@@ -1,0 +1,87 @@
+/* 색상은 한곳에서 관리 */
+:root {
+  --bg: #f5f6f8;
+  --card: #ffffff;
+  --text: #1f2328;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --primary: #2f6fed;
+  --primary-dark: #2458c4;
+  --error-bg: #fdecec;
+  --error: #b42318;
+  --notice-bg: #eaf2ff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+a { color: var(--primary); }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.brand { font-weight: 700; color: var(--text); text-decoration: none; }
+.me { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.me form { margin: 0; }
+
+.container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 24px;
+}
+.card.narrow { max-width: 420px; margin: 24px auto; }
+.card h1 { margin-top: 0; font-size: 22px; }
+
+label { display: block; margin-bottom: 14px; font-size: 14px; font-weight: 600; }
+input, select {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 16px; /* 16px 미만이면 아이폰이 입력 시 화면을 확대함 */
+  background: #fff;
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+button:hover { background: var(--primary-dark); }
+button.link {
+  width: auto;
+  padding: 0;
+  background: none;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.muted { color: var(--muted); font-size: 14px; }
+.error { background: var(--error-bg); color: var(--error); padding: 10px 12px; border-radius: 8px; }
+.notice { background: var(--notice-bg); padding: 10px 12px; border-radius: 8px; }

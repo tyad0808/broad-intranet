@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %> · 브로애드 인트라넷</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">브로애드 인트라넷</a>
+    <% if (user) { %>
+      <div class="me">
+        <span><%= user.name %><% if (user.role === 'admin') { %> · 관리자<% } %></span>
+        <form method="post" action="/logout">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="link" type="submit">로그아웃</button>
+        </form>
+      </div>
+    <% } %>
+  </header>
+  <main class="container">

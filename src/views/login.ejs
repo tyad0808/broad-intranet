@@ -1,0 +1,18 @@
+<%- include('partials/header') %>
+<section class="card narrow">
+  <h1>로그인</h1>
+  <% if (notice) { %><p class="notice"><%= notice %></p><% } %>
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <form method="post" action="/login">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>이메일
+      <input type="email" name="email" value="<%= email %>" required autocomplete="username">
+    </label>
+    <label>비밀번호
+      <input type="password" name="password" required autocomplete="current-password">
+    </label>
+    <button type="submit">로그인</button>
+  </form>
+  <p class="muted">처음이신가요? <a href="/signup">회원가입</a></p>
+</section>
+<%- include('partials/footer') %>
