@@ -1,0 +1,19 @@
+{
+  "name": "broad-intranet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "브로애드 사내 인트라넷: 주문관리, 작업공유, 알림",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.5",
+    "express": "^5.2.1"
+  }
+}

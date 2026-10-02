@@ -1,0 +1,17 @@
+# 비밀값: API 키, 세션 비밀키가 들어 있으므로 절대 깃에 올리지 않는다
+.env
+
+# 설치된 패키지 (npm install 로 다시 받을 수 있음)
+node_modules/
+
+# DB 파일: 고객 주소·연락처가 들어 있으므로 깃에 올리지 않는다
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+backups/
+
+# 로그·기타
+*.log
+.DS_Store
