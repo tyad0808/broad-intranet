@@ -2,7 +2,8 @@
 // SQLite 는 DB 전체가 파일 하나(data/intranet.db)라서 백업은 이 파일을 복사하면 된다.
 const fs = require('fs');
 const path = require('path');
-const Database = require('better-sqlite3');
+// Node.js 에 기본으로 들어 있는 SQLite (따로 설치·빌드할 필요가 없음)
+const { DatabaseSync } = require('node:sqlite');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'intranet.db');
 
@@ -10,11 +11,11 @@ function openDb(dbPath = DB_PATH) {
   if (dbPath !== ':memory:') {
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   }
-  const db = new Database(dbPath);
+  const db = new DatabaseSync(dbPath);
   // WAL: 읽기와 쓰기가 동시에 일어나도 서로 기다리지 않게 하는 SQLite 설정
-  db.pragma('journal_mode = WAL');
+  db.exec('PRAGMA journal_mode = WAL');
   // 다른 테이블을 가리키는 칸(FOREIGN KEY)이 엉뚱한 값을 갖지 못하게 검사
-  db.pragma('foreign_keys = ON');
+  db.exec('PRAGMA foreign_keys = ON');
   migrate(db);
   seed(db);
   return db;
@@ -115,7 +116,7 @@ function seed(db) {
     'INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)'
   );
 
-  db.transaction(() => {
+  transaction(db, () => {
     const hasStages = db.prepare('SELECT COUNT(*) AS n FROM work_stages').get().n > 0;
     if (!hasStages) {
       ['발주', '발주확인', '디자인작업', '컨펌', '제작', '발송'].forEach((name, i) =>
@@ -132,7 +133,20 @@ function seed(db) {
 
     insertSetting.run('unassigned_threshold', '5');      // 미지정 알림 기준 건수
     insertSetting.run('unassigned_repeat_minutes', '30'); // 해소될 때까지 다시 알리는 간격
-  })();
+  });
 }
 
-module.exports = { openDb, DB_PATH };
+// 여러 작업을 "전부 성공 또는 전부 취소"로 묶는다. 중간에 오류가 나면 앞의 작업도 되돌린다.
+function transaction(db, fn) {
+  db.exec('BEGIN');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
+
+module.exports = { openDb, transaction, DB_PATH };
