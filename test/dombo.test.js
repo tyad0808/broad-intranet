@@ -94,7 +94,7 @@ const docWith = (layers, artboardRect = [0, 300, 300, 0]) => ({
   artboards: { 0: { artboardRect }, getActiveArtboardIndex: () => 0 },
 });
 
-test('아무것도 선택하지 않으면 대지에 걸친 보이는 개체 전체를 기준으로 한다', () => {
+test('아무것도 선택하지 않으면 대지 밖까지 문서의 보이는 개체 전체를 기준으로 한다', () => {
   const clip = group([pathItem([10, 100, 110, 20], { clipping: true }), pathItem([-500, 500, 500, -500])], { clipped: true });
   const doc = docWith([
     layer('작업', [clip, pathItem([150, 80, 200, 40])], {
@@ -105,10 +105,10 @@ test('아무것도 선택하지 않으면 대지에 걸친 보이는 개체 전�
     layer('칼선', [pathItem([-30, 330, 330, -30])]),
     layer('대지밖', [pathItem([1000, 1100, 1100, 1000]), pathItem([0, 0, 0, 0], { guides: true })]),
   ]);
-  assert.deepStrictEqual(Array.from(core.domboArtworkBounds(doc)), [10, 150, 200, 20]);
+  assert.deepStrictEqual(Array.from(core.domboArtworkBounds(doc)), [10, 1100, 1100, 20]);
 });
 
-test('선택도 없고 대지 위에 개체도 없으면 알려준다', () => {
+test('선택도 없고 개체도 없으면 알려준다', () => {
   assert.throws(() => core.domboArtworkBounds(docWith([layer('작업', [])])), /개체가 없습니다/);
 });
 

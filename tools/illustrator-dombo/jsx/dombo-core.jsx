@@ -146,11 +146,7 @@ function domboLayerItems(layer, out) {
   for (var j = 0; j < layer.layers.length; j++) domboLayerItems(layer.layers[j], out);
 }
 
-function domboOverlaps(a, b) {
-  return a[0] < b[2] && a[2] > b[0] && a[1] > b[3] && a[3] < b[1];
-}
-
-// 돔보 기준 범위: 선택한 개체가 있으면 그것, 없으면 현재 대지에 걸친 보이는 개체 전체
+// 돔보 기준 범위: 선택한 개체가 있으면 그것, 없으면 문서의 보이는 개체 전체 (대지 밖에 있어도 포함)
 function domboArtworkBounds(doc) {
   var items = [], i, b = null, v;
   if (domboHasSelection(doc)) {
@@ -165,13 +161,12 @@ function domboArtworkBounds(doc) {
   if (doc.selection && doc.selection.typename === 'TextRange') {
     throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
   }
-  var ab = domboArtboardRect(doc);
   for (i = 0; i < doc.layers.length; i++) domboLayerItems(doc.layers[i], items);
   for (i = 0; i < items.length; i++) {
     v = domboItemBounds(items[i]);
-    if (v && domboOverlaps(v, ab)) b = domboUnion(b, v);
+    if (v) b = domboUnion(b, v);
   }
-  if (!b) throw new Error('현재 대지 위에 돔보를 찍을 개체가 없습니다.');
+  if (!b) throw new Error('돔보를 찍을 개체가 없습니다.');
   return b;
 }
 
