@@ -3,11 +3,14 @@
 // 2) 아크릴 텍스트 네스팅: 글자를 아웃라인·분리해서 아크릴 원판에 배치 (레이저 커팅용)
 // 패널(roll.html, text.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
 // 좌표: 계산은 '왼쪽 위가 0, 아래로 갈수록 y 증가'. 일러스트레이터에 놓을 때 뒤집는다.
+// 대지는 새로 만들지 않는다. 선택한 것이 있던 자리(왼쪽 위)부터 배치하고, 용지·원판 범위는 안내선으로 그린다.
+// 원본은 숨긴 '네스팅 전 원본' 레이어로 옮겨 둔다.
 
 var NEST_PT_PER_MM = 72 / 25.4;
 var NEST_LAYER = '네스팅';
 var NEST_EPS = 1e-6;
-var NEST_ARTBOARD_GAP_MM = 50;
+var NEST_SHEET_GAP_MM = 30;
+var NEST_BACKUP_LAYER = '네스팅 전 원본';
 
 // ---- 배치 계산 (MaxRects, 일러스트레이터 없이도 동작) ----
 
@@ -355,6 +358,16 @@ function nestCheckText(o) {
   return o;
 }
 
+// 용지·원판 자리: 시작점(왼쪽 위, 문서 좌표)에서 아래로 간격을 두고 차례로 쌓는다
+function nestOrigins(start, heights, gapPt) {
+  var out = [], y = start[1];
+  for (var i = 0; i < heights.length; i++) {
+    out.push([start[0], y]);
+    y -= heights[i] + gapPt;
+  }
+  return out;
+}
+
 // ---- 여기부터는 일러스트레이터 안에서만 동작 ----
 
 function nestDoc() {
@@ -407,24 +420,50 @@ function nestGetLayer(doc) {
   return layer;
 }
 
-// 기존 대지들 오른쪽에 새 대지(용지·원판)를 나란히 만든다. 대지의 [왼쪽, 위] 목록을 돌려준다
-function nestMakeArtboards(doc, widthPt, heights, label) {
-  var right = -Infinity, top = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect[1];
-  for (var i = 0; i < doc.artboards.length; i++) right = Math.max(right, doc.artboards[i].artboardRect[2]);
-  var gap = NEST_ARTBOARD_GAP_MM * NEST_PT_PER_MM, x = right + gap, origins = [], made = [];
-  try {
-    for (i = 0; i < heights.length; i++) {
-      var ab = doc.artboards.add([x, top, x + widthPt, top - heights[i]]);
-      ab.name = label + ' ' + (i + 1);
-      made.push(ab);
-      origins.push([x, top]);
-      x += widthPt + gap;
-    }
-  } catch (e) {
-    for (var j = made.length - 1; j >= 0; j--) made[j].remove();
-    throw new Error('대지를 만들 자리가 없습니다 (일러스트레이터 작업 영역 한계). 새 문서에서 하거나 장수를 줄이세요.');
+function nestFindLayer(doc, name) {
+  for (var i = 0; i < doc.layers.length; i++) if (doc.layers[i].name === name) return doc.layers[i];
+  return null;
+}
+
+// 선택한 것들의 왼쪽 위 (배치 시작점)
+function nestStart(items, geometric) {
+  var b = null;
+  for (var i = 0; i < items.length; i++) {
+    var v = nestBounds(items[i], geometric);
+    if (v) b = nestUnion(b, v);
   }
-  return origins;
+  return [b[0], b[1]];
+}
+
+// 용지·원판 범위를 안내선 사각형으로 그린다 (출력·커팅에 나오지 않음)
+function nestDrawSheets(layer, origins, widthPt, heights, label) {
+  for (var i = 0; i < origins.length; i++) {
+    var r = layer.pathItems.rectangle(origins[i][1], origins[i][0], widthPt, heights[i]);
+    r.filled = false;
+    r.stroked = true;
+    r.name = label + ' ' + (i + 1);
+    r.guides = true;
+  }
+}
+
+// 원본을 숨긴 '네스팅 전 원본' 레이어로 옮겨 둔다
+function nestBackup(doc, items) {
+  var layer = nestFindLayer(doc, NEST_BACKUP_LAYER);
+  if (!layer) { layer = doc.layers.add(); layer.name = NEST_BACKUP_LAYER; }
+  layer.locked = false;
+  layer.visible = true;
+  for (var i = 0; i < items.length; i++) items[i].move(layer, ElementPlacement.PLACEATEND);
+  layer.visible = false;
+  layer.locked = true;
+}
+
+// 결과가 지금 대지 밖으로 나가면 알려 준다
+function nestOutsideNote(doc, origins, widthPt, heights) {
+  var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
+  var last = origins.length - 1;
+  var L = origins[0][0], T = origins[0][1], R = L + widthPt, B = origins[last][1] - heights[last];
+  if (L < ab[0] || T > ab[1] || R > ab[2] || B < ab[3]) return '\n주의: 결과 일부가 지금 대지 밖에 있습니다.';
+  return '';
 }
 
 // 개체를 계산된 자리로 옮긴다 (필요하면 90도 회전)
@@ -469,14 +508,17 @@ function nestRoll(opts) {
     throw new Error(nestTooBigMessage(e, names));
   }
 
-  var origins = nestMakeArtboards(doc, o.widthMm * k, r.binHeights, '용지');
+  var start = nestStart(src, false);
+  var origins = nestOrigins(start, r.binHeights, NEST_SHEET_GAP_MM * k);
   var layer = nestGetLayer(doc), placed = [];
+  nestDrawSheets(layer, origins, o.widthMm * k, r.binHeights, '용지');
   for (i = 0; i < r.placements.length; i++) {
     var pl = r.placements[i];
     var d = src[pl.id].duplicate(layer, ElementPlacement.PLACEATEND);
     nestMoveTo(d, pl, origins[pl.bin], false);
     placed.push(d);
   }
+  nestBackup(doc, src);
   doc.selection = null;
   for (i = 0; i < placed.length; i++) placed[i].selected = true;
 
@@ -485,7 +527,8 @@ function nestRoll(opts) {
   var eff = Math.round(r.usedArea / (o.widthMm * k * total) * 100);
   return placed.length + '개를 폭 ' + nestFmt(o.widthMm) + 'mm 용지에 배치했습니다.\n' +
     '사용 길이 ' + nestFmt(total / k) + 'mm' + (r.bins > 1 ? ' (' + r.bins + '장으로 나눔)' : '') +
-    ', 용지 효율 ' + eff + '%.';
+    ', 용지 효율 ' + eff + '%.\n원본은 숨긴 \'' + NEST_BACKUP_LAYER + '\' 레이어에 있습니다.' +
+    nestOutsideNote(doc, origins, o.widthMm * k, r.binHeights);
 }
 
 // ---- 2) 아크릴 텍스트 네스팅 ----
@@ -563,6 +606,7 @@ function nestText(opts) {
   var doc = nestDoc();
   var src = nestSelection(doc, '네스팅할 글자(살아있는 글자 또는 아웃라인)를');
   var k = NEST_PT_PER_MM, layer = nestGetLayer(doc), units = [], i, q;
+  var start = nestStart(src, true);
 
   // 원본은 두고 복제본을 글자·조각으로 푼다
   for (q = 0; q < o.quantity; q++) {
@@ -588,13 +632,8 @@ function nestText(opts) {
     cleanup();
     throw new Error(nestTooBigMessage(e, names));
   }
-  var origins;
-  try {
-    origins = nestMakeArtboards(doc, o.sheetWMm * k, r.binHeights, '원판');
-  } catch (e2) {
-    cleanup();
-    throw e2;
-  }
+  var origins = nestOrigins(start, r.binHeights, NEST_SHEET_GAP_MM * k);
+  nestDrawSheets(layer, origins, o.sheetWMm * k, r.binHeights, '원판');
 
   var red = o.laserLine ? nestRed(doc) : null;
   for (i = 0; i < r.placements.length; i++) {
@@ -603,6 +642,7 @@ function nestText(opts) {
     if (red) nestLaserStyle(it, red);
     it.name = (o.unit === 'piece' ? '조각_' : '글자_') + (pl.id + 1);
   }
+  nestBackup(doc, src);
   doc.selection = null;
   for (i = 0; i < kept.length; i++) kept[i].selected = true;
 
@@ -613,7 +653,9 @@ function nestText(opts) {
   var eff = Math.round(r.usedArea / (o.sheetWMm * o.sheetHMm * k * k * r.bins) * 100);
   return (o.unit === 'piece' ? '조각 ' : '글자 ') + kept.length + '개를 ' +
     nestFmt(o.sheetWMm) + '×' + nestFmt(o.sheetHMm) + 'mm 원판 ' + r.bins + '장에 배치했습니다.\n' +
-    '마지막 원판은 위에서 ' + nestFmt((last + o.marginMm * k) / k) + 'mm 까지 사용, 원판 효율(사각형 기준) ' + eff + '%.';
+    '마지막 원판은 위에서 ' + nestFmt((last + o.marginMm * k) / k) + 'mm 까지 사용, 원판 효율(사각형 기준) ' + eff + '%.\n' +
+    '원판 범위는 안내선으로 그렸고, 원본은 숨긴 \'' + NEST_BACKUP_LAYER + '\' 레이어에 있습니다.' +
+    nestOutsideNote(doc, origins, o.sheetWMm * k, r.binHeights);
 }
 
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다

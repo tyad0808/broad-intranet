@@ -184,12 +184,16 @@ function fakeIllustrator() {
   const rectPath = (l, t, r, b) => new Item('PathItem', { b: [l, t, r, b], pts: [[l, t], [r, t], [r, b], [l, b]], closed: true });
   const compound = (...paths) => { const c = new Item('CompoundPathItem', { kids: paths }); paths.forEach(p => { p.parent = c; }); return c; };
   const group = (...kids) => { const g = new Item('GroupItem', { kids, clipped: false }); kids.forEach(k => { k.parent = g; }); return g; };
-  const mkLayer = name => ({ name, items: [], locked: false, visible: true, adopt(it) { it.parent = this; this.items.push(it); } });
+  const mkLayer = name => {
+    const l = { name, items: [], locked: false, visible: true, adopt(it) { it.parent = this; this.items.push(it); } };
+    l.pathItems = { rectangle: (t, left, w, h) => { const r = rectPath(left, t, left + w, t - h); l.adopt(r); return r; } };
+    return l;
+  };
   const layers = [mkLayer('작업')];
   layers.add = () => { const l = mkLayer(''); layers.push(l); return l; };
   const artboards = [{ artboardRect: [0, 1000, 1000, 0], name: '대지 1' }];
   artboards.getActiveArtboardIndex = () => 0;
-  artboards.add = rect => { const a = { artboardRect: rect, name: '', remove() { artboards.splice(artboards.indexOf(a), 1); } }; artboards.push(a); return a; };
+  artboards.add = () => { throw new Error('대지를 만들면 안 된다'); };
   const doc = { layers, artboards, selection: [], documentColorSpace: 'CMYK' };
   const app = { documents: { length: 1 }, activeDocument: doc };
   return { all, Item, rectPath, compound, group, doc, app, layers, artboards };
@@ -208,26 +212,43 @@ const MM = 72 / 25.4;
 const inside = (b, ab) => b[0] >= ab[0] - 1e-6 && b[1] <= ab[1] + 1e-6 && b[2] <= ab[2] + 1e-6 && b[3] >= ab[3] - 1e-6;
 const apart = (a, b, gap) => a[2] + gap <= b[0] + 1e-6 || b[2] + gap <= a[0] + 1e-6 || a[3] >= b[1] + gap - 1e-6 || b[3] >= a[1] + gap - 1e-6;
 
-test('용지 폭 네스팅: 복제본을 새 대지에 수량만큼, 원본은 그대로', () => {
+test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 용지는 안내선, 원본은 숨긴 레이어로', () => {
   const f = fakeIllustrator();
   const a = f.rectPath(0, 300, 400 * MM, 300 - 200 * MM);  // 400 x 200mm
-  const b = f.rectPath(0, 0, 100 * MM, -100 * MM);         // 100 x 100mm
+  const b = f.rectPath(50, 0, 50 + 100 * MM, -100 * MM);   // 100 x 100mm
   f.layers[0].adopt(a); f.layers[0].adopt(b);
   f.doc.selection = [a, b];
   const ai = loadWith(f);
   const msg = ai.nestRoll({ widthMm: 1000, quantity: 3, gapMm: 5, marginMm: 10 });
   assert.match(msg, /6개를 폭 1000mm/);
+  assert.strictEqual(f.artboards.length, 1, '대지는 만들지 않는다');
+
   const layer = f.layers.find(l => l.name === '네스팅');
-  assert.strictEqual(layer.items.length, 6);
-  assert.deepStrictEqual(a.b, [0, 300, 400 * MM, 300 - 200 * MM], '원본은 그대로');
-  assert.strictEqual(f.artboards.length, 2);
-  const ab = f.artboards[1].artboardRect;
-  assert.ok(ab[0] >= 1000, '기존 대지 오른쪽');
-  assert.ok(Math.abs(ab[2] - ab[0] - 1000 * MM) < 1e-6, '대지 폭 = 용지 폭');
-  const vb = layer.items.map(it => it.visibleBounds);
-  const inner = [ab[0] + 10 * MM, ab[1] - 10 * MM, ab[2] - 10 * MM, ab[3] + 10 * MM];
+  const sheets = layer.items.filter(it => it.guides);
+  const parts = layer.items.filter(it => !it.guides);
+  assert.strictEqual(parts.length, 6);
+  assert.strictEqual(sheets.length, 1);
+  const sb = sheets[0].b;
+  // 선택한 것들의 왼쪽 위 (선 두께 포함 visibleBounds) 에서 시작
+  assert.deepStrictEqual([sb[0], sb[1]], [-1, 301]);
+  assert.ok(Math.abs(sb[2] - sb[0] - 1000 * MM) < 1e-6, '안내선 폭 = 용지 폭');
+
+  const backup = f.layers.find(l => l.name === '네스팅 전 원본');
+  assert.deepStrictEqual(backup.items, [a, b], '원본은 숨긴 레이어로');
+  assert.strictEqual(backup.visible, false);
+  assert.strictEqual(backup.locked, true);
+  assert.deepStrictEqual(a.b, [0, 300, 400 * MM, 300 - 200 * MM], '원본 위치는 그대로');
+
+  const vb = parts.map(it => it.visibleBounds);
+  const inner = [sb[0] + 10 * MM, sb[1] - 10 * MM, sb[2] - 10 * MM, sb[3] + 10 * MM];
   vb.forEach(v => assert.ok(inside(v, inner), '여백 안'));
   for (let i = 0; i < vb.length; i++) for (let j = i + 1; j < vb.length; j++) assert.ok(apart(vb[i], vb[j], 5 * MM - 1e-6), '간격 유지');
+  assert.match(msg, /대지 밖/, '1000mm 대지보다 크면 알려 준다');
+});
+
+test('여러 장이면 시작점에서 아래로 간격을 두고 쌓는다', () => {
+  const o = Array.from(core.nestOrigins([10, 500], [100, 50, 80], 30), p => Array.from(p));
+  assert.deepStrictEqual(o, [[10, 500], [10, 370], [10, 290]]);
 });
 
 test('아크릴 텍스트 네스팅: 살아있는 글자를 아웃라인해서 글자마다·조각마다 배치', () => {
@@ -244,9 +265,15 @@ test('아크릴 텍스트 네스팅: 살아있는 글자를 아웃라인해서 �
     const ai = loadWith(f);
     const msg = ai.nestText({ sheetWMm: 100, sheetHMm: 100, gapMm: 2, marginMm: 3, unit, laserLine: true });
     const layer = f.layers.find(l => l.name === '네스팅');
+    const sheets = layer.items.filter(it => it.guides);
+    layer.items = layer.items.filter(it => !it.guides);
     const expected = unit === 'glyph' ? 2 : 3;
     assert.strictEqual(layer.items.length, expected, `${unit}: ${msg}`);
-    assert.ok(f.all.has(text) && text.parent === f.layers[0], '원본 글자는 그대로');
+    assert.strictEqual(sheets.length, 1);
+    assert.deepStrictEqual([sheets[0].b[0], sheets[0].b[1]], [0, 100], '글자가 있던 자리(왼쪽 위)부터');
+    const backup = f.layers.find(l => l.name === '네스팅 전 원본');
+    assert.ok(f.all.has(text) && text.parent === backup && backup.visible === false, '원본 글자는 숨긴 레이어에');
+    assert.strictEqual(f.artboards.length, 1);
     if (unit === 'piece') {
       const withHole = layer.items.find(it => it.kids && it.kids.length === 2);
       assert.ok(withHole, 'ㅇ 은 구멍과 함께 한 조각');
@@ -255,7 +282,7 @@ test('아크릴 텍스트 네스팅: 살아있는 글자를 아웃라인해서 �
       assert.strictEqual(p.filled, false);
       assert.strictEqual(p.strokeWidth, 0.1);
     }));
-    const ab = f.artboards[1].artboardRect;
+    const ab = sheets[0].b;
     layer.items.forEach(it => assert.ok(inside(it.geometricBounds, [ab[0] + 3 * MM, ab[1] - 3 * MM, ab[2] - 3 * MM, ab[3] + 3 * MM])));
     assert.match(layer.items[0].name, unit === 'glyph' ? /^글자_/ : /^조각_/);
   }
@@ -270,5 +297,5 @@ test('네스팅: 원판보다 큰 글자는 알려주고 만든 것을 치운다
   assert.throws(() => ai.nestText({ sheetWMm: 100, sheetHMm: 100 }), /용지보다 큰 작업물이 1개 .*353×353mm/);
   const layer = f.layers.find(l => l.name === '네스팅');
   assert.strictEqual(layer.items.length, 0, '복제본을 남기지 않는다');
-  assert.strictEqual(f.artboards.length, 1);
+  assert.strictEqual(big.parent, f.layers[0], '실패하면 원본도 그대로');
 });
