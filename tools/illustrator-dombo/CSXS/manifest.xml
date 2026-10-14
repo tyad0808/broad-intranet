@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.dombo" ExtensionBundleVersion="1.3.2"
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.dombo" ExtensionBundleVersion="1.4.0"
   ExtensionBundleName="Broad Dombo" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.broad.dombo.panel" Version="1.3.2" />
+    <Extension Id="com.broad.dombo.panel" Version="1.4.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>

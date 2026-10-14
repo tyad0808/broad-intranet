@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'cutBleedMm'];
+  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm'];
   var CHECKS = ['fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -57,11 +57,7 @@
     call('domboPanelPlace', o);
   });
   $('remove').addEventListener('click', function () { call('domboPanelRemove'); });
-  $('cut').addEventListener('click', function () {
-    var o = readOptions();
-    save(o);
-    call('domboPanelCut', { bleedMm: o.cutBleedMm || 0 });
-  });
+  $('cut').addEventListener('click', function () { call('domboPanelCut'); });
   $('grid').addEventListener('click', function () {
     var o = readOptions();
     save(o);
