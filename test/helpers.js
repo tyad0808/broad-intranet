@@ -30,9 +30,8 @@ function browser(baseUrl) {
   return { request, submit };
 }
 
-async function startServer() {
-  const db = openDb(':memory:');
-  const app = createApp({ db, secret: 'test-secret' });
+async function startServer({ db = openDb(':memory:'), collector = null } = {}) {
+  const app = createApp({ db, collector, secret: 'test-secret' });
   const server = await new Promise(resolve => {
     const s = app.listen(0, () => resolve(s));
   });

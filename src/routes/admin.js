@@ -10,7 +10,7 @@ const STATUS_LABELS = {
   rejected: '거절',
 };
 
-function adminRoutes(db, sessionStore) {
+function adminRoutes(db, sessionStore, collector) {
   const router = express.Router();
 
   // 처리 결과 안내 문구를 다음 화면에 한 번만 보여준다
@@ -256,6 +256,41 @@ function adminRoutes(db, sessionStore) {
       flash(req, 'ok', `'${job.name}' 직무를 담당 디자이너 목록에서 ${job.is_designer ? '뺐습니다' : '보이게 했습니다'}.`);
     }
     res.redirect('/admin/jobs');
+  });
+
+  // ───────── 주문 수집 상태 ─────────
+  router.get('/collect', (req, res) => {
+    const runs = db.prepare('SELECT * FROM collect_runs ORDER BY id DESC LIMIT 10').all();
+    const recent = db.prepare(`
+      SELECT o.channel_item_id, o.product_name, o.option_text, o.quantity, o.paid_at, o.channel_status,
+             o.channel_confirmed, s.name AS stage_name
+      FROM orders o LEFT JOIN work_stages s ON s.id = o.stage_id
+      ORDER BY o.id DESC LIMIT 10
+    `).all();
+    const total = db.prepare('SELECT COUNT(*) AS n FROM orders').get().n;
+    res.render('admin/collect', {
+      title: '주문 수집',
+      tab: 'collect',
+      source: collector ? collector.source : null,
+      intervalMinutes: collector ? collector.intervalMinutes : null,
+      runs,
+      recent,
+      total,
+    });
+  });
+
+  router.post('/collect', async (req, res) => {
+    if (!collector) {
+      flash(req, 'error', '주문 수집기가 설정되지 않았습니다.');
+      return res.redirect('/admin/collect');
+    }
+    const result = await collector.run();
+    if (result.ok) {
+      flash(req, 'ok', `수집 완료: 새 주문 ${result.created}건, 바뀐 주문 ${result.updated}건`);
+    } else {
+      flash(req, 'error', `수집 실패: ${result.error}`);
+    }
+    res.redirect('/admin/collect');
   });
 
   return router;

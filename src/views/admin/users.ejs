@@ -23,7 +23,7 @@
         <li class="row">
           <div class="row-main">
             <strong><%= u.name %></strong>
-            <span class="muted"><%= u.email %> · <%= u.job_name || '직무 없음' %> · <%= u.created_at.slice(0, 16) %> 신청</span>
+            <span class="muted"><%= u.email %> · <%= u.job_name || '직무 없음' %> · <%= kst(u.created_at) %> 신청</span>
           </div>
           <div class="row-actions">
             <%- action(`/admin/users/${u.id}/approve`, '승인', 'primary') %>

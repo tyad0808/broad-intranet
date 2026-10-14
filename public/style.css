@@ -166,3 +166,14 @@ form.inline { display: inline; margin: 0; }
 .status-active { background: #e7f6ec; color: #1a7f37; }
 .status-pending { background: #fff4e0; color: #9a6700; }
 .status-suspended, .status-rejected { background: var(--error-bg); color: var(--error); }
+
+/* ───────── 4단계: 표 ───────── */
+.table-wrap { overflow-x: auto; }
+.table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.table th, .table td { padding: 8px 10px; border-top: 1px solid var(--line); text-align: left; vertical-align: top; }
+.table th { color: var(--muted); font-weight: 600; white-space: nowrap; border-top: 0; }
+.table { min-width: 560px; }
+.table td { white-space: nowrap; }
+.table td.product { white-space: normal; min-width: 180px; }
+.table td.muted:last-child { white-space: normal; }
+.status { white-space: nowrap; }

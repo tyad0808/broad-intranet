@@ -93,6 +93,21 @@ function migrate(db) {
       value TEXT NOT NULL
     );
 
+    -- 주문 수집 기록 (언제 몇 건을 가져왔는지, 실패했다면 왜인지)
+    CREATE TABLE IF NOT EXISTS collect_runs (
+      id          INTEGER PRIMARY KEY,
+      channel     TEXT    NOT NULL,
+      started_at  TEXT    NOT NULL,
+      finished_at TEXT,
+      range_from  TEXT,
+      range_to    TEXT,
+      ok          INTEGER,
+      fetched     INTEGER NOT NULL DEFAULT 0,
+      created     INTEGER NOT NULL DEFAULT 0,
+      updated     INTEGER NOT NULL DEFAULT 0,
+      error       TEXT
+    );
+
     -- 알림 기록
     CREATE TABLE IF NOT EXISTS notifications (
       id         INTEGER PRIMARY KEY,
@@ -130,6 +145,16 @@ function seed(db) {
       insertJob.run('출력·후가공', 0, 20);
       insertJob.run('CS', 0, 30);
     }
+
+    // 새 주문이 들어갈 단계, 채널에서 발주확인되면 옮겨 갈 단계 (이름을 바꿔도 번호로 기억)
+    const stageId = name => {
+      const row = db.prepare('SELECT id FROM work_stages WHERE name = ?').get(name);
+      return row ? String(row.id) : null;
+    };
+    const newStage = stageId('발주');
+    const confirmedStage = stageId('발주확인');
+    if (newStage) insertSetting.run('stage_new', newStage);
+    if (confirmedStage) insertSetting.run('stage_confirmed', confirmedStage);
 
     insertSetting.run('unassigned_threshold', '5');      // 미지정 알림 기준 건수
     insertSetting.run('unassigned_repeat_minutes', '30'); // 해소될 때까지 다시 알리는 간격

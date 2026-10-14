@@ -1,0 +1,269 @@
+// 4단계: 스마트스토어 주문 수집 (조회 전용)
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const { openDb } = require('../src/db');
+const { createNaverClient, isAllowed, ALLOWED } = require('../src/channels/naverClient');
+const { createSmartstoreSource, toKstIso } = require('../src/channels/smartstore');
+const { createMockSource } = require('../src/channels/mock');
+const { createCollector, applyOrders } = require('../src/collector');
+const { startServer, addUser, loginAs } = require('./helpers');
+
+// 실제 네이버 대신 응답하는 가짜 fetch. 받은 요청을 calls 에 기록한다.
+function fakeNaver(handlers) {
+  const calls = [];
+  const fetchFn = async (url, init = {}) => {
+    const u = new URL(url);
+    const call = { method: init.method || 'GET', path: u.pathname.replace('/external', ''), query: u.searchParams, body: init.body };
+    calls.push(call);
+    if (call.path === '/v1/oauth2/token') {
+      return Response.json({ access_token: 'tok', expires_in: 10800 });
+    }
+    const handler = handlers[`${call.method} ${call.path}`];
+    if (!handler) return Response.json({ message: 'not found' }, { status: 404 });
+    return Response.json(handler(call));
+  };
+  return { fetchFn, calls };
+}
+
+function naverItem(id, { confirmed = false, status = 'PAYED' } = {}) {
+  return {
+    order: { orderId: `O${id}`, ordererName: '홍길동', paymentDate: '2026-10-14T10:00:00.0+09:00' },
+    productOrder: {
+      productOrderId: `P${id}`,
+      productName: '명함',
+      productOption: '양면 / 200매',
+      quantity: 2,
+      productOrderStatus: status,
+      placeOrderStatus: confirmed ? 'OK' : 'NOT_YET',
+      shippingAddress: { name: '김수령', tel1: '010-1234-5678', zipCode: '06236', baseAddress: '서울 강남구 테헤란로 1', detailedAddress: '2층' },
+    },
+  };
+}
+
+// ───────── 안전장치 ─────────
+
+test('조회용 주소 2개 말고는 네이버 API 를 호출할 수 없다', async () => {
+  const { fetchFn, calls } = fakeNaver({});
+  const client = createNaverClient({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn });
+  const forbidden = [
+    ['POST', '/v1/pay-order/seller/product-orders/confirm'],   // 발주확인
+    ['POST', '/v1/pay-order/seller/product-orders/dispatch'],  // 발송처리
+    ['GET', '/v1/products/search'],
+  ];
+  for (const [method, p] of forbidden) {
+    await assert.rejects(client.request(method, p), /허용되지 않은/);
+  }
+  assert.strictEqual(calls.length, 0, '막힌 요청은 네이버로 아무것도 보내지 않아야 한다');
+});
+
+test('소스 코드 어디에도 허용 목록 밖의 네이버 API 주소가 없다', () => {
+  const allowed = new Set([...ALLOWED.map(a => a.path), '/v1/oauth2/token']);
+  const files = [];
+  const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).forEach(e => {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) walk(full);
+    else if (e.name.endsWith('.js')) files.push(full);
+  });
+  walk(path.join(__dirname, '..', 'src'));
+  for (const file of files) {
+    const found = fs.readFileSync(file, 'utf8').match(/['"`](\/v\d+\/[^'"`?]+)['"`]/g) || [];
+    for (const raw of found) {
+      const p = raw.slice(1, -1);
+      assert.ok(allowed.has(p), `${path.basename(file)} 에 허용되지 않은 주소: ${p}`);
+    }
+  }
+});
+
+test('허용 목록에는 조회용 주소만 있다', () => {
+  assert.ok(isAllowed('GET', '/v1/pay-order/seller/product-orders/last-changed-statuses'));
+  assert.ok(isAllowed('POST', '/v1/pay-order/seller/product-orders/query'));
+  assert.strictEqual(ALLOWED.length, 2);
+});
+
+// ───────── 스마트스토어 응답 처리 ─────────
+
+test('네이버 시각 형식은 한국 시간(+09:00)이다', () => {
+  assert.strictEqual(toKstIso(new Date('2026-10-14T01:02:03.000Z')), '2026-10-14T10:02:03.000+09:00');
+});
+
+test('바뀐 주문 목록 → 상세 조회 → 인트라넷 형식으로 바꾼다 (페이지 넘김 포함)', async () => {
+  const { fetchFn, calls } = fakeNaver({
+    'GET /v1/pay-order/seller/product-orders/last-changed-statuses': call =>
+      call.query.get('moreSequence')
+        ? { data: { lastChangeStatuses: [{ productOrderId: 'P2' }] } }
+        : { data: { lastChangeStatuses: [{ productOrderId: 'P1' }], more: { moreFrom: '2026-10-14T09:00:00.000+09:00', moreSequence: '5' } } },
+    'POST /v1/pay-order/seller/product-orders/query': call => {
+      const ids = JSON.parse(call.body).productOrderIds;
+      return { data: ids.map(id => naverItem(id.slice(1), { confirmed: id === 'P2' })) };
+    },
+  });
+  const source = createSmartstoreSource({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn });
+  const orders = await source.fetchChanges({ from: new Date('2026-10-14T00:00:00Z'), to: new Date('2026-10-14T01:00:00Z') });
+
+  assert.strictEqual(orders.length, 2);
+  assert.deepStrictEqual(orders[0], {
+    channel: 'smartstore',
+    channel_order_id: 'O1',
+    channel_item_id: 'P1',
+    product_name: '명함',
+    option_text: '양면 / 200매',
+    quantity: 2,
+    buyer_name: '홍길동',
+    receiver_name: '김수령',
+    receiver_phone: '010-1234-5678',
+    receiver_address: '(06236) 서울 강남구 테헤란로 1 2층',
+    paid_at: '2026-10-14T10:00:00.0+09:00',
+    channel_status: 'PAYED',
+    channel_confirmed: 0,
+  });
+  assert.strictEqual(orders[1].channel_confirmed, 1);
+
+  for (const c of calls) {
+    assert.ok(c.path === '/v1/oauth2/token' || isAllowed(c.method, c.path), `허용되지 않은 호출: ${c.method} ${c.path}`);
+  }
+});
+
+test('24시간보다 긴 기간은 24시간씩 나눠서 조회한다', async () => {
+  const { fetchFn, calls } = fakeNaver({
+    'GET /v1/pay-order/seller/product-orders/last-changed-statuses': () => ({ data: { lastChangeStatuses: [] } }),
+  });
+  const source = createSmartstoreSource({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn });
+  await source.fetchChanges({ from: new Date('2026-10-11T00:00:00Z'), to: new Date('2026-10-13T02:00:00Z') });
+  const windows = calls.filter(c => c.path.endsWith('last-changed-statuses'));
+  assert.strictEqual(windows.length, 3);
+});
+
+// ───────── DB 반영 ─────────
+
+const stageName = (db, orderItemId) => db.prepare(
+  'SELECT s.name FROM orders o JOIN work_stages s ON s.id = o.stage_id WHERE o.channel_item_id = ?'
+).get(orderItemId).name;
+
+function order(id, extra = {}) {
+  return {
+    channel: 'smartstore', channel_order_id: `O${id}`, channel_item_id: `P${id}`, product_name: '명함',
+    option_text: null, quantity: 1, buyer_name: 'a', receiver_name: 'b', receiver_phone: null,
+    receiver_address: null, paid_at: null, channel_status: 'PAYED', channel_confirmed: 0, ...extra,
+  };
+}
+
+test('새 주문은 발주 단계 카드로 생기고 신규 발주 알림이 남는다', () => {
+  const db = openDb(':memory:');
+  const r = applyOrders(db, [order(1), order(2, { channel_confirmed: 1 })]);
+  assert.strictEqual(r.created, 2);
+  assert.strictEqual(stageName(db, 'P1'), '발주');
+  assert.strictEqual(stageName(db, 'P2'), '발주확인', '처음부터 발주확인된 주문은 발주확인 단계로');
+  const n = db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE type = 'new_order'").get().n;
+  assert.strictEqual(n, 2);
+});
+
+test('같은 주문을 다시 받아도 카드가 두 개 생기지 않는다', () => {
+  const db = openDb(':memory:');
+  applyOrders(db, [order(1)]);
+  const r = applyOrders(db, [order(1)]);
+  assert.deepStrictEqual([r.created, r.updated], [0, 1]);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 1);
+});
+
+test('판매자센터에서 발주확인되면 발주 단계 카드가 발주확인으로 옮겨진다', () => {
+  const db = openDb(':memory:');
+  applyOrders(db, [order(1)]);
+  applyOrders(db, [order(1, { channel_confirmed: 1 })]);
+  assert.strictEqual(stageName(db, 'P1'), '발주확인');
+});
+
+test('직원이 이미 다음 단계로 옮긴 카드는 되돌리지 않고, 사내 메모·담당자도 그대로 둔다', () => {
+  const db = openDb(':memory:');
+  const designer = addUser(db, { email: 'd@broad.test' });
+  applyOrders(db, [order(1)]);
+  const design = db.prepare("SELECT id FROM work_stages WHERE name = '디자인작업'").get().id;
+  db.prepare("UPDATE orders SET stage_id = ?, assignee_id = ?, memo = '금박 추가' WHERE channel_item_id = 'P1'").run(design, designer);
+
+  applyOrders(db, [order(1, { channel_confirmed: 1, channel_status: 'DELIVERING' })]);
+  const row = db.prepare("SELECT assignee_id, memo, channel_status FROM orders WHERE channel_item_id = 'P1'").get();
+  assert.strictEqual(stageName(db, 'P1'), '디자인작업');
+  assert.deepStrictEqual({ ...row }, { assignee_id: designer, memo: '금박 추가', channel_status: 'DELIVERING' });
+});
+
+test('결제 전 주문은 카드로 만들지 않는다', () => {
+  const db = openDb(':memory:');
+  const r = applyOrders(db, [order(1, { channel_status: 'PAYMENT_WAITING' })]);
+  assert.strictEqual(r.created, 0);
+});
+
+test('관리자가 단계 이름을 바꿔도 새 주문은 첫 단계로 들어간다', () => {
+  const db = openDb(':memory:');
+  db.prepare("UPDATE work_stages SET name = '접수' WHERE name = '발주'").run();
+  applyOrders(db, [order(1)]);
+  assert.strictEqual(stageName(db, 'P1'), '접수');
+});
+
+// ───────── 수집기 ─────────
+
+test('수집 기록이 남고, 다음 수집은 지난번 끝 시각 10분 전부터 본다', async () => {
+  const db = openDb(':memory:');
+  const ranges = [];
+  let clock = new Date('2026-10-14T00:00:00Z');
+  const source = { channel: 'smartstore', fetchChanges: async r => { ranges.push(r); return [order(ranges.length)]; } };
+  const collector = createCollector({ db, source, now: () => clock });
+
+  assert.strictEqual((await collector.run()).created, 1);
+  clock = new Date('2026-10-14T00:05:00Z');
+  await collector.run();
+
+  assert.strictEqual(ranges[0].from.toISOString(), '2026-10-11T00:00:00.000Z', '처음에는 최근 3일');
+  assert.strictEqual(ranges[1].from.toISOString(), '2026-10-13T23:50:00.000Z');
+  const runs = db.prepare('SELECT ok, created FROM collect_runs ORDER BY id').all().map(r => ({ ...r }));
+  assert.deepStrictEqual(runs, [{ ok: 1, created: 1 }, { ok: 1, created: 1 }]);
+});
+
+test('수집에 실패하면 이유를 기록하고, 다음 수집 범위를 앞으로 당기지 않는다', async () => {
+  const db = openDb(':memory:');
+  const source = { channel: 'smartstore', fetchChanges: async () => { throw new Error('IP 가 등록되지 않음'); } };
+  const collector = createCollector({ db, source });
+  const r = await collector.run();
+  assert.strictEqual(r.ok, false);
+  const run = db.prepare('SELECT ok, error FROM collect_runs').get();
+  assert.deepStrictEqual({ ...run }, { ok: 0, error: 'IP 가 등록되지 않음' });
+  assert.strictEqual(db.prepare("SELECT value FROM settings WHERE key = 'collect_last_to_smartstore'").get(), undefined);
+});
+
+test('수집이 겹쳐 실행되면 한 번만 돈다', async () => {
+  const db = openDb(':memory:');
+  let calls = 0;
+  const source = { channel: 'smartstore', fetchChanges: async () => { calls += 1; await new Promise(r => setTimeout(r, 20)); return []; } };
+  const collector = createCollector({ db, source });
+  await Promise.all([collector.run(), collector.run(), collector.run()]);
+  assert.strictEqual(calls, 1);
+});
+
+test('가짜 주문 출처: 처음 3건, 이후 일부가 발주확인으로 바뀐다', async () => {
+  let i = 0;
+  const seq = [0.1, 0.5, 0.9, 0.2, 0.7, 0.3];
+  const source = createMockSource({ random: () => seq[i++ % seq.length] });
+  const first = await source.fetchChanges();
+  assert.strictEqual(first.length, 3);
+  assert.ok(first.every(o => o.channel_confirmed === 0));
+  const second = await source.fetchChanges();
+  assert.ok(second.some(o => o.channel_confirmed === 1));
+});
+
+// ───────── 관리자 화면 ─────────
+
+test('관리자가 "지금 수집"을 누르면 주문이 들어오고 화면에 보인다', async t => {
+  const db = openDb(':memory:');
+  const collector = createCollector({ db, source: createMockSource() });
+  collector.intervalMinutes = 5;
+  const { server, baseUrl } = await startServer({ db, collector });
+  t.after(() => server.close());
+  addUser(db, { email: 'boss@broad.test', role: 'admin' });
+  const admin = await loginAs(baseUrl, 'boss@broad.test');
+
+  const res = await admin.submit('/admin/collect', '/admin/collect', {});
+  assert.strictEqual(res.location, '/admin/collect');
+  const page = await admin.request('/admin/collect');
+  assert.match(page.text, /수집 완료: 새 주문 3건/);
+  assert.match(page.text, /저장된 주문 <strong>3건/);
+});

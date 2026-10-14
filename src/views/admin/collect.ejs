@@ -1,0 +1,78 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<section class="card">
+  <h2>주문 수집</h2>
+  <% if (!source) { %>
+    <p class="error">주문 수집기가 설정되지 않았습니다.</p>
+  <% } else { %>
+    <p>
+      출처: <strong><%= source.label %></strong>
+      <% if (source.isMock) { %><span class="status status-pending">개발용</span><% } %>
+      · <%= intervalMinutes %>분마다 자동 수집 · 저장된 주문 <strong><%= total %>건</strong>
+    </p>
+    <% if (source.isMock) { %>
+      <p class="muted">지금은 가짜 주문으로 동작합니다. 서버에 올린 뒤 .env 의 ORDER_SOURCE 를 naver 로 바꾸면 실제 스마트스토어 주문을 가져옵니다.
+        네이버에는 주문을 조회만 하고, 주문 상태를 바꾸는 요청은 보내지 않습니다.</p>
+    <% } %>
+    <form method="post" action="/admin/collect" class="inline">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="btn-sm primary">지금 수집</button>
+    </form>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>최근 수집 기록</h2>
+  <% if (runs.length === 0) { %>
+    <p class="muted">아직 수집 기록이 없습니다.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>시각</th><th>결과</th><th>새 주문</th><th>바뀐 주문</th><th>비고</th></tr></thead>
+        <tbody>
+          <% runs.forEach(r => { %>
+            <tr>
+              <td class="nowrap"><%= kst(r.started_at) %></td>
+              <td>
+                <% if (r.ok === 1) { %><span class="status status-active">성공</span>
+                <% } else if (r.ok === 0) { %><span class="status status-suspended">실패</span>
+                <% } else { %><span class="status">진행 중</span><% } %>
+              </td>
+              <td><%= r.created %></td>
+              <td><%= r.updated %></td>
+              <td class="muted"><%= r.error || '' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>최근 들어온 주문 <span class="muted">(확인용, 주문 목록 화면은 5단계)</span></h2>
+  <% if (recent.length === 0) { %>
+    <p class="muted">아직 주문이 없습니다.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>상품주문번호</th><th>상품</th><th>수량</th><th>채널 상태</th><th>발주확인</th><th>작업 단계</th></tr></thead>
+        <tbody>
+          <% recent.forEach(o => { %>
+            <tr>
+              <td class="muted nowrap"><%= o.channel_item_id %></td>
+              <td class="product"><%= o.product_name %><% if (o.option_text) { %><div class="muted"><%= o.option_text %></div><% } %></td>
+              <td><%= o.quantity %></td>
+              <td><%= channelStatusLabel(o.channel_status) %></td>
+              <td><%= o.channel_confirmed ? '완료' : '대기' %></td>
+              <td><%= o.stage_name || '-' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</section>
+<%- include('../partials/footer') %>

@@ -10,6 +10,7 @@ const { SqliteSessionStore } = require('./sessionStore');
 const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
+const { channelStatusLabel } = require('./channels/labels');
 
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -21,13 +22,22 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ db, secret = sessionSecret() }) {
+function createApp({ db, collector = null, secret = sessionSecret() }) {
   const app = express();
   const isProd = process.env.NODE_ENV === 'production';
   const store = new SqliteSessionStore(db);
 
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));
+  app.locals.channelStatusLabel = channelStatusLabel;
+  // 화면에 시각을 한국 시간으로 보여준다 (DB 에는 UTC 로 저장)
+  app.locals.kst = value => {
+    if (!value) return '-';
+    const text = String(value);
+    const d = new Date(/[zZ]|[+-]\d\d:\d\d$/.test(text) ? text : text.replace(' ', 'T') + 'Z');
+    if (Number.isNaN(d.getTime())) return text;
+    return new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 16).replace('T', ' ');
+  };
   // HTTPS 프록시(Nginx 등) 뒤에서 실행될 때 실제 접속 정보를 믿도록 설정
   if (isProd) app.set('trust proxy', 1);
 
@@ -74,7 +84,7 @@ function createApp({ db, secret = sessionSecret() }) {
     res.render('home', { title: '홈' });
   });
 
-  app.use('/admin', requireAdmin, adminRoutes(db, store));
+  app.use('/admin', requireAdmin, adminRoutes(db, store, collector));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });
