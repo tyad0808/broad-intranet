@@ -177,3 +177,71 @@ form.inline { display: inline; margin: 0; }
 .table td.product { white-space: normal; min-width: 180px; }
 .table td.muted:last-child { white-space: normal; }
 .status { white-space: nowrap; }
+
+/* ───────── 5단계: 주문 목록과 주문 카드 ───────── */
+.tabs .count { color: var(--muted); font-size: 13px; font-weight: 400; }
+
+.filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+.filters select, .filters input { width: auto; margin-top: 0; padding: 8px 10px; }
+.filters input[type=search] { flex: 1 1 220px; }
+
+.order-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.order-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 14px 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+.order-item:hover { border-color: var(--primary); }
+.oi-main { flex: 1 1 280px; min-width: 0; }
+.oi-title { font-weight: 600; }
+.oi-meta { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; flex: 0 1 auto; }
+
+.pill {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.pill.stage { background: var(--notice-bg); border-color: #cddcfb; color: var(--primary-dark); font-weight: 600; }
+.pill.warn { background: #fff4e0; border-color: #f5d9a8; color: #9a6700; }
+.pill.light { color: var(--muted); }
+.pill.due-soon { background: #fff4e0; border-color: #f5d9a8; color: #9a6700; font-weight: 600; }
+.pill.due-over { background: var(--error-bg); border-color: #f3c4c0; color: var(--error); font-weight: 600; }
+
+.detail { display: grid; gap: 16px; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+.detail .card + .card { margin-top: 0; }
+.detail-title { font-size: 20px; margin: 0 0 4px; }
+.detail-form { margin-top: 16px; }
+textarea {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+.form-actions { display: flex; gap: 8px; }
+button.secondary { background: #fff; color: var(--primary); border: 1px solid var(--primary); }
+button.secondary:hover { background: var(--notice-bg); }
+
+.info { display: grid; grid-template-columns: 96px 1fr; gap: 6px 12px; margin: 0 0 16px; font-size: 14px; }
+.info dt { color: var(--muted); }
+.info dd { margin: 0; word-break: break-all; }
+
+@media (max-width: 760px) {
+  .detail { grid-template-columns: 1fr; }
+  .oi-meta { justify-content: flex-start; }
+}

@@ -17,8 +17,21 @@ function openDb(dbPath = DB_PATH) {
   // 다른 테이블을 가리키는 칸(FOREIGN KEY)이 엉뚱한 값을 갖지 못하게 검사
   db.exec('PRAGMA foreign_keys = ON');
   migrate(db);
+  addMissingColumns(db);
   seed(db);
   return db;
+}
+
+// 이미 만들어진 DB 파일에 새 칸을 추가한다.
+// CREATE TABLE IF NOT EXISTS 는 표가 이미 있으면 아무것도 안 하므로, 나중에 추가된 칸은 여기서 넣는다.
+function addColumn(db, table, column, definition) {
+  const exists = db.prepare(`PRAGMA table_info(${table})`).all().some(c => c.name === column);
+  if (!exists) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+}
+
+function addMissingColumns(db) {
+  // 5단계: 직원이 주문 카드를 저장할 때마다 1씩 올린다 (동시에 고칠 때 덮어쓰기 방지용)
+  addColumn(db, 'orders', 'version', 'INTEGER NOT NULL DEFAULT 0');
 }
 
 function migrate(db) {

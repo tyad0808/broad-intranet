@@ -1,0 +1,76 @@
+<%- include('../partials/header') %>
+<p><a href="<%= back %>">← 목록으로</a></p>
+
+<div class="detail">
+  <section class="card">
+    <h1 class="detail-title"><%= order.product_name %></h1>
+    <% if (order.option_text) { %><p class="muted"><%= order.option_text %></p><% } %>
+
+    <form method="post" action="/orders/<%= order.id %>" class="detail-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="version" value="<%= order.version %>">
+      <input type="hidden" name="back" value="<%= back %>">
+
+      <label>작업 단계
+        <select name="stage_id">
+          <% stages.forEach(s => { if (!s.active && s.id !== order.stage_id) return; %>
+            <option value="<%= s.id %>" <%= s.id === order.stage_id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label>담당 디자이너
+        <select name="assignee_id">
+          <option value="">미지정</option>
+          <% if (order.assignee_id && !designers.some(d => d.id === order.assignee_id)) { %>
+            <option value="<%= order.assignee_id %>" selected><%= order.assignee_name %> (디자이너 아님)</option>
+          <% } %>
+          <% designers.forEach(d => { %>
+            <option value="<%= d.id %>" <%= d.id === order.assignee_id ? 'selected' : '' %>><%= d.name %><%= d.id === user.id ? ' (나)' : '' %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label>납기
+        <input type="date" name="due_date" value="<%= order.due_date || '' %>">
+      </label>
+
+      <label>파일 위치 (NAS 경로)
+        <input type="text" name="nas_path" value="<%= order.nas_path || '' %>" maxlength="300" placeholder="예: \\NAS\작업\2026\10\홍길동_명함">
+      </label>
+
+      <label>메모
+        <textarea name="memo" rows="4" maxlength="2000" placeholder="작업 요청사항, 고객과 통화 내용 등"><%= order.memo || '' %></textarea>
+      </label>
+
+      <div class="form-actions">
+        <button type="submit">저장</button>
+        <% if (isDesigner && order.assignee_id !== user.id) { %>
+          <button type="submit" name="assignee_id" value="me" class="secondary">내가 맡기</button>
+        <% } %>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>주문 정보</h2>
+    <dl class="info">
+      <dt>채널</dt><dd>스마트스토어</dd>
+      <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
+      <dt>상품주문번호</dt><dd><%= order.channel_item_id %></dd>
+      <dt>수량</dt><dd><%= order.quantity %>개</dd>
+      <dt>결제일</dt><dd><%= kst(order.paid_at) %></dd>
+      <dt>채널 상태</dt><dd><%= channelStatusLabel(order.channel_status) %></dd>
+      <dt>발주확인</dt><dd><%= order.channel_confirmed ? '판매자센터에서 발주확인됨' : '아직 안 됨' %></dd>
+    </dl>
+    <h2>배송지</h2>
+    <dl class="info">
+      <dt>주문자</dt><dd><%= order.buyer_name || '-' %></dd>
+      <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
+      <dt>연락처</dt><dd><% if (order.receiver_phone) { %><a href="tel:<%= order.receiver_phone %>"><%= order.receiver_phone %></a><% } else { %>-<% } %></dd>
+      <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
+    </dl>
+    <p class="muted">주문 정보와 배송지는 스마트스토어에서 가져온 값이라 여기서 바꿀 수 없습니다.</p>
+  </section>
+</div>
+<%- include('../partials/footer') %>

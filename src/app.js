@@ -10,6 +10,7 @@ const { SqliteSessionStore } = require('./sessionStore');
 const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
+const { orderRoutes } = require('./routes/orders');
 const { channelStatusLabel } = require('./channels/labels');
 
 function sessionSecret() {
@@ -30,6 +31,15 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));
   app.locals.channelStatusLabel = channelStatusLabel;
+  // 납기 표시: 지났으면 빨강, 오늘·내일이면 주황 (today 는 한국 날짜 YYYY-MM-DD)
+  app.locals.dueInfo = (due, today) => {
+    if (!due) return { cls: '', text: '' };
+    const tomorrow = new Date(Date.parse(today + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
+    if (due < today) return { cls: 'due-over', text: `${due.slice(5)} 지남` };
+    if (due === today) return { cls: 'due-soon', text: '오늘' };
+    if (due === tomorrow) return { cls: 'due-soon', text: '내일' };
+    return { cls: '', text: due.slice(5) };
+  };
   // 화면에 시각을 한국 시간으로 보여준다 (DB 에는 UTC 로 저장)
   app.locals.kst = value => {
     if (!value) return '-';
@@ -80,11 +90,8 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
   app.use(authRoutes(db));
 
   // 여기부터는 로그인 + 승인된 계정만 접근
-  app.get('/', requireActive, (req, res) => {
-    res.render('home', { title: '홈' });
-  });
-
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector));
+  app.use(requireActive, orderRoutes(db));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });

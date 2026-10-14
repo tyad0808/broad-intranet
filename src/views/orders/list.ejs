@@ -1,0 +1,71 @@
+<%- include('../partials/header') %>
+<%
+  // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
+  const link = changes => {
+    const p = new URLSearchParams();
+    const merged = { view, stage: stageFilter || '', sort: sort === 'recent' ? '' : sort, q, ...changes };
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
+    const s = p.toString();
+    return s ? `/?${s}` : '/';
+  };
+%>
+
+<div class="list-head">
+  <h1 class="page-title">주문</h1>
+</div>
+
+<nav class="tabs">
+  <% Object.entries(VIEWS).forEach(([key, label]) => { %>
+    <a href="<%= link({ view: key === 'active' ? '' : key }) %>" class="<%= view === key ? 'on' : '' %>">
+      <%= label %> <span class="count"><%= counts[key] || 0 %></span>
+    </a>
+  <% }) %>
+</nav>
+
+<form method="get" action="/" class="filters" data-autosubmit>
+  <% if (view !== 'active') { %><input type="hidden" name="view" value="<%= view %>"><% } %>
+  <select name="stage" aria-label="작업 단계">
+    <option value="">모든 단계</option>
+    <% stages.forEach(s => { %>
+      <option value="<%= s.id %>" <%= stageFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %></option>
+    <% }) %>
+  </select>
+  <select name="sort" aria-label="정렬">
+    <option value="">최근 주문순</option>
+    <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>
+  </select>
+  <input type="search" name="q" value="<%= q %>" placeholder="상품, 고객, 주문번호, 메모 검색" aria-label="검색">
+  <button type="submit" class="btn-sm">검색</button>
+</form>
+
+<% if (orders.length === 0) { %>
+  <section class="card"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>
+<% } else { %>
+  <ul class="order-list">
+    <% orders.forEach(o => { const due = dueInfo(o.due_date, today); %>
+      <li>
+        <a class="order-item" href="/orders/<%= o.id %>?back=<%= encodeURIComponent(currentUrl) %>">
+          <div class="oi-main">
+            <div class="oi-title"><%= o.product_name %></div>
+            <div class="muted"><%= o.option_text || '' %><%= o.option_text ? ' · ' : '' %><%= o.quantity %>개</div>
+            <div class="muted"><%= o.receiver_name || o.buyer_name || '-' %> · <%= kst(o.paid_at) %> 결제</div>
+          </div>
+          <div class="oi-meta">
+            <span class="pill stage"><%= o.stage_name || '단계 없음' %></span>
+            <% if (o.assignee_name) { %>
+              <span class="pill"><%= o.assignee_name %></span>
+            <% } else { %>
+              <span class="pill warn">미지정</span>
+            <% } %>
+            <% if (due.text) { %><span class="pill <%= due.cls %>">납기 <%= due.text %></span><% } %>
+            <span class="pill light"><%= channelStatusLabel(o.channel_status) %><%= o.channel_confirmed ? ' · 발주확인됨' : '' %></span>
+          </div>
+        </a>
+      </li>
+    <% }) %>
+  </ul>
+  <% if (orders.length >= 300) { %><p class="muted">최근 300건까지만 보입니다. 검색이나 필터로 좁혀 보세요.</p><% } %>
+<% } %>
+
+<script src="/orders.js"></script>
+<%- include('../partials/footer') %>
