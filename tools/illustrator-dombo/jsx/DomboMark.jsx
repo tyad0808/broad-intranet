@@ -27,7 +27,7 @@
   var eDia = numRow(gMark, '마크 지름', d.diameterMm);
   var eOffset = numRow(gMark, '작업물과의 거리', d.offsetMm);
   var eSpacing = numRow(gMark, '마크 간격 (최대)', d.spacingMm);
-  gMark.add('statictext', undefined, '간격 0 이면 네 모서리만 찍습니다.');
+  gMark.add('statictext', undefined, '간격은 위·아래 변에만 적용. 0 이면 네 모서리만.');
 
   var gAb = w.add('panel', undefined, '대지');
   gAb.alignChildren = 'left';

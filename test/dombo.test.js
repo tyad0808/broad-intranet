@@ -30,25 +30,25 @@ test('기본값은 지름 6mm 원형, 마크 가장자리가 작업물에서 5mm
   nearPts([[r.paper[0], r.paper[1]], [r.paper[2], r.paper[3]]], mmPts([[-16, 66], [116, -16]]));
 });
 
-test('각 변을 간격 이하로 똑같이 나누고, 왼쪽 위부터 시계 방향으로 놓는다', () => {
-  // 중심 사각형 116mm x 66mm, 간격 50mm → 가로 3칸(38.67mm), 세로 2칸(33mm)
+test('위·아래 변만 간격 이하로 똑같이 나누고, 좌우 변 가운데에는 찍지 않는다', () => {
+  // 중심 사각형 116mm x 66mm, 간격 50mm → 위·아래 3칸(38.67mm)
   const r = core.domboComputeMarks(art, { spacingMm: 50 });
   const w = 116 / 3;
   nearPts(r.centers, mmPts([
     [-8, 58], [-8 + w, 58], [-8 + 2 * w, 58], [108, 58],
-    [108, 25],
     [108, -8], [-8 + 2 * w, -8], [-8 + w, -8], [-8, -8],
-    [-8, 25],
   ]));
   near(r.spacingX, w * MM);
-  near(r.spacingY, 33 * MM);
+  // 세로가 간격보다 길어도 좌우 변에는 모서리만
+  const tall = core.domboComputeMarks([0, 500 * MM, 100 * MM, 0], { spacingMm: 50 });
+  assert.ok(Array.from(tall.centers).every(c => Math.abs(c[1] - 508 * MM) < 1e-9 || Math.abs(c[1] + 8 * MM) < 1e-9));
 });
 
 test('길이가 간격으로 딱 나눠지면 칸을 더 만들지 않는다', () => {
   // 중심 사각형 116mm x 66mm → 간격 58mm 이면 가로 2칸
   const r = core.domboComputeMarks(art, { spacingMm: 58 });
   near(r.spacingX, 58 * MM);
-  assert.strictEqual(r.centers.length, 2 * 3 + 2 * 1);
+  assert.strictEqual(r.centers.length, 2 * 3);
 });
 
 test('간격 0 이면 네 모서리만, 패널에서 온 글자 숫자도 받는다', () => {
@@ -62,4 +62,27 @@ test('잘못된 설정은 거절한다', () => {
   assert.throws(() => core.domboComputeMarks(art, { offsetMm: -1 }), /거리/);
   assert.throws(() => core.domboComputeMarks(art, { spacingMm: 6 }), /지름\(6mm\)보다/);
   assert.throws(() => core.domboComputeMarks([0, 5000 * MM, 5000 * MM, 0], { spacingMm: 10 }), /너무 많습니다/);
+});
+
+// 일러스트레이터 개체 흉내
+const pathItem = (b, extra = {}) => ({ typename: 'PathItem', geometricBounds: b, visibleBounds: b, ...extra });
+const group = (kids, extra = {}) => ({ typename: 'GroupItem', pageItems: kids, visibleBounds: [-999, 999, 999, -999], ...extra });
+
+test('클리핑 마스크는 가려진 부분이 아니라 마스크 모양을 기준으로 찍는다', () => {
+  const hiddenArt = pathItem([-500, 500, 500, -500]);
+  const mask = pathItem([0, 50, 100, 0], { clipping: true });
+  const clip = group([mask, hiddenArt], { clipped: true });
+  assert.deepStrictEqual(Array.from(core.domboItemBounds(clip)), [0, 50, 100, 0]);
+
+  // 복합 패스 마스크, 그룹 안의 마스크, 여러 개 선택
+  const compoundMask = { typename: 'CompoundPathItem', geometricBounds: [10, 40, 60, 5], pathItems: [{ clipping: true }] };
+  const clip2 = group([compoundMask, hiddenArt], { clipped: true });
+  const outer = group([clip2, pathItem([70, 20, 120, -10])]);
+  const doc = { selection: [outer, clip] };
+  assert.deepStrictEqual(Array.from(core.domboSelectionBounds(doc)), [0, 50, 120, -10]);
+});
+
+test('숨긴 개체는 범위에서 뺀다', () => {
+  const g = group([pathItem([0, 10, 10, 0]), pathItem([-100, 100, 100, -100], { hidden: true })]);
+  assert.deepStrictEqual(Array.from(core.domboItemBounds(g)), [0, 10, 10, 0]);
 });

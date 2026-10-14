@@ -13,7 +13,7 @@ function domboDefaults() {
     target: 'selection', // 'selection' 선택한 작업물 / 'artboard' 현재 대지
     diameterMm: 6,       // 원형 마크 지름
     offsetMm: 5,         // 작업물 테두리와 마크 가장자리 사이 거리
-    spacingMm: 300,      // 마크 중심 사이 최대 간격 (0 이면 네 모서리만)
+    spacingMm: 300,      // 위·아래 변의 마크 중심 사이 최대 간격 (0 이면 네 모서리만)
     fitArtboard: true,   // 마크가 대지 밖으로 나가면 대지를 넓힌다
     marginMm: 5          // 대지를 넓힐 때 마크 바깥 여백
   };
@@ -57,7 +57,8 @@ function domboSteps(a, b, spacing) {
 
 // 범위와 설정을 받아 원형 마크의 중심 목록을 계산한다 (일러스트레이터 없이도 동작).
 // 마크는 작업물 둘레에 놓이고, 마크 가장자리와 작업물 테두리 사이가 정확히 '거리' 만큼 떨어진다.
-// 네 모서리에는 항상 마크가 있고, 각 변은 간격이 설정값을 넘지 않도록 똑같이 나눈다.
+// 네 모서리에는 항상 마크가 있고, 위·아래 변만 간격이 설정값을 넘지 않도록 똑같이 나눈다.
+// 왼쪽·오른쪽 변 가운데에는 찍지 않는다.
 function domboComputeMarks(bounds, opts) {
   var o = domboMerge(opts);
   domboValidate(o);
@@ -67,8 +68,7 @@ function domboComputeMarks(bounds, opts) {
   var L = bounds[0] - e, T = bounds[1] + e, R = bounds[2] + e, B = bounds[3] - e;
 
   var xs = domboSteps(L, R, sp);
-  var ys = domboSteps(B, T, sp);
-  var count = 2 * xs.length + 2 * (ys.length - 2);
+  var count = 2 * xs.length;
   if (count > DOMBO_MAX_MARKS) {
     throw new Error('마크가 ' + count + '개로 너무 많습니다. 간격을 늘리세요.');
   }
@@ -76,16 +76,13 @@ function domboComputeMarks(bounds, opts) {
   // 왼쪽 위에서 시작해 시계 방향
   var centers = [], i;
   for (i = 0; i < xs.length; i++) centers.push([xs[i], T]);
-  for (i = ys.length - 2; i >= 1; i--) centers.push([R, ys[i]]);
   for (i = xs.length - 1; i >= 0; i--) centers.push([xs[i], B]);
-  for (i = 1; i <= ys.length - 2; i++) centers.push([L, ys[i]]);
 
   var m = o.marginMm * DOMBO_PT_PER_MM;
   return {
     radius: r,
     centers: centers,
     spacingX: (R - L) / (xs.length - 1),
-    spacingY: (T - B) / (ys.length - 1),
     extent: [L - r, T + r, R + r, B - r],
     paper: [L - r - m, T + r + m, R + r + m, B - r - m]
   };
@@ -102,20 +99,41 @@ function domboArtboardRect(doc) {
   return doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
 }
 
+function domboUnion(b, v) {
+  if (!b) return [v[0], v[1], v[2], v[3]];
+  return [Math.min(b[0], v[0]), Math.max(b[1], v[1]), Math.max(b[2], v[2]), Math.min(b[3], v[3])];
+}
+
+// 눈에 보이는 범위. 클리핑 마스크 그룹은 가려진 부분을 빼고 마스크 모양만 기준으로 삼는다.
+// (일러스트레이터의 visibleBounds 는 마스크에 가려진 부분까지 포함하기 때문)
+function domboItemBounds(item) {
+  if (item.typename === 'GroupItem') {
+    var kids = item.pageItems, i;
+    if (item.clipped) {
+      for (i = 0; i < kids.length; i++) {
+        var k = kids[i];
+        if (k.typename === 'PathItem' && k.clipping) return k.geometricBounds;
+        if (k.typename === 'CompoundPathItem' && k.pathItems.length > 0 && k.pathItems[0].clipping) {
+          return k.geometricBounds;
+        }
+      }
+    }
+    var b = null;
+    for (i = 0; i < kids.length; i++) {
+      if (!kids[i].hidden) b = domboUnion(b, domboItemBounds(kids[i]));
+    }
+    if (b) return b;
+  }
+  return item.visibleBounds;
+}
+
 function domboSelectionBounds(doc) {
   var sel = doc.selection;
   if (!sel || sel.typename === 'TextRange' || sel.length === 0) {
     throw new Error('돔보를 찍을 작업물을 선택하세요. (글자 편집 중이면 선택 도구로 바꾸세요)');
   }
   var b = null;
-  for (var i = 0; i < sel.length; i++) {
-    var v = sel[i].visibleBounds;
-    if (!b) { b = [v[0], v[1], v[2], v[3]]; continue; }
-    if (v[0] < b[0]) b[0] = v[0];
-    if (v[1] > b[1]) b[1] = v[1];
-    if (v[2] > b[2]) b[2] = v[2];
-    if (v[3] < b[3]) b[3] = v[3];
-  }
+  for (var i = 0; i < sel.length; i++) b = domboUnion(b, domboItemBounds(sel[i]));
   return b;
 }
 
@@ -184,8 +202,8 @@ function domboPlace(opts) {
   layer.locked = true;
 
   var mm = function (pt) { return Math.round(pt / DOMBO_PT_PER_MM * 10) / 10; };
-  var msg = '원형 돔보 ' + result.centers.length + '개를 찍었습니다. 실제 간격: 가로 ' +
-    mm(result.spacingX) + 'mm, 세로 ' + mm(result.spacingY) + 'mm.';
+  var msg = '원형 돔보 ' + result.centers.length + '개를 찍었습니다. 실제 가로 간격 ' +
+    mm(result.spacingX) + 'mm.';
   var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
   var ar = ab.artboardRect, e = result.extent;
   var outside = e[0] < ar[0] || e[1] > ar[1] || e[2] > ar[2] || e[3] < ar[3];
