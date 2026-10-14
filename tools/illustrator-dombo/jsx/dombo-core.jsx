@@ -1,5 +1,5 @@
 ﻿// 브로애드 일러스트레이터 도구 핵심 기능 (ExtendScript, ES3 문법만 사용)
-// 돔보마크, 칼선, 격자 칼선, 막대 + 박스, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
+// 돔보마크, 칼선, 격자 칼선, 막대 + 박스, 치수 표시, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
@@ -118,20 +118,20 @@ function domboClipMask(group) {
 
 // 눈에 보이는 범위. 클리핑 마스크 그룹은 가려진 부분을 빼고 마스크 모양만 기준으로 삼는다.
 // (일러스트레이터의 visibleBounds 는 마스크에 가려진 부분까지 포함하기 때문)
-// 숨긴 개체나 안내선만 있으면 null
-function domboItemBounds(item) {
+// 숨긴 개체나 안내선만 있으면 null. geometric 이면 선 두께를 뺀 패스 범위
+function domboItemBounds(item, geometric) {
   if (item.hidden || item.guides) return null;
   if (item.typename === 'GroupItem') {
     var mask = domboClipMask(item);
     if (mask) return mask.geometricBounds;
     var b = null;
     for (var i = 0; i < item.pageItems.length; i++) {
-      var v = domboItemBounds(item.pageItems[i]);
+      var v = domboItemBounds(item.pageItems[i], geometric);
       if (v) b = domboUnion(b, v);
     }
     return b;
   }
-  return item.visibleBounds;
+  return geometric ? item.geometricBounds : item.visibleBounds;
 }
 
 function domboHasSelection(doc) {
@@ -139,9 +139,9 @@ function domboHasSelection(doc) {
   return !!sel && sel.typename !== 'TextRange' && sel.length > 0;
 }
 
-// 레이어(하위 레이어 포함)에서 보이는 맨 위 개체들을 모은다. 돔보·칼선 레이어는 뺀다.
+// 레이어(하위 레이어 포함)에서 보이는 맨 위 개체들을 모은다. 돔보·칼선·치수 레이어는 뺀다.
 function domboLayerItems(layer, out) {
-  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER) return;
+  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER) return;
   for (var i = 0; i < layer.pageItems.length; i++) out.push(layer.pageItems[i]);
   for (var j = 0; j < layer.layers.length; j++) domboLayerItems(layer.layers[j], out);
 }
@@ -532,6 +532,181 @@ function domboBarBox(opts) {
   return made + '개 객체 기준으로 ' + (o.useBar ? '막대와 박스를' : '박스를') + ' 만들었습니다.';
 }
 
+// ---- 치수 표시 ----
+
+var DOMBO_DIM_LAYER = '치수';
+
+function domboDimDefaults() {
+  return {
+    target: 'each',     // 'each' 선택한 것마다 / 'all' 전체를 하나로
+    showW: true,        // 가로 치수
+    showH: true,        // 세로 치수
+    hSide: 'top',       // 가로 치수 위치 'top' / 'bottom'
+    vSide: 'right',     // 세로 치수 위치 'right' / 'left'
+    offsetMm: 10,       // 객체와 치수선 사이
+    textAuto: true,     // 글자 크기를 객체 크기에 맞춤
+    textMm: 5,          // 글자 크기 (자동이 아닐 때)
+    decimals: 0,        // 소수점 자리
+    unit: true,         // 'mm' 붙이기
+    stroke: false       // 선 두께 포함해서 재기 (기본은 패스 크기)
+  };
+}
+
+function domboDimMerge(opts) {
+  var o = domboDimDefaults();
+  if (opts) {
+    for (var k in opts) {
+      if (opts.hasOwnProperty(k) && opts[k] !== undefined && opts[k] !== null) o[k] = opts[k];
+    }
+  }
+  var bools = ['showW', 'showH', 'textAuto', 'unit', 'stroke'];
+  for (var i = 0; i < bools.length; i++) o[bools[i]] = o[bools[i]] === true || o[bools[i]] === 'true';
+  o.offsetMm = Number(o.offsetMm);
+  o.textMm = Number(o.textMm);
+  o.decimals = Number(o.decimals);
+  if (o.target !== 'each' && o.target !== 'all') throw new Error('치수 기준이 잘못됐습니다.');
+  if (o.hSide !== 'top' && o.hSide !== 'bottom') throw new Error('가로 치수 위치가 잘못됐습니다.');
+  if (o.vSide !== 'right' && o.vSide !== 'left') throw new Error('세로 치수 위치가 잘못됐습니다.');
+  if (!o.showW && !o.showH) throw new Error('가로·세로 중 하나는 골라야 합니다.');
+  if (!(o.offsetMm >= 0)) throw new Error('치수선 거리는 0 이상이어야 합니다.');
+  if (!o.textAuto && !(o.textMm > 0)) throw new Error('글자 크기는 0보다 커야 합니다.');
+  if (o.decimals !== 0 && o.decimals !== 1 && o.decimals !== 2) throw new Error('소수점 자리는 0, 1, 2 중 하나여야 합니다.');
+  return o;
+}
+
+// 치수 글자: 300 → '300 mm', 소수점 자리 맞춤
+function domboDimLabel(mm, decimals, unit) {
+  var f = Math.pow(10, decimals), v = Math.round(mm * f) / f;
+  var str = decimals > 0 ? v.toFixed(decimals) : String(v);
+  // 천 단위 쉼표
+  var parts = str.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  return parts.join('.') + (unit ? ' mm' : '');
+}
+
+// 범위를 받아 치수선·화살표·글자 자리를 계산한다 (일러스트레이터 없이도 동작, 단위 pt)
+// 결과: { textPt, strokePt, lines: [[[x,y],[x,y]], ...], arrows: [[[x,y]x3], ...], texts: [{ x, y, angle, str }] }
+//  - 글자 x, y 는 글자 가운데 자리, angle 90 이면 세로(아래에서 위로 읽음)
+function domboDimGeometry(bounds, opts) {
+  var o = domboDimMerge(opts), k = DOMBO_PT_PER_MM;
+  var L = bounds[0], T = bounds[1], R = bounds[2], B = bounds[3];
+  var wMm = (R - L) / k, hMm = (T - B) / k;
+  var textMm = o.textAuto ? Math.min(60, Math.max(2.5, Math.max(wMm, hMm) * 0.03)) : o.textMm;
+  var tp = textMm * k;                         // 글자 크기 (pt)
+  var arrow = tp * 0.6, half = arrow * 0.3;   // 화살표 길이, 반폭
+  var gap = tp * 0.25;                         // 객체와 보조선 사이 틈
+  var over = tp * 0.4;                         // 보조선이 치수선 너머로 나가는 길이
+  var off = o.offsetMm * k + tp * 0.5;
+  var lines = [], arrows = [], texts = [];
+
+  if (o.showW) {
+    var dir = o.hSide === 'top' ? 1 : -1, edge = dir > 0 ? T : B, y = edge + dir * off;
+    lines.push([[L, edge + dir * gap], [L, y + dir * over]]);
+    lines.push([[R, edge + dir * gap], [R, y + dir * over]]);
+    lines.push([[L, y], [R, y]]);
+    arrows.push([[L, y], [L + arrow, y + half], [L + arrow, y - half]]);
+    arrows.push([[R, y], [R - arrow, y + half], [R - arrow, y - half]]);
+    texts.push({ x: (L + R) / 2, y: y + dir * tp * 0.75, angle: 0, str: domboDimLabel(wMm, o.decimals, o.unit) });
+  }
+  if (o.showH) {
+    var dx = o.vSide === 'right' ? 1 : -1, side = dx > 0 ? R : L, x = side + dx * off;
+    lines.push([[side + dx * gap, T], [x + dx * over, T]]);
+    lines.push([[side + dx * gap, B], [x + dx * over, B]]);
+    lines.push([[x, T], [x, B]]);
+    arrows.push([[x, T], [x - half, T - arrow], [x + half, T - arrow]]);
+    arrows.push([[x, B], [x - half, B + arrow], [x + half, B + arrow]]);
+    texts.push({ x: x + dx * tp * 0.75, y: (T + B) / 2, angle: 90, str: domboDimLabel(hMm, o.decimals, o.unit) });
+  }
+  return { textPt: tp, strokePt: Math.max(0.3, tp / 25), lines: lines, arrows: arrows, texts: texts };
+}
+
+// 치수 색: 시안(파랑). 레이저 빨강·칼선 마젠타와 헷갈리지 않게
+function domboDimColor(doc) {
+  if (doc.documentColorSpace === DocumentColorSpace.CMYK) {
+    var c = new CMYKColor();
+    c.cyan = 100; c.magenta = 30; c.yellow = 0; c.black = 0;
+    return c;
+  }
+  var r = new RGBColor();
+  r.red = 0; r.green = 120; r.blue = 220;
+  return r;
+}
+
+function domboDimDraw(doc, layer, bounds, o, color) {
+  var g = domboDimGeometry(bounds, o);
+  var grp = layer.groupItems.add(), i;
+  grp.name = '치수';
+  for (i = 0; i < g.lines.length; i++) {
+    var ln = grp.pathItems.add();
+    ln.setEntirePath(g.lines[i]);
+    ln.closed = false;
+    ln.filled = false;
+    ln.stroked = true;
+    ln.strokeColor = color;
+    ln.strokeWidth = g.strokePt;
+  }
+  for (i = 0; i < g.arrows.length; i++) {
+    var ar = grp.pathItems.add();
+    ar.setEntirePath(g.arrows[i]);
+    ar.closed = true;
+    ar.filled = true;
+    ar.fillColor = color;
+    ar.stroked = false;
+  }
+  for (i = 0; i < g.texts.length; i++) {
+    var t = g.texts[i], tf = grp.textFrames.add();
+    tf.contents = t.str;
+    var ca = tf.textRange.characterAttributes;
+    ca.size = g.textPt;
+    ca.fillColor = color;
+    if (t.angle) tf.rotate(t.angle);
+    // 글자 가운데를 계산한 자리로
+    var b = tf.geometricBounds;
+    tf.translate(t.x - (b[0] + b[2]) / 2, t.y - (b[1] + b[3]) / 2);
+  }
+  return grp;
+}
+
+function domboDimension(opts) {
+  var doc = domboDoc();
+  var o = domboDimMerge(opts);
+  if (!domboHasSelection(doc)) throw new Error('치수를 표시할 객체를 선택하세요.');
+  var items = [], i;
+  for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+  var boundsList = [], all = null;
+  for (i = 0; i < items.length; i++) {
+    var b = domboItemBounds(items[i], !o.stroke);
+    if (!b) continue;
+    boundsList.push(b);
+    all = domboUnion(all, b);
+  }
+  if (!all) throw new Error('선택한 것에 보이는 모양이 없습니다.');
+  if (o.target === 'all') boundsList = [all];
+
+  var layer = domboGetLayer(doc, DOMBO_DIM_LAYER);
+  layer.zOrder(ZOrderMethod.BRINGTOFRONT);
+  var color = domboDimColor(doc), k = DOMBO_PT_PER_MM;
+  for (i = 0; i < boundsList.length; i++) domboDimDraw(doc, layer, boundsList[i], o, color);
+  doc.selection = null;
+
+  var msg = boundsList.length + '개에 치수를 표시했습니다.';
+  if (boundsList.length === 1) {
+    var one = boundsList[0];
+    msg += ' (' + domboDimLabel((one[2] - one[0]) / k, o.decimals, false) + ' × ' +
+      domboDimLabel((one[1] - one[3]) / k, o.decimals, false) + ' mm)';
+  }
+  return msg + " '치수' 레이어에 있습니다.";
+}
+
+function domboDimRemove() {
+  var doc = domboDoc();
+  var layer = domboFindLayer(doc, DOMBO_DIM_LAYER);
+  if (!layer) return '지울 치수가 없습니다.';
+  layer.locked = false;
+  layer.remove();
+  return '치수를 모두 지웠습니다.';
+}
+
 // ---- 개수 세기 ----
 
 function domboCountItem(item, c) {
@@ -583,3 +758,5 @@ function domboPanelCut() { return domboCall(domboCutContour); }
 function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
 function domboPanelCount() { return domboCall(domboCount); }
 function domboPanelBarBox(opts) { return domboCall(domboBarBox, opts); }
+function domboPanelDim(opts) { return domboCall(domboDimension, opts); }
+function domboPanelDimRemove() { return domboCall(domboDimRemove); }

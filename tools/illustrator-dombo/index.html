@@ -9,6 +9,9 @@
   legend { color: #aaa; padding: 0 4px; }
   label { display: block; margin: 4px 0; }
   .num { display: flex; align-items: center; justify-content: space-between; margin: 5px 0; }
+  .num select { background: #222; color: #eee; border: 1px solid #555; padding: 2px; }
+  .num label { margin: 0; }
+  .num input[type=checkbox] { width: auto; }
   .num input { width: 60px; background: #222; color: #eee; border: 1px solid #555; padding: 2px 4px; }
   button { width: 100%; margin: 4px 0; padding: 7px; border: 1px solid #666; border-radius: 4px;
            background: #444; color: #eee; cursor: pointer; font-size: 12px; }
@@ -87,6 +90,31 @@
     <label><input id="boxAsCut" type="checkbox"> 박스를 칼선(CutContour)으로</label>
     <button id="barbox">막대 + 박스 만들기</button>
     <p class="hint">단위 mm. 여러 개 선택하면 각각, 그룹 하나를 선택하면 안의 하위 그룹마다 만듭니다.</p>
+  </details>
+
+  <details open data-id="dim">
+    <summary>치수 표시</summary>
+    <label><input type="radio" name="dimTarget" value="each" checked> 선택한 것마다</label>
+    <label><input type="radio" name="dimTarget" value="all"> 전체를 하나로</label>
+    <div class="num">
+      <label><input id="dimShowW" type="checkbox" checked> 가로</label>
+      <select id="dimHSide"><option value="top">위</option><option value="bottom">아래</option></select>
+    </div>
+    <div class="num">
+      <label><input id="dimShowH" type="checkbox" checked> 세로</label>
+      <select id="dimVSide"><option value="right">오른쪽</option><option value="left">왼쪽</option></select>
+    </div>
+    <div class="num">치수선 거리 (mm) <input id="dimOffsetMm" type="number" step="1" min="0" value="10"></div>
+    <label><input id="dimTextAuto" type="checkbox" checked> 글자 크기 자동</label>
+    <div class="num">글자 크기 (mm) <input id="dimTextMm" type="number" step="1" min="1" value="5"></div>
+    <div class="num">소수점
+      <select id="dimDecimals"><option value="0">없음 (300)</option><option value="1">1자리 (300.5)</option><option value="2">2자리</option></select>
+    </div>
+    <label><input id="dimUnit" type="checkbox" checked> 'mm' 붙이기</label>
+    <label><input id="dimStroke" type="checkbox"> 선 두께 포함해서 재기</label>
+    <button id="dim">치수 표시</button>
+    <button id="dimRemove">치수 지우기</button>
+    <p class="hint">'치수' 레이어에 파랑으로 그립니다. 클리핑 마스크는 마스크 모양 기준. 출력할 땐 레이어를 숨기세요.</p>
   </details>
 
   <details open data-id="count">

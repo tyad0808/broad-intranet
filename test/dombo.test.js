@@ -207,3 +207,54 @@ test('막대 + 박스 대상: 여러 개면 각각, 그룹 하나면 하위 그�
   const clip = group([pathItem([0, 1, 1, 0], { clipping: true }), group([a])], { clipped: true });
   assert.deepStrictEqual(Array.from(core.domboBarBoxTargets([clip])), [clip], '마스크 그룹은 통째로');
 });
+
+test('치수 글자: 소수점·천 단위 쉼표·단위', () => {
+  assert.strictEqual(core.domboDimLabel(300, 0, true), '300 mm');
+  assert.strictEqual(core.domboDimLabel(1234.56, 1, true), '1,234.6 mm');
+  assert.strictEqual(core.domboDimLabel(5000, 0, false), '5,000');
+  assert.strictEqual(core.domboDimLabel(12.004, 2, false), '12.00');
+});
+
+test('치수선: 가로는 위, 세로는 오른쪽에 거리만큼 띄우고 양 끝에 화살표', () => {
+  // 객체 100 x 50mm, 거리 10mm, 글자 5mm (자동 아님)
+  const g = core.domboDimGeometry(art, { offsetMm: 10, textAuto: false, textMm: 5 });
+  near(g.textPt, 5 * MM);
+  const lines = Array.from(g.lines, l => Array.from(l, p => Array.from(p)));
+  assert.strictEqual(lines.length, 6, '보조선 2 + 치수선 1, 가로·세로');
+  // 가로 치수선: 객체 위 50mm 에서 10mm + 글자 반 만큼 위, 왼쪽~오른쪽 끝
+  const yW = (50 + 10 + 2.5) * MM;
+  near(lines[2][0][1], yW); near(lines[2][1][1], yW);
+  near(lines[2][0][0], 0); near(lines[2][1][0], 100 * MM);
+  // 세로 치수선: 객체 오른쪽 100mm 에서 같은 만큼 오른쪽, 위~아래 끝
+  const xH = (100 + 10 + 2.5) * MM;
+  near(lines[5][0][0], xH); near(lines[5][1][0], xH);
+  near(lines[5][0][1], 50 * MM); near(lines[5][1][1], 0);
+  assert.strictEqual(g.arrows.length, 4);
+  const texts = Array.from(g.texts, t => ({ ...t }));
+  assert.deepStrictEqual(texts.map(t => [t.str, t.angle]), [['100 mm', 0], ['50 mm', 90]]);
+  near(texts[0].x, 50 * MM);
+  assert.ok(texts[0].y > yW, '가로 글자는 치수선 위');
+  assert.ok(texts[1].x > xH, '세로 글자는 치수선 오른쪽');
+});
+
+test('치수선: 아래·왼쪽, 가로만, 글자 크기 자동', () => {
+  const g = core.domboDimGeometry(art, { hSide: 'bottom', showH: false, offsetMm: 0 });
+  assert.strictEqual(g.lines.length, 3);
+  assert.ok(g.lines[2][0][1] < 0, '아래쪽');
+  near(g.textPt, 3 * MM); // 큰 변 100mm × 3% = 3mm
+  const big = core.domboDimGeometry([0, 5000 * MM, 5000 * MM, 0], { vSide: 'left', showW: false });
+  near(big.textPt, 60 * MM); // 상한 60mm
+  assert.ok(big.lines[2][0][0] < 0, '왼쪽');
+  const tiny = core.domboDimGeometry([0, 10 * MM, 10 * MM, 0], {});
+  near(tiny.textPt, 2.5 * MM); // 하한 2.5mm
+  assert.throws(() => core.domboDimGeometry(art, { showW: false, showH: false }), /하나는/);
+  assert.throws(() => core.domboDimGeometry(art, { decimals: 3 }), /소수점/);
+});
+
+test('돔보·개수 세기 전체 기준에서 치수 레이어는 뺀다', () => {
+  const doc = docWith([
+    layer('작업', [pathItem([0, 100, 100, 0])]),
+    layer('치수', [pathItem([-50, 200, 200, -50])]),
+  ]);
+  assert.deepStrictEqual(Array.from(core.domboArtworkBounds(doc)), [0, 100, 100, 0]);
+});

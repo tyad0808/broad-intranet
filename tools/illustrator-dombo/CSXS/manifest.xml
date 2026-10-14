@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.dombo" ExtensionBundleVersion="1.1.0"
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.dombo" ExtensionBundleVersion="1.2.0"
   ExtensionBundleName="Broad Dombo" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.broad.dombo.panel" Version="1.1.0" />
+    <Extension Id="com.broad.dombo.panel" Version="1.2.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -30,7 +30,7 @@
           <Type>Panel</Type>
           <Menu>브로애드 도구</Menu>
           <Geometry>
-            <Size><Height>640</Height><Width>280</Width></Size>
+            <Size><Height>720</Height><Width>280</Width></Size>
             <MinSize><Height>360</Height><Width>240</Width></MinSize>
           </Geometry>
         </UI>
