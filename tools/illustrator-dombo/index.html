@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>돔보마크</title>
+<style>
+  body { margin: 0; padding: 10px; background: #323232; color: #ddd; font: 12px sans-serif; }
+  fieldset { border: 1px solid #555; border-radius: 4px; margin: 0 0 10px; padding: 6px 8px 8px; }
+  legend { color: #aaa; padding: 0 4px; }
+  label { display: block; margin: 4px 0; }
+  .num { display: flex; align-items: center; justify-content: space-between; margin: 5px 0; }
+  .num input { width: 60px; background: #222; color: #eee; border: 1px solid #555; padding: 2px 4px; }
+  button { width: 100%; margin: 4px 0; padding: 7px; border: 1px solid #666; border-radius: 4px;
+           background: #444; color: #eee; cursor: pointer; font-size: 12px; }
+  button.main { background: #2d6fd1; border-color: #2d6fd1; color: #fff; font-weight: bold; }
+  button:hover { filter: brightness(1.15); }
+  #msg { margin-top: 8px; min-height: 2.6em; line-height: 1.4; }
+  #msg.err { color: #ff8a80; }
+  #msg.ok { color: #9ccc65; }
+</style>
+</head>
+<body>
+  <fieldset>
+    <legend>기준</legend>
+    <label><input type="radio" name="target" value="selection" checked> 선택한 작업물</label>
+    <label><input type="radio" name="target" value="artboard"> 현재 대지</label>
+  </fieldset>
+  <fieldset>
+    <legend>마크</legend>
+    <label><input type="radio" name="shape" value="L" checked> L자 (모서리)</label>
+    <label><input type="radio" name="shape" value="square"> 사각형</label>
+    <label><input type="radio" name="count" value="4" checked> 4점</label>
+    <label><input type="radio" name="count" value="3"> 3점 (오른쪽 위 생략)</label>
+  </fieldset>
+  <fieldset>
+    <legend>크기 (mm)</legend>
+    <div class="num">마크 크기 <input id="sizeMm" type="number" step="0.5" min="1" value="10"></div>
+    <div class="num">L자 선 두께 <input id="thickMm" type="number" step="0.1" min="0.1" value="0.5"></div>
+    <div class="num">작업물과의 거리 <input id="offsetMm" type="number" step="0.5" min="0" value="5"></div>
+    <div class="num">대지 여백 <input id="marginMm" type="number" step="0.5" min="0" value="5"></div>
+    <label><input id="fitArtboard" type="checkbox" checked> 마크가 대지 밖이면 대지 넓히기</label>
+  </fieldset>
+
+  <button class="main" id="place">돔보 찍기</button>
+  <button id="remove">돔보 지우기</button>
+  <button id="cut">선택 → 칼선(CutContour) 만들기</button>
+  <div id="msg"></div>
+
+  <script src="panel.js"></script>
+</body>
+</html>
