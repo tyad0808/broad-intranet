@@ -1,0 +1,78 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<%
+  // 직원 이름 등 사용자가 입력한 글자를 HTML 로 해석되지 않게 바꾼다 (스크립트 주입 방지)
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  // 버튼 하나짜리 폼 (CSRF 토큰 포함)
+  const action = (url, label, cls = '', confirmMsg = '') => `
+    <form method="post" action="${esc(url)}" class="inline"${confirmMsg ? ` data-confirm="${esc(confirmMsg)}"` : ''}>
+      <input type="hidden" name="_csrf" value="${esc(csrfToken)}">
+      <button type="submit" class="btn-sm ${cls}">${esc(label)}</button>
+    </form>`;
+%>
+
+<section class="card">
+  <h2>가입 신청 <span class="muted"><%= pending.length %>건</span></h2>
+  <% if (pending.length === 0) { %>
+    <p class="muted">새 가입 신청이 없습니다.</p>
+  <% } else { %>
+    <ul class="rows">
+      <% pending.forEach(u => { %>
+        <li class="row">
+          <div class="row-main">
+            <strong><%= u.name %></strong>
+            <span class="muted"><%= u.email %> · <%= u.job_name || '직무 없음' %> · <%= u.created_at.slice(0, 16) %> 신청</span>
+          </div>
+          <div class="row-actions">
+            <%- action(`/admin/users/${u.id}/approve`, '승인', 'primary') %>
+            <%- action(`/admin/users/${u.id}/reject`, '거절', 'danger', `${u.name} 님의 가입 신청을 거절할까요?`) %>
+          </div>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>직원 목록 <span class="muted"><%= others.length %>명</span></h2>
+  <ul class="rows">
+    <% others.forEach(u => { const isMe = u.id === user.id; const locked = u.locked_until && new Date(u.locked_until) > now; %>
+      <li class="row">
+        <div class="row-main">
+          <strong><%= u.name %></strong><% if (isMe) { %> <span class="muted">(나)</span><% } %>
+          <span class="status status-<%= u.status %>"><%= STATUS_LABELS[u.status] %></span>
+          <% if (locked) { %><span class="status status-suspended">로그인 잠김</span><% } %>
+          <div class="muted"><%= u.email %></div>
+        </div>
+        <form method="post" action="/admin/users/<%= u.id %>/update" class="row-edit">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <select name="job_id" aria-label="직무">
+            <option value="">직무 없음</option>
+            <% jobs.forEach(j => { %>
+              <option value="<%= j.id %>" <%= u.job_id === j.id ? 'selected' : '' %>><%= j.name %><%= j.active ? '' : ' (숨김)' %></option>
+            <% }) %>
+          </select>
+          <select name="role" aria-label="역할" <%= isMe ? 'disabled' : '' %>>
+            <option value="staff" <%= u.role === 'staff' ? 'selected' : '' %>>직원</option>
+            <option value="admin" <%= u.role === 'admin' ? 'selected' : '' %>>관리자</option>
+          </select>
+          <% if (isMe) { %><input type="hidden" name="role" value="<%= u.role %>"><% } %>
+          <button type="submit" class="btn-sm">저장</button>
+        </form>
+        <div class="row-actions">
+          <% if (locked) { %><%- action(`/admin/users/${u.id}/unlock`, '잠금 풀기') %><% } %>
+          <% if (!isMe && u.status === 'active') { %>
+            <%- action(`/admin/users/${u.id}/suspend`, '정지', 'danger', `${u.name} 님의 계정을 정지할까요? 즉시 로그아웃됩니다.`) %>
+          <% } else if (!isMe && (u.status === 'suspended' || u.status === 'rejected')) { %>
+            <%- action(`/admin/users/${u.id}/reactivate`, u.status === 'rejected' ? '승인' : '정지 해제', 'primary') %>
+          <% } %>
+        </div>
+      </li>
+    <% }) %>
+  </ul>
+</section>
+
+<script src="/confirm.js"></script>
+<%- include('../partials/footer') %>

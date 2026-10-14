@@ -7,8 +7,9 @@ const session = require('express-session');
 const helmet = require('helmet');
 
 const { SqliteSessionStore } = require('./sessionStore');
-const { loadUser, requireActive, csrf } = require('./auth');
+const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
+const { adminRoutes } = require('./routes/admin');
 
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -51,6 +52,17 @@ function createApp({ db, secret = sessionSecret() }) {
   }));
 
   app.use(loadUser(db));
+  // 화면 공통 값: 처리 결과 안내 문구(한 번만 표시), 관리자에게 보이는 가입 신청 건수
+  const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
+  app.use((req, res, next) => {
+    res.locals.flash = req.session.flash || null;
+    delete req.session.flash;
+    res.locals.tab = null;
+    res.locals.pendingCount =
+      req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
+    next();
+  });
+
   app.use(csrf);
 
   app.get('/health', (req, res) => res.json({ ok: true }));
@@ -61,6 +73,8 @@ function createApp({ db, secret = sessionSecret() }) {
   app.get('/', requireActive, (req, res) => {
     res.render('home', { title: '홈' });
   });
+
+  app.use('/admin', requireAdmin, adminRoutes(db, store));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });

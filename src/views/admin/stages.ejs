@@ -1,0 +1,13 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<section class="card">
+  <h2>작업 단계</h2>
+  <p class="muted">주문 카드의 작업 상태로 쓰이는 단계입니다. 위에서 아래 순서로 진행됩니다.
+    숨긴 단계는 새로 고를 수 없지만, 이미 그 단계에 있는 주문은 그대로 남습니다.</p>
+  <%- include('../partials/list-editor', { items: stages, base: '/admin/stages', countLabel: s => `주문 ${s.order_count}건`, extra: null }) %>
+</section>
+
+<script src="/confirm.js"></script>
+<%- include('../partials/footer') %>

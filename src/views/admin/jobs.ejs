@@ -1,0 +1,12 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<section class="card">
+  <h2>직무</h2>
+  <p class="muted">직원 계정에 표시되는 직무입니다. '디자이너 목록'이 켜진 직무의 직원만 주문의 담당 디자이너로 지정할 수 있습니다.</p>
+  <%- include('../partials/list-editor', { items: jobs, base: '/admin/jobs', countLabel: j => `직원 ${j.user_count}명`, extra: 'designer' }) %>
+</section>
+
+<script src="/confirm.js"></script>
+<%- include('../partials/footer') %>
