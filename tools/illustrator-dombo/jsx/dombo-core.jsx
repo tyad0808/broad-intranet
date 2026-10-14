@@ -483,8 +483,8 @@ function domboAddBleed(doc, item, cut, n) {
       var v = k.typename === 'GroupItem' ? domboItemBounds(k, true) : k.geometricBounds;
       if (v) content = domboUnion(content, v);
     }
-    var short = !content || content[0] > mb[0] + 0.5 || content[1] < mb[1] - 0.5 || content[2] < mb[2] - 0.5 || content[3] > mb[3] + 0.5;
-    return short ? 'mask-short' : 'mask';
+    var notCovered = !content || content[0] > mb[0] + 0.5 || content[1] < mb[1] - 0.5 || content[2] < mb[2] - 0.5 || content[3] > mb[3] + 0.5;
+    return notCovered ? 'mask-short' : 'mask';
   }
   // 2) 이미지: 키운 복사본을 뒤에
   if (t === 'PlacedItem' || t === 'RasterItem') {
