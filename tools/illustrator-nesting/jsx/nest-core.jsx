@@ -329,7 +329,9 @@ function nestTextDefaults() {
   return {
     sheetWMm: 900, sheetHMm: 600, marginMm: 5, gapMm: 3, quantity: 1, allowRotate: true,
     unit: 'glyph',     // 'glyph' 글자 단위 / 'piece' 떨어지는 조각 단위
-    laserLine: true    // 면 없이 빨강 헤어라인으로
+    laserLine: true,   // 면 없이 빨강 헤어라인으로
+    method: 'shape',   // 'shape' 모양대로 (빈 곳까지, 패널에서 계산) / 'rect' 사각형 범위
+    precisionMm: 1     // 모양대로 계산할 때 칸 크기
   };
 }
 
@@ -355,6 +357,9 @@ function nestCheckText(o) {
   if (!(o.quantity >= 1) || Math.floor(o.quantity) !== o.quantity) throw new Error('수량은 1 이상의 정수여야 합니다.');
   if (o.quantity > 100) throw new Error('세트 수량이 너무 많습니다 (최대 100).');
   if (o.unit !== 'glyph' && o.unit !== 'piece') throw new Error('나누기 단위가 잘못됐습니다.');
+  o.precisionMm = nestNum(o.precisionMm);
+  if (o.method !== 'shape' && o.method !== 'rect') throw new Error('배치 방식이 잘못됐습니다.');
+  if (!(o.precisionMm >= 0.2 && o.precisionMm <= 5)) throw new Error('정밀도는 0.2 ~ 5mm 사이여야 합니다.');
   return o;
 }
 
@@ -658,6 +663,116 @@ function nestText(opts) {
     nestOutsideNote(doc, origins, o.sheetWMm * k, r.binHeights);
 }
 
+// ---- 2-1) 아크릴 텍스트 네스팅: 모양대로 (패널이 nest-shape.js 로 배치를 계산) ----
+// 준비(nestTextPrepare) → 패널이 계산 → 적용(nestTextApply). 중간에 실패하면 nestTextCancel.
+
+// 개체의 윤곽선들 (문서 좌표 꼭짓점 목록). 패스가 아닌 것(이미지 등)은 범위 사각형
+function nestUnitPolys(item, out) {
+  if (item.hidden || item.guides) return;
+  var t = item.typename, i;
+  if (t === 'PathItem') {
+    if (!item.clipping && item.pathPoints.length > 1) out.push(nestFlatten(item.pathPoints, item.closed, 8));
+  } else if (t === 'CompoundPathItem') {
+    for (i = 0; i < item.pathItems.length; i++) nestUnitPolys(item.pathItems[i], out);
+  } else if (t === 'GroupItem') {
+    if (item.clipped) {
+      for (i = 0; i < item.pageItems.length; i++) {
+        var k = item.pageItems[i];
+        if (k.typename === 'PathItem' && k.clipping) { out.push(nestFlatten(k.pathPoints, true, 8)); return; }
+        if (k.typename === 'CompoundPathItem' && k.pathItems.length > 0 && k.pathItems[0].clipping) {
+          for (var j = 0; j < k.pathItems.length; j++) out.push(nestFlatten(k.pathItems[j].pathPoints, true, 8));
+          return;
+        }
+      }
+    }
+    for (i = 0; i < item.pageItems.length; i++) nestUnitPolys(item.pageItems[i], out);
+  } else {
+    var b = item.geometricBounds;
+    out.push([[b[0], b[3]], [b[2], b[3]], [b[2], b[1]], [b[0], b[1]]]);
+  }
+}
+
+// JSON 이 없는 ExtendScript 용: 숫자·글자·배열·객체만
+function nestJson(v) {
+  if (v === null || v === undefined) return 'null';
+  if (typeof v === 'number') return isFinite(v) ? String(Math.round(v * 100) / 100) : 'null';
+  if (typeof v === 'boolean') return v ? 'true' : 'false';
+  if (typeof v === 'string') return '"' + v.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"';
+  var parts = [], k;
+  if (v instanceof Array) {
+    for (k = 0; k < v.length; k++) parts.push(nestJson(v[k]));
+    return '[' + parts.join(',') + ']';
+  }
+  for (k in v) if (v.hasOwnProperty(k)) parts.push('"' + k + '":' + nestJson(v[k]));
+  return '{' + parts.join(',') + '}';
+}
+
+function nestTextCancel() {
+  var p = $.global.NEST_PENDING;
+  $.global.NEST_PENDING = null;
+  if (!p) return '취소했습니다.';
+  for (var i = 0; i < p.units.length; i++) {
+    try { p.units[i].remove(); } catch (e) {}
+  }
+  return '취소했습니다.';
+}
+
+function nestTextPrepare(opts) {
+  if ($.global.NEST_PENDING) nestTextCancel();
+  var o = nestCheckText(opts);
+  var doc = nestDoc();
+  var src = nestSelection(doc, '네스팅할 글자(살아있는 글자 또는 아웃라인)를');
+  var layer = nestGetLayer(doc), units = [], i, q;
+  var start = nestStart(src, true);
+  for (q = 0; q < o.quantity; q++) {
+    for (i = 0; i < src.length; i++) nestExplode(src[i].duplicate(layer, ElementPlacement.PLACEATEND), layer, o.unit, units);
+  }
+  var kept = [], pieces = [], names = [], k = NEST_PT_PER_MM;
+  for (i = 0; i < units.length; i++) {
+    var b = nestBounds(units[i], true), polys = [];
+    if (b && b[2] - b[0] > 0 && b[1] - b[3] > 0) nestUnitPolys(units[i], polys);
+    if (polys.length === 0) { units[i].remove(); continue; }
+    pieces.push({ id: kept.length, polys: polys });
+    names.push(Math.round((b[2] - b[0]) / k) + '×' + Math.round((b[1] - b[3]) / k) + 'mm');
+    kept.push(units[i]);
+  }
+  if (kept.length === 0) throw new Error('선택한 것에 글자 모양이 없습니다.');
+  $.global.NEST_PENDING = { doc: doc, units: kept, src: src, start: start, o: o };
+  return nestJson({ pieces: pieces, names: names });
+}
+
+// plan: 패널이 계산한 { placements: [{ id, bin, x, y, angle }], bins, area } (pt)
+function nestTextApply(plan) {
+  var p = $.global.NEST_PENDING;
+  if (!p) throw new Error('준비된 글자가 없습니다. 다시 네스팅하세요.');
+  var doc = p.doc, o = p.o, k = NEST_PT_PER_MM, i;
+  var layer = nestGetLayer(doc);
+  var heights = [];
+  for (i = 0; i < plan.bins; i++) heights.push(o.sheetHMm * k);
+  var origins = nestOrigins(p.start, heights, NEST_SHEET_GAP_MM * k);
+  nestDrawSheets(layer, origins, o.sheetWMm * k, heights, '원판');
+
+  var red = o.laserLine ? nestRed(doc) : null;
+  for (i = 0; i < plan.placements.length; i++) {
+    var pl = plan.placements[i], it = p.units[pl.id];
+    if (pl.angle) it.rotate(pl.angle);
+    var b = nestBounds(it, true);
+    it.translate(origins[pl.bin][0] + pl.x - b[0], origins[pl.bin][1] - pl.y - b[1]);
+    if (red) nestLaserStyle(it, red);
+    it.name = (o.unit === 'piece' ? '조각_' : '글자_') + (pl.id + 1);
+  }
+  nestBackup(doc, p.src);
+  doc.selection = null;
+  for (i = 0; i < p.units.length; i++) p.units[i].selected = true;
+  $.global.NEST_PENDING = null;
+
+  var eff = Math.round(plan.area / (o.sheetWMm * o.sheetHMm * k * k * plan.bins) * 100);
+  return (o.unit === 'piece' ? '조각 ' : '글자 ') + p.units.length + '개를 모양대로 ' +
+    nestFmt(o.sheetWMm) + '×' + nestFmt(o.sheetHMm) + 'mm 원판 ' + plan.bins + '장에 배치했습니다.\n' +
+    '원판 효율(실제 모양 기준) ' + eff + '%. 원판 범위는 안내선으로 그렸고, 원본은 숨긴 \'' + NEST_BACKUP_LAYER + '\' 레이어에 있습니다.' +
+    nestOutsideNote(doc, origins, o.sheetWMm * k, heights);
+}
+
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다
 function nestCall(fn, arg) {
   try {
@@ -668,3 +783,6 @@ function nestCall(fn, arg) {
 }
 function nestPanelRoll(opts) { return nestCall(nestRoll, opts); }
 function nestPanelText(opts) { return nestCall(nestText, opts); }
+function nestPanelTextPrepare(opts) { return nestCall(nestTextPrepare, opts); }
+function nestPanelTextApply(plan) { return nestCall(nestTextApply, plan); }
+function nestPanelTextCancel() { return nestCall(nestTextCancel); }

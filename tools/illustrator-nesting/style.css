@@ -4,6 +4,7 @@ fieldset { border: 1px solid #555; border-radius: 4px; margin: 0 0 10px; padding
 legend { color: #aaa; padding: 0 4px; }
 label { display: block; margin: 4px 0; }
 .num { display: flex; align-items: center; justify-content: space-between; margin: 5px 0; }
+.num select { background: #222; color: #eee; border: 1px solid #555; padding: 2px; max-width: 130px; }
 .num input { width: 64px; background: #222; color: #eee; border: 1px solid #555; padding: 2px 4px; }
 .hint { margin: 6px 0 0; color: #999; font-size: 11px; line-height: 1.4; }
 button { width: 100%; margin: 4px 0; padding: 7px; border: 1px solid #2d6fd1; border-radius: 4px;

@@ -5,13 +5,26 @@
 <title>아크릴 텍스트 네스팅</title>
 <link rel="stylesheet" href="style.css">
 </head>
-<body data-fn="nestPanelText" data-store="text">
+<body>
   <h1>아크릴 텍스트 네스팅</h1>
   <fieldset>
     <legend>원판 (mm)</legend>
     <div class="num">가로 <input data-opt="sheetWMm" type="number" step="10" min="1" value="900"></div>
     <div class="num">세로 <input data-opt="sheetHMm" type="number" step="10" min="1" value="600"></div>
     <div class="num">원판 여백 <input data-opt="marginMm" type="number" step="1" min="0" value="5"></div>
+  </fieldset>
+  <fieldset>
+    <legend>배치 방식</legend>
+    <label><input data-opt="method" type="radio" name="method" value="shape" checked> 모양대로 (빈 곳·구멍까지 채움)</label>
+    <label><input data-opt="method" type="radio" name="method" value="rect"> 사각형 범위 (빠름)</label>
+    <div class="num">정밀도 (mm)
+      <select data-opt="precisionMm">
+        <option value="0.5">0.5 (아주 촘촘, 느림)</option>
+        <option value="1" selected>1 (권장)</option>
+        <option value="2">2 (빠름)</option>
+      </select>
+    </div>
+    <p class="hint">모양대로: 'ㄱ' 안쪽, 'ㅇ' 구멍 같은 빈 곳에 다른 글자를 끼워 넣습니다. 정밀도가 작을수록 촘촘하지만 오래 걸립니다.</p>
   </fieldset>
   <fieldset>
     <legend>나누기</legend>
@@ -29,6 +42,7 @@
   <button id="run">네스팅</button>
   <p class="hint">글자가 있던 자리(왼쪽 위)부터 원판을 아래로 이어 놓고, 원판 범위는 안내선으로 그립니다. 대지는 만들지 않습니다. 살아있는 글자는 아웃라인으로 바꾸고, 원본은 숨긴 '네스팅 전 원본' 레이어로 옮겨 둡니다.</p>
   <div id="msg"></div>
-  <script src="panel.js"></script>
+  <script src="nest-shape.js"></script>
+  <script src="text-panel.js"></script>
 </body>
 </html>

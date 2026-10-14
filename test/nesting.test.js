@@ -160,7 +160,7 @@ function fakeIllustrator() {
     remove() { this.detach(); const kill = it => { all.delete(it); (it.kids || []).forEach(kill); }; kill(this); }
     translate(dx, dy) { this.each(it => { it.b = shift(it.b, dx, dy); if (it.pts) it.pts = it.pts.map(([x, y]) => [x + dx, y + dy]); }); }
     rotate(deg) {
-      assert.strictEqual(deg, 90);
+      if (deg !== 90) { for (let i = 0; i < deg / 90; i++) this.rotate(90); return; }
       const b = this.calc(), cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
       const rot = ([x, y]) => [cx - (y - cy), cy + (x - cx)];
       this.each(it => {
@@ -204,6 +204,7 @@ function loadWith(fake) {
     app: fake.app, ElementPlacement: { PLACEATEND: 'end' }, DocumentColorSpace: { CMYK: 'CMYK' },
     CMYKColor: function () {}, RGBColor: function () {},
   };
+  ctx.$ = { global: ctx };
   vm.runInNewContext(fs.readFileSync(file, 'utf8').replace(/^﻿/, ''), ctx);
   return ctx;
 }
@@ -298,4 +299,59 @@ test('네스팅: 원판보다 큰 글자는 알려주고 만든 것을 치운다
   const layer = f.layers.find(l => l.name === '네스팅');
   assert.strictEqual(layer.items.length, 0, '복제본을 남기지 않는다');
   assert.strictEqual(big.parent, f.layers[0], '실패하면 원본도 그대로');
+});
+
+const nestShape = require('../tools/illustrator-nesting/nest-shape.js');
+
+test('모양대로 네스팅: 준비 → 패널 계산 → 적용, ㅁ 구멍 안에 작은 글자가 들어간다', () => {
+  const f = fakeIllustrator();
+  // 'ㅁ' (바깥 100 x 100mm, 두께 10mm) 와 작은 'l' 네 개 (15 x 15mm)
+  const s = 100 * MM, t = 10 * MM, q = 15 * MM;
+  const mieum = f.compound(f.rectPath(0, s, s, 0), f.rectPath(t, s - t, s - t, t));
+  const smalls = [0, 1, 2, 3].map(i => f.rectPath(200 * MM + i * 20 * MM, q, 200 * MM + i * 20 * MM + q, 0));
+  const text = new f.Item('TextFrame', { b: [0, s, 300 * MM, 0], glyphs: [mieum, ...smalls] });
+  f.layers[0].adopt(text);
+  f.doc.selection = [text];
+  const ai = loadWith(f);
+  const opts = { sheetWMm: 110, sheetHMm: 110, marginMm: 3, gapMm: 3, unit: 'glyph', method: 'shape', precisionMm: 1 };
+
+  const data = JSON.parse(ai.nestTextPrepare(opts));
+  assert.strictEqual(data.pieces.length, 5);
+  assert.strictEqual(data.pieces[0].polys.length, 2, 'ㅁ 은 바깥 + 구멍 윤곽선');
+  const plan = nestShape.nest(data.pieces, {
+    sheetW: 110 * MM, sheetH: 110 * MM, margin: 3 * MM, gap: 3 * MM, res: 1 * MM, allowRotate: true,
+  });
+  assert.strictEqual(plan.bins, 1, '구멍 안에 넣어서 한 장');
+  // 패널은 JSON 으로 넘긴다
+  const msg = ai.nestTextApply(JSON.parse(JSON.stringify(plan)));
+  assert.match(msg, /글자 5개를 모양대로 110×110mm 원판 1장/);
+
+  const layer = f.layers.find(l => l.name === '네스팅');
+  const parts = layer.items.filter(it => !it.guides);
+  const sheet = layer.items.find(it => it.guides).b;
+  assert.strictEqual(parts.length, 5);
+  // 실제 자리에서: 원판 여백 안, 작은 것들은 ㅁ 구멍 안, 서로 간격 유지
+  const big = parts.find(p => p.kids && p.kids.length === 2);
+  parts.forEach(p => assert.ok(inside(p.geometricBounds, [sheet[0] + 3 * MM, sheet[1] - 3 * MM, sheet[2] - 3 * MM, sheet[3] + 3 * MM]), '여백 안'));
+  const hole = big.kids.map(k => k.b).sort((a, b) => (a[2] - a[0]) - (b[2] - b[0]))[0];
+  const others = parts.filter(p => p !== big);
+  others.forEach(p => assert.ok(inside(p.b, [hole[0] + 3 * MM - 1e-6, hole[1] - 3 * MM + 1e-6, hole[2] - 3 * MM + 1e-6, hole[3] + 3 * MM - 1e-6]), '구멍 안, 간격 유지'));
+  for (let i = 0; i < others.length; i++) for (let j = i + 1; j < others.length; j++) assert.ok(apart(others[i].b, others[j].b, 3 * MM - 1e-6));
+  assert.ok(f.layers.find(l => l.name === '네스팅 전 원본').items.includes(text), '원본은 숨긴 레이어로');
+  assert.strictEqual(ai.$.global.NEST_PENDING, null);
+});
+
+test('모양대로 네스팅: 계산이 실패하면 준비한 복제본을 치우고 원본은 그대로', () => {
+  const f = fakeIllustrator();
+  const a = f.rectPath(0, 100, 100, 0);
+  f.layers[0].adopt(a);
+  f.doc.selection = [a];
+  const ai = loadWith(f);
+  JSON.parse(ai.nestTextPrepare({ method: 'shape' }));
+  const layer = f.layers.find(l => l.name === '네스팅');
+  assert.strictEqual(layer.items.length, 1);
+  ai.nestTextCancel();
+  assert.strictEqual(layer.items.length, 0);
+  assert.strictEqual(a.parent, f.layers[0]);
+  assert.throws(() => ai.nestTextApply({ placements: [], bins: 0, area: 0 }), /준비된 글자가 없습니다/);
 });

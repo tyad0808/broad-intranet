@@ -14,6 +14,8 @@ xcopy "%SRC%jsx" "%DEST%\jsx\" /e /i /y > nul
 copy /y "%SRC%roll.html" "%DEST%\" > nul
 copy /y "%SRC%text.html" "%DEST%\" > nul
 copy /y "%SRC%panel.js" "%DEST%\" > nul
+copy /y "%SRC%text-panel.js" "%DEST%\" > nul
+copy /y "%SRC%nest-shape.js" "%DEST%\" > nul
 copy /y "%SRC%style.css" "%DEST%\" > nul
 echo 설치 완료: %DEST%
 echo 일러스트레이터를 다시 켜고 [창 ^> 확장] 에서 '용지 폭 네스팅' 또는 '아크릴 텍스트 네스팅' 을 여세요.

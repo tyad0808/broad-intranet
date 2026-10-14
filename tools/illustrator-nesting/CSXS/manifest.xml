@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.nesting" ExtensionBundleVersion="1.1.0"
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.nesting" ExtensionBundleVersion="1.2.0"
   ExtensionBundleName="Broad Nesting" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.broad.nesting.roll" Version="1.1.0" />
-    <Extension Id="com.broad.nesting.text" Version="1.1.0" />
+    <Extension Id="com.broad.nesting.roll" Version="1.2.0" />
+    <Extension Id="com.broad.nesting.text" Version="1.2.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>
@@ -46,7 +46,7 @@
           <Type>Panel</Type>
           <Menu>아크릴 텍스트 네스팅</Menu>
           <Geometry>
-            <Size><Height>540</Height><Width>260</Width></Size>
+            <Size><Height>700</Height><Width>260</Width></Size>
             <MinSize><Height>300</Height><Width>220</Width></MinSize>
           </Geometry>
         </UI>
