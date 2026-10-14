@@ -84,9 +84,37 @@ function orderRoutes(db) {
       sort,
       q,
       stages: stages(),
+      designers: designers(),
       today: kstToday(),
       currentUrl: req.originalUrl,
     });
+  });
+
+  // 목록에서 바로 담당 디자이너 지정 (담당자 칸만 바꾼다)
+  router.post('/orders/:id/assign', (req, res) => {
+    const back = safeBack(req.body.back);
+    const order = findOrder(req.params.id);
+    if (!order) {
+      req.session.flash = { type: 'error', message: '주문을 찾을 수 없습니다.' };
+      return res.redirect(back);
+    }
+    const assignee = req.body.assignee_id ? Number(req.body.assignee_id) : null;
+    const designer = designers().find(d => d.id === assignee);
+    if (assignee && !designer && assignee !== order.assignee_id) {
+      req.session.flash = { type: 'error', message: '담당 디자이너로 지정할 수 없는 직원입니다.' };
+      return res.redirect(back);
+    }
+    // version 을 올려서, 이 주문 카드를 열어 둔 다른 직원이 옛 담당자로 덮어쓰지 못하게 한다
+    db.prepare("UPDATE orders SET assignee_id = ?, version = version + 1, updated_at = datetime('now') WHERE id = ?")
+      .run(assignee, order.id);
+    req.session.flash = {
+      type: 'ok',
+      message: designer
+        ? `'${order.product_name}' 담당자를 ${designer.name} 님으로 지정했습니다.`
+        : `'${order.product_name}' 담당자를 비웠습니다.`,
+    };
+    // 목록의 같은 위치로 돌아간다 (#o12 처럼 주문 위치로 스크롤)
+    res.redirect(`${back}#o${order.id}`);
   });
 
   router.get('/orders/:id', (req, res) => {

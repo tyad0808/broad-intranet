@@ -153,3 +153,34 @@ test('잘못된 납기 형식은 거부한다', async t => {
   await save(kim, idOf('P1'), { due_date: '10월 20일' });
   assert.strictEqual(row('P1').due_date, null);
 });
+
+test('목록에서 바로 담당 디자이너를 지정하고, 같은 목록 위치로 돌아온다', async t => {
+  const { kim, leeId, idOf, row } = await setup(t);
+  const id = idOf('P2');
+  const res = await kim.submit('/?view=unassigned', `/orders/${id}/assign`, { assignee_id: String(leeId), back: '/?view=unassigned' });
+  assert.strictEqual(res.location, `/?view=unassigned#o${id}`);
+  assert.strictEqual(row('P2').assignee_id, leeId);
+  assert.strictEqual(row('P2').version, 1, '주문 카드를 열어 둔 사람이 덮어쓰지 못하게 version 이 오른다');
+  assert.match((await kim.request('/?view=all')).text, /이디자 님으로 지정했습니다/);
+});
+
+test('목록에서 담당자를 미지정으로 되돌릴 수 있다', async t => {
+  const { db, kim, kimId, idOf, row } = await setup(t);
+  db.prepare('UPDATE orders SET assignee_id = ? WHERE id = ?').run(kimId, idOf('P1'));
+  await kim.submit('/', `/orders/${idOf('P1')}/assign`, { assignee_id: '', back: '/' });
+  assert.strictEqual(row('P1').assignee_id, null);
+});
+
+test('목록에서도 디자이너가 아닌 직원은 지정할 수 없다', async t => {
+  const { kim, csId, idOf, row } = await setup(t);
+  await kim.submit('/', `/orders/${idOf('P1')}/assign`, { assignee_id: String(csId), back: '/' });
+  assert.strictEqual(row('P1').assignee_id, null);
+});
+
+test('목록의 담당자 선택 상자에는 디자이너만 나온다', async t => {
+  const { kim } = await setup(t);
+  const text = (await kim.request('/')).text;
+  assert.match(text, />이디자</);
+  assert.match(text, />김디자 \(나\)</);
+  assert.ok(!text.includes('>최상담<'));
+});

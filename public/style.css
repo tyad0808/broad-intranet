@@ -199,7 +199,18 @@ form.inline { display: inline; margin: 0; }
   text-decoration: none;
 }
 .order-item:hover { border-color: var(--primary); }
-.oi-main { flex: 1 1 280px; min-width: 0; }
+.oi-main { flex: 1 1 280px; min-width: 0; color: var(--text); text-decoration: none; }
+.order-item:target { border-color: var(--primary); box-shadow: 0 0 0 2px var(--notice-bg); }
+.oi-meta { align-items: center; }
+.assign-select {
+  width: auto;
+  margin-top: 0;
+  padding: 3px 28px 3px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.assign-select.unassigned { background-color: #fff4e0; border-color: #f5d9a8; color: #9a6700; }
 .oi-title { font-weight: 600; }
 .oi-meta { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; flex: 0 1 auto; }
 
