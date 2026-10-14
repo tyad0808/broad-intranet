@@ -180,3 +180,30 @@ test('개수 세기: 글자 수, 아웃라인 도형 수, 마스크 틀과 숨�
   items.forEach(it => core.domboCountItem(it, c));
   assert.deepStrictEqual({ ...c }, { frames: 1, chars: 6, charsNoSpace: 4, shapes: 2 });
 });
+
+test('막대 + 박스: 막대는 객체 위로 간격만큼, 박스는 객체 + 막대를 여백만큼 감싼다', () => {
+  // 객체 100 x 50mm, 기본값: 막대 높이 2mm, 간격 5mm, 박스 여백 10mm
+  const r = core.domboBarBoxRects(art, {});
+  nearPts([r.bar.slice(0, 2), r.bar.slice(2)], mmPts([[57, 0], [100, 2]]));
+  // 박스: 위 = 막대 위 57 + 10, 왼쪽 -10, 가로 120, 세로 (57 - 0) + 20
+  nearPts([r.box.slice(0, 2), r.box.slice(2)], mmPts([[67, -10], [120, 77]]));
+
+  const noBar = core.domboBarBoxRects(art, { useBar: false, boxMarginMm: '3' });
+  assert.strictEqual(noBar.bar, null);
+  nearPts([noBar.box.slice(0, 2), noBar.box.slice(2)], mmPts([[53, -3], [106, 56]]));
+
+  assert.throws(() => core.domboBarBoxRects(art, { barHeightMm: 0 }), /막대 높이/);
+  assert.throws(() => core.domboBarBoxRects(art, { boxMarginMm: NaN }), /박스 여백/);
+});
+
+test('막대 + 박스 대상: 여러 개면 각각, 그룹 하나면 하위 그룹마다', () => {
+  const a = pathItem([0, 1, 1, 0]), b = pathItem([2, 3, 3, 2]);
+  assert.deepStrictEqual(Array.from(core.domboBarBoxTargets([a, b])), [a, b]);
+  const sub1 = group([a]), sub2 = group([b]);
+  const parent = group([sub1, pathItem([5, 6, 6, 5]), sub2]);
+  assert.deepStrictEqual(Array.from(core.domboBarBoxTargets([parent])), [sub1, sub2]);
+  const flat = group([a, b]);
+  assert.deepStrictEqual(Array.from(core.domboBarBoxTargets([flat])), [flat]);
+  const clip = group([pathItem([0, 1, 1, 0], { clipping: true }), group([a])], { clipped: true });
+  assert.deepStrictEqual(Array.from(core.domboBarBoxTargets([clip])), [clip], '마스크 그룹은 통째로');
+});

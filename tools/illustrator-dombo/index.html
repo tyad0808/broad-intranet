@@ -61,6 +61,17 @@
   </details>
 
   <details open>
+    <summary>막대 + 박스</summary>
+    <label><input id="useBar" type="checkbox" checked> 막대 만들기</label>
+    <div class="num">막대 높이(두께) <input id="barHeightMm" type="number" step="0.5" min="0.1" value="2"></div>
+    <div class="num">막대 간격 <input id="barGapMm" type="number" step="0.5" min="0" value="5"></div>
+    <div class="num">박스 여백 <input id="boxMarginMm" type="number" step="0.5" min="0" value="10"></div>
+    <label><input id="boxAsCut" type="checkbox"> 박스를 칼선(CutContour)으로</label>
+    <button id="barbox">막대 + 박스 만들기</button>
+    <p class="hint">단위 mm. 여러 개 선택하면 각각, 그룹 하나를 선택하면 안의 하위 그룹마다 만듭니다.</p>
+  </details>
+
+  <details open>
     <summary>개수 세기</summary>
     <button id="count">글자·도형 개수 세기</button>
     <p class="hint">선택한 것만, 선택이 없으면 문서 전체. 그룹 안까지 셉니다.</p>

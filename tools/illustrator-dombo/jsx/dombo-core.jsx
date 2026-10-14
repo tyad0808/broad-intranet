@@ -1,5 +1,5 @@
 ﻿// 브로애드 일러스트레이터 도구 핵심 기능 (ExtendScript, ES3 문법만 사용)
-// 돔보마크, 칼선, 격자 칼선, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
+// 돔보마크, 칼선, 격자 칼선, 막대 + 박스, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
@@ -431,6 +431,107 @@ function domboGridCut(opts) {
     (removeRects ? ' 기준 사각형 ' + rects.length + '개는 지웠습니다.' : '');
 }
 
+// ---- 막대 + 박스 ----
+
+function domboBarBoxDefaults() {
+  return {
+    useBar: true,       // 막대 만들기
+    barHeightMm: 2,     // 막대 높이(두께)
+    barGapMm: 5,        // 객체 위쪽과 막대 사이 간격
+    boxMarginMm: 10,    // 박스 여백 (객체 + 막대 바깥으로)
+    boxAsCut: false     // 박스를 칼선(CutContour)으로
+  };
+}
+
+function domboBarBoxMerge(opts) {
+  var o = domboBarBoxDefaults();
+  if (opts) {
+    for (var k in opts) {
+      if (opts.hasOwnProperty(k) && opts[k] !== undefined && opts[k] !== null) o[k] = opts[k];
+    }
+  }
+  o.useBar = o.useBar === true || o.useBar === 'true';
+  o.boxAsCut = o.boxAsCut === true || o.boxAsCut === 'true';
+  o.barHeightMm = Number(o.barHeightMm);
+  o.barGapMm = Number(o.barGapMm);
+  o.boxMarginMm = Number(o.boxMarginMm);
+  if (o.useBar && !(o.barHeightMm > 0)) throw new Error('막대 높이는 0보다 커야 합니다.');
+  if (o.useBar && !(o.barGapMm >= 0)) throw new Error('막대 간격은 0 이상이어야 합니다.');
+  if (!(o.boxMarginMm >= 0)) throw new Error('박스 여백은 0 이상이어야 합니다.');
+  return o;
+}
+
+// 객체 범위를 받아 막대와 박스의 [위, 왼쪽, 가로, 세로] 를 계산한다 (일러스트레이터 없이도 동작).
+// 막대는 객체 위쪽으로 간격만큼 띄우고 객체와 같은 가로 길이. 박스는 객체 + 막대를 여백만큼 감싼다.
+function domboBarBoxRects(bounds, opts) {
+  var o = domboBarBoxMerge(opts);
+  var L = bounds[0], T = bounds[1], R = bounds[2], B = bounds[3];
+  var h = o.barHeightMm * DOMBO_PT_PER_MM, g = o.barGapMm * DOMBO_PT_PER_MM, m = o.boxMarginMm * DOMBO_PT_PER_MM;
+  var top = T, bar = null;
+  if (o.useBar) {
+    top = T + g + h;
+    bar = [top, L, R - L, h];
+  }
+  return { bar: bar, box: [top + m, L - m, R - L + 2 * m, top - B + 2 * m] };
+}
+
+// 대상 고르기: 여러 개 선택 → 각각. 그룹 하나 선택 → 안의 하위 그룹마다 (하위 그룹이 없으면 그룹 전체).
+function domboBarBoxTargets(sel) {
+  var targets = [], i;
+  if (sel.length > 1) {
+    for (i = 0; i < sel.length; i++) targets.push(sel[i]);
+    return targets;
+  }
+  var obj = sel[0];
+  if (obj.typename === 'GroupItem' && !obj.clipped) {
+    for (i = 0; i < obj.pageItems.length; i++) {
+      var k = obj.pageItems[i];
+      if (k.typename === 'GroupItem' && !k.hidden) targets.push(k);
+    }
+  }
+  if (targets.length === 0) targets.push(obj);
+  return targets;
+}
+
+function domboBarBox(opts) {
+  var doc = domboDoc();
+  var o = domboBarBoxMerge(opts);
+  if (!domboHasSelection(doc)) throw new Error('막대와 박스를 만들 객체를 선택하세요.');
+  var layer = doc.activeLayer;
+  if (layer.locked || !layer.visible || layer.name === DOMBO_LAYER) {
+    throw new Error("지금 레이어('" + layer.name + "')가 잠겨 있거나 숨겨져 있습니다. 다른 레이어를 고르세요.");
+  }
+  var targets = domboBarBoxTargets(doc.selection);
+  var black = domboBlack(doc);
+  var cut = o.boxAsCut ? domboCutColor(doc) : null;
+  var made = 0;
+  for (var i = 0; i < targets.length; i++) {
+    var b = domboItemBounds(targets[i]);
+    if (!b) continue;
+    var r = domboBarBoxRects(b, o);
+    if (r.bar) {
+      var bar = layer.pathItems.rectangle(r.bar[0], r.bar[1], r.bar[2], r.bar[3]);
+      bar.filled = true;
+      bar.fillColor = black;
+      bar.stroked = false;
+      bar.name = '막대_' + (made + 1);
+    }
+    var box = layer.pathItems.rectangle(r.box[0], r.box[1], r.box[2], r.box[3]);
+    box.filled = false;
+    if (cut) {
+      domboStyleCutPath(box, cut);
+    } else {
+      box.stroked = true;
+      box.strokeColor = black;
+      box.strokeWidth = 1;
+    }
+    box.name = '박스_' + (made + 1);
+    made++;
+  }
+  if (made === 0) throw new Error('선택한 것에 보이는 모양이 없습니다.');
+  return made + '개 객체 기준으로 ' + (o.useBar ? '막대와 박스를' : '박스를') + ' 만들었습니다.';
+}
+
 // ---- 개수 세기 ----
 
 function domboCountItem(item, c) {
@@ -481,3 +582,4 @@ function domboPanelRemove() { return domboCall(domboRemove); }
 function domboPanelCut() { return domboCall(domboCutContour); }
 function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
 function domboPanelCount() { return domboCall(domboCount); }
+function domboPanelBarBox(opts) { return domboCall(domboBarBox, opts); }
