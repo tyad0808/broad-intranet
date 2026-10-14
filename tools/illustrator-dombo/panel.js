@@ -69,5 +69,101 @@
   });
   $('count').addEventListener('click', function () { call('domboPanelCount'); });
 
+  // ---- 칸 순서·이름 바꾸기 (이 컴퓨터에 기억) ----
+  var LAYOUT_KEY = 'broad-dombo-layout';
+  var box = $('sections');
+  var sections = {}, defaults = [];
+  Array.prototype.forEach.call(box.querySelectorAll('details[data-id]'), function (d) {
+    var id = d.getAttribute('data-id');
+    sections[id] = d;
+    defaults.push({ id: id, name: d.querySelector('summary').textContent });
+  });
+
+  function readLayout() {
+    var saved;
+    try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY)); } catch (e) {}
+    var list = [], seen = {};
+    // 저장된 순서를 따르되, 없어진 칸은 빼고 새로 생긴 칸은 뒤에 붙인다
+    ((saved && saved.items) || []).concat(defaults).forEach(function (it) {
+      if (!it || !sections[it.id] || seen[it.id]) return;
+      seen[it.id] = true;
+      var def = defaults.filter(function (x) { return x.id === it.id; })[0];
+      list.push({ id: it.id, name: (typeof it.name === 'string' && it.name.trim()) || def.name, open: it.open !== false });
+    });
+    return list;
+  }
+
+  var layout = readLayout();
+
+  function saveLayout() {
+    layout.forEach(function (it) { it.open = sections[it.id].open; });
+    try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ items: layout })); } catch (e) {}
+  }
+
+  function applyLayout() {
+    layout.forEach(function (it) {
+      var d = sections[it.id];
+      d.querySelector('summary').textContent = it.name;
+      d.open = it.open;
+      box.appendChild(d);
+    });
+  }
+
+  function renderEditor() {
+    var list = $('editList');
+    list.innerHTML = '';
+    layout.forEach(function (it, i) {
+      var row = document.createElement('div');
+      row.className = 'editRow';
+      var name = document.createElement('input');
+      name.type = 'text';
+      name.value = it.name;
+      name.addEventListener('input', function () {
+        it.name = name.value.trim() || defaults.filter(function (x) { return x.id === it.id; })[0].name;
+        sections[it.id].querySelector('summary').textContent = it.name;
+        saveLayout();
+      });
+      var up = document.createElement('button');
+      up.textContent = '▲';
+      up.disabled = i === 0;
+      up.addEventListener('click', function () { move(i, -1); });
+      var down = document.createElement('button');
+      down.textContent = '▼';
+      down.disabled = i === layout.length - 1;
+      down.addEventListener('click', function () { move(i, 1); });
+      row.appendChild(name);
+      row.appendChild(up);
+      row.appendChild(down);
+      list.appendChild(row);
+    });
+  }
+
+  function move(i, dir) {
+    var j = i + dir;
+    if (j < 0 || j >= layout.length) return;
+    var t = layout[i]; layout[i] = layout[j]; layout[j] = t;
+    applyLayout();
+    saveLayout();
+    renderEditor();
+  }
+
+  $('editToggle').addEventListener('click', function () {
+    var ed = $('editor');
+    ed.hidden = !ed.hidden;
+    if (!ed.hidden) renderEditor();
+  });
+  $('editDone').addEventListener('click', function () { $('editor').hidden = true; });
+  $('editReset').addEventListener('click', function () {
+    layout = defaults.map(function (d) { return { id: d.id, name: d.name, open: true }; });
+    applyLayout();
+    saveLayout();
+    renderEditor();
+  });
+  // 칸을 접거나 펼친 상태도 기억한다
+  Object.keys(sections).forEach(function (id) {
+    sections[id].addEventListener('toggle', saveLayout);
+  });
+
+  applyLayout();
   load();
 })();

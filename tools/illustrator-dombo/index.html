@@ -17,6 +17,13 @@
   .hint { margin: 6px 0 0; color: #999; font-size: 11px; line-height: 1.4; }
   details { border-bottom: 1px solid #444; padding: 4px 0 8px; margin-bottom: 6px; }
   summary { cursor: pointer; font-weight: bold; color: #eee; padding: 4px 0 6px; }
+  .top { text-align: right; margin-bottom: 4px; }
+  button.small { width: auto; padding: 3px 8px; margin: 2px 0; font-size: 11px; }
+  #editor { border: 1px solid #2d6fd1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; }
+  .editRow { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
+  .editRow input { flex: 1; min-width: 0; background: #222; color: #eee; border: 1px solid #555; padding: 3px 4px; }
+  .editRow button { width: 26px; margin: 0; padding: 3px 0; }
+  .editRow button:disabled { opacity: 0.3; cursor: default; }
   #msg { position: sticky; bottom: 0; background: #323232; padding: 6px 0; min-height: 2.6em;
          line-height: 1.4; white-space: pre-line; }
   #msg.err { color: #ff8a80; }
@@ -24,7 +31,18 @@
 </style>
 </head>
 <body>
-  <details open>
+  <div class="top">
+    <button id="editToggle" class="small">순서·이름 바꾸기</button>
+  </div>
+  <div id="editor" hidden>
+    <p class="hint">▲▼ 로 순서를 옮기고, 칸에 이름을 고치면 바로 바뀝니다.</p>
+    <div id="editList"></div>
+    <button id="editReset" class="small">처음대로</button>
+    <button id="editDone" class="small main">완료</button>
+  </div>
+
+  <div id="sections">
+  <details open data-id="dombo">
     <summary>돔보마크</summary>
     <fieldset>
       <legend>기준</legend>
@@ -47,20 +65,20 @@
     <button id="remove">돔보 지우기</button>
   </details>
 
-  <details open>
+  <details open data-id="cut">
     <summary>칼선</summary>
     <button id="cut">선택 → 칼선(CutContour) 만들기</button>
     <p class="hint">선택한 패스를 복제해 '칼선' 레이어에 만듭니다. 클리핑 마스크는 마스크 모양만.</p>
   </details>
 
-  <details open>
+  <details open data-id="grid">
     <summary>격자 칼선</summary>
     <label><input id="removeRects" type="checkbox" checked> 기준 사각형 지우기</label>
     <button id="grid">선택한 사각형 → 격자 칼선</button>
     <p class="hint">사각형 변마다 전체를 가로지르는 선을 긋고, 칼 이동이 짧은 순서로 쌓습니다 (맨 아래가 첫 번째).</p>
   </details>
 
-  <details open>
+  <details open data-id="barbox">
     <summary>막대 + 박스</summary>
     <label><input id="useBar" type="checkbox" checked> 막대 만들기</label>
     <div class="num">막대 높이(두께) <input id="barHeightMm" type="number" step="0.5" min="0.1" value="2"></div>
@@ -71,11 +89,13 @@
     <p class="hint">단위 mm. 여러 개 선택하면 각각, 그룹 하나를 선택하면 안의 하위 그룹마다 만듭니다.</p>
   </details>
 
-  <details open>
+  <details open data-id="count">
     <summary>개수 세기</summary>
     <button id="count">글자·도형 개수 세기</button>
     <p class="hint">선택한 것만, 선택이 없으면 문서 전체. 그룹 안까지 셉니다.</p>
   </details>
+
+  </div>
 
   <div id="msg"></div>
 
