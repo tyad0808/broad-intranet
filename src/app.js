@@ -11,6 +11,7 @@ const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { orderRoutes } = require('./routes/orders');
+const { createNotifier } = require('./notifier');
 const { channelStatusLabel } = require('./channels/labels');
 
 function sessionSecret() {
@@ -23,7 +24,7 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ db, collector = null, secret = sessionSecret() }) {
+function createApp({ db, collector = null, notifier = createNotifier({ db }), secret = sessionSecret() }) {
   const app = express();
   const isProd = process.env.NODE_ENV === 'production';
   const store = new SqliteSessionStore(db);
@@ -80,6 +81,7 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
     res.locals.tab = null;
     res.locals.pendingCount =
       req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
+    res.locals.unassignedAlert = notifier.unassignedBanner(req.user);
     next();
   });
 
@@ -87,11 +89,16 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
 
   app.get('/health', (req, res) => res.json({ ok: true }));
 
-  app.use(authRoutes(db));
+  app.use(authRoutes(db, notifier));
 
   // 여기부터는 로그인 + 승인된 계정만 접근
-  app.use('/admin', requireAdmin, adminRoutes(db, store, collector));
-  app.use(requireActive, orderRoutes(db));
+  // 실시간 소식 통로 (주문 변경, 알림)
+  app.get('/events', requireActive, (req, res) => {
+    notifier.hub.add(req, res, req.user.id);
+  });
+
+  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier));
+  app.use(requireActive, orderRoutes(db, notifier));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });
@@ -103,6 +110,7 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
   });
 
   app.locals.sessionStore = store;
+  app.locals.notifier = notifier;
   return app;
 }
 

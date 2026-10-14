@@ -8,7 +8,7 @@ const LOGIN_MESSAGES = {
   loggedout: '로그아웃되었습니다.',
 };
 
-function authRoutes(db) {
+function authRoutes(db, notifier) {
   const router = express.Router();
 
   const activeJobs = () =>
@@ -67,10 +67,8 @@ function authRoutes(db) {
       "INSERT INTO users (email, password_hash, name, job_id, role, status) VALUES (?, ?, ?, ?, 'staff', 'pending')"
     ).run(form.email, hashPassword(password), form.name, form.job_id);
 
-    // 관리자 알림용 기록 (화면에 띄우는 기능은 6단계)
-    db.prepare("INSERT INTO notifications (type, message) VALUES ('signup', ?)").run(
-      `${form.name}(${form.email}) 님이 가입을 신청했습니다.`
-    );
+    // 관리자에게 가입 신청 알림
+    notifier.signup({ name: form.name, email: form.email });
 
     res.redirect('/login?m=signedup');
   });

@@ -171,6 +171,7 @@ function seed(db) {
 
     insertSetting.run('unassigned_threshold', '5');      // 미지정 알림 기준 건수
     insertSetting.run('unassigned_repeat_minutes', '30'); // 해소될 때까지 다시 알리는 간격
+    insertSetting.run('unassigned_recipients', '[]');     // 관리자 말고 미지정 알림을 함께 받을 직원 번호들
   });
 }
 

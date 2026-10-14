@@ -5,14 +5,19 @@ const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
 const { createCollector } = require('./collector');
+const { createNotifier } = require('./notifier');
 
 const PORT = process.env.PORT || 3000;
 const COLLECT_INTERVAL_MINUTES = Math.max(1, Number(process.env.COLLECT_INTERVAL_MINUTES) || 5);
 
 const db = openDb();
-const collector = createCollector({ db, source: createOrderSource() });
+const notifier = createNotifier({ db });
+const collector = createCollector({ db, source: createOrderSource(), onResult: notifier.afterCollect });
 collector.intervalMinutes = COLLECT_INTERVAL_MINUTES;
-const app = createApp({ db, collector });
+const app = createApp({ db, collector, notifier });
+
+// 미지정 초과 알림: 1분마다 확인 (해소될 때까지 정해진 간격으로 다시 알림)
+setInterval(() => notifier.checkUnassigned(), 60 * 1000).unref();
 
 // 만료된 로그인 정보를 1시간마다 정리
 setInterval(() => app.locals.sessionStore.cleanup(), 60 * 60 * 1000).unref();

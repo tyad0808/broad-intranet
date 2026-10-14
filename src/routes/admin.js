@@ -10,7 +10,7 @@ const STATUS_LABELS = {
   rejected: '거절',
 };
 
-function adminRoutes(db, sessionStore, collector) {
+function adminRoutes(db, sessionStore, collector, notifier) {
   const router = express.Router();
 
   // 처리 결과 안내 문구를 다음 화면에 한 번만 보여준다
@@ -82,6 +82,7 @@ function adminRoutes(db, sessionStore, collector) {
     }
     db.prepare("UPDATE users SET status = 'rejected' WHERE id = ?").run(user.id);
     sessionStore.destroyUserSessions(user.id);
+    notifier.hub.disconnectUser(user.id);
     flash(req, 'ok', `${user.name} 님의 가입 신청을 거절했습니다.`);
     res.redirect('/admin/users');
   });
@@ -94,8 +95,9 @@ function adminRoutes(db, sessionStore, collector) {
       return res.redirect('/admin/users');
     }
     db.prepare("UPDATE users SET status = 'suspended' WHERE id = ?").run(user.id);
-    // 이미 로그인해 있는 창도 즉시 끊는다
+    // 이미 로그인해 있는 창도 즉시 끊는다 (실시간 연결 포함)
     sessionStore.destroyUserSessions(user.id);
+    notifier.hub.disconnectUser(user.id);
     flash(req, 'ok', `${user.name} 님의 계정을 정지했습니다. 즉시 로그아웃됩니다.`);
     res.redirect('/admin/users');
   });
@@ -256,6 +258,53 @@ function adminRoutes(db, sessionStore, collector) {
       flash(req, 'ok', `'${job.name}' 직무를 담당 디자이너 목록에서 ${job.is_designer ? '뺐습니다' : '보이게 했습니다'}.`);
     }
     res.redirect('/admin/jobs');
+  });
+
+  // ───────── 알림 설정 ─────────
+  const getSetting = key => {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    return row ? row.value : null;
+  };
+  const putSetting = (key, value) => db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).run(key, String(value));
+
+  router.get('/notify', (req, res) => {
+    let recipients = [];
+    try { recipients = JSON.parse(getSetting('unassigned_recipients') || '[]'); } catch { recipients = []; }
+    const staff = db.prepare(`
+      SELECT u.id, u.name, u.role, j.name AS job_name FROM users u LEFT JOIN jobs j ON j.id = u.job_id
+      WHERE u.status = 'active' ORDER BY u.role, u.name
+    `).all();
+    res.render('admin/notify', {
+      title: '알림 설정',
+      tab: 'notify',
+      threshold: Number(getSetting('unassigned_threshold')) || 5,
+      repeatMinutes: Number(getSetting('unassigned_repeat_minutes')) || 30,
+      recipients,
+      staff,
+      unassigned: notifier.unassignedCount(),
+    });
+  });
+
+  router.post('/notify', (req, res) => {
+    const threshold = Math.round(Number(req.body.threshold));
+    const repeat = Math.round(Number(req.body.repeat_minutes));
+    if (!(threshold >= 1 && threshold <= 999)) {
+      flash(req, 'error', '기준 건수는 1~999 사이로 입력하세요.');
+      return res.redirect('/admin/notify');
+    }
+    if (!(repeat >= 5 && repeat <= 240)) {
+      flash(req, 'error', '다시 알림 간격은 5~240분 사이로 입력하세요.');
+      return res.redirect('/admin/notify');
+    }
+    const picked = [].concat(req.body.recipients || []).map(Number).filter(Boolean);
+    putSetting('unassigned_threshold', threshold);
+    putSetting('unassigned_repeat_minutes', repeat);
+    putSetting('unassigned_recipients', JSON.stringify(picked));
+    notifier.checkUnassigned();
+    flash(req, 'ok', '알림 설정을 저장했습니다.');
+    res.redirect('/admin/notify');
   });
 
   // ───────── 주문 수집 상태 ─────────

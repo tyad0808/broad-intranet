@@ -8,7 +8,7 @@ const VIEWS = {
   all: '전체',
 };
 
-function orderRoutes(db) {
+function orderRoutes(db, notifier) {
   const router = express.Router();
 
   // 마지막 단계(보통 '발송')에 있는 주문은 끝난 것으로 보고 '진행 중' 목록에서 뺀다
@@ -107,6 +107,8 @@ function orderRoutes(db) {
     // version 을 올려서, 이 주문 카드를 열어 둔 다른 직원이 옛 담당자로 덮어쓰지 못하게 한다
     db.prepare("UPDATE orders SET assignee_id = ?, version = version + 1, updated_at = datetime('now') WHERE id = ?")
       .run(assignee, order.id);
+    notifier.ordersChanged([order.id], req.user.id);
+    notifier.checkUnassigned();
     req.session.flash = {
       type: 'ok',
       message: designer
@@ -159,6 +161,8 @@ function orderRoutes(db) {
       WHERE id = ? AND version = ?
     `).run(changes.assignee_id, changes.stage_id, changes.due_date, changes.memo, changes.nas_path, order.id, order.version);
 
+    notifier.ordersChanged([order.id], req.user.id);
+    if (changes.assignee_id !== order.assignee_id || changes.stage_id !== order.stage_id) notifier.checkUnassigned();
     req.session.flash = { type: 'ok', message: '저장했습니다.' };
     res.redirect(self);
   });

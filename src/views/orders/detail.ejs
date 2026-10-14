@@ -1,7 +1,7 @@
 <%- include('../partials/header') %>
 <p><a href="<%= back %>">← 목록으로</a></p>
 
-<div class="detail">
+<div class="detail" data-order-id="<%= order.id %>">
   <section class="card">
     <h1 class="detail-title"><%= order.product_name %></h1>
     <% if (order.option_text) { %><p class="muted"><%= order.option_text %></p><% } %>

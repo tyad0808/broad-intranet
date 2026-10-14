@@ -27,7 +27,7 @@ function browser(baseUrl) {
     const token = /name="_csrf" value="([^"]+)"/.exec(page.text)[1];
     return request(actionPath, { method: 'POST', form: { ...fields, _csrf: token } });
   }
-  return { request, submit };
+  return { request, submit, cookie: () => cookie };
 }
 
 async function startServer({ db = openDb(':memory:'), collector = null } = {}) {

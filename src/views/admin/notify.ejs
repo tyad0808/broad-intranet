@@ -1,0 +1,49 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<form method="post" action="/admin/notify">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card">
+    <h2>미지정 초과 알림</h2>
+    <p class="muted">담당 디자이너가 없는 진행 중 주문이 기준 건수를 <strong>넘으면</strong> 바로 한 번 알리고,
+      해소될 때까지 정해진 간격마다 다시 알립니다. 지금 미지정 주문은 <strong><%= unassigned %>건</strong>입니다.</p>
+    <div class="row-edit">
+      <label class="inline-label">기준 건수
+        <input type="number" name="threshold" value="<%= threshold %>" min="1" max="999" required>
+      </label>
+      <label class="inline-label">다시 알림 간격 (분)
+        <input type="number" name="repeat_minutes" value="<%= repeatMinutes %>" min="5" max="240" required>
+      </label>
+    </div>
+
+    <h2>받는 사람</h2>
+    <p class="muted">관리자는 항상 받습니다. 함께 받을 직원을 고르세요.</p>
+    <ul class="check-list">
+      <% staff.forEach(s => { %>
+        <li>
+          <label class="check">
+            <% if (s.role === 'admin') { %>
+              <input type="checkbox" checked disabled> <%= s.name %> <span class="muted">관리자</span>
+            <% } else { %>
+              <input type="checkbox" name="recipients" value="<%= s.id %>" <%= recipients.includes(s.id) ? 'checked' : '' %>>
+              <%= s.name %> <span class="muted"><%= s.job_name || '' %></span>
+            <% } %>
+          </label>
+        </li>
+      <% }) %>
+    </ul>
+    <button type="submit" class="btn-sm primary">저장</button>
+  </section>
+</form>
+
+<section class="card">
+  <h2>다른 알림</h2>
+  <ul class="plain">
+    <li><strong>신규 발주</strong>: 새 주문이 수집되면 전 직원에게</li>
+    <li><strong>가입 신청</strong>: 직원이 회원가입하면 관리자에게</li>
+  </ul>
+  <p class="muted">알림은 인트라넷 화면이 열려 있을 때 화면 알림 + 소리로 뜨고, 브라우저 알림을 허용하면 다른 창을 보고 있어도 뜹니다.</p>
+</section>
+<%- include('../partials/footer') %>

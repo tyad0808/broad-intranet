@@ -74,7 +74,7 @@ function applyOrders(db, orders) {
   return result;
 }
 
-function createCollector({ db, source, now = () => new Date(), initialHours = 72 }) {
+function createCollector({ db, source, now = () => new Date(), initialHours = 72, onResult = () => {} }) {
   const lastKey = `collect_last_to_${source.channel}`;
   let running = null;
 
@@ -110,7 +110,13 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
     // 이미 수집 중이면 새로 시작하지 않고 진행 중인 결과를 같이 기다린다 (중복 실행 방지)
     run() {
       if (!running) {
-        running = runOnce().finally(() => { running = null; });
+        running = runOnce()
+          .then(result => {
+            // 수집이 끝나면 알림·화면 갱신 (실패해도 수집 결과는 그대로 돌려준다)
+            try { onResult(result); } catch (err) { console.error('수집 후 알림 실패:', err); }
+            return result;
+          })
+          .finally(() => { running = null; });
       }
       return running;
     },

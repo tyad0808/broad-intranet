@@ -1,0 +1,111 @@
+// 알림 규칙: 누구에게, 언제, 무엇을 알릴지
+//
+//  신규 발주   새 주문이 수집될 때            → 전 직원
+//  미지정 초과 담당자 없는 진행 중 주문이 기준 건수를 넘을 때
+//              (넘는 순간 1회, 해소될 때까지 정해진 간격마다 다시) → 관리자 + 관리자가 지정한 직원
+//  가입 신청   직원이 회원가입할 때           → 관리자
+const { EventHub } = require('./events');
+
+function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
+  const activeUserStmt = db.prepare("SELECT id, role FROM users WHERE id = ? AND status = 'active'");
+  const setting = key => {
+    const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+    return row ? row.value : null;
+  };
+  const record = db.prepare('INSERT INTO notifications (type, message, order_id) VALUES (?, ?, ?)');
+
+  // 받을 사람 판단: 보내는 순간에도 계정이 '사용 중' 인지 다시 확인한다
+  const receivers = rule => userId => {
+    const user = activeUserStmt.get(userId);
+    return Boolean(user) && rule(user);
+  };
+  const everyone = receivers(() => true);
+  const admins = receivers(u => u.role === 'admin');
+  const isUnassignedRecipient = u => {
+    if (u.role === 'admin') return true;
+    try {
+      return JSON.parse(setting('unassigned_recipients') || '[]').includes(u.id);
+    } catch {
+      return false;
+    }
+  };
+  const unassignedReceivers = receivers(isUnassignedRecipient);
+
+  function notify(type, { title, body, url }, canReceive) {
+    hub.send('notify', { type, title, body, url }, canReceive);
+  }
+
+  // 주문 목록·카드를 보고 있는 화면들에게 "다시 불러오라" 고 알린다
+  function ordersChanged(ids = [], actorId = null) {
+    hub.send('orders-changed', { ids, actorId }, everyone);
+  }
+
+  // ── 미지정 초과 ──
+  let overSince = null;     // 기준을 넘은 상태가 시작된 시각
+  let lastAlertAt = null;   // 마지막으로 알린 시각
+
+  function unassignedCount() {
+    const last = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
+    return db.prepare(
+      'SELECT COUNT(*) AS n FROM orders WHERE assignee_id IS NULL AND (stage_id IS NULL OR stage_id != ?)'
+    ).get(last ? last.id : -1).n;
+  }
+
+  // 화면 위쪽 배너용: 지금 기준을 넘었는지 (알림을 놓쳐도 배너는 계속 보이게)
+  function unassignedBanner(user) {
+    if (!user || user.status !== 'active' || !isUnassignedRecipient(user)) return null;
+    const threshold = Number(setting('unassigned_threshold')) || 5;
+    const count = unassignedCount();
+    return count > threshold ? { count, threshold } : null;
+  }
+
+  function checkUnassigned() {
+    const threshold = Number(setting('unassigned_threshold')) || 5;
+    const repeatMs = (Number(setting('unassigned_repeat_minutes')) || 30) * 60 * 1000;
+    const count = unassignedCount();
+
+    if (count <= threshold) {
+      overSince = null;
+      lastAlertAt = null;
+      return { count, alerted: false };
+    }
+    const t = now();
+    if (overSince === null) overSince = t;
+    if (lastAlertAt !== null && t - lastAlertAt < repeatMs) return { count, alerted: false };
+
+    lastAlertAt = t;
+    const message = `담당 디자이너가 없는 주문이 ${count}건입니다 (기준 ${threshold}건).`;
+    record.run('unassigned_over', message, null);
+    notify('unassigned_over', { title: '미지정 주문이 쌓였습니다', body: message, url: '/?view=unassigned' }, unassignedReceivers);
+    return { count, alerted: true };
+  }
+
+  // 주문 수집이 끝날 때마다 호출된다
+  function afterCollect(result) {
+    if (!result || !result.ok) return;
+    if (result.created > 0) {
+      // 알림 기록(notifications)은 수집기가 주문마다 이미 남겼으므로 여기서는 화면에만 보낸다
+      const names = db.prepare(
+        `SELECT product_name FROM orders WHERE id IN (${result.createdIds.map(() => '?').join(',')}) LIMIT 3`
+      ).all(...result.createdIds).map(r => r.product_name);
+      const more = result.created > names.length ? ` 외 ${result.created - names.length}건` : '';
+      notify('new_order', {
+        title: `신규 발주 ${result.created}건`,
+        body: names.join(', ') + more,
+        url: '/?view=unassigned',
+      }, everyone);
+    }
+    if (result.created > 0 || result.updated > 0) ordersChanged(result.createdIds || []);
+    checkUnassigned();
+  }
+
+  function signup(user) {
+    const message = `${user.name}(${user.email}) 님이 가입을 신청했습니다.`;
+    record.run('signup', message, null);
+    notify('signup', { title: '가입 신청', body: message, url: '/admin/users' }, admins);
+  }
+
+  return { hub, notify, ordersChanged, checkUnassigned, afterCollect, signup, unassignedCount, unassignedBanner };
+}
+
+module.exports = { createNotifier };

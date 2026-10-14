@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title %> · 브로애드 인트라넷</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="icon" href="data:,">
 </head>
-<body>
+<body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %>>
   <header class="topbar">
     <a class="brand" href="/">브로애드 인트라넷</a>
     <% if (locals.user) { %>
@@ -14,6 +15,7 @@
         <% if (user.role === 'admin' && user.status === 'active') { %>
           <a href="/admin/users">관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
         <% } %>
+        <button type="button" id="enable-notify" class="link" hidden>알림 켜기</button>
         <span><%= user.name %></span>
         <form method="post" action="/logout">
           <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
@@ -22,6 +24,11 @@
       </nav>
     <% } %>
   </header>
+  <% if (locals.unassignedAlert) { %>
+    <a class="alert-bar" id="unassigned-bar" href="/?view=unassigned">
+      담당 디자이너가 없는 주문이 <strong><%= unassignedAlert.count %>건</strong>입니다 (기준 <%= unassignedAlert.threshold %>건). 눌러서 확인하세요.
+    </a>
+  <% } %>
   <main class="container">
     <% if (locals.flash) { %>
       <p class="<%= flash.type === 'error' ? 'error' : 'notice' %> flash"><%= flash.message %></p>

@@ -256,3 +256,63 @@ button.secondary:hover { background: var(--notice-bg); }
   .detail { grid-template-columns: 1fr; }
   .oi-meta { justify-content: flex-start; }
 }
+
+/* ───────── 6단계: 알림 ───────── */
+.toast-stack {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(360px, calc(100vw - 24px));
+}
+.toast {
+  position: relative;
+  display: block;
+  padding: 12px 36px 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--primary);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(16, 24, 40, 0.12);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  animation: toast-in 0.2s ease-out;
+}
+.toast strong { display: block; margin-bottom: 2px; }
+.toast-unassigned_over { border-left-color: #d29922; }
+.toast-signup { border-left-color: #1a7f37; }
+.toast-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  padding: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 28px;
+}
+.toast-close:hover { background: var(--bg); }
+@keyframes toast-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.inline-label { display: inline-block; margin-right: 12px; }
+.inline-label input { width: 120px; }
+.check-list { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 6px; }
+.check { display: flex; align-items: center; gap: 8px; font-weight: 400; margin: 0; }
+.check input { width: auto; margin: 0; }
+.plain { padding-left: 18px; }
+.alert-bar {
+  display: block;
+  padding: 10px 16px;
+  background: #fff4e0;
+  border-bottom: 1px solid #f5d9a8;
+  color: #7a5200;
+  text-decoration: none;
+  font-size: 14px;
+  text-align: center;
+}
+.alert-bar:hover { background: #ffecc7; }

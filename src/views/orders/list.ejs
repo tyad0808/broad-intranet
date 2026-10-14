@@ -14,7 +14,7 @@
   <h1 class="page-title">주문</h1>
 </div>
 
-<nav class="tabs">
+<nav class="tabs" id="live-tabs">
   <% Object.entries(VIEWS).forEach(([key, label]) => { %>
     <a href="<%= link({ view: key === 'active' ? '' : key }) %>" class="<%= view === key ? 'on' : '' %>">
       <%= label %> <span class="count"><%= counts[key] || 0 %></span>
@@ -38,6 +38,7 @@
   <button type="submit" class="btn-sm">검색</button>
 </form>
 
+<div id="live-list">
 <% if (orders.length === 0) { %>
   <section class="card"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>
 <% } else { %>
@@ -71,6 +72,7 @@
   </ul>
   <% if (orders.length >= 300) { %><p class="muted">최근 300건까지만 보입니다. 검색이나 필터로 좁혀 보세요.</p><% } %>
 <% } %>
+</div>
 
 <script src="/orders.js"></script>
 <%- include('../partials/footer') %>
