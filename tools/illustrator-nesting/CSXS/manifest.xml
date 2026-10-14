@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.nesting" ExtensionBundleVersion="1.0.0"
+  ExtensionBundleName="Broad Nesting" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <ExtensionList>
+    <Extension Id="com.broad.nesting.roll" Version="1.0.0" />
+    <Extension Id="com.broad.nesting.text" Version="1.0.0" />
+  </ExtensionList>
+  <ExecutionEnvironment>
+    <HostList>
+      <!-- 일러스트레이터 CC 2017(21) 이상 -->
+      <Host Name="ILST" Version="[21.0,99.9]" />
+    </HostList>
+    <LocaleList>
+      <Locale Code="All" />
+    </LocaleList>
+    <RequiredRuntimeList>
+      <RequiredRuntime Name="CSXS" Version="7.0" />
+    </RequiredRuntimeList>
+  </ExecutionEnvironment>
+  <DispatchInfoList>
+    <Extension Id="com.broad.nesting.roll">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./roll.html</MainPath>
+          <ScriptPath>./jsx/nest-core.jsx</ScriptPath>
+        </Resources>
+        <Lifecycle><AutoVisible>true</AutoVisible></Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>용지 폭 네스팅</Menu>
+          <Geometry>
+            <Size><Height>460</Height><Width>260</Width></Size>
+            <MinSize><Height>300</Height><Width>220</Width></MinSize>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+    <Extension Id="com.broad.nesting.text">
+      <DispatchInfo>
+        <Resources>
+          <MainPath>./text.html</MainPath>
+          <ScriptPath>./jsx/nest-core.jsx</ScriptPath>
+        </Resources>
+        <Lifecycle><AutoVisible>true</AutoVisible></Lifecycle>
+        <UI>
+          <Type>Panel</Type>
+          <Menu>아크릴 텍스트 네스팅</Menu>
+          <Geometry>
+            <Size><Height>540</Height><Width>260</Width></Size>
+            <MinSize><Height>300</Height><Width>220</Width></MinSize>
+          </Geometry>
+        </UI>
+      </DispatchInfo>
+    </Extension>
+  </DispatchInfoList>
+</ExtensionManifest>

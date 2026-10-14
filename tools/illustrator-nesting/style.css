@@ -1,0 +1,16 @@
+body { margin: 0; padding: 10px; background: #323232; color: #ddd; font: 12px sans-serif; }
+h1 { font-size: 13px; color: #eee; margin: 0 0 8px; }
+fieldset { border: 1px solid #555; border-radius: 4px; margin: 0 0 10px; padding: 6px 8px 8px; }
+legend { color: #aaa; padding: 0 4px; }
+label { display: block; margin: 4px 0; }
+.num { display: flex; align-items: center; justify-content: space-between; margin: 5px 0; }
+.num input { width: 64px; background: #222; color: #eee; border: 1px solid #555; padding: 2px 4px; }
+.hint { margin: 6px 0 0; color: #999; font-size: 11px; line-height: 1.4; }
+button { width: 100%; margin: 4px 0; padding: 7px; border: 1px solid #2d6fd1; border-radius: 4px;
+         background: #2d6fd1; color: #fff; cursor: pointer; font-size: 12px; font-weight: bold; }
+button:hover { filter: brightness(1.15); }
+button:disabled { opacity: 0.5; cursor: wait; }
+#msg { margin-top: 8px; min-height: 2.6em; line-height: 1.4; white-space: pre-line; }
+#msg.err { color: #ff8a80; }
+#msg.ok { color: #9ccc65; }
+#msg.busy { color: #aaa; }
