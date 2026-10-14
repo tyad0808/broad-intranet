@@ -79,10 +79,59 @@ test('클리핑 마스크는 가려진 부분이 아니라 마스크 모양을 �
   const clip2 = group([compoundMask, hiddenArt], { clipped: true });
   const outer = group([clip2, pathItem([70, 20, 120, -10])]);
   const doc = { selection: [outer, clip] };
-  assert.deepStrictEqual(Array.from(core.domboSelectionBounds(doc)), [0, 50, 120, -10]);
+  assert.deepStrictEqual(Array.from(core.domboArtworkBounds(doc)), [0, 50, 120, -10]);
 });
 
 test('숨긴 개체는 범위에서 뺀다', () => {
   const g = group([pathItem([0, 10, 10, 0]), pathItem([-100, 100, 100, -100], { hidden: true })]);
   assert.deepStrictEqual(Array.from(core.domboItemBounds(g)), [0, 10, 10, 0]);
+});
+
+const layer = (name, items, extra = {}) => ({ name, visible: true, pageItems: items, layers: [], ...extra });
+const docWith = (layers, artboardRect = [0, 300, 300, 0]) => ({
+  selection: [],
+  layers,
+  artboards: { 0: { artboardRect }, getActiveArtboardIndex: () => 0 },
+});
+
+test('아무것도 선택하지 않으면 대지에 걸친 보이는 개체 전체를 기준으로 한다', () => {
+  const clip = group([pathItem([10, 100, 110, 20], { clipping: true }), pathItem([-500, 500, 500, -500])], { clipped: true });
+  const doc = docWith([
+    layer('작업', [clip, pathItem([150, 80, 200, 40])], {
+      layers: [layer('하위', [pathItem([50, 150, 60, 140])])],
+    }),
+    layer('숨김', [pathItem([-50, 400, 400, -50])], { visible: false }),
+    layer('돔보마크', [pathItem([-30, 330, 330, -30])]),
+    layer('칼선', [pathItem([-30, 330, 330, -30])]),
+    layer('대지밖', [pathItem([1000, 1100, 1100, 1000]), pathItem([0, 0, 0, 0], { guides: true })]),
+  ]);
+  assert.deepStrictEqual(Array.from(core.domboArtworkBounds(doc)), [10, 150, 200, 20]);
+});
+
+test('선택도 없고 대지 위에 개체도 없으면 알려준다', () => {
+  assert.throws(() => core.domboArtworkBounds(docWith([layer('작업', [])])), /개체가 없습니다/);
+});
+
+test('칼선: 클리핑 마스크는 안쪽 내용 없이 마스크 모양 하나만 만든다', () => {
+  core.ElementPlacement = { PLACEATEND: 'end' };
+  const out = [];
+  const cutLayer = { items: out };
+  const dupable = (item) => Object.assign(item, {
+    duplicate(target) { const c = { ...this }; target.items.push(c); return c; },
+  });
+  const mask = dupable(pathItem([0, 50, 100, 0], { clipping: true, filled: true }));
+  const inner = dupable(pathItem([-500, 500, 500, -500]));
+  const innerClip = group([dupable(pathItem([1, 2, 3, 0], { clipping: true })), inner], { clipped: true });
+  const clip = group([mask, inner, innerClip], { clipped: true });
+  const loose = dupable(pathItem([200, 50, 250, 0]));
+  const text = { typename: 'TextFrame' };
+  const stat = { paths: 0, skipped: 0 };
+  [clip, group([loose, text])].forEach(it => core.domboCollectCut(it, cutLayer, 'SPOT', stat));
+
+  assert.deepStrictEqual({ ...stat }, { paths: 2, skipped: 1 });
+  assert.deepStrictEqual(out.map(o => Array.from(o.geometricBounds)), [[0, 50, 100, 0], [200, 50, 250, 0]]);
+  assert.strictEqual(out[0].clipping, false);
+  assert.strictEqual(out[0].filled, false);
+  assert.strictEqual(out[0].strokeColor, 'SPOT');
+  assert.strictEqual(mask.clipping, true, '원본 마스크는 그대로');
 });

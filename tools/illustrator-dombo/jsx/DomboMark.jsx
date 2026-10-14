@@ -10,7 +10,7 @@
 
   var gTarget = w.add('panel', undefined, '기준');
   gTarget.orientation = 'row';
-  var rSel = gTarget.add('radiobutton', undefined, '선택한 작업물');
+  var rSel = gTarget.add('radiobutton', undefined, '작업물 (선택 안 하면 대지 위 전체)');
   var rAb = gTarget.add('radiobutton', undefined, '현재 대지');
   rSel.value = true;
 

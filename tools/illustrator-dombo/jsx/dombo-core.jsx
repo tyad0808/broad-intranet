@@ -104,36 +104,74 @@ function domboUnion(b, v) {
   return [Math.min(b[0], v[0]), Math.max(b[1], v[1]), Math.max(b[2], v[2]), Math.min(b[3], v[3])];
 }
 
+// 클리핑 마스크 그룹에서 마스크 모양(패스 또는 복합 패스)을 찾는다. 없으면 null
+function domboClipMask(group) {
+  if (group.typename !== 'GroupItem' || !group.clipped) return null;
+  var kids = group.pageItems;
+  for (var i = 0; i < kids.length; i++) {
+    var k = kids[i];
+    if (k.typename === 'PathItem' && k.clipping) return k;
+    if (k.typename === 'CompoundPathItem' && k.pathItems.length > 0 && k.pathItems[0].clipping) return k;
+  }
+  return null;
+}
+
 // 눈에 보이는 범위. 클리핑 마스크 그룹은 가려진 부분을 빼고 마스크 모양만 기준으로 삼는다.
 // (일러스트레이터의 visibleBounds 는 마스크에 가려진 부분까지 포함하기 때문)
+// 숨긴 개체나 안내선만 있으면 null
 function domboItemBounds(item) {
+  if (item.hidden || item.guides) return null;
   if (item.typename === 'GroupItem') {
-    var kids = item.pageItems, i;
-    if (item.clipped) {
-      for (i = 0; i < kids.length; i++) {
-        var k = kids[i];
-        if (k.typename === 'PathItem' && k.clipping) return k.geometricBounds;
-        if (k.typename === 'CompoundPathItem' && k.pathItems.length > 0 && k.pathItems[0].clipping) {
-          return k.geometricBounds;
-        }
-      }
-    }
+    var mask = domboClipMask(item);
+    if (mask) return mask.geometricBounds;
     var b = null;
-    for (i = 0; i < kids.length; i++) {
-      if (!kids[i].hidden) b = domboUnion(b, domboItemBounds(kids[i]));
+    for (var i = 0; i < item.pageItems.length; i++) {
+      var v = domboItemBounds(item.pageItems[i]);
+      if (v) b = domboUnion(b, v);
     }
-    if (b) return b;
+    return b;
   }
   return item.visibleBounds;
 }
 
-function domboSelectionBounds(doc) {
+function domboHasSelection(doc) {
   var sel = doc.selection;
-  if (!sel || sel.typename === 'TextRange' || sel.length === 0) {
-    throw new Error('돔보를 찍을 작업물을 선택하세요. (글자 편집 중이면 선택 도구로 바꾸세요)');
+  return !!sel && sel.typename !== 'TextRange' && sel.length > 0;
+}
+
+// 레이어(하위 레이어 포함)에서 보이는 맨 위 개체들을 모은다. 돔보·칼선 레이어는 뺀다.
+function domboLayerItems(layer, out) {
+  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER) return;
+  for (var i = 0; i < layer.pageItems.length; i++) out.push(layer.pageItems[i]);
+  for (var j = 0; j < layer.layers.length; j++) domboLayerItems(layer.layers[j], out);
+}
+
+function domboOverlaps(a, b) {
+  return a[0] < b[2] && a[2] > b[0] && a[1] > b[3] && a[3] < b[1];
+}
+
+// 돔보 기준 범위: 선택한 개체가 있으면 그것, 없으면 현재 대지에 걸친 보이는 개체 전체
+function domboArtworkBounds(doc) {
+  var items = [], i, b = null, v;
+  if (domboHasSelection(doc)) {
+    for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+    for (i = 0; i < items.length; i++) {
+      v = domboItemBounds(items[i]);
+      if (v) b = domboUnion(b, v);
+    }
+    if (!b) throw new Error('선택한 개체에 보이는 모양이 없습니다.');
+    return b;
   }
-  var b = null;
-  for (var i = 0; i < sel.length; i++) b = domboUnion(b, domboItemBounds(sel[i]));
+  if (doc.selection && doc.selection.typename === 'TextRange') {
+    throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  }
+  var ab = domboArtboardRect(doc);
+  for (i = 0; i < doc.layers.length; i++) domboLayerItems(doc.layers[i], items);
+  for (i = 0; i < items.length; i++) {
+    v = domboItemBounds(items[i]);
+    if (v && domboOverlaps(v, ab)) b = domboUnion(b, v);
+  }
+  if (!b) throw new Error('현재 대지 위에 돔보를 찍을 개체가 없습니다.');
   return b;
 }
 
@@ -180,7 +218,7 @@ function domboPlace(opts) {
   var doc = domboDoc();
   var o = domboMerge(opts);
   domboValidate(o);
-  var bounds = o.target === 'artboard' ? domboArtboardRect(doc) : domboSelectionBounds(doc);
+  var bounds = o.target === 'artboard' ? domboArtboardRect(doc) : domboArtworkBounds(doc);
   var result = domboComputeMarks(bounds, o);
 
   // 다시 찍으면 기존 마크를 지우고 새로 만든다
@@ -243,42 +281,60 @@ function domboCutColor(doc) {
   return sc;
 }
 
-// 복제본 안의 패스를 칼선 모양(면 없음, 별색 0.25pt 실선)으로 바꾼다. 글자 등은 지우고 개수를 센다.
-function domboStyleCut(item, color, stat) {
-  var t = item.typename;
-  if (t === 'PathItem') {
-    item.filled = false;
-    item.stroked = true;
-    item.strokeColor = color;
-    item.strokeWidth = 0.25;
-    item.strokeDashes = [];
+// 패스를 칼선 모양(면 없음, 별색 0.25pt 실선)으로 바꾼다
+function domboStyleCutPath(p, color) {
+  p.filled = false;
+  p.stroked = true;
+  p.strokeColor = color;
+  p.strokeWidth = 0.25;
+  p.strokeDashes = [];
+}
+
+// 개체에서 칼선이 될 패스만 '칼선' 레이어로 복제한다. 원본은 건드리지 않는다.
+// 클리핑 마스크 그룹은 안쪽 내용은 빼고 마스크 모양 하나만 칼선으로 만든다.
+function domboCollectCut(item, layer, color, stat) {
+  if (item.hidden || item.guides) return;
+  var t = item.typename, dup, i;
+  if (t === 'GroupItem') {
+    var mask = domboClipMask(item);
+    if (mask) {
+      dup = mask.duplicate(layer, ElementPlacement.PLACEATEND);
+      if (dup.typename === 'PathItem') {
+        dup.clipping = false;
+        domboStyleCutPath(dup, color);
+      } else {
+        for (i = 0; i < dup.pathItems.length; i++) {
+          dup.pathItems[i].clipping = false;
+          domboStyleCutPath(dup.pathItems[i], color);
+        }
+      }
+      stat.paths++;
+      return;
+    }
+    for (i = 0; i < item.pageItems.length; i++) domboCollectCut(item.pageItems[i], layer, color, stat);
+  } else if (t === 'PathItem') {
+    domboStyleCutPath(item.duplicate(layer, ElementPlacement.PLACEATEND), color);
     stat.paths++;
   } else if (t === 'CompoundPathItem') {
-    for (var i = 0; i < item.pathItems.length; i++) domboStyleCut(item.pathItems[i], color, stat);
-  } else if (t === 'GroupItem') {
-    for (var j = item.pageItems.length - 1; j >= 0; j--) domboStyleCut(item.pageItems[j], color, stat);
+    dup = item.duplicate(layer, ElementPlacement.PLACEATEND);
+    for (i = 0; i < dup.pathItems.length; i++) domboStyleCutPath(dup.pathItems[i], color);
+    stat.paths++;
   } else {
-    item.remove();
     stat.skipped++;
   }
 }
 
-// 선택한 패스를 복제해 '칼선' 레이어에 CutContour 별색 선으로 만든다. 원본 작업물은 건드리지 않는다.
+// 선택한 개체의 칼선을 '칼선' 레이어에 CutContour 별색 선으로 만든다.
 function domboCutContour() {
   var doc = domboDoc();
-  var sel = doc.selection;
-  if (!sel || sel.typename === 'TextRange' || sel.length === 0) {
-    throw new Error('칼선으로 만들 패스를 선택하세요.');
-  }
+  if (!domboHasSelection(doc)) throw new Error('칼선으로 만들 개체를 선택하세요.');
   var items = [];
-  for (var i = 0; i < sel.length; i++) items.push(sel[i]);
+  for (var i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
 
   var layer = domboGetLayer(doc, DOMBO_CUT_LAYER);
   var color = domboCutColor(doc);
   var stat = { paths: 0, skipped: 0 };
-  for (var j = 0; j < items.length; j++) {
-    domboStyleCut(items[j].duplicate(layer, ElementPlacement.PLACEATEND), color, stat);
-  }
+  for (var j = 0; j < items.length; j++) domboCollectCut(items[j], layer, color, stat);
   var msg = '칼선 ' + stat.paths + '개를 만들었습니다.';
   if (stat.skipped > 0) msg += ' 패스가 아닌 ' + stat.skipped + '개(글자·이미지 등)는 뺐습니다. 글자는 윤곽선 만들기 후 다시 하세요.';
   return msg;
