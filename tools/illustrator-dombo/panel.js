@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['sizeMm', 'thickMm', 'offsetMm', 'marginMm'];
+  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm'];
   var STORE_KEY = 'broad-dombo-settings';
 
   function $(id) { return document.getElementById(id); }
@@ -11,7 +11,7 @@
   }
 
   function readOptions() {
-    var o = { target: radio('target'), shape: radio('shape'), count: Number(radio('count')), fitArtboard: $('fitArtboard').checked };
+    var o = { target: radio('target'), fitArtboard: $('fitArtboard').checked };
     FIELDS.forEach(function (f) { o[f] = parseFloat($(f).value); });
     return o;
   }
@@ -22,7 +22,7 @@
     var o;
     try { o = JSON.parse(localStorage.getItem(STORE_KEY)); } catch (e) {}
     if (!o) return;
-    ['target', 'shape', 'count'].forEach(function (n) { if (o[n] !== undefined) setRadio(n, o[n]); });
+    if (o.target) setRadio('target', o.target);
     FIELDS.forEach(function (f) { if (typeof o[f] === 'number' && !isNaN(o[f])) $(f).value = o[f]; });
     if (typeof o.fitArtboard === 'boolean') $('fitArtboard').checked = o.fitArtboard;
   }

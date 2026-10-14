@@ -16,47 +16,50 @@ const nearPts = (actual, expected) => {
   actual.forEach((p, i) => { near(p[0], expected[i][0]); near(p[1], expected[i][1]); });
 };
 
+const mmPts = pts => pts.map(([x, y]) => [x * MM, y * MM]);
+
 // 100mm x 50mm 작업물 (왼쪽 아래가 원점)
 const art = [0, 50 * MM, 100 * MM, 0];
 
-test('기본 설정은 4점 L자, 마크 바깥 모서리가 작업물에서 5mm 떨어진다', () => {
+test('기본값은 지름 6mm 원형, 마크 가장자리가 작업물에서 5mm 떨어진다', () => {
   const r = core.domboComputeMarks(art, {});
-  assert.deepStrictEqual(Array.from(r.marks, m => m.corner), ['leftTop', 'rightTop', 'rightBottom', 'leftBottom']);
-  nearPts([[r.extent[0], r.extent[1]], [r.extent[2], r.extent[3]]], [[-5 * MM, 55 * MM], [105 * MM, -5 * MM]]);
-  r.marks.forEach(m => assert.strictEqual(m.points.length, 6));
-
-  // 왼쪽 위 L자: 꼭짓점에서 오른쪽·아래로 10mm, 두께 0.5mm
-  nearPts(r.marks[0].points, [
-    [-5, 55], [5, 55], [5, 54.5], [-4.5, 54.5], [-4.5, 45], [-5, 45],
-  ].map(([x, y]) => [x * MM, y * MM]));
-
-  // 오른쪽 아래 L자: 꼭짓점에서 왼쪽·위로
-  nearPts(r.marks[2].points, [
-    [105, -5], [95, -5], [95, -4.5], [104.5, -4.5], [104.5, 5], [105, 5],
-  ].map(([x, y]) => [x * MM, y * MM]));
+  near(r.radius, 3 * MM);
+  // 중심은 작업물에서 거리 5mm + 반지름 3mm = 8mm 바깥. 간격 300mm 보다 작으니 네 모서리만
+  nearPts(r.centers, mmPts([[-8, 58], [108, 58], [108, -8], [-8, -8]]));
+  nearPts([[r.extent[0], r.extent[1]], [r.extent[2], r.extent[3]]], mmPts([[-11, 61], [111, -11]]));
+  nearPts([[r.paper[0], r.paper[1]], [r.paper[2], r.paper[3]]], mmPts([[-16, 66], [116, -16]]));
 });
 
-test('3점이면 오른쪽 위를 뺀다', () => {
-  const r = core.domboComputeMarks(art, { count: 3 });
-  assert.deepStrictEqual(Array.from(r.marks, m => m.corner), ['leftTop', 'rightBottom', 'leftBottom']);
+test('각 변을 간격 이하로 똑같이 나누고, 왼쪽 위부터 시계 방향으로 놓는다', () => {
+  // 중심 사각형 116mm x 66mm, 간격 50mm → 가로 3칸(38.67mm), 세로 2칸(33mm)
+  const r = core.domboComputeMarks(art, { spacingMm: 50 });
+  const w = 116 / 3;
+  nearPts(r.centers, mmPts([
+    [-8, 58], [-8 + w, 58], [-8 + 2 * w, 58], [108, 58],
+    [108, 25],
+    [108, -8], [-8 + 2 * w, -8], [-8 + w, -8], [-8, -8],
+    [-8, 25],
+  ]));
+  near(r.spacingX, w * MM);
+  near(r.spacingY, 33 * MM);
 });
 
-test('사각형 마크는 바깥 모서리에서 안쪽으로 꽉 찬 정사각형이다', () => {
-  const r = core.domboComputeMarks(art, { shape: 'square', sizeMm: 5, offsetMm: 0 });
-  nearPts(r.marks[3].points, [[0, 0], [5, 0], [5, 5], [0, 5]].map(([x, y]) => [x * MM, y * MM]));
+test('길이가 간격으로 딱 나눠지면 칸을 더 만들지 않는다', () => {
+  // 중심 사각형 116mm x 66mm → 간격 58mm 이면 가로 2칸
+  const r = core.domboComputeMarks(art, { spacingMm: 58 });
+  near(r.spacingX, 58 * MM);
+  assert.strictEqual(r.centers.length, 2 * 3 + 2 * 1);
 });
 
-test('패널에서 온 글자 숫자도 받아들이고, 대지는 마크 바깥 여백만큼 넓힌다', () => {
-  const r = core.domboComputeMarks(art, { count: '3', sizeMm: '8', offsetMm: '2', marginMm: '3' });
-  assert.strictEqual(r.marks.length, 3);
-  nearPts([[r.paper[0], r.paper[1]], [r.paper[2], r.paper[3]]], [[-5 * MM, 55 * MM], [105 * MM, -5 * MM]]);
+test('간격 0 이면 네 모서리만, 패널에서 온 글자 숫자도 받는다', () => {
+  const r = core.domboComputeMarks(art, { diameterMm: '4', offsetMm: '2', spacingMm: '0' });
+  nearPts(r.centers, mmPts([[-4, 54], [104, 54], [104, -4], [-4, -4]]));
 });
 
-test('잘못된 설정과 너무 작은 작업물은 거절한다', () => {
-  assert.throws(() => core.domboComputeMarks(art, { sizeMm: 0 }), /마크 크기/);
-  assert.throws(() => core.domboComputeMarks(art, { thickMm: 10 }), /선 두께/);
-  assert.throws(() => core.domboComputeMarks(art, { count: 5 }), /개수/);
-  assert.throws(() => core.domboComputeMarks(art, { shape: 'circle' }), /모양/);
-  assert.throws(() => core.domboComputeMarks(art, { sizeMm: NaN }), /마크 크기/);
-  assert.throws(() => core.domboComputeMarks([0, 5 * MM, 5 * MM, 0], { offsetMm: 0 }), /너무 작습니다/);
+test('잘못된 설정은 거절한다', () => {
+  assert.throws(() => core.domboComputeMarks(art, { diameterMm: 0 }), /지름/);
+  assert.throws(() => core.domboComputeMarks(art, { diameterMm: NaN }), /지름/);
+  assert.throws(() => core.domboComputeMarks(art, { offsetMm: -1 }), /거리/);
+  assert.throws(() => core.domboComputeMarks(art, { spacingMm: 6 }), /지름\(6mm\)보다/);
+  assert.throws(() => core.domboComputeMarks([0, 5000 * MM, 5000 * MM, 0], { spacingMm: 10 }), /너무 많습니다/);
 });

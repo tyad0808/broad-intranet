@@ -11,15 +11,15 @@ var DOMBO_PT_PER_MM = 72 / 25.4;
 function domboDefaults() {
   return {
     target: 'selection', // 'selection' 선택한 작업물 / 'artboard' 현재 대지
-    shape: 'L',          // 'L' 모서리 L자 / 'square' 꽉 찬 사각형
-    count: 4,            // 4점 또는 3점(오른쪽 위 생략)
-    sizeMm: 10,          // 마크 한 변 길이
-    thickMm: 0.5,        // L자 선 두께
-    offsetMm: 5,         // 작업물과 마크 사이 거리
+    diameterMm: 6,       // 원형 마크 지름
+    offsetMm: 5,         // 작업물 테두리와 마크 가장자리 사이 거리
+    spacingMm: 300,      // 마크 중심 사이 최대 간격 (0 이면 네 모서리만)
     fitArtboard: true,   // 마크가 대지 밖으로 나가면 대지를 넓힌다
     marginMm: 5          // 대지를 넓힐 때 마크 바깥 여백
   };
 }
+
+var DOMBO_MAX_MARKS = 400;
 
 function domboMerge(opts) {
   var o = domboDefaults();
@@ -28,67 +28,66 @@ function domboMerge(opts) {
       if (opts.hasOwnProperty(k) && opts[k] !== undefined && opts[k] !== null) o[k] = opts[k];
     }
   }
-  o.count = Number(o.count);
-  o.sizeMm = Number(o.sizeMm);
-  o.thickMm = Number(o.thickMm);
+  o.diameterMm = Number(o.diameterMm);
   o.offsetMm = Number(o.offsetMm);
+  o.spacingMm = Number(o.spacingMm);
   o.marginMm = Number(o.marginMm);
   o.fitArtboard = o.fitArtboard === true || o.fitArtboard === 'true';
   return o;
 }
 
 function domboValidate(o) {
-  if (o.shape !== 'L' && o.shape !== 'square') throw new Error('마크 모양은 L 또는 square 여야 합니다.');
-  if (o.count !== 3 && o.count !== 4) throw new Error('마크 개수는 3 또는 4 여야 합니다.');
-  if (!(o.sizeMm > 0)) throw new Error('마크 크기는 0보다 커야 합니다.');
-  if (o.shape === 'L' && !(o.thickMm > 0 && o.thickMm < o.sizeMm)) {
-    throw new Error('선 두께는 0보다 크고 마크 크기보다 작아야 합니다.');
-  }
+  if (!(o.diameterMm > 0)) throw new Error('마크 지름은 0보다 커야 합니다.');
   if (!(o.offsetMm >= 0)) throw new Error('작업물과의 거리는 0 이상이어야 합니다.');
+  if (!(o.spacingMm >= 0)) throw new Error('마크 간격은 0 이상이어야 합니다. (0 이면 네 모서리만)');
+  if (o.spacingMm > 0 && o.spacingMm <= o.diameterMm) {
+    throw new Error('마크 간격은 마크 지름(' + o.diameterMm + 'mm)보다 커야 합니다.');
+  }
   if (!(o.marginMm >= 0)) throw new Error('대지 여백은 0 이상이어야 합니다.');
 }
 
-// 범위와 설정을 받아 마크 도형의 꼭짓점 목록을 계산한다 (일러스트레이터 없이도 동작).
-// 각 마크의 바깥 모서리가 (작업물 범위 + 거리) 사각형의 꼭짓점에 정확히 놓인다.
+// a 에서 b 까지를 간격이 spacing 이하가 되도록 똑같이 나눈 점들 (양 끝 포함)
+function domboSteps(a, b, spacing) {
+  var n = spacing > 0 ? Math.ceil((b - a) / spacing - 1e-9) : 1;
+  if (n < 1) n = 1;
+  var list = [];
+  for (var i = 0; i <= n; i++) list.push(a + (b - a) * i / n);
+  return list;
+}
+
+// 범위와 설정을 받아 원형 마크의 중심 목록을 계산한다 (일러스트레이터 없이도 동작).
+// 마크는 작업물 둘레에 놓이고, 마크 가장자리와 작업물 테두리 사이가 정확히 '거리' 만큼 떨어진다.
+// 네 모서리에는 항상 마크가 있고, 각 변은 간격이 설정값을 넘지 않도록 똑같이 나눈다.
 function domboComputeMarks(bounds, opts) {
   var o = domboMerge(opts);
   domboValidate(o);
-  var s = o.sizeMm * DOMBO_PT_PER_MM;
-  var w = o.thickMm * DOMBO_PT_PER_MM;
-  var d = o.offsetMm * DOMBO_PT_PER_MM;
-  var L = bounds[0] - d, T = bounds[1] + d, R = bounds[2] + d, B = bounds[3] - d;
+  var r = o.diameterMm * DOMBO_PT_PER_MM / 2;
+  var e = o.offsetMm * DOMBO_PT_PER_MM + r;
+  var sp = o.spacingMm * DOMBO_PT_PER_MM;
+  var L = bounds[0] - e, T = bounds[1] + e, R = bounds[2] + e, B = bounds[3] - e;
 
-  if (R - L < 2 * s || T - B < 2 * s) {
-    throw new Error('작업물이 마크에 비해 너무 작습니다. 마크 크기를 줄이거나 거리를 늘리세요.');
+  var xs = domboSteps(L, R, sp);
+  var ys = domboSteps(B, T, sp);
+  var count = 2 * xs.length + 2 * (ys.length - 2);
+  if (count > DOMBO_MAX_MARKS) {
+    throw new Error('마크가 ' + count + '개로 너무 많습니다. 간격을 늘리세요.');
   }
 
-  // sx, sy: 꼭짓점에서 안쪽을 향하는 방향
-  var corners = [
-    { corner: 'leftTop', x: L, y: T, sx: 1, sy: -1 },
-    { corner: 'rightTop', x: R, y: T, sx: -1, sy: -1 },
-    { corner: 'rightBottom', x: R, y: B, sx: -1, sy: 1 },
-    { corner: 'leftBottom', x: L, y: B, sx: 1, sy: 1 }
-  ];
-
-  var marks = [];
-  for (var i = 0; i < corners.length; i++) {
-    var c = corners[i];
-    if (o.count === 3 && c.corner === 'rightTop') continue;
-    var x = c.x, y = c.y, sx = c.sx, sy = c.sy, pts;
-    if (o.shape === 'square') {
-      pts = [[x, y], [x + sx * s, y], [x + sx * s, y + sy * s], [x, y + sy * s]];
-    } else {
-      pts = [[x, y], [x + sx * s, y], [x + sx * s, y + sy * w],
-             [x + sx * w, y + sy * w], [x + sx * w, y + sy * s], [x, y + sy * s]];
-    }
-    marks.push({ corner: c.corner, points: pts });
-  }
+  // 왼쪽 위에서 시작해 시계 방향
+  var centers = [], i;
+  for (i = 0; i < xs.length; i++) centers.push([xs[i], T]);
+  for (i = ys.length - 2; i >= 1; i--) centers.push([R, ys[i]]);
+  for (i = xs.length - 1; i >= 0; i--) centers.push([xs[i], B]);
+  for (i = 1; i <= ys.length - 2; i++) centers.push([L, ys[i]]);
 
   var m = o.marginMm * DOMBO_PT_PER_MM;
   return {
-    marks: marks,
-    extent: [L, T, R, B],
-    paper: [L - m, T + m, R + m, B - m]
+    radius: r,
+    centers: centers,
+    spacingX: (R - L) / (xs.length - 1),
+    spacingY: (T - B) / (ys.length - 1),
+    extent: [L - r, T + r, R + r, B - r],
+    paper: [L - r - m, T + r + m, R + r + m, B - r - m]
   };
 }
 
@@ -173,21 +172,23 @@ function domboPlace(opts) {
   layer.zOrder(ZOrderMethod.BRINGTOFRONT);
 
   var black = domboBlack(doc);
-  for (var i = 0; i < result.marks.length; i++) {
-    var p = layer.pathItems.add();
-    p.setEntirePath(result.marks[i].points);
-    p.closed = true;
+  var r = result.radius;
+  for (var i = 0; i < result.centers.length; i++) {
+    var c = result.centers[i];
+    var p = layer.pathItems.ellipse(c[1] + r, c[0] - r, 2 * r, 2 * r);
     p.filled = true;
     p.fillColor = black;
     p.stroked = false;
-    p.name = '돔보_' + result.marks[i].corner;
+    p.name = '돔보_' + (i + 1);
   }
   layer.locked = true;
 
-  var msg = result.marks.length + '점 돔보마크를 찍었습니다.';
+  var mm = function (pt) { return Math.round(pt / DOMBO_PT_PER_MM * 10) / 10; };
+  var msg = '원형 돔보 ' + result.centers.length + '개를 찍었습니다. 실제 간격: 가로 ' +
+    mm(result.spacingX) + 'mm, 세로 ' + mm(result.spacingY) + 'mm.';
   var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-  var r = ab.artboardRect, e = result.extent;
-  var outside = e[0] < r[0] || e[1] > r[1] || e[2] > r[2] || e[3] < r[3];
+  var ar = ab.artboardRect, e = result.extent;
+  var outside = e[0] < ar[0] || e[1] > ar[1] || e[2] > ar[2] || e[3] < ar[3];
   if (outside) {
     if (o.fitArtboard) {
       ab.artboardRect = result.paper;

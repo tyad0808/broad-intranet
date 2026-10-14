@@ -5,7 +5,7 @@
 
 (function () {
   var d = domboDefaults();
-  var w = new Window('dialog', '돔보마크 찍기');
+  var w = new Window('dialog', '원형 돔보마크 찍기');
   w.alignChildren = 'fill';
 
   var gTarget = w.add('panel', undefined, '기준');
@@ -13,17 +13,6 @@
   var rSel = gTarget.add('radiobutton', undefined, '선택한 작업물');
   var rAb = gTarget.add('radiobutton', undefined, '현재 대지');
   rSel.value = true;
-
-  var gShape = w.add('panel', undefined, '마크');
-  gShape.alignChildren = 'left';
-  var rowShape = gShape.add('group');
-  var rL = rowShape.add('radiobutton', undefined, 'L자');
-  var rSq = rowShape.add('radiobutton', undefined, '사각형');
-  rL.value = true;
-  var rowCount = gShape.add('group');
-  var r4 = rowCount.add('radiobutton', undefined, '4점');
-  var r3 = rowCount.add('radiobutton', undefined, '3점 (오른쪽 위 생략)');
-  r4.value = true;
 
   function numRow(parent, label, value) {
     var g = parent.add('group');
@@ -33,14 +22,18 @@
     g.add('statictext', undefined, 'mm');
     return e;
   }
-  var gSize = w.add('panel', undefined, '크기');
-  gSize.alignChildren = 'left';
-  var eSize = numRow(gSize, '마크 크기', d.sizeMm);
-  var eThick = numRow(gSize, 'L자 선 두께', d.thickMm);
-  var eOffset = numRow(gSize, '작업물과의 거리', d.offsetMm);
-  var eMargin = numRow(gSize, '대지 여백', d.marginMm);
-  var cFit = gSize.add('checkbox', undefined, '마크가 대지 밖이면 대지 넓히기');
+  var gMark = w.add('panel', undefined, '원형 마크');
+  gMark.alignChildren = 'left';
+  var eDia = numRow(gMark, '마크 지름', d.diameterMm);
+  var eOffset = numRow(gMark, '작업물과의 거리', d.offsetMm);
+  var eSpacing = numRow(gMark, '마크 간격 (최대)', d.spacingMm);
+  gMark.add('statictext', undefined, '간격 0 이면 네 모서리만 찍습니다.');
+
+  var gAb = w.add('panel', undefined, '대지');
+  gAb.alignChildren = 'left';
+  var cFit = gAb.add('checkbox', undefined, '마크가 대지 밖이면 대지 넓히기');
   cFit.value = d.fitArtboard;
+  var eMargin = numRow(gAb, '마크 바깥 여백', d.marginMm);
 
   var gBtn = w.add('group');
   gBtn.alignment = 'right';
@@ -52,11 +45,9 @@
   try {
     var msg = domboPlace({
       target: rAb.value ? 'artboard' : 'selection',
-      shape: rSq.value ? 'square' : 'L',
-      count: r3.value ? 3 : 4,
-      sizeMm: parseFloat(eSize.text),
-      thickMm: parseFloat(eThick.text),
+      diameterMm: parseFloat(eDia.text),
       offsetMm: parseFloat(eOffset.text),
+      spacingMm: parseFloat(eSpacing.text),
       marginMm: parseFloat(eMargin.text),
       fitArtboard: cFit.value
     });
