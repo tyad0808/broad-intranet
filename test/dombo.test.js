@@ -135,3 +135,48 @@ test('칼선: 클리핑 마스크는 안쪽 내용 없이 마스크 모양 하�
   assert.strictEqual(out[0].strokeColor, 'SPOT');
   assert.strictEqual(mask.clipping, true, '원본 마스크는 그대로');
 });
+
+test('격자 칼선: 사각형 변마다 전체를 가로지르는 선, 붙은 변은 하나로', () => {
+  // 2 x 2 로 붙은 사각형 (변 하나는 0.01pt 어긋남) → 세로 3개, 가로 3개
+  const rects = [[0, 100, 50, 50], [50.01, 100, 100, 50], [0, 50, 50, 0], [50, 50, 100, 0]];
+  const lines = Array.from(core.domboGridLines(rects, 0.1 * MM), l => Array.from(l, p => Array.from(p)));
+  assert.strictEqual(lines.length, 6);
+  const vertical = lines.filter(l => l[0][0] === l[1][0]).map(l => l[0][0]).sort((a, b) => a - b);
+  const horizontal = lines.filter(l => l[0][1] === l[1][1]).map(l => l[0][1]).sort((a, b) => a - b);
+  assert.deepStrictEqual(vertical, [0, 50, 100]);
+  assert.deepStrictEqual(horizontal, [0, 50, 100]);
+  lines.forEach(l => {
+    const len = Math.hypot(l[1][0] - l[0][0], l[1][1] - l[0][1]);
+    assert.strictEqual(len, 100, '선은 전체 영역을 가로지른다');
+  });
+});
+
+test('격자 칼선: 왼쪽 위에서 시작해 지그재그로 이어 자른다', () => {
+  const rects = [[0, 100, 50, 50], [50, 100, 100, 50], [0, 50, 50, 0], [50, 50, 100, 0]];
+  const lines = Array.from(core.domboGridLines(rects, 0.1 * MM), l => Array.from(l, p => Array.from(p)));
+  assert.deepStrictEqual(lines[0][0], [0, 100], '왼쪽 위에서 시작');
+  // 칼을 든 채 움직이는 거리 합: 지그재그면 모서리끼리 이어져 거의 0
+  let travel = 0;
+  for (let i = 1; i < lines.length; i++) {
+    travel += Math.hypot(lines[i][0][0] - lines[i - 1][1][0], lines[i][0][1] - lines[i - 1][1][1]);
+  }
+  // 중심점 기준 정렬(방향 안 바꿈)은 매번 100 이상 되돌아간다
+  assert.ok(travel <= 200, `빈 이동 ${travel}`);
+});
+
+test('개수 세기: 글자 수, 아웃라인 도형 수, 마스크 틀과 숨긴 것은 빼기', () => {
+  const c = { frames: 0, chars: 0, charsNoSpace: 0, shapes: 0 };
+  const items = [
+    { typename: 'TextFrame', contents: '털보 농장\r' },
+    group([
+      pathItem([0, 1, 1, 0], { clipping: true }),
+      pathItem([0, 1, 1, 0]),
+      { typename: 'CompoundPathItem', pathItems: [{ clipping: false }] },
+      { typename: 'CompoundPathItem', pathItems: [{ clipping: true }] },
+      pathItem([0, 1, 1, 0], { hidden: true }),
+      { typename: 'TextFrame', contents: 'AB', hidden: true },
+    ], { clipped: true }),
+  ];
+  items.forEach(it => core.domboCountItem(it, c));
+  assert.deepStrictEqual({ ...c }, { frames: 1, chars: 6, charsNoSpace: 4, shapes: 2 });
+});

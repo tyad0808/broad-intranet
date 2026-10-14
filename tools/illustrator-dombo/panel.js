@@ -1,4 +1,4 @@
-// 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(dombo-core.jsx)를 부른다
+// 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
   var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -11,7 +11,7 @@
   }
 
   function readOptions() {
-    var o = { target: radio('target'), fitArtboard: $('fitArtboard').checked };
+    var o = { target: radio('target'), fitArtboard: $('fitArtboard').checked, removeRects: $('removeRects').checked };
     FIELDS.forEach(function (f) { o[f] = parseFloat($(f).value); });
     return o;
   }
@@ -25,6 +25,7 @@
     if (o.target) setRadio('target', o.target);
     FIELDS.forEach(function (f) { if (typeof o[f] === 'number' && !isNaN(o[f])) $(f).value = o[f]; });
     if (typeof o.fitArtboard === 'boolean') $('fitArtboard').checked = o.fitArtboard;
+    if (typeof o.removeRects === 'boolean') $('removeRects').checked = o.removeRects;
   }
 
   function show(result) {
@@ -52,6 +53,12 @@
   });
   $('remove').addEventListener('click', function () { call('domboPanelRemove'); });
   $('cut').addEventListener('click', function () { call('domboPanelCut'); });
+  $('grid').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelGrid', { removeRects: o.removeRects });
+  });
+  $('count').addEventListener('click', function () { call('domboPanelCount'); });
 
   load();
 })();

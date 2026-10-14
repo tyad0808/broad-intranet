@@ -1,5 +1,5 @@
-﻿// 돔보마크 핵심 기능 (ExtendScript, ES3 문법만 사용)
-// 패널(index.html)과 단독 스크립트(DomboMark.jsx)가 함께 쓴다.
+﻿// 브로애드 일러스트레이터 도구 핵심 기능 (ExtendScript, ES3 문법만 사용)
+// 돔보마크, 칼선, 격자 칼선, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
@@ -335,6 +335,139 @@ function domboCutContour() {
   return msg;
 }
 
+// ---- 격자 칼선 ----
+
+// 숫자 목록을 정렬하고, tol 이내로 붙어 있는 값은 하나로 합친다
+function domboUniqueSorted(arr, tol) {
+  var a = arr.slice(0);
+  a.sort(function (x, y) { return x - y; });
+  var out = [];
+  for (var i = 0; i < a.length; i++) {
+    if (out.length === 0 || a[i] - out[out.length - 1] > tol) out.push(a[i]);
+  }
+  return out;
+}
+
+// 사각형 범위 목록을 받아 격자 칼선을 계산한다 (일러스트레이터 없이도 동작).
+// 사각형의 모든 가로·세로 변 위치에 전체 영역을 가로지르는 선을 긋고,
+// 왼쪽 위에서 시작해 칼이 빈 채로 움직이는 거리가 짧아지도록 순서와 방향을 정한다.
+// 결과: [[시작x, 시작y], [끝x, 끝y]] 목록 (자를 순서대로)
+function domboGridLines(boundsList, tolPt) {
+  var xs = [], ys = [], i;
+  for (i = 0; i < boundsList.length; i++) {
+    var b = boundsList[i];
+    xs.push(b[0], b[2]);
+    ys.push(b[1], b[3]);
+  }
+  xs = domboUniqueSorted(xs, tolPt);
+  ys = domboUniqueSorted(ys, tolPt);
+  if (xs.length < 2 || ys.length < 2) throw new Error('사각형 크기가 너무 작습니다.');
+  var minX = xs[0], maxX = xs[xs.length - 1], minY = ys[0], maxY = ys[ys.length - 1];
+
+  var lines = [];
+  for (i = 0; i < xs.length; i++) lines.push([[xs[i], maxY], [xs[i], minY]]);
+  for (i = 0; i < ys.length; i++) lines.push([[minX, ys[i]], [maxX, ys[i]]]);
+
+  // 가장 가까운 선의 가까운 끝부터 자른다. 반대쪽 끝이 더 가까우면 선 방향을 뒤집는다.
+  var pen = [minX, maxY], ordered = [];
+  var d2 = function (p, q) { return (p[0] - q[0]) * (p[0] - q[0]) + (p[1] - q[1]) * (p[1] - q[1]); };
+  while (lines.length > 0) {
+    var best = 0, bestD = Infinity, flip = false;
+    for (i = 0; i < lines.length; i++) {
+      var ds = d2(pen, lines[i][0]), de = d2(pen, lines[i][1]);
+      if (ds < bestD) { bestD = ds; best = i; flip = false; }
+      if (de < bestD) { bestD = de; best = i; flip = true; }
+    }
+    var ln = lines.splice(best, 1)[0];
+    if (flip) ln = [ln[1], ln[0]];
+    ordered.push(ln);
+    pen = ln[1];
+  }
+  return ordered;
+}
+
+// 닫힌 4점 패스(사각형)를 그룹 안까지 찾아 모은다
+function domboCollectRects(item, out) {
+  if (item.hidden || item.guides) return;
+  if (item.typename === 'PathItem') {
+    if (item.closed && !item.clipping && item.pathPoints.length === 4) out.push(item);
+  } else if (item.typename === 'GroupItem') {
+    for (var i = 0; i < item.pageItems.length; i++) domboCollectRects(item.pageItems[i], out);
+  }
+}
+
+// 선택한 사각형들로 격자 칼선을 만들어 '칼선' 레이어에 자를 순서대로 쌓는다 (맨 아래가 첫 번째).
+function domboGridCut(opts) {
+  var doc = domboDoc();
+  var removeRects = !opts || opts.removeRects !== false && opts.removeRects !== 'false';
+  if (!domboHasSelection(doc)) throw new Error('격자 칼선의 기준이 될 사각형을 선택하세요.');
+  var rects = [], i;
+  for (i = 0; i < doc.selection.length; i++) domboCollectRects(doc.selection[i], rects);
+  if (rects.length === 0) throw new Error('선택한 것 중에 사각형(점 4개짜리 닫힌 패스)이 없습니다.');
+
+  var bounds = [];
+  for (i = 0; i < rects.length; i++) bounds.push(rects[i].geometricBounds);
+  var lines = domboGridLines(bounds, 0.1 * DOMBO_PT_PER_MM);
+
+  var layer = domboGetLayer(doc, DOMBO_CUT_LAYER);
+  var color = domboCutColor(doc);
+  var made = [];
+  for (i = 0; i < lines.length; i++) {
+    // 새 패스는 레이어 맨 위에 들어가므로, 순서대로 만들면 첫 번째 선이 맨 아래가 된다
+    var p = layer.pathItems.add();
+    p.setEntirePath(lines[i]);
+    p.closed = false;
+    domboStyleCutPath(p, color);
+    p.name = '격자칼선_' + (i + 1);
+    made.push(p);
+  }
+  if (removeRects) {
+    for (i = 0; i < rects.length; i++) rects[i].remove();
+  }
+  doc.selection = null;
+  for (i = 0; i < made.length; i++) made[i].selected = true;
+
+  return '격자 칼선 ' + made.length + '개를 자르는 순서대로 만들었습니다.' +
+    (removeRects ? ' 기준 사각형 ' + rects.length + '개는 지웠습니다.' : '');
+}
+
+// ---- 개수 세기 ----
+
+function domboCountItem(item, c) {
+  if (item.hidden || item.guides) return;
+  var t = item.typename;
+  if (t === 'TextFrame') {
+    var txt = item.contents;
+    c.frames++;
+    c.chars += txt.length;
+    c.charsNoSpace += txt.replace(/\s/g, '').length;
+  } else if (t === 'CompoundPathItem') {
+    if (!(item.pathItems.length > 0 && item.pathItems[0].clipping)) c.shapes++;
+  } else if (t === 'PathItem') {
+    if (!item.clipping) c.shapes++;
+  } else if (t === 'GroupItem') {
+    for (var i = 0; i < item.pageItems.length; i++) domboCountItem(item.pageItems[i], c);
+  }
+}
+
+// 선택한 것(없으면 문서 전체)의 글자 수와 아웃라인 도형 수를 센다
+function domboCount() {
+  var doc = domboDoc();
+  var items = [], i, scope;
+  if (domboHasSelection(doc)) {
+    for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+    scope = '선택한 것';
+  } else {
+    for (i = 0; i < doc.layers.length; i++) domboLayerItems(doc.layers[i], items);
+    scope = '문서 전체';
+  }
+  var c = { frames: 0, chars: 0, charsNoSpace: 0, shapes: 0 };
+  for (i = 0; i < items.length; i++) domboCountItem(items[i], c);
+  return '[' + scope + ']\n' +
+    '살아있는 글자: ' + c.charsNoSpace + '자 (공백 포함 ' + c.chars + '자, 글상자 ' + c.frames + '개)\n' +
+    '아웃라인 도형: ' + c.shapes + '개 (i·j 점처럼 떨어진 조각은 따로 셉니다)';
+}
+
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다
 function domboCall(fn, arg) {
   try {
@@ -346,3 +479,5 @@ function domboCall(fn, arg) {
 function domboPanelPlace(opts) { return domboCall(domboPlace, opts); }
 function domboPanelRemove() { return domboCall(domboRemove); }
 function domboPanelCut() { return domboCall(domboCutContour); }
+function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
+function domboPanelCount() { return domboCall(domboCount); }

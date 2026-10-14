@@ -14,5 +14,5 @@ xcopy "%SRC%jsx" "%DEST%\jsx\" /e /i /y > nul
 copy /y "%SRC%index.html" "%DEST%\" > nul
 copy /y "%SRC%panel.js" "%DEST%\" > nul
 echo 설치 완료: %DEST%
-echo 일러스트레이터를 다시 켜고 [창 ^> 확장 ^> 돔보마크] 를 여세요.
+echo 일러스트레이터를 다시 켜고 [창 ^> 확장 ^> 브로애드 도구] 를 여세요.
 pause

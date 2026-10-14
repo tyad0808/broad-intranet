@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>돔보마크</title>
+<title>브로애드 도구</title>
 <style>
   body { margin: 0; padding: 10px; background: #323232; color: #ddd; font: 12px sans-serif; }
   fieldset { border: 1px solid #555; border-radius: 4px; margin: 0 0 10px; padding: 6px 8px 8px; }
@@ -15,33 +15,57 @@
   button.main { background: #2d6fd1; border-color: #2d6fd1; color: #fff; font-weight: bold; }
   button:hover { filter: brightness(1.15); }
   .hint { margin: 6px 0 0; color: #999; font-size: 11px; line-height: 1.4; }
-  #msg { margin-top: 8px; min-height: 2.6em; line-height: 1.4; }
+  details { border-bottom: 1px solid #444; padding: 4px 0 8px; margin-bottom: 6px; }
+  summary { cursor: pointer; font-weight: bold; color: #eee; padding: 4px 0 6px; }
+  #msg { position: sticky; bottom: 0; background: #323232; padding: 6px 0; min-height: 2.6em;
+         line-height: 1.4; white-space: pre-line; }
   #msg.err { color: #ff8a80; }
   #msg.ok { color: #9ccc65; }
 </style>
 </head>
 <body>
-  <fieldset>
-    <legend>기준</legend>
-    <label><input type="radio" name="target" value="selection" checked> 작업물 (선택 안 하면 문서 전체)</label>
-    <label><input type="radio" name="target" value="artboard"> 현재 대지</label>
-  </fieldset>
-  <fieldset>
-    <legend>원형 마크 (mm)</legend>
-    <div class="num">마크 지름 <input id="diameterMm" type="number" step="0.5" min="1" value="6"></div>
-    <div class="num">작업물과의 거리 <input id="offsetMm" type="number" step="0.5" min="0" value="5"></div>
-    <div class="num">마크 간격 (최대) <input id="spacingMm" type="number" step="10" min="0" value="300"></div>
-    <p class="hint">거리: 작업물 테두리 ~ 마크 가장자리<br>간격: 위·아래 변의 마크 중심 사이. 이 값 이하로 똑같이 나눕니다. 0 이면 네 모서리만.</p>
-  </fieldset>
-  <fieldset>
-    <legend>대지</legend>
-    <label><input id="fitArtboard" type="checkbox" checked> 마크가 대지 밖이면 대지 넓히기</label>
-    <div class="num">마크 바깥 여백 <input id="marginMm" type="number" step="0.5" min="0" value="5"></div>
-  </fieldset>
+  <details open>
+    <summary>돔보마크</summary>
+    <fieldset>
+      <legend>기준</legend>
+      <label><input type="radio" name="target" value="selection" checked> 작업물 (선택 안 하면 문서 전체)</label>
+      <label><input type="radio" name="target" value="artboard"> 현재 대지</label>
+    </fieldset>
+    <fieldset>
+      <legend>원형 마크 (mm)</legend>
+      <div class="num">마크 지름 <input id="diameterMm" type="number" step="0.5" min="1" value="6"></div>
+      <div class="num">작업물과의 거리 <input id="offsetMm" type="number" step="0.5" min="0" value="5"></div>
+      <div class="num">마크 간격 (최대) <input id="spacingMm" type="number" step="10" min="0" value="300"></div>
+      <p class="hint">거리: 작업물 테두리 ~ 마크 가장자리<br>간격: 위·아래 변의 마크 중심 사이. 이 값 이하로 똑같이 나눕니다. 0 이면 네 모서리만.</p>
+    </fieldset>
+    <fieldset>
+      <legend>대지</legend>
+      <label><input id="fitArtboard" type="checkbox" checked> 마크가 대지 밖이면 대지 넓히기</label>
+      <div class="num">마크 바깥 여백 <input id="marginMm" type="number" step="0.5" min="0" value="5"></div>
+    </fieldset>
+    <button class="main" id="place">돔보 찍기</button>
+    <button id="remove">돔보 지우기</button>
+  </details>
 
-  <button class="main" id="place">돔보 찍기</button>
-  <button id="remove">돔보 지우기</button>
-  <button id="cut">선택 → 칼선(CutContour) 만들기</button>
+  <details open>
+    <summary>칼선</summary>
+    <button id="cut">선택 → 칼선(CutContour) 만들기</button>
+    <p class="hint">선택한 패스를 복제해 '칼선' 레이어에 만듭니다. 클리핑 마스크는 마스크 모양만.</p>
+  </details>
+
+  <details open>
+    <summary>격자 칼선</summary>
+    <label><input id="removeRects" type="checkbox" checked> 기준 사각형 지우기</label>
+    <button id="grid">선택한 사각형 → 격자 칼선</button>
+    <p class="hint">사각형 변마다 전체를 가로지르는 선을 긋고, 칼 이동이 짧은 순서로 쌓습니다 (맨 아래가 첫 번째).</p>
+  </details>
+
+  <details open>
+    <summary>개수 세기</summary>
+    <button id="count">글자·도형 개수 세기</button>
+    <p class="hint">선택한 것만, 선택이 없으면 문서 전체. 그룹 안까지 셉니다.</p>
+  </details>
+
   <div id="msg"></div>
 
   <script src="panel.js"></script>
