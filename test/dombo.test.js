@@ -298,48 +298,80 @@ test('도련: 클리핑 마스크는 마스크를 키우고, 그림이 모자라
   assert.strictEqual(core.domboAddBleed({}, tight, null, 10), 'mask-short');
 });
 
-test('도련: 벡터는 넓힌 복사본을 칼선 바깥 고리로 가려 원본 바로 뒤에 둔다', () => {
-  // 메뉴 명령·효과를 흉내 내는 가짜 일러스트레이터
+// 도련용 가짜 일러스트레이터: 사각형 패스, 복제, 크기 바꾸기, 효과(되거나 안 되거나), 복합 패스, 그룹
+function bleedFake(effectWorks) {
   const calls = [];
-  const doc = { selection: [] };
-  const made = [];
-  const mk = (typename, extra = {}) => {
+  let selection = [];
+  const doc = {};
+  Object.defineProperty(doc, 'selection', { get: () => selection, set: v => { selection = v || []; } });
+  const groups = [];
+  const containerOf = kids => ({ kids, items: kids });
+  function rectPts(b) {
+    // 반시계 방향 사각형 (왼쪽 아래부터)
+    return [[b[0], b[3]], [b[2], b[3]], [b[2], b[1]], [b[0], b[1]]].map(p => ({ anchor: p, leftDirection: p, rightDirection: p, pointType: 'corner' }));
+  }
+  function mkPath(b, layer) {
     const it = {
-      typename, name: '', ...extra,
-      set selected(v) { if (v) doc.selection = [it]; },
-      duplicate() { const c = mk(this.typename, { geometricBounds: this.geometricBounds, layer: this.layer }); made.push(c); return c; },
+      typename: 'PathItem', name: '', layer, b: b.slice(), effect: 0,
+      get geometricBounds() { return this.b.slice(); },
+      get visibleBounds() { const e = this.effect; return [this.b[0] - e, this.b[1] + e, this.b[2] + e, this.b[3] - e]; },
+      get pathPoints() { return this.pts || rectPts(this.b); },
+      set selected(v) { if (v) selection = [it]; },
+      duplicate() { const c = mkPath(this.b, this.layer); c.effect = this.effect; return c; },
       move(target, where) { it.movedTo = [target, where]; if (target.kids) { if (where === 'begin') target.kids.unshift(it); else target.kids.push(it); } },
-      applyEffect(xml) { calls.push(['effect', xml.match(/ofst ([\d.]+)/)[1]]); },
+      resize(sx, sy, a1, a2, a3, a4, lw, about) {
+        calls.push(['resize', Math.round(sx), Math.round(sy)]);
+        const cx = (this.b[0] + this.b[2]) / 2, cy = (this.b[1] + this.b[3]) / 2;
+        const w = (this.b[2] - this.b[0]) * sx / 100, h = (this.b[1] - this.b[3]) * sy / 100;
+        this.b = [cx - w / 2, cy + h / 2, cx + w / 2, cy - h / 2];
+      },
+      applyEffect(xml) { calls.push(['effect', xml.match(/ofst ([\d.]+)/)[1]]); if (effectWorks) it.pending = Number(xml.match(/ofst ([\d.]+)/)[1]); },
       remove() { it.removed = true; },
     };
     return it;
+  }
+  const layer = {
+    groupItems: { add: () => { const g = { typename: 'GroupItem', name: '', kids: [], move(t, w) { g.movedTo = [t, w]; } }; groups.push(g); return g; } },
+    compoundPathItems: { add: () => { const c = { typename: 'CompoundPathItem', kids: [], move(t, w) { c.movedTo = [t, w]; if (t.kids) { if (w === 'begin') t.kids.unshift(c); else t.kids.push(c); } } }; c.pathItems = c.kids; groups.push(c); return c; } },
+    pathItems: { add: () => { const q = mkPath([0, 0, 0, 0], layer); q.setEntirePath = pts => { q.pts = pts.map(p => ({ anchor: p, leftDirection: p, rightDirection: p })); }; return q; } },
   };
-  const groups = [];
-  const artLayer = { groupItems: { add: () => { const g = mk('GroupItem', { kids: [] }); groups.push(g); return g; } } };
-  const cutLayer = { groupItems: artLayer.groupItems };
-  core.ElementPlacement = { PLACEATEND: 'end', PLACEATBEGINNING: 'begin', PLACEAFTER: 'after' };
-  core.app = {
+  const app = {
+    redraw() { calls.push(['redraw']); },
     executeMenuCommand(cmd) {
       calls.push(['menu', cmd]);
-      const sel = doc.selection[0];
-      if (cmd === 'Live Pathfinder Subtract') doc.selection = [mk('CompoundPathItem', { pathItems: [], from: sel })];
+      // 펼치기: 효과가 됐으면 실제로 커진다
+      if (cmd === 'expandStyle') selection.forEach(it => { if (it.pending) { const n = it.pending; it.b = [it.b[0] - n, it.b[1] + n, it.b[2] + n, it.b[3] - n]; it.pending = 0; } });
     },
   };
-  const art = mk('GroupItem', { layer: artLayer, pageItems: [], clipped: false });
-  const cut = mk('PathItem', { layer: cutLayer, geometricBounds: [0, 100, 100, 0] });
-  Object.defineProperty(doc, 'selection', { get() { return this._s || []; }, set(v) { this._s = v || []; } });
+  return { calls, doc, layer, groups, mkPath, app };
+}
 
-  assert.strictEqual(core.domboAddBleed(doc, art, cut, 8), 'vector');
-  // 그림 복사본을 8 만큼, 고리 바깥은 8.5 만큼 패스 이동 → 펼치기, 그다음 빼기
-  assert.deepStrictEqual(calls, [
-    ['effect', '8'], ['menu', 'expandStyle'],
-    ['effect', '8.5'], ['menu', 'expandStyle'],
-    ['menu', 'Live Pathfinder Subtract'], ['menu', 'expandStyle'],
-  ]);
-  const clip = groups[groups.length - 1];
-  assert.strictEqual(clip.clipped, true, '가리개 그룹');
-  assert.strictEqual(clip.kids[0].typename, 'CompoundPathItem', '맨 위가 고리 모양(가리는 모양)');
-  assert.strictEqual(clip.kids.length, 2, '고리 + 넓힌 그림');
-  assert.deepStrictEqual(clip.movedTo, [art, 'after'], '원본 바로 뒤로');
-  assert.strictEqual(clip.name, '도련');
-});
+for (const effectWorks of [true, false]) {
+  test(`도련: 벡터는 넓힌 복사본을 칼선 바깥 고리로 가려 원본 바로 뒤에 (패스 이동 ${effectWorks ? '됨' : '안 됨 → 가로·세로 키우기'})`, () => {
+    const f = bleedFake(effectWorks);
+    core.app = f.app;
+    core.Transformation = { CENTER: 'center' };
+    core.ElementPlacement = { PLACEATEND: 'end', PLACEATBEGINNING: 'begin', PLACEAFTER: 'after' };
+    const art = f.mkPath([0, 100, 200, 0], f.layer);   // 파란 사각형
+    const cut = f.mkPath([0, 100, 200, 0], f.layer);   // 칼선 (같은 크기)
+    const kind = core.domboAddBleed(f.doc, art, cut, 10);
+    assert.strictEqual(kind, effectWorks ? 'vector' : 'approx');
+
+    const clip = f.groups.find(g => g.name === '도련');
+    assert.ok(clip, '도련 그룹');
+    assert.strictEqual(clip.clipped, true);
+    assert.deepStrictEqual(clip.movedTo, [art, 'after'], '원본 바로 뒤');
+    const [ring, grown] = clip.kids;
+    assert.strictEqual(ring.typename, 'CompoundPathItem', '맨 위가 고리(가리개)');
+    // 넓힌 그림: 사방 10
+    assert.deepStrictEqual(grown.geometricBounds.map(Math.round), [-10, 110, 210, -10]);
+    // 고리: 바깥은 사방 10.5, 안은 칼선 그대로, 서로 반대 방향
+    const [outer, inner] = ring.kids;
+    assert.deepStrictEqual(outer.geometricBounds.map(v => Math.round(v * 10) / 10), [-10.5, 110.5, 210.5, -10.5]);
+    const area = pts => pts.reduce((s, p, i) => { const q = pts[(i + 1) % pts.length].anchor; return s + p.anchor[0] * q[1] - q[0] * p.anchor[1]; }, 0);
+    assert.ok(Math.sign(area(outer.pathPoints)) !== Math.sign(area(inner.pathPoints)), '안쪽은 반대 방향 (구멍)');
+    assert.ok(!f.calls.some(c => c[0] === 'menu' && /Pathfinder/.test(c[1])), '사각형 칼선은 패스파인더 없이');
+    assert.ok(f.calls.some(c => c[0] === 'redraw'), '효과 뒤 화면 다시 그리기');
+    if (!effectWorks) assert.ok(f.calls.some(c => c[0] === 'resize'), '가로·세로 키우기로 대신');
+  });
+}
