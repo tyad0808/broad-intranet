@@ -70,8 +70,10 @@
 
   <details open data-id="cut">
     <summary>칼선</summary>
+    <div class="num">도련 (mm) <input id="cutBleedMm" type="number" step="0.5" min="0" value="0"></div>
     <button id="cut">선택 → 칼선(CutContour) 만들기</button>
-    <p class="hint">선택한 패스를 복제해 '칼선' 레이어에 만듭니다. 클리핑 마스크는 마스크 모양만.</p>
+    <p class="hint">선택한 것을 복제해 '칼선' 레이어에 만듭니다. 클리핑 마스크는 마스크 모양만, 글자는 아웃라인해서.<br>
+    도련: 재단 밀림 대비로 그림을 칼선 바깥으로 그만큼 넓힙니다 (칼선은 원래 크기). 이때 칼선은 개체마다 외곽 하나로 만듭니다. 0 이면 칼선만.</p>
   </details>
 
   <details open data-id="grid">
@@ -82,14 +84,16 @@
   </details>
 
   <details open data-id="barbox">
-    <summary>막대 + 박스</summary>
+    <summary>막대 + 박스 · 개수 세기</summary>
     <label><input id="useBar" type="checkbox" checked> 막대 만들기</label>
     <div class="num">막대 높이(두께) <input id="barHeightMm" type="number" step="0.5" min="0.1" value="2"></div>
     <div class="num">막대 간격 <input id="barGapMm" type="number" step="0.5" min="0" value="5"></div>
     <div class="num">박스 여백 <input id="boxMarginMm" type="number" step="0.5" min="0" value="10"></div>
     <label><input id="boxAsCut" type="checkbox"> 박스를 칼선(CutContour)으로</label>
     <button id="barbox">막대 + 박스 만들기</button>
-    <p class="hint">단위 mm. 여러 개 선택하면 각각, 그룹 하나를 선택하면 안의 하위 그룹마다 만듭니다.</p>
+    <button id="count">글자·도형 개수 세기</button>
+    <p class="hint">단위 mm. 여러 개 선택하면 각각, 그룹 하나를 선택하면 안의 하위 그룹마다 만듭니다.<br>
+    개수 세기: 선택한 것만(없으면 문서 전체) 글자 수와 아웃라인 도형 수를 그룹 안까지 셉니다.</p>
   </details>
 
   <details open data-id="dim">
@@ -117,11 +121,6 @@
     <p class="hint">'치수' 레이어에 파랑으로 그립니다. 클리핑 마스크는 마스크 모양 기준. 출력할 땐 레이어를 숨기세요.</p>
   </details>
 
-  <details open data-id="count">
-    <summary>개수 세기</summary>
-    <button id="count">글자·도형 개수 세기</button>
-    <p class="hint">선택한 것만, 선택이 없으면 문서 전체. 그룹 안까지 셉니다.</p>
-  </details>
 
   </div>
 

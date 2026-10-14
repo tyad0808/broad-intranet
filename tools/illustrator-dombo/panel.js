@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm'];
+  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'cutBleedMm'];
   var CHECKS = ['fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -57,7 +57,11 @@
     call('domboPanelPlace', o);
   });
   $('remove').addEventListener('click', function () { call('domboPanelRemove'); });
-  $('cut').addEventListener('click', function () { call('domboPanelCut'); });
+  $('cut').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelCut', { bleedMm: o.cutBleedMm || 0 });
+  });
   $('grid').addEventListener('click', function () {
     var o = readOptions();
     save(o);
@@ -85,6 +89,8 @@
 
   // ---- 칸 순서·이름 바꾸기 (이 컴퓨터에 기억) ----
   var LAYOUT_KEY = 'broad-dombo-layout';
+  // 예전 기본 이름: 저장돼 있어도 직접 바꾼 이름이 아니므로 새 기본 이름으로 보여 준다
+  var LEGACY_NAMES = { barbox: ['막대 + 박스'] };
   var box = $('sections');
   var sections = {}, defaults = [];
   Array.prototype.forEach.call(box.querySelectorAll('details[data-id]'), function (d) {
@@ -102,7 +108,9 @@
       if (!it || !sections[it.id] || seen[it.id]) return;
       seen[it.id] = true;
       var def = defaults.filter(function (x) { return x.id === it.id; })[0];
-      list.push({ id: it.id, name: (typeof it.name === 'string' && it.name.trim()) || def.name, open: it.open !== false });
+      var name = typeof it.name === 'string' && it.name.trim();
+      if (!name || (LEGACY_NAMES[it.id] || []).indexOf(name) >= 0) name = def.name;
+      list.push({ id: it.id, name: name, open: it.open !== false });
     });
     return list;
   }

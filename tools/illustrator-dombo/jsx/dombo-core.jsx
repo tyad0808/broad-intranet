@@ -287,7 +287,9 @@ function domboStyleCutPath(p, color) {
 
 // 개체에서 칼선이 될 패스만 '칼선' 레이어로 복제한다. 원본은 건드리지 않는다.
 // 클리핑 마스크 그룹은 안쪽 내용은 빼고 마스크 모양 하나만 칼선으로 만든다.
-function domboCollectCut(item, layer, color, stat) {
+// 살아있는 글자는 복제본을 아웃라인으로 바꾼다. 이미지 등은 boxOthers 일 때 범위 사각형으로.
+// 만든 것은 made 에 모은다.
+function domboCollectCut(item, layer, color, stat, made, boxOthers) {
   if (item.hidden || item.guides) return;
   var t = item.typename, dup, i;
   if (t === 'GroupItem') {
@@ -296,43 +298,267 @@ function domboCollectCut(item, layer, color, stat) {
       dup = mask.duplicate(layer, ElementPlacement.PLACEATEND);
       if (dup.typename === 'PathItem') {
         dup.clipping = false;
-        domboStyleCutPath(dup, color);
       } else {
-        for (i = 0; i < dup.pathItems.length; i++) {
-          dup.pathItems[i].clipping = false;
-          domboStyleCutPath(dup.pathItems[i], color);
-        }
+        for (i = 0; i < dup.pathItems.length; i++) dup.pathItems[i].clipping = false;
       }
+      domboStyleCutDeep(dup, color);
       stat.paths++;
+      if (made) made.push(dup);
       return;
     }
-    for (i = 0; i < item.pageItems.length; i++) domboCollectCut(item.pageItems[i], layer, color, stat);
-  } else if (t === 'PathItem') {
-    domboStyleCutPath(item.duplicate(layer, ElementPlacement.PLACEATEND), color);
-    stat.paths++;
-  } else if (t === 'CompoundPathItem') {
+    for (i = 0; i < item.pageItems.length; i++) domboCollectCut(item.pageItems[i], layer, color, stat, made, boxOthers);
+  } else if (t === 'PathItem' || t === 'CompoundPathItem') {
     dup = item.duplicate(layer, ElementPlacement.PLACEATEND);
-    for (i = 0; i < dup.pathItems.length; i++) domboStyleCutPath(dup.pathItems[i], color);
+    domboStyleCutDeep(dup, color);
     stat.paths++;
+    if (made) made.push(dup);
+  } else if (t === 'TextFrame') {
+    dup = item.duplicate(layer, ElementPlacement.PLACEATEND).createOutline();
+    domboStyleCutDeep(dup, color);
+    stat.paths++;
+    if (made) made.push(dup);
+  } else if (boxOthers) {
+    var b = item.geometricBounds;
+    dup = layer.pathItems.rectangle(b[1], b[0], b[2] - b[0], b[1] - b[3]);
+    domboStyleCutDeep(dup, color);
+    stat.paths++;
+    if (made) made.push(dup);
   } else {
     stat.skipped++;
   }
 }
 
+function domboStyleCutDeep(item, color) {
+  var t = item.typename, i;
+  if (t === 'PathItem') domboStyleCutPath(item, color);
+  else if (t === 'CompoundPathItem') for (i = 0; i < item.pathItems.length; i++) domboStyleCutPath(item.pathItems[i], color);
+  else if (t === 'GroupItem') for (i = 0; i < item.pageItems.length; i++) domboStyleCutDeep(item.pageItems[i], color);
+}
+
+function domboCutDefaults() {
+  return {
+    bleedMm: 0          // 도련: 그림을 칼선 바깥으로 넓히는 길이. 0 이면 칼선만
+  };
+}
+
+function domboCutMerge(opts) {
+  var o = domboCutDefaults();
+  if (opts) {
+    for (var k in opts) {
+      if (opts.hasOwnProperty(k) && opts[k] !== undefined && opts[k] !== null) o[k] = opts[k];
+    }
+  }
+  o.bleedMm = Number(o.bleedMm);
+  if (!(o.bleedMm >= 0)) throw new Error('도련은 0 이상이어야 합니다.');
+  if (o.bleedMm > 50) throw new Error('도련은 50mm 이하로 넣으세요.');
+  return o;
+}
+
+// 범위를 사방으로 n(pt)만큼 키우려면 가로·세로를 몇 % 로 늘려야 하는지
+function domboBleedScale(bounds, n) {
+  var w = bounds[2] - bounds[0], h = bounds[1] - bounds[3];
+  if (!(w > 0) || !(h > 0)) throw new Error('크기가 0인 개체는 도련을 줄 수 없습니다.');
+  return [(w + 2 * n) / w * 100, (h + 2 * n) / h * 100];
+}
+
+// 일러스트레이터 '패스 이동(Offset Path)' 효과. jntp: 0 둥글게, 1 비스듬히, 2 뾰족하게
+function domboOffsetXml(offsetPt, join) {
+  return '<LiveEffect name="Adobe Offset Path"><Dict data="R mlim 4 R ofst ' +
+    (Math.round(offsetPt * 1000) / 1000) + ' I jntp ' + (join === 'miter' ? 2 : 0) + ' "/></LiveEffect>';
+}
+
+// 베지어 곡선을 잘게 나눠 꼭짓점 목록으로 (구멍 판정용)
+function domboFlatten(points, steps) {
+  var out = [], n = points.length;
+  for (var i = 0; i < n; i++) {
+    var a = points[i], b = points[(i + 1) % n];
+    var p0 = a.anchor, p1 = a.rightDirection, p2 = b.leftDirection, p3 = b.anchor;
+    for (var s = 0; s < steps; s++) {
+      var t = s / steps, u = 1 - t;
+      var c0 = u * u * u, c1 = 3 * u * u * t, c2 = 3 * u * t * t, c3 = t * t * t;
+      out.push([c0 * p0[0] + c1 * p1[0] + c2 * p2[0] + c3 * p3[0], c0 * p0[1] + c1 * p1[1] + c2 * p2[1] + c3 * p3[1]]);
+    }
+  }
+  return out;
+}
+
+function domboPolyArea(poly) {
+  var s = 0;
+  for (var i = 0, n = poly.length; i < n; i++) {
+    var a = poly[i], b = poly[(i + 1) % n];
+    s += a[0] * b[1] - b[0] * a[1];
+  }
+  return Math.abs(s / 2);
+}
+
+function domboPointInPoly(pt, poly) {
+  var inside = false;
+  for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    var xi = poly[i][0], yi = poly[i][1], xj = poly[j][0], yj = poly[j][1];
+    if ((yi > pt[1]) !== (yj > pt[1]) && pt[0] < (xj - xi) * (pt[1] - yi) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// 다른 윤곽선 안에 들어 있는 윤곽선 번호들 (구멍, 구멍 안의 섬) — 외곽만 남길 때 지울 것
+function domboHoleIndices(polys) {
+  var area = [], out = [], i, j;
+  for (i = 0; i < polys.length; i++) area.push(domboPolyArea(polys[i]));
+  for (i = 0; i < polys.length; i++) {
+    for (j = 0; j < polys.length; j++) {
+      if (j !== i && area[j] > area[i] && polys[i].length > 0 && domboPointInPoly(polys[i][0], polys[j])) {
+        out.push(i);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+function domboRemoveHoles(item) {
+  var t = item.typename, i;
+  if (t === 'GroupItem') {
+    for (i = item.pageItems.length - 1; i >= 0; i--) domboRemoveHoles(item.pageItems[i]);
+  } else if (t === 'CompoundPathItem') {
+    var polys = [];
+    for (i = 0; i < item.pathItems.length; i++) polys.push(domboFlatten(item.pathItems[i].pathPoints, 8));
+    var holes = domboHoleIndices(polys);
+    for (i = holes.length - 1; i >= 0; i--) item.pathItems[holes[i]].remove();
+  }
+}
+
+function domboCountPaths(item) {
+  var t = item.typename, n = 0, i;
+  if (t === 'PathItem') return 1;
+  if (t === 'CompoundPathItem') return item.pathItems.length;
+  if (t === 'GroupItem') for (i = 0; i < item.pageItems.length; i++) n += domboCountPaths(item.pageItems[i]);
+  return n;
+}
+
+// 메뉴 명령은 선택한 것에 적용된다. 하나만 선택하고 실행한 뒤 결과(선택된 것)를 돌려준다
+function domboRunOn(doc, item, commands) {
+  doc.selection = null;
+  item.selected = true;
+  for (var i = 0; i < commands.length; i++) app.executeMenuCommand(commands[i]);
+  return doc.selection.length > 0 ? doc.selection[0] : null;
+}
+
+// 개체 하나의 외곽 칼선: 패스들을 합치고 안쪽 구멍은 뺀다 ('칼선' 레이어에)
+function domboOuterCut(doc, item, layer, color, stat) {
+  var made = [], i;
+  domboCollectCut(item, layer, color, stat, made, true);
+  if (made.length === 0) return null;
+  var out = made[0];
+  if (made.length > 1 || made[0].typename === 'GroupItem') {
+    var grp = layer.groupItems.add();
+    for (i = 0; i < made.length; i++) made[i].move(grp, ElementPlacement.PLACEATEND);
+    out = domboRunOn(doc, grp, ['Live Pathfinder Add', 'expandStyle']);
+  }
+  domboRemoveHoles(out);
+  domboStyleCutDeep(out, color);
+  return out;
+}
+
+// 패스 이동(Offset Path) 효과를 적용하고 펼친다
+function domboOffsetExpand(doc, item, n) {
+  doc.selection = null;
+  item.selected = true;
+  item.applyEffect(domboOffsetXml(n, 'round'));
+  app.executeMenuCommand('expandStyle');
+  return doc.selection.length > 0 ? doc.selection[0] : null;
+}
+
+// 도련: 그림을 칼선(cut) 바깥으로 n(pt)만큼 넓힌다. 결과 설명을 돌려준다
+function domboAddBleed(doc, item, cut, n) {
+  var t = item.typename, sc, i;
+  // 1) 클리핑 마스크 그룹: 마스크를 키워 가려진 그림을 더 보이게
+  var mask = domboClipMask(item);
+  if (mask) {
+    sc = domboBleedScale(mask.geometricBounds, n);
+    mask.resize(sc[0], sc[1], true, false, false, false, 0, Transformation.CENTER);
+    var mb = mask.geometricBounds, content = null;
+    for (i = 0; i < item.pageItems.length; i++) {
+      var k = item.pageItems[i];
+      if (k === mask || k.hidden) continue;
+      var v = k.typename === 'GroupItem' ? domboItemBounds(k, true) : k.geometricBounds;
+      if (v) content = domboUnion(content, v);
+    }
+    var short = !content || content[0] > mb[0] + 0.5 || content[1] < mb[1] - 0.5 || content[2] < mb[2] - 0.5 || content[3] > mb[3] + 0.5;
+    return short ? 'mask-short' : 'mask';
+  }
+  // 2) 이미지: 키운 복사본을 뒤에
+  if (t === 'PlacedItem' || t === 'RasterItem') {
+    var img = item.duplicate();
+    sc = domboBleedScale(item.geometricBounds, n);
+    img.resize(sc[0], sc[1], true, true, true, true, 0, Transformation.CENTER);
+    img.move(item, ElementPlacement.PLACEAFTER);
+    return 'image';
+  }
+  // 3) 벡터: 넓힌 복사본을 원본 뒤에 깔고, 칼선 바깥 고리 모양으로만 보이게 가린다
+  var copy = item.duplicate();
+  if (copy.typename === 'TextFrame') copy = copy.createOutline();
+  var grown = domboOffsetExpand(doc, copy, n);
+  if (!grown) throw new Error('도련 모양을 만들지 못했습니다.');
+
+  var outer = domboOffsetExpand(doc, cut.duplicate(), n + 0.5);
+  var inner = cut.duplicate();
+  var tmp = cut.layer.groupItems.add();
+  outer.move(tmp, ElementPlacement.PLACEATEND);
+  inner.move(tmp, ElementPlacement.PLACEATBEGINNING); // 앞에 있는 것을 뺀다
+  var ring = domboRunOn(doc, tmp, ['Live Pathfinder Subtract', 'expandStyle']);
+  if (!ring || (ring.typename !== 'PathItem' && ring.typename !== 'CompoundPathItem')) {
+    if (ring) ring.remove();
+    grown.move(item, ElementPlacement.PLACEAFTER);
+    return 'vector-unmasked';
+  }
+  var clip = item.layer.groupItems.add();
+  grown.move(clip, ElementPlacement.PLACEATEND);
+  ring.move(clip, ElementPlacement.PLACEATBEGINNING);
+  clip.clipped = true;
+  clip.name = '도련';
+  clip.move(item, ElementPlacement.PLACEAFTER);
+  return 'vector';
+}
+
 // 선택한 개체의 칼선을 '칼선' 레이어에 CutContour 별색 선으로 만든다.
-function domboCutContour() {
+// 도련을 넣으면 칼선은 개체마다 외곽 하나로 만들고, 그림을 칼선 바깥으로 그만큼 넓힌다.
+function domboCutContour(opts) {
   var doc = domboDoc();
+  var o = domboCutMerge(opts), k = DOMBO_PT_PER_MM;
   if (!domboHasSelection(doc)) throw new Error('칼선으로 만들 개체를 선택하세요.');
-  var items = [];
-  for (var i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+  var items = [], i;
+  for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
 
   var layer = domboGetLayer(doc, DOMBO_CUT_LAYER);
   var color = domboCutColor(doc);
   var stat = { paths: 0, skipped: 0 };
-  for (var j = 0; j < items.length; j++) domboCollectCut(items[j], layer, color, stat);
-  var msg = '칼선 ' + stat.paths + '개를 만들었습니다.';
-  if (stat.skipped > 0) msg += ' 패스가 아닌 ' + stat.skipped + '개(글자·이미지 등)는 뺐습니다. 글자는 윤곽선 만들기 후 다시 하세요.';
-  return msg;
+
+  if (o.bleedMm === 0) {
+    for (i = 0; i < items.length; i++) domboCollectCut(items[i], layer, color, stat, null, false);
+    if (stat.paths === 0) throw new Error('칼선으로 만들 패스가 없습니다.');
+    var msg = '칼선 ' + stat.paths + '개를 만들었습니다.';
+    if (stat.skipped > 0) msg += ' 패스가 아닌 ' + stat.skipped + '개(이미지 등)는 뺐습니다.';
+    return msg;
+  }
+
+  var kinds = { mask: 0, 'mask-short': 0, image: 0, vector: 0, 'vector-unmasked': 0 }, cuts = 0;
+  for (i = 0; i < items.length; i++) {
+    var cut = domboOuterCut(doc, items[i], layer, color, stat);
+    if (!cut) continue;
+    cuts++;
+    try {
+      kinds[domboAddBleed(doc, items[i], cut, o.bleedMm * k)]++;
+    } catch (e) {
+      throw new Error((i + 1) + '번째 개체에 도련을 주지 못했습니다: ' + e.message);
+    }
+  }
+  if (cuts === 0) throw new Error('칼선으로 만들 패스가 없습니다.');
+  doc.selection = null;
+  var notes = [];
+  if (kinds['mask-short']) notes.push('마스크 안의 그림이 모자란 것이 ' + kinds['mask-short'] + '개 있어 도련 일부가 비어 있을 수 있습니다');
+  if (kinds['vector-unmasked']) notes.push(kinds['vector-unmasked'] + '개는 도련이 그림 안쪽 빈 곳에도 비칠 수 있으니 확인하세요');
+  return '칼선 ' + cuts + '개를 만들고 그림을 칼선 바깥으로 ' + o.bleedMm + 'mm 넓혔습니다 (도련).' +
+    (notes.length ? '\n주의: ' + notes.join('. ') + '.' : '');
 }
 
 // ---- 격자 칼선 ----
@@ -754,7 +980,7 @@ function domboCall(fn, arg) {
 }
 function domboPanelPlace(opts) { return domboCall(domboPlace, opts); }
 function domboPanelRemove() { return domboCall(domboRemove); }
-function domboPanelCut() { return domboCall(domboCutContour); }
+function domboPanelCut(opts) { return domboCall(domboCutContour, opts); }
 function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
 function domboPanelCount() { return domboCall(domboCount); }
 function domboPanelBarBox(opts) { return domboCall(domboBarBox, opts); }

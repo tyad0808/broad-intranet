@@ -124,12 +124,16 @@ test('칼선: 클리핑 마스크는 안쪽 내용 없이 마스크 모양 하�
   const innerClip = group([dupable(pathItem([1, 2, 3, 0], { clipping: true })), inner], { clipped: true });
   const clip = group([mask, inner, innerClip], { clipped: true });
   const loose = dupable(pathItem([200, 50, 250, 0]));
-  const text = { typename: 'TextFrame' };
+  // 글자는 복제본을 아웃라인으로, 이미지는 건너뛴다 (도련이 없을 때)
+  const outlined = pathItem([300, 20, 340, 0]);
+  const text = dupable({ typename: 'TextFrame', createOutline() { return outlined; } });
+  const image = { typename: 'PlacedItem', geometricBounds: [0, 1, 1, 0] };
   const stat = { paths: 0, skipped: 0 };
-  [clip, group([loose, text])].forEach(it => core.domboCollectCut(it, cutLayer, 'SPOT', stat));
+  [clip, group([loose, text, image])].forEach(it => core.domboCollectCut(it, cutLayer, 'SPOT', stat));
 
-  assert.deepStrictEqual({ ...stat }, { paths: 2, skipped: 1 });
-  assert.deepStrictEqual(out.map(o => Array.from(o.geometricBounds)), [[0, 50, 100, 0], [200, 50, 250, 0]]);
+  assert.deepStrictEqual({ ...stat }, { paths: 3, skipped: 1 });
+  assert.deepStrictEqual(out.slice(0, 2).map(o => Array.from(o.geometricBounds)), [[0, 50, 100, 0], [200, 50, 250, 0]]);
+  assert.strictEqual(outlined.strokeColor, 'SPOT', '아웃라인한 글자도 칼선');
   assert.strictEqual(out[0].clipping, false);
   assert.strictEqual(out[0].filled, false);
   assert.strictEqual(out[0].strokeColor, 'SPOT');
@@ -257,4 +261,85 @@ test('돔보·개수 세기 전체 기준에서 치수 레이어는 뺀다', () 
     layer('치수', [pathItem([-50, 200, 200, -50])]),
   ]);
   assert.deepStrictEqual(Array.from(core.domboArtworkBounds(doc)), [0, 100, 100, 0]);
+});
+
+test('도련: 사방으로 n 만큼 키우는 비율, 구멍 찾기, 패스 이동 효과', () => {
+  const sc = Array.from(core.domboBleedScale([0, 50, 100, 0], 5));
+  near(sc[0], 110); near(sc[1], 120);
+  assert.throws(() => core.domboBleedScale([0, 0, 10, 0], 1), /크기가 0/);
+  // 바깥, 구멍, 떨어진 것, 구멍 안의 섬 → 구멍과 섬은 지운다
+  const sq = (x, y, w) => [[x, y], [x + w, y], [x + w, y + w], [x, y + w]];
+  assert.deepStrictEqual(Array.from(core.domboHoleIndices([sq(0, 0, 100), sq(10, 10, 80), sq(200, 0, 10), sq(40, 40, 10)])), [1, 3]);
+  assert.strictEqual(core.domboOffsetXml(8.5039, 'round'),
+    '<LiveEffect name="Adobe Offset Path"><Dict data="R mlim 4 R ofst 8.504 I jntp 0 "/></LiveEffect>');
+  assert.throws(() => core.domboCutMerge({ bleedMm: -1 }), /0 이상/);
+  assert.strictEqual(core.domboCutMerge({ bleedMm: '3' }).bleedMm, 3);
+});
+
+test('도련: 클리핑 마스크는 마스크를 키우고, 그림이 모자라면 알려 준다', () => {
+  core.Transformation = { CENTER: 'center' };
+  const mkMask = b => pathItem(b, {
+    clipping: true,
+    resize(sx, sy, changePos, a, b2, c, lw, about) {
+      assert.strictEqual(about, 'center');
+      const g = this.geometricBounds, cx = (g[0] + g[2]) / 2, cy = (g[1] + g[3]) / 2;
+      const w = (g[2] - g[0]) * sx / 100, h = (g[1] - g[3]) * sy / 100;
+      this.geometricBounds = [cx - w / 2, cy + h / 2, cx + w / 2, cy - h / 2];
+    },
+  });
+  const mask = mkMask([0, 100, 100, 0]);
+  const photo = pathItem([-50, 150, 150, -50]);
+  const clip = group([mask, photo], { clipped: true });
+  assert.strictEqual(core.domboAddBleed({}, clip, null, 10), 'mask');
+  assert.deepStrictEqual(Array.from(mask.geometricBounds), [-10, 110, 110, -10]);
+
+  const mask2 = mkMask([0, 100, 100, 0]);
+  const tight = group([mask2, pathItem([0, 100, 100, 0])], { clipped: true });
+  assert.strictEqual(core.domboAddBleed({}, tight, null, 10), 'mask-short');
+});
+
+test('도련: 벡터는 넓힌 복사본을 칼선 바깥 고리로 가려 원본 바로 뒤에 둔다', () => {
+  // 메뉴 명령·효과를 흉내 내는 가짜 일러스트레이터
+  const calls = [];
+  const doc = { selection: [] };
+  const made = [];
+  const mk = (typename, extra = {}) => {
+    const it = {
+      typename, name: '', ...extra,
+      set selected(v) { if (v) doc.selection = [it]; },
+      duplicate() { const c = mk(this.typename, { geometricBounds: this.geometricBounds, layer: this.layer }); made.push(c); return c; },
+      move(target, where) { it.movedTo = [target, where]; if (target.kids) { if (where === 'begin') target.kids.unshift(it); else target.kids.push(it); } },
+      applyEffect(xml) { calls.push(['effect', xml.match(/ofst ([\d.]+)/)[1]]); },
+      remove() { it.removed = true; },
+    };
+    return it;
+  };
+  const groups = [];
+  const artLayer = { groupItems: { add: () => { const g = mk('GroupItem', { kids: [] }); groups.push(g); return g; } } };
+  const cutLayer = { groupItems: artLayer.groupItems };
+  core.ElementPlacement = { PLACEATEND: 'end', PLACEATBEGINNING: 'begin', PLACEAFTER: 'after' };
+  core.app = {
+    executeMenuCommand(cmd) {
+      calls.push(['menu', cmd]);
+      const sel = doc.selection[0];
+      if (cmd === 'Live Pathfinder Subtract') doc.selection = [mk('CompoundPathItem', { pathItems: [], from: sel })];
+    },
+  };
+  const art = mk('GroupItem', { layer: artLayer, pageItems: [], clipped: false });
+  const cut = mk('PathItem', { layer: cutLayer, geometricBounds: [0, 100, 100, 0] });
+  Object.defineProperty(doc, 'selection', { get() { return this._s || []; }, set(v) { this._s = v || []; } });
+
+  assert.strictEqual(core.domboAddBleed(doc, art, cut, 8), 'vector');
+  // 그림 복사본을 8 만큼, 고리 바깥은 8.5 만큼 패스 이동 → 펼치기, 그다음 빼기
+  assert.deepStrictEqual(calls, [
+    ['effect', '8'], ['menu', 'expandStyle'],
+    ['effect', '8.5'], ['menu', 'expandStyle'],
+    ['menu', 'Live Pathfinder Subtract'], ['menu', 'expandStyle'],
+  ]);
+  const clip = groups[groups.length - 1];
+  assert.strictEqual(clip.clipped, true, '가리개 그룹');
+  assert.strictEqual(clip.kids[0].typename, 'CompoundPathItem', '맨 위가 고리 모양(가리는 모양)');
+  assert.strictEqual(clip.kids.length, 2, '고리 + 넓힌 그림');
+  assert.deepStrictEqual(clip.movedTo, [art, 'after'], '원본 바로 뒤로');
+  assert.strictEqual(clip.name, '도련');
 });
