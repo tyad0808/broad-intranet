@@ -14,25 +14,25 @@
   // 두 번 눌러 같은 요청이 두 번 가지 않도록, 확인 후에는 버튼을 잠근다
   const sent = new WeakSet();
 
+  // data-once: 한 번 제출하면 버튼을 잠근다 (form.elements 에는 form="..." 로 연결된 바깥 버튼도 들어 있다)
+  function lock(form) {
+    sent.add(form);
+    setTimeout(() => [...form.elements].forEach(el => { if (el.tagName === 'BUTTON') el.disabled = true; }), 0);
+  }
+
   document.addEventListener('submit', event => {
     const form = event.target;
     const button = event.submitter;
-    const raw = (button && button.getAttribute('data-confirm')) || form.getAttribute('data-confirm');
-    if (!raw) return;
     if (sent.has(form)) {
       event.preventDefault();
       return;
     }
-    const message = raw.replace('{ship}', shipSummary(form));
-    if (!window.confirm(message)) {
+    const raw = (button && button.getAttribute('data-confirm')) || form.getAttribute('data-confirm');
+    if (raw && !window.confirm(raw.replace('{ship}', shipSummary(form)))) {
       event.preventDefault();
       return;
     }
-    if (form.hasAttribute('data-once')) {
-      sent.add(form);
-      // form.elements 에는 form="..." 로 연결된 바깥 버튼(일괄 처리 막대)도 들어 있다
-      setTimeout(() => [...form.elements].forEach(el => { if (el.tagName === 'BUTTON') el.disabled = true; }), 0);
-    }
+    if (form.hasAttribute('data-once')) lock(form);
   });
 
   // '뒤로 가기'로 돌아왔을 때 잠긴 버튼이 그대로 남지 않게 새로 불러온다

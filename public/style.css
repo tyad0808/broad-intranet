@@ -463,3 +463,5 @@ button:disabled, button:disabled:hover { opacity: 0.45; cursor: default; backgro
 button.secondary:disabled, button.secondary:disabled:hover { background: #fff; }
 .form-actions a.btn-sm { display: inline-flex; align-items: center; white-space: nowrap; text-decoration: none; color: var(--text); }
 @media (max-width: 760px) { .bulk-bar { padding: 8px 10px; } .bulk-bar button { padding: 8px 12px; font-size: 15px; } }
+.title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.collect-form { display: inline-flex; align-items: center; gap: 8px; margin: 0; }

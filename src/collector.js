@@ -8,6 +8,10 @@ const CANCELED = new Set(['CANCELED']);
 // 처음 보는 주문인데 이미 배송이 시작됐거나 끝난 것 → 지난 주문이므로 마지막 단계(발송)로 바로 넣는다.
 // (최근 며칠 동안 '구매확정' 등으로 상태만 바뀐 오래된 주문이 새 주문처럼 쌓이는 것을 막는다)
 const ALREADY_DONE = new Set(['DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED', 'EXCHANGED', 'RETURNED']);
+// 채널에서 끝난 주문 (배송 시작·완료, 취소, 반품 등) → '진행 중' 목록과 미지정 알림에서 뺀다
+const ENDED = [...new Set([...ALREADY_DONE, ...CANCELED, 'CANCELED_BY_NOPAYMENT'])];
+// SQL 에 바로 넣는 목록 (코드에 적힌 상수라 안전)
+const ENDED_SQL = ENDED.map(s => `'${s}'`).join(', ');
 const OVERLAP_MS = 10 * 60 * 1000; // 경계에서 빠지는 주문이 없도록 지난 수집 끝 시각보다 10분 앞부터 다시 본다
 
 // 마지막 작업 단계 (보통 '발송'): 여기 있는 주문은 끝난 것으로 본다
@@ -174,4 +178,4 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
   };
 }
 
-module.exports = { createCollector, applyOrders, getSetting, setSetting, lastStageId, isClaimRequest, ALREADY_DONE, CANCELED };
+module.exports = { createCollector, applyOrders, getSetting, setSetting, lastStageId, isClaimRequest, ALREADY_DONE, CANCELED, ENDED, ENDED_SQL };

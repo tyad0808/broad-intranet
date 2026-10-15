@@ -5,6 +5,7 @@
 // 담당자·작업 단계·납기·메모는 주문 단위로 함께 바뀐다.
 const express = require('express');
 const { CHANNELS } = require('../channels/labels');
+const { ENDED_SQL } = require('../collector');
 const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
 
@@ -21,10 +22,12 @@ const VIEWS = {
 
 // 주문 묶음을 구분하는 열쇠 (채널 + 주문번호)
 const GROUP_KEY = "o.channel || ':' || o.channel_order_id";
+// 묶음의 모든 상품이 채널에서 끝났으면(배송중·배송완료·취소·반품 등) 1, 아니면 0
+const GROUP_ENDED = `MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END)`;
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
 const ITEM_ORDER = "CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id";
 
-function orderRoutes(db, notifier, actions) {
+function orderRoutes(db, notifier, actions, collector = null) {
   const router = express.Router();
 
   // 마지막 단계(보통 '발송')에 있는 주문은 끝난 것으로 보고 '진행 중' 목록에서 뺀다
@@ -84,6 +87,7 @@ function orderRoutes(db, notifier, actions) {
         SELECT o.channel AS ch, o.channel_order_id AS oid, MAX(o.paid_at) AS g_paid, MIN(o.due_date) AS g_due
         FROM orders o ${whereSql}
         GROUP BY o.channel, o.channel_order_id
+        ${view !== 'all' ? `HAVING ${GROUP_ENDED} = 0` : ''}
         ORDER BY ${groupOrder}
         LIMIT 300
       ), r AS (
@@ -113,14 +117,25 @@ function orderRoutes(db, notifier, actions) {
 
     // 탭에 보여줄 건수 (주문 묶음 단위, 채널을 골랐으면 그 채널만)
     const countWhere = channel ? 'WHERE o.channel = ?' : '';
+    // 탭 건수: 주문 묶음마다 '진행 중인지(마지막 단계 전 + 채널에서 안 끝남)' 를 먼저 구해서 센다
     const counts = db.prepare(`
+      WITH grp AS (
+        SELECT
+          MAX(CASE WHEN o.stage_id IS NULL OR o.stage_id != ? THEN 1 ELSE 0 END) AND ${GROUP_ENDED} = 0 AS open,
+          MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
+          MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned
+        FROM orders o ${countWhere}
+        GROUP BY o.channel, o.channel_order_id
+      )
       SELECT
-        COUNT(DISTINCT CASE WHEN o.stage_id IS NULL OR o.stage_id != ? THEN ${GROUP_KEY} END) AS active,
-        COUNT(DISTINCT CASE WHEN (o.stage_id IS NULL OR o.stage_id != ?) AND o.assignee_id = ? THEN ${GROUP_KEY} END) AS mine,
-        COUNT(DISTINCT CASE WHEN (o.stage_id IS NULL OR o.stage_id != ?) AND o.assignee_id IS NULL THEN ${GROUP_KEY} END) AS unassigned,
-        COUNT(DISTINCT ${GROUP_KEY}) AS "all"
-      FROM orders o ${countWhere}
-    `).get(last, last, req.user.id, last, ...(channel ? [channel] : []));
+        COALESCE(SUM(open), 0) AS active,
+        COALESCE(SUM(open AND mine), 0) AS mine,
+        COALESCE(SUM(open AND unassigned), 0) AS unassigned,
+        COUNT(*) AS "all"
+      FROM grp
+    `).get(last, req.user.id, ...(channel ? [channel] : []));
+
+    const lastRun = db.prepare('SELECT started_at, ok FROM collect_runs ORDER BY id DESC LIMIT 1').get() || null;
 
     res.render('orders/list', {
       title: '주문',
@@ -137,7 +152,24 @@ function orderRoutes(db, notifier, actions) {
       designers: designers(),
       today: kstToday(),
       currentUrl: req.originalUrl,
+      canCollect: Boolean(collector),
+      lastRun,
     });
+  });
+
+  // 주문 목록에서 바로 '지금 수집' (조회만 하므로 승인된 직원 누구나)
+  router.post('/orders/collect', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      if (!collector) return flashBack(req, res, back, { type: 'error', message: '주문 수집이 꺼져 있습니다 (ORDER_SOURCE=off).' });
+      const result = await collector.run();
+      req.session.flash = result.ok
+        ? { type: 'ok', message: `수집 완료: 새 주문 ${result.createdOrders}건, 바뀐 상품주문 ${result.updated}건` }
+        : { type: 'error', message: `수집 실패: ${result.error}` };
+      res.redirect(back);
+    } catch (e) {
+      next(e);
+    }
   });
 
   // 목록에서 바로 담당 디자이너 지정 (주문 묶음 전체의 담당자 칸만 바꾼다)

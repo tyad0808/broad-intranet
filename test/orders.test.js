@@ -238,3 +238,29 @@ test('주문 앞에 채널 표시가 붙고, 채널별로 골라 볼 수 있다'
   assert.ok(coupangOnly.includes('>쿠팡상품<'));
   assert.ok(!coupangOnly.includes('>상품1<'));
 });
+
+test('채널에서 취소되거나 배송이 시작된 주문은 진행 중·미지정에서 빠지고 전체에만 보인다', async t => {
+  const { db, kim } = await setup(t);
+  applyOrders(db, [order(1, { channel_status: 'CANCELED' }), order(2, { channel_status: 'DELIVERING' })]);
+  const active = (await kim.request('/')).text;
+  assert.doesNotMatch(active, />상품1</);
+  assert.doesNotMatch(active, />상품2</);
+  assert.match(active, />상품3</);
+  assert.match(active, /진행 중 <span class="count">1</);
+  assert.match(active, /미지정 <span class="count">1</);
+  assert.match(active, /전체 <span class="count">3</);
+  const all = (await kim.request('/?view=all')).text;
+  assert.match(all, />상품1</);
+  assert.match(all, />상품2</);
+  const { createNotifier } = require('../src/notifier');
+  assert.strictEqual(createNotifier({ db }).unassignedCount(), 1, '미지정 알림도 끝난 주문은 세지 않는다');
+});
+
+test('추가상품만 남아 있고 본상품이 배송 중이어도, 하나라도 안 끝났으면 진행 중에 남는다', async t => {
+  const { db, kim } = await setup(t);
+  applyOrders(db, [
+    order(1, { channel_status: 'DELIVERING' }),
+    order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '추가품' }),
+  ]);
+  assert.match((await kim.request('/')).text, />상품1</);
+});

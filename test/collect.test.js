@@ -378,3 +378,27 @@ test('같은 주문번호의 상품은 사내 칸을 이어받고, 발주확인�
   applyOrders(db, [order(1, { channel_confirmed: 1 })]);
   assert.deepStrictEqual([stageName(db, 'P1'), stageName(db, 'P2')], ['발주확인', '발주확인']);
 });
+
+test('주문 목록에서 직원 누구나 지금 수집을 누를 수 있다', async t => {
+  const db = openDb(':memory:');
+  addUser(db, { email: 'staff@broad.test' });
+  const collector = createCollector({ db, source: createMockSource() });
+  const { server, baseUrl } = await startServer({ db, collector });
+  t.after(() => server.close());
+  const b = await loginAs(baseUrl, 'staff@broad.test');
+  const page = await b.request('/');
+  assert.match(page.text, /지금 수집/);
+  const res = await b.submit('/', '/orders/collect', { back: '/' });
+  assert.strictEqual(res.location, '/');
+  assert.ok(db.prepare('SELECT COUNT(*) AS n FROM orders').get().n > 0);
+  assert.match((await b.request('/')).text, /수집 완료/);
+});
+
+test('수집이 꺼져 있으면 목록에 지금 수집 버튼이 없다', async t => {
+  const db = openDb(':memory:');
+  addUser(db, { email: 'staff@broad.test' });
+  const { server, baseUrl } = await startServer({ db });
+  t.after(() => server.close());
+  const b = await loginAs(baseUrl, 'staff@broad.test');
+  assert.doesNotMatch((await b.request('/')).text, /지금 수집/);
+});

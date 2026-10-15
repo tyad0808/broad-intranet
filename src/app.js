@@ -112,7 +112,7 @@ function createApp({
   });
 
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier));
-  app.use(requireActive, orderRoutes(db, notifier, actions));
+  app.use(requireActive, orderRoutes(db, notifier, actions, collector));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });

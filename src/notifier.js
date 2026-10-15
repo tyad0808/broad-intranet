@@ -7,6 +7,7 @@
 //  클레임      고객이 취소·반품·교환을 요청할 때 → 관리자 + 그 주문 담당자
 const { EventHub } = require('./events');
 const { claimLabel } = require('./channels/labels');
+const { ENDED_SQL } = require('./collector');
 
 function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
   const activeUserStmt = db.prepare("SELECT id, role FROM users WHERE id = ? AND status = 'active'");
@@ -48,10 +49,16 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
 
   function unassignedCount() {
     const last = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
-    return db.prepare(
-      // 주문 묶음(채널 + 주문번호) 단위로 센다: 본상품과 추가상품은 1건
-      "SELECT COUNT(DISTINCT channel || ':' || channel_order_id) AS n FROM orders WHERE assignee_id IS NULL AND (stage_id IS NULL OR stage_id != ?)"
-    ).get(last ? last.id : -1).n;
+    // 주문 묶음(채널 + 주문번호) 단위로 센다: 본상품과 추가상품은 1건.
+    // 채널에서 이미 끝난 주문(배송중·취소 등)은 빼고 센다
+    return db.prepare(`
+      SELECT COUNT(*) AS n FROM (
+        SELECT 1 FROM orders
+        WHERE assignee_id IS NULL AND (stage_id IS NULL OR stage_id != ?)
+        GROUP BY channel, channel_order_id
+        HAVING MIN(CASE WHEN channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END) = 0
+      )
+    `).get(last ? last.id : -1).n;
   }
 
   // 화면 위쪽 배너용: 지금 기준을 넘었는지 (알림을 놓쳐도 배너는 계속 보이게)

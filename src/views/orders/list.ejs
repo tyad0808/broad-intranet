@@ -11,7 +11,17 @@
 %>
 
 <div class="list-head">
-  <h1 class="page-title">주문</h1>
+  <div class="title-row">
+    <h1 class="page-title">주문</h1>
+    <% if (canCollect) { %>
+      <form method="post" action="/orders/collect" class="collect-form" data-once>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= currentUrl %>">
+        <button type="submit" class="btn-sm">↻ 지금 수집</button>
+        <% if (lastRun) { %><span class="muted small">마지막 <%= kst(lastRun.started_at).slice(11) %><%= lastRun.ok === 0 ? ' (실패)' : '' %></span><% } %>
+      </form>
+    <% } %>
+  </div>
   <% if (channels.length > 0) { %>
     <nav class="channel-chips" aria-label="채널">
       <a href="<%= link({ ch: '' }) %>" class="chip <%= channel ? '' : 'on' %>">전체 채널</a>
