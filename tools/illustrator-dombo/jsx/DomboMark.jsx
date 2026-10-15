@@ -29,6 +29,16 @@
   var eSpacing = numRow(gMark, '마크 간격 (최대)', d.spacingMm);
   gMark.add('statictext', undefined, '간격은 위·아래 변에만 적용. 0 이면 네 모서리만.');
 
+  var gOri = w.add('panel', undefined, '방향 표시점');
+  gOri.alignChildren = 'left';
+  var cOri = gOri.add('checkbox', undefined, '좌우를 알 수 있게 점 하나 더');
+  cOri.value = d.orientMark;
+  var gCorner = gOri.add('group');
+  gCorner.add('statictext', undefined, '모서리').preferredSize.width = 130;
+  var dCorner = gCorner.add('dropdownlist', undefined, ['오른쪽 아래', '왼쪽 아래', '오른쪽 위', '왼쪽 위']);
+  dCorner.selection = 0;
+  var eOri = numRow(gOri, '모서리 마크에서 거리', d.orientMm);
+
   var gAb = w.add('panel', undefined, '대지');
   gAb.alignChildren = 'left';
   var cFit = gAb.add('checkbox', undefined, '마크가 대지 밖이면 대지 넓히기');
@@ -49,7 +59,10 @@
       offsetMm: parseFloat(eOffset.text),
       spacingMm: parseFloat(eSpacing.text),
       marginMm: parseFloat(eMargin.text),
-      fitArtboard: cFit.value
+      fitArtboard: cFit.value,
+      orientMark: cOri.value,
+      orientCorner: ['rb', 'lb', 'rt', 'lt'][dCorner.selection.index],
+      orientMm: parseFloat(eOri.text)
     });
     alert(msg);
   } catch (e) {

@@ -22,7 +22,7 @@ const mmPts = pts => pts.map(([x, y]) => [x * MM, y * MM]);
 const art = [0, 50 * MM, 100 * MM, 0];
 
 test('기본값은 지름 6mm 원형, 마크 가장자리가 작업물에서 5mm 떨어진다', () => {
-  const r = core.domboComputeMarks(art, {});
+  const r = core.domboComputeMarks(art, { orientMark: false });
   near(r.radius, 3 * MM);
   // 중심은 작업물에서 거리 5mm + 반지름 3mm = 8mm 바깥. 간격 300mm 보다 작으니 네 모서리만
   nearPts(r.centers, mmPts([[-8, 58], [108, 58], [108, -8], [-8, -8]]));
@@ -32,7 +32,7 @@ test('기본값은 지름 6mm 원형, 마크 가장자리가 작업물에서 5mm
 
 test('위·아래 변만 간격 이하로 똑같이 나누고, 좌우 변 가운데에는 찍지 않는다', () => {
   // 중심 사각형 116mm x 66mm, 간격 50mm → 위·아래 3칸(38.67mm)
-  const r = core.domboComputeMarks(art, { spacingMm: 50 });
+  const r = core.domboComputeMarks(art, { spacingMm: 50, orientMark: false });
   const w = 116 / 3;
   nearPts(r.centers, mmPts([
     [-8, 58], [-8 + w, 58], [-8 + 2 * w, 58], [108, 58],
@@ -40,20 +40,44 @@ test('위·아래 변만 간격 이하로 똑같이 나누고, 좌우 변 가운
   ]));
   near(r.spacingX, w * MM);
   // 세로가 간격보다 길어도 좌우 변에는 모서리만
-  const tall = core.domboComputeMarks([0, 500 * MM, 100 * MM, 0], { spacingMm: 50 });
+  const tall = core.domboComputeMarks([0, 500 * MM, 100 * MM, 0], { spacingMm: 50, orientMark: false });
   assert.ok(Array.from(tall.centers).every(c => Math.abs(c[1] - 508 * MM) < 1e-9 || Math.abs(c[1] + 8 * MM) < 1e-9));
 });
 
 test('길이가 간격으로 딱 나눠지면 칸을 더 만들지 않는다', () => {
   // 중심 사각형 116mm x 66mm → 간격 58mm 이면 가로 2칸
-  const r = core.domboComputeMarks(art, { spacingMm: 58 });
+  const r = core.domboComputeMarks(art, { spacingMm: 58, orientMark: false });
   near(r.spacingX, 58 * MM);
   assert.strictEqual(r.centers.length, 2 * 3);
 });
 
 test('간격 0 이면 네 모서리만, 패널에서 온 글자 숫자도 받는다', () => {
-  const r = core.domboComputeMarks(art, { diameterMm: '4', offsetMm: '2', spacingMm: '0' });
+  const r = core.domboComputeMarks(art, { diameterMm: '4', offsetMm: '2', spacingMm: '0', orientMark: false });
   nearPts(r.centers, mmPts([[-4, 54], [104, 54], [104, -4], [-4, -4]]));
+});
+
+test('방향 표시점: 기본은 오른쪽 아래 모서리 마크에서 안쪽으로 50mm', () => {
+  // 1000 x 500mm 작업물 → 마크 중심 사각형 -8 ~ 1008, 아래 변 y = -8
+  const big = [0, 500 * MM, 1000 * MM, 0];
+  const r = core.domboComputeMarks(big, { spacingMm: 0 });
+  assert.strictEqual(r.centers.length, 5, '네 모서리 + 방향 표시점');
+  assert.strictEqual(r.orient, 4);
+  nearPts([r.centers[4]], mmPts([[1008 - 50, -8]]));
+  // 왼쪽 위, 거리 80
+  const lt = core.domboComputeMarks(big, { spacingMm: 0, orientCorner: 'lt', orientMm: 80 });
+  nearPts([lt.centers[lt.orient]], mmPts([[-8 + 80, 508]]));
+  // 끄면 없음
+  const off = core.domboComputeMarks(big, { orientMark: 'false' });
+  assert.strictEqual(off.orient, -1);
+});
+
+test('방향 표시점: 다른 마크와 겹치거나 너무 멀면 알려 준다', () => {
+  const big = [0, 500 * MM, 1000 * MM, 0];
+  // 간격 50mm 면 아래 변 마크가 50mm 마다 → 방향 표시점과 겹침
+  assert.throws(() => core.domboComputeMarks(big, { spacingMm: 50.4 }), /겹칩니다/);
+  assert.throws(() => core.domboComputeMarks(art, { orientMm: 200 }), /작업물 폭보다/);
+  assert.throws(() => core.domboComputeMarks(art, { orientMm: 5 }), /지름/);
+  assert.throws(() => core.domboComputeMarks(art, { orientCorner: 'xx' }), /위치/);
 });
 
 test('잘못된 설정은 거절한다', () => {

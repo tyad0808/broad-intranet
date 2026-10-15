@@ -15,7 +15,10 @@ function domboDefaults() {
     offsetMm: 5,         // 작업물 테두리와 마크 가장자리 사이 거리
     spacingMm: 300,      // 위·아래 변의 마크 중심 사이 최대 간격 (0 이면 네 모서리만)
     fitArtboard: true,   // 마크가 대지 밖으로 나가면 대지를 넓힌다
-    marginMm: 5          // 대지를 넓힐 때 마크 바깥 여백
+    marginMm: 5,         // 대지를 넓힐 때 마크 바깥 여백
+    orientMark: true,    // 좌우(방향)를 알 수 있게 모서리 옆에 점 하나 더
+    orientMm: 50,        // 모서리 마크 중심에서 방향 표시점 중심까지
+    orientCorner: 'rb'   // 어느 모서리 옆: 'rb' 오른쪽 아래 / 'lb' 왼쪽 아래 / 'rt' 오른쪽 위 / 'lt' 왼쪽 위
   };
 }
 
@@ -33,6 +36,8 @@ function domboMerge(opts) {
   o.spacingMm = Number(o.spacingMm);
   o.marginMm = Number(o.marginMm);
   o.fitArtboard = o.fitArtboard === true || o.fitArtboard === 'true';
+  o.orientMark = o.orientMark === true || o.orientMark === 'true';
+  o.orientMm = Number(o.orientMm);
   return o;
 }
 
@@ -44,6 +49,12 @@ function domboValidate(o) {
     throw new Error('마크 간격은 마크 지름(' + o.diameterMm + 'mm)보다 커야 합니다.');
   }
   if (!(o.marginMm >= 0)) throw new Error('대지 여백은 0 이상이어야 합니다.');
+  if (o.orientMark) {
+    if (o.orientCorner !== 'rb' && o.orientCorner !== 'lb' && o.orientCorner !== 'rt' && o.orientCorner !== 'lt') {
+      throw new Error('방향 표시점 위치가 잘못됐습니다.');
+    }
+    if (!(o.orientMm > o.diameterMm)) throw new Error('방향 표시점 거리는 마크 지름(' + o.diameterMm + 'mm)보다 커야 합니다.');
+  }
 }
 
 // a 에서 b 까지를 간격이 spacing 이하가 되도록 똑같이 나눈 점들 (양 끝 포함)
@@ -78,10 +89,27 @@ function domboComputeMarks(bounds, opts) {
   for (i = 0; i < xs.length; i++) centers.push([xs[i], T]);
   for (i = xs.length - 1; i >= 0; i--) centers.push([xs[i], B]);
 
+  // 방향 표시점: 고른 모서리에서 가로 변을 따라 안쪽으로 orientMm (중심 사이 거리)
+  var orient = -1;
+  if (o.orientMark) {
+    var d = o.orientMm * DOMBO_PT_PER_MM;
+    var right = o.orientCorner.charAt(0) === 'r', top = o.orientCorner.charAt(1) === 't';
+    var ox = right ? R - d : L + d, oy = top ? T : B;
+    if (d >= (R - L) - 2 * r) throw new Error('방향 표시점 거리가 작업물 폭보다 깁니다. 거리를 줄이세요.');
+    for (i = 0; i < centers.length; i++) {
+      if (Math.abs(centers[i][1] - oy) < 1e-6 && Math.abs(centers[i][0] - ox) < 2 * r + DOMBO_PT_PER_MM) {
+        throw new Error('방향 표시점이 다른 마크와 겹칩니다. 방향 표시점 거리나 마크 간격을 바꾸세요.');
+      }
+    }
+    orient = centers.length;
+    centers.push([ox, oy]);
+  }
+
   var m = o.marginMm * DOMBO_PT_PER_MM;
   return {
     radius: r,
     centers: centers,
+    orient: orient,   // 방향 표시점 번호 (없으면 -1)
     spacingX: (R - L) / (xs.length - 1),
     extent: [L - r, T + r, R + r, B - r],
     paper: [L - r - m, T + r + m, R + r + m, B - r - m]
@@ -230,13 +258,13 @@ function domboPlace(opts) {
     p.filled = true;
     p.fillColor = black;
     p.stroked = false;
-    p.name = '돔보_' + (i + 1);
+    p.name = i === result.orient ? '돔보_방향' : '돔보_' + (i + 1);
   }
   layer.locked = true;
 
   var mm = function (pt) { return Math.round(pt / DOMBO_PT_PER_MM * 10) / 10; };
-  var msg = '원형 돔보 ' + result.centers.length + '개를 찍었습니다. 실제 가로 간격 ' +
-    mm(result.spacingX) + 'mm.';
+  var msg = '원형 돔보 ' + (result.centers.length - (result.orient >= 0 ? 1 : 0)) + '개' +
+    (result.orient >= 0 ? ' + 방향 표시점 1개' : '') + '를 찍었습니다. 실제 가로 간격 ' + mm(result.spacingX) + 'mm.';
   var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
   var ar = ab.artboardRect, e = result.extent;
   var outside = e[0] < ar[0] || e[1] > ar[1] || e[2] > ar[2] || e[3] < ar[3];
