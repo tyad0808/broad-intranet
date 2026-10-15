@@ -3,8 +3,18 @@
 
 <div class="detail" data-order-id="<%= order.id %>">
   <section class="card">
-    <h1 class="detail-title"><%= order.product_name %></h1>
-    <% if (order.option_text) { %><p class="muted"><%= order.option_text %></p><% } %>
+    <% const c = channelInfo(order.channel); %>
+    <p class="detail-channel"><span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %> · 주문번호 <%= order.channel_order_id %></p>
+    <ul class="oi-items detail-items">
+      <% items.forEach(i => { %>
+        <li class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
+          <% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %>
+          <span class="oi-name <%= i.item_type === 'addon' ? '' : 'detail-title' %>"><%= i.product_name %></span>
+          <div class="muted"><%= i.option_text || '' %><%= i.option_text ? ' · ' : '' %><%= i.quantity %>개</div>
+        </li>
+      <% }) %>
+    </ul>
+    <% if (items.length > 1) { %><p class="muted">아래 내용은 이 주문의 상품 <%= items.length %>개에 함께 저장됩니다.</p><% } %>
 
     <form method="post" action="/orders/<%= order.id %>" class="detail-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -55,13 +65,19 @@
   <section class="card">
     <h2>주문 정보</h2>
     <dl class="info">
-      <dt>채널</dt><dd>스마트스토어</dd>
+      <dt>채널</dt><dd><%= channelInfo(order.channel).name %></dd>
       <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
-      <dt>상품주문번호</dt><dd><%= order.channel_item_id %></dd>
-      <dt>수량</dt><dd><%= order.quantity %>개</dd>
       <dt>결제일</dt><dd><%= kst(order.paid_at) %></dd>
-      <dt>채널 상태</dt><dd><%= channelStatusLabel(order.channel_status) %></dd>
-      <dt>발주확인</dt><dd><%= order.channel_confirmed ? '판매자센터에서 발주확인됨' : '아직 안 됨' %></dd>
+    </dl>
+    <h2>상품별 상태</h2>
+    <dl class="info">
+      <% items.forEach(i => { %>
+        <dt><%= i.item_type === 'addon' ? '추가상품' : '상품' %></dt>
+        <dd>
+          <%= i.product_name %>
+          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= channelStatusLabel(i.channel_status) %> · <%= i.channel_confirmed ? '발주확인됨' : '발주확인 전' %></div>
+        </dd>
+      <% }) %>
     </dl>
     <h2>배송지</h2>
     <dl class="info">
@@ -70,7 +86,7 @@
       <dt>연락처</dt><dd><% if (order.receiver_phone) { %><a href="tel:<%= order.receiver_phone %>"><%= order.receiver_phone %></a><% } else { %>-<% } %></dd>
       <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
     </dl>
-    <p class="muted">주문 정보와 배송지는 스마트스토어에서 가져온 값이라 여기서 바꿀 수 없습니다.</p>
+    <p class="muted">주문 정보와 배송지는 <%= channelInfo(order.channel).name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p>
   </section>
 </div>
 <%- include('../partials/footer') %>

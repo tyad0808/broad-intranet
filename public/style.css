@@ -316,3 +316,66 @@ button.secondary:hover { background: var(--notice-bg); }
   text-align: center;
 }
 .alert-bar:hover { background: #ffecc7; }
+
+/* ───────── 채널 표시 · 주문 묶음 ───────── */
+.list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 4px; }
+.list-head .page-title { margin: 0; }
+.channel-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+}
+.chip.on { border-color: var(--primary); background: var(--notice-bg); font-weight: 600; }
+
+/* 채널 표시: 색깔 네모 + 한 글자 */
+.ch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+}
+.ch-naver { background: #03c75a; }
+.ch-own { background: #2f6fed; }
+.ch-coupang { background: #e52528; }
+.ch-esm { background: #6d4aff; }
+.ch-etc { background: #8c959f; }
+
+.oi-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.oi-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.oi-items li.addon { padding-left: 14px; border-left: 2px solid var(--line); }
+.oi-name { font-weight: 600; }
+.oi-items li.addon .oi-name { font-weight: 500; }
+.tag {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: #eef1f4;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+.detail-channel { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--muted); font-size: 14px; }
+.detail-items { margin-bottom: 8px; }
+
+/* 휴대폰에서 상단 메뉴 글자가 한 글자씩 끊기지 않게 */
+.topbar { flex-wrap: wrap; row-gap: 6px; }
+.brand { white-space: nowrap; }
+.me { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
+.me > * { white-space: nowrap; }

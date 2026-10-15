@@ -250,3 +250,13 @@ test('미지정이 기준을 넘으면 받는 사람 화면 위쪽에 배너가 
   db.prepare("UPDATE settings SET value = '5' WHERE key = 'unassigned_threshold'").run();
   assert.ok(!(await admin.request('/')).text.includes('unassigned-bar'), '기준 아래로 내려가면 사라짐');
 });
+
+test('미지정·신규 발주 건수는 주문 단위로 센다 (추가상품은 따로 세지 않음)', () => {
+  const { db, hub, notifier } = setup({ threshold: 99 });
+  const result = applyOrders(db, [order(1), order(2, { channel_order_id: 'O1', item_type: 'addon' }), order(3)]);
+  assert.strictEqual(notifier.unassignedCount(), 2);
+  notifier.afterCollect({ ok: true, ...result });
+  const notify = hub.sent.find(s => s.event === 'notify');
+  assert.strictEqual(notify.data.title, '신규 발주 2건');
+  assert.strictEqual(notify.data.body, '상품1, 상품3');
+});

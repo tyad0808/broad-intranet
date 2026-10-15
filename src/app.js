@@ -12,7 +12,7 @@ const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { orderRoutes } = require('./routes/orders');
 const { createNotifier } = require('./notifier');
-const { channelStatusLabel } = require('./channels/labels');
+const { channelStatusLabel, channelInfo } = require('./channels/labels');
 
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -32,6 +32,7 @@ function createApp({ db, collector = null, notifier = createNotifier({ db }), se
   app.set('view engine', 'ejs');
   app.set('views', path.join(__dirname, 'views'));
   app.locals.channelStatusLabel = channelStatusLabel;
+  app.locals.channelInfo = channelInfo;
   // 납기 표시: 지났으면 빨강, 오늘·내일이면 주황 (today 는 한국 날짜 YYYY-MM-DD)
   app.locals.dueInfo = (due, today) => {
     if (!due) return { cls: '', text: '' };

@@ -30,6 +30,8 @@ function normalize(item) {
     channel_order_id: String(order.orderId || po.orderId || ''),
     channel_item_id: String(po.productOrderId || ''),
     product_name: po.productName || '(상품명 없음)',
+    // 스마트스토어는 추가상품을 별도 상품주문으로 보낸다 (productClass: '추가구성상품')
+    item_type: String(po.productClass || '').includes('추가') ? 'addon' : 'main',
     option_text: po.productOption || null,
     quantity: Number(po.quantity) || 1,
     buyer_name: order.ordererName || null,

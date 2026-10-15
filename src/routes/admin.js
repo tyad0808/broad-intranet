@@ -316,7 +316,7 @@ function adminRoutes(db, sessionStore, collector, notifier) {
       FROM orders o LEFT JOIN work_stages s ON s.id = o.stage_id
       ORDER BY o.id DESC LIMIT 10
     `).all();
-    const total = db.prepare('SELECT COUNT(*) AS n FROM orders').get().n;
+    const total = db.prepare("SELECT COUNT(DISTINCT channel || ':' || channel_order_id) AS n FROM orders").get().n;
     res.render('admin/collect', {
       title: '주문 수집',
       tab: 'collect',
@@ -335,7 +335,7 @@ function adminRoutes(db, sessionStore, collector, notifier) {
     }
     const result = await collector.run();
     if (result.ok) {
-      flash(req, 'ok', `수집 완료: 새 주문 ${result.created}건, 바뀐 주문 ${result.updated}건` +
+      flash(req, 'ok', `수집 완료: 새 주문 ${result.createdOrders}건, 바뀐 상품주문 ${result.updated}건` +
         (result.archived ? `, 이미 배송된 지난 주문 ${result.archived}건(전체 탭에 보관)` : ''));
     } else {
       flash(req, 'error', `수집 실패: ${result.error}`);

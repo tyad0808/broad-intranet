@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view, stage: stageFilter || '', sort: sort === 'recent' ? '' : sort, q, ...changes };
+    const merged = { view, ch: channel, stage: stageFilter || '', sort: sort === 'recent' ? '' : sort, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -12,6 +12,16 @@
 
 <div class="list-head">
   <h1 class="page-title">주문</h1>
+  <% if (channels.length > 0) { %>
+    <nav class="channel-chips" aria-label="채널">
+      <a href="<%= link({ ch: '' }) %>" class="chip <%= channel ? '' : 'on' %>">전체 채널</a>
+      <% channels.forEach(key => { const c = channelInfo(key); %>
+        <a href="<%= link({ ch: key }) %>" class="chip <%= channel === key ? 'on' : '' %>">
+          <span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %>
+        </a>
+      <% }) %>
+    </nav>
+  <% } %>
 </div>
 
 <nav class="tabs" id="live-tabs">
@@ -24,6 +34,7 @@
 
 <form method="get" action="/" class="filters" data-autosubmit>
   <% if (view !== 'active') { %><input type="hidden" name="view" value="<%= view %>"><% } %>
+  <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
   <select name="stage" aria-label="작업 단계">
     <option value="">모든 단계</option>
     <% stages.forEach(s => { %>
@@ -39,16 +50,32 @@
 </form>
 
 <div id="live-list">
-<% if (orders.length === 0) { %>
+<% if (groups.length === 0) { %>
   <section class="card"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>
 <% } else { %>
   <ul class="order-list">
-    <% orders.forEach(o => { const due = dueInfo(o.due_date, today); const keepCurrent = o.assignee_id && !designers.some(d => d.id === o.assignee_id); %>
+    <% groups.forEach(g => {
+         const o = g.main;
+         const c = channelInfo(o.channel);
+         const due = dueInfo(o.due_date, today);
+         const keepCurrent = o.assignee_id && !designers.some(d => d.id === o.assignee_id);
+         const confirmed = g.items.every(i => i.channel_confirmed);
+    %>
       <li id="o<%= o.id %>" class="order-item">
         <a class="oi-main" href="/orders/<%= o.id %>?back=<%= encodeURIComponent(currentUrl) %>">
-          <div class="oi-title"><%= o.product_name %></div>
-          <div class="muted"><%= o.option_text || '' %><%= o.option_text ? ' · ' : '' %><%= o.quantity %>개</div>
-          <div class="muted"><%= o.receiver_name || o.buyer_name || '-' %> · <%= kst(o.paid_at) %> 결제</div>
+          <div class="oi-head">
+            <span class="ch ch-<%= c.cls %>" title="<%= c.name %>"><%= c.mark %></span>
+            <span class="muted"><%= o.receiver_name || o.buyer_name || '-' %> · <%= kst(o.paid_at) %> 결제<% if (g.items.length > 1) { %> · 상품 <%= g.items.length %>개<% } %></span>
+          </div>
+          <ul class="oi-items">
+            <% g.items.forEach(i => { %>
+              <li class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
+                <% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %>
+                <span class="oi-name"><%= i.product_name %></span>
+                <div class="muted"><%= i.option_text || '' %><%= i.option_text ? ' · ' : '' %><%= i.quantity %>개</div>
+              </li>
+            <% }) %>
+          </ul>
         </a>
         <div class="oi-meta">
           <span class="pill stage"><%= o.stage_name || '단계 없음' %></span>
@@ -65,12 +92,12 @@
             <noscript><button type="submit" class="btn-sm">지정</button></noscript>
           </form>
           <% if (due.text) { %><span class="pill <%= due.cls %>">납기 <%= due.text %></span><% } %>
-          <span class="pill light"><%= channelStatusLabel(o.channel_status) %><%= o.channel_confirmed ? ' · 발주확인됨' : '' %></span>
+          <span class="pill light"><%= channelStatusLabel(o.channel_status) %><%= confirmed ? ' · 발주확인됨' : '' %></span>
         </div>
       </li>
     <% }) %>
   </ul>
-  <% if (orders.length >= 300) { %><p class="muted">최근 300건까지만 보입니다. 검색이나 필터로 좁혀 보세요.</p><% } %>
+  <% if (groups.length >= 300) { %><p class="muted">최근 300건까지만 보입니다. 검색이나 필터로 좁혀 보세요.</p><% } %>
 <% } %>
 </div>
 

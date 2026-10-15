@@ -34,19 +34,36 @@ function applyOrders(db, orders) {
   const lastStage = lastStageId(db);
 
   const find = db.prepare('SELECT id, stage_id, channel_confirmed FROM orders WHERE channel = ? AND channel_item_id = ?');
-  const insert = db.prepare(`
-    INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, option_text, quantity,
-      buyer_name, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed, stage_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  const insertRow = db.prepare(`
+    INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
+      buyer_name, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
+      stage_id, assignee_id, due_date, memo, nas_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
+  // 같은 주문번호의 다른 상품이 이미 카드로 있으면 그 카드의 사내 칸(단계·담당자·납기·메모)을 이어받는다
+  const groupSibling = db.prepare(
+    'SELECT stage_id, assignee_id, due_date, memo, nas_path FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY id LIMIT 1'
+  );
+  const insert = (o, stage) => {
+    const sib = groupSibling.get(o.channel, o.channel_order_id);
+    return insertRow.run(
+      o.channel, o.channel_order_id, o.channel_item_id, o.item_type || 'main', o.product_name, o.option_text, o.quantity,
+      o.buyer_name, o.receiver_name, o.receiver_phone, o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed,
+      sib && sib.stage_id ? sib.stage_id : stage, sib ? sib.assignee_id : null,
+      sib ? sib.due_date : null, sib ? sib.memo : null, sib ? sib.nas_path : null
+    );
+  };
   // 채널에서 온 칸만 고친다. 담당자·작업 단계·메모 같은 사내 칸은 건드리지 않는다.
   const update = db.prepare(`
     UPDATE orders SET product_name = ?, option_text = ?, quantity = ?, buyer_name = ?, receiver_name = ?,
       receiver_phone = ?, receiver_address = ?, paid_at = ?, channel_status = ?, channel_confirmed = ?,
-      updated_at = datetime('now')
+      item_type = ?, updated_at = datetime('now')
     WHERE id = ?
   `);
-  const moveStage = db.prepare("UPDATE orders SET stage_id = ?, updated_at = datetime('now') WHERE id = ?");
+  // 발주확인은 주문 단위로 본다: 같은 주문번호에서 아직 '발주' 단계인 상품을 모두 '발주확인'으로
+  const moveGroupStage = db.prepare(
+    "UPDATE orders SET stage_id = ?, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ? AND stage_id = ?"
+  );
   const notify = db.prepare("INSERT INTO notifications (type, message, order_id) VALUES ('new_order', ?, ?)");
 
   const result = { created: 0, updated: 0, createdIds: [], archived: 0 };
@@ -58,20 +75,15 @@ function applyOrders(db, orders) {
       if (!existing) {
         if (UNPAID.has(o.channel_status) || CANCELED.has(o.channel_status)) continue;
         if (ALREADY_DONE.has(o.channel_status)) {
-          insert.run(
-            o.channel, o.channel_order_id, o.channel_item_id, o.product_name, o.option_text, o.quantity,
-            o.buyer_name, o.receiver_name, o.receiver_phone, o.receiver_address, o.paid_at,
-            o.channel_status, o.channel_confirmed, lastStage
-          );
+          insert(o, lastStage);
           result.archived += 1; // 알림 없이 '전체' 탭에서만 보인다
           continue;
         }
         const stage = o.channel_confirmed && stageConfirmed ? stageConfirmed : stageNew;
-        const info = insert.run(
-          o.channel, o.channel_order_id, o.channel_item_id, o.product_name, o.option_text, o.quantity,
-          o.buyer_name, o.receiver_name, o.receiver_phone, o.receiver_address, o.paid_at,
-          o.channel_status, o.channel_confirmed, stage
-        );
+        const info = insert(o, stage);
+        if (o.channel_confirmed && stageConfirmed && stageNew) {
+          moveGroupStage.run(stageConfirmed, o.channel, o.channel_order_id, stageNew);
+        }
         const id = Number(info.lastInsertRowid);
         notify.run(`새 주문: ${o.product_name}${o.option_text ? ` (${o.option_text})` : ''} × ${o.quantity}`, id);
         result.created += 1;
@@ -81,17 +93,23 @@ function applyOrders(db, orders) {
 
       update.run(
         o.product_name, o.option_text, o.quantity, o.buyer_name, o.receiver_name, o.receiver_phone,
-        o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed, existing.id
+        o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed, o.item_type || 'main', existing.id
       );
       // 판매자센터에서 발주확인됨 → 카드가 아직 '발주' 단계면 '발주확인' 으로 옮긴다.
       // 직원이 이미 다음 단계로 옮겼다면 그대로 둔다 (뒤로 되돌리지 않음).
-      if (o.channel_confirmed && stageConfirmed && existing.stage_id === stageNew) {
-        moveStage.run(stageConfirmed, existing.id);
+      if (o.channel_confirmed && stageConfirmed && stageNew) {
+        moveGroupStage.run(stageConfirmed, o.channel, o.channel_order_id, stageNew);
       }
       result.updated += 1;
     }
   });
 
+  // 새로 생긴 '주문' 수 (본상품 + 추가상품은 1건)
+  result.createdOrders = result.createdIds.length
+    ? db.prepare(
+      `SELECT COUNT(DISTINCT channel || ':' || channel_order_id) AS n FROM orders WHERE id IN (${result.createdIds.map(() => '?').join(',')})`
+    ).get(...result.createdIds).n
+    : 0;
   return result;
 }
 

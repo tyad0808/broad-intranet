@@ -2,6 +2,7 @@
 //
 // 실행 (미리보기, 아무것도 바꾸지 않음):  npm run tidy-orders
 // 실제로 옮기기:                          npm run tidy-orders -- --apply
+// 최근 3일 주문 다시 읽기(추가상품 표시 갱신): npm run tidy-orders -- --refetch
 //
 // 직원이 손댄 카드(담당자 지정, 저장 이력 있음)는 절대 건드리지 않는다.
 require('dotenv').config({ quiet: true });
@@ -40,9 +41,19 @@ function tidyOrders(db, { apply = false } = {}) {
 if (require.main === module) {
   const apply = process.argv.includes('--apply');
   const db = openDb();
+
+  if (process.argv.includes('--refetch')) {
+    // 마지막 수집 시각을 지우면 다음 수집 때 최근 3일치를 처음처럼 다시 읽는다.
+    // 이미 있는 주문은 채널 정보(추가상품 여부 등)만 새로 고쳐지고, 사내 칸은 그대로 남는다.
+    db.prepare("DELETE FROM settings WHERE key LIKE 'collect_last_to_%'").run();
+    console.log('다음 수집 때 최근 3일 주문을 다시 읽습니다. 인트라넷 관리자 → 주문 수집 → 지금 수집 을 누르세요.');
+    db.close();
+    return;
+  }
+
   const { byStatus, total, moved } = tidyOrders(db, { apply });
   const remaining = db.prepare(`
-    SELECT COUNT(*) AS n FROM orders
+    SELECT COUNT(DISTINCT channel || ':' || channel_order_id) AS n FROM orders
     WHERE stage_id IS NULL OR stage_id != (SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1)
   `).get().n;
 

@@ -108,6 +108,7 @@ test('바뀐 주문 목록 → 상세 조회 → 인트라넷 형식으로 바�
     channel_order_id: 'O1',
     channel_item_id: 'P1',
     product_name: '명함',
+    item_type: 'main',
     option_text: '양면 / 200매',
     quantity: 2,
     buyer_name: '홍길동',
@@ -244,7 +245,9 @@ test('가짜 주문 출처: 처음 3건, 이후 일부가 발주확인으로 바
   const seq = [0.1, 0.5, 0.9, 0.2, 0.7, 0.3];
   const source = createMockSource({ random: () => seq[i++ % seq.length] });
   const first = await source.fetchChanges();
-  assert.strictEqual(first.length, 3);
+  assert.strictEqual(first.filter(o => o.item_type === 'main').length, 3);
+  assert.ok(first.filter(o => o.item_type === 'addon').every(a => first.some(m => m.item_type === 'main' && m.channel_order_id === a.channel_order_id)),
+    '추가상품은 본상품과 같은 주문번호');
   assert.ok(first.every(o => o.channel_confirmed === 0));
   const second = await source.fetchChanges();
   assert.ok(second.some(o => o.channel_confirmed === 1));
@@ -322,4 +325,29 @@ test('지난 주문 정리: 미리보기는 바꾸지 않고, --apply 는 손대
   const done = tidyOrders(db, { apply: true });
   assert.strictEqual(done.moved, 3);
   assert.deepStrictEqual(['P1', 'P2', 'P3', 'P4', 'P5'].map(p => stageName(db, p)), ['발송', '발송', '발송', '발주', '발주']);
+});
+
+test('스마트스토어 추가구성상품은 추가상품(addon)으로 표시한다', () => {
+  const { normalize } = require('../src/channels/smartstore');
+  const item = naverItem(9);
+  item.productOrder.productClass = '추가구성상품';
+  assert.strictEqual(normalize(item).item_type, 'addon');
+  item.productOrder.productClass = '조합형옵션상품';
+  assert.strictEqual(normalize(item).item_type, 'main');
+});
+
+test('같은 주문번호의 상품은 사내 칸을 이어받고, 발주확인도 주문 단위로 옮긴다', () => {
+  const db = openDb(':memory:');
+  const designer = addUser(db, { email: 'd@broad.test' });
+  applyOrders(db, [order(1)]);
+  db.prepare("UPDATE orders SET assignee_id = ?, due_date = '2026-10-20' WHERE channel_item_id = 'P1'").run(designer);
+
+  // 같은 주문(O1)의 추가상품이 나중에 들어옴
+  applyOrders(db, [order(2, { channel_order_id: 'O1', item_type: 'addon' })]);
+  const addon = db.prepare("SELECT assignee_id, due_date, item_type FROM orders WHERE channel_item_id = 'P2'").get();
+  assert.deepStrictEqual({ ...addon }, { assignee_id: designer, due_date: '2026-10-20', item_type: 'addon' });
+
+  // 본상품만 발주확인돼도 주문 전체가 발주확인으로
+  applyOrders(db, [order(1, { channel_confirmed: 1 })]);
+  assert.deepStrictEqual([stageName(db, 'P1'), stageName(db, 'P2')], ['발주확인', '발주확인']);
 });

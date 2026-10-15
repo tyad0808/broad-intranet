@@ -184,3 +184,57 @@ test('목록의 담당자 선택 상자에는 디자이너만 나온다', async 
   assert.match(text, />김디자 \(나\)</);
   assert.ok(!text.includes('>최상담<'));
 });
+
+// ───────── 같은 주문번호 묶기, 채널 ─────────
+
+async function groupSetup(t) {
+  const ctx = await setup(t);
+  // O1 주문에 추가상품이 붙어 있는 상황 (P1 본상품 + P9 추가상품)
+  applyOrders(ctx.db, [order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '무료 양면테이프' })]);
+  return ctx;
+}
+
+test('같은 주문번호의 본상품과 추가상품은 카드 하나로 묶여 보인다', async t => {
+  const { kim } = await groupSetup(t);
+  const text = (await kim.request('/')).text;
+  const cards = text.split('class="order-item"').length - 1;
+  assert.strictEqual(cards, 3, '상품은 4개지만 주문은 3건');
+  assert.match(text, /진행 중 <span class="count">3</);
+  const card = text.slice(text.indexOf('>상품1<') - 600, text.indexOf('>상품1<') + 900);
+  assert.match(card, /상품 2개/);
+  assert.match(card, /<span class="tag">추가<\/span>\s*<span class="oi-name">무료 양면테이프</);
+});
+
+test('목록에서 담당자를 지정하면 추가상품까지 같이 지정된다', async t => {
+  const { kim, leeId, idOf, row } = await groupSetup(t);
+  await kim.submit('/', `/orders/${idOf('P9')}/assign`, { assignee_id: String(leeId), back: '/' });
+  assert.deepStrictEqual([row('P1').assignee_id, row('P9').assignee_id], [leeId, leeId]);
+});
+
+test('주문 카드에서 저장하면 같은 주문의 상품 모두에 적용되고, 카드에 상품이 모두 보인다', async t => {
+  const { kim, idOf, row, stageId } = await groupSetup(t);
+  const page = await kim.request(`/orders/${idOf('P1')}`);
+  assert.match(page.text, /무료 양면테이프/);
+  assert.match(page.text, /상품 2개에 함께 저장됩니다/);
+  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업')), due_date: '2026-10-22', memo: '같이 작업' });
+  for (const p of ['P1', 'P9']) {
+    const r = row(p);
+    assert.deepStrictEqual([r.stage_id, r.due_date, r.memo], [stageId('디자인작업'), '2026-10-22', '같이 작업']);
+  }
+});
+
+test('주문 앞에 채널 표시가 붙고, 채널별로 골라 볼 수 있다', async t => {
+  const { db, kim } = await groupSetup(t);
+  db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, stage_id) VALUES ('coupang', 'C1', 'CP1', '쿠팡상품', (SELECT id FROM work_stages WHERE name = '발주'))").run();
+  const all = (await kim.request('/')).text;
+  assert.match(all, /class="ch ch-naver"[^>]*>N</);
+  assert.match(all, /class="ch ch-coupang"[^>]*>C</);
+  assert.match(all, />쿠팡상품</);
+
+  const naverOnly = (await kim.request('/?ch=smartstore')).text;
+  assert.ok(!naverOnly.includes('>쿠팡상품<'));
+  assert.match(naverOnly, /진행 중 <span class="count">3</);
+  const coupangOnly = (await kim.request('/?ch=coupang')).text;
+  assert.ok(coupangOnly.includes('>쿠팡상품<'));
+  assert.ok(!coupangOnly.includes('>상품1<'));
+});

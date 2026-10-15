@@ -9,6 +9,12 @@ const PRODUCTS = [
   { name: '스티커 라벨 인쇄', options: ['원형 50mm / 1000매', '사각 90x50 / 500매'] },
   { name: '전단지 A4', options: ['아트지 150g / 2000매', '스노우지 120g / 4000매'] },
 ];
+// 실제 스마트스토어처럼 본상품에 붙는 추가상품 (같은 주문번호, 별도 상품주문번호)
+const ADDONS = [
+  { name: '제공', option: '무료 양면테이프(미신청 시 미제공): 제공' },
+  { name: '(무료)누끼+칼선작업', option: '디자인 작업 의뢰: (무료)누끼+칼선작업' },
+  { name: '중급 디자인', option: '디자인 요청(출력파일이 없는 경우): 중급 디자인' },
+];
 const NAMES = ['김민준', '이서연', '박지호', '최수아', '정예준', '강하은', '조도윤', '윤지우'];
 const ADDRESSES = [
   '(06236) 서울 강남구 테헤란로 123 4층',
@@ -30,6 +36,7 @@ function createMockSource({ random = Math.random, now = () => new Date() } = {})
       channel: 'smartstore',
       channel_order_id: `MOCK-O${id}`,
       channel_item_id: `MOCK-P${id}`,
+      item_type: 'main',
       product_name: product.name,
       option_text: pick(product.options),
       quantity: 1 + Math.floor(random() * 3),
@@ -55,6 +62,20 @@ function createMockSource({ random = Math.random, now = () => new Date() } = {})
         const o = newOrder();
         orders.push(o);
         changed.push(o);
+        // 절반쯤은 추가상품이 같이 들어온다
+        if (random() < 0.5) {
+          const addon = pick(ADDONS);
+          const extra = {
+            ...o,
+            channel_item_id: `${o.channel_item_id}-A`,
+            item_type: 'addon',
+            product_name: addon.name,
+            option_text: addon.option,
+            quantity: 1,
+          };
+          orders.push(extra);
+          changed.push(extra);
+        }
       }
       // 아직 발주확인 안 된 기존 주문 중 일부를 "판매자센터에서 발주확인함" 으로 바꾼다
       for (const o of orders) {

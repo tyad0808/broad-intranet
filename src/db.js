@@ -32,6 +32,9 @@ function addColumn(db, table, column, definition) {
 function addMissingColumns(db) {
   // 5단계: 직원이 주문 카드를 저장할 때마다 1씩 올린다 (동시에 고칠 때 덮어쓰기 방지용)
   addColumn(db, 'orders', 'version', 'INTEGER NOT NULL DEFAULT 0');
+  // 본상품(main) / 추가상품(addon). 같은 주문번호 안에서 추가상품은 본상품 아래에 묶어 보여준다
+  addColumn(db, 'orders', 'item_type', "TEXT NOT NULL DEFAULT 'main'");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_orders_group ON orders(channel, channel_order_id)');
 }
 
 function migrate(db) {

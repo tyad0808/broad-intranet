@@ -32,7 +32,7 @@ async function collect() {
   const result = await collector.run();
   const time = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' });
   if (result.ok) {
-    console.log(`[${time}] 주문 수집: 새 주문 ${result.created}건, 바뀐 주문 ${result.updated}건, 지난 주문 보관 ${result.archived || 0}건`);
+    console.log(`[${time}] 주문 수집: 새 주문 ${result.createdOrders}건, 바뀐 상품주문 ${result.updated}건, 지난 주문 보관 ${result.archived || 0}건`);
   } else {
     console.error(`[${time}] 주문 수집 실패: ${result.error}`);
   }

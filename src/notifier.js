@@ -47,7 +47,8 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
   function unassignedCount() {
     const last = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
     return db.prepare(
-      'SELECT COUNT(*) AS n FROM orders WHERE assignee_id IS NULL AND (stage_id IS NULL OR stage_id != ?)'
+      // 주문 묶음(채널 + 주문번호) 단위로 센다: 본상품과 추가상품은 1건
+      "SELECT COUNT(DISTINCT channel || ':' || channel_order_id) AS n FROM orders WHERE assignee_id IS NULL AND (stage_id IS NULL OR stage_id != ?)"
     ).get(last ? last.id : -1).n;
   }
 
@@ -84,13 +85,18 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
   function afterCollect(result) {
     if (!result || !result.ok) return;
     if (result.created > 0) {
-      // 알림 기록(notifications)은 수집기가 주문마다 이미 남겼으므로 여기서는 화면에만 보낸다
+      // 알림 기록(notifications)은 수집기가 주문마다 이미 남겼으므로 여기서는 화면에만 보낸다.
+      // 본상품과 추가상품을 1건으로 세고, 이름은 본상품 이름으로 보여준다
+      const marks = result.createdIds.map(() => '?').join(',');
+      const orderCount = db.prepare(
+        `SELECT COUNT(DISTINCT channel || ':' || channel_order_id) AS n FROM orders WHERE id IN (${marks})`
+      ).get(...result.createdIds).n;
       const names = db.prepare(
-        `SELECT product_name FROM orders WHERE id IN (${result.createdIds.map(() => '?').join(',')}) LIMIT 3`
+        `SELECT product_name FROM orders WHERE id IN (${marks}) AND item_type != 'addon' ORDER BY id LIMIT 3`
       ).all(...result.createdIds).map(r => r.product_name);
-      const more = result.created > names.length ? ` 외 ${result.created - names.length}건` : '';
+      const more = orderCount > names.length ? ` 외 ${orderCount - names.length}건` : '';
       notify('new_order', {
-        title: `신규 발주 ${result.created}건`,
+        title: `신규 발주 ${orderCount}건`,
         body: names.join(', ') + more,
         url: '/?view=unassigned',
       }, everyone);
