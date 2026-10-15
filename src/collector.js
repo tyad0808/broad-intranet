@@ -52,17 +52,22 @@ function applyOrders(db, orders) {
   `);
   // 같은 주문번호의 다른 상품이 이미 카드로 있으면 그 카드의 사내 칸(단계·담당자·납기·메모)을 이어받는다
   const groupSibling = db.prepare(
-    'SELECT stage_id, assignee_id, due_date, memo, nas_path FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY id LIMIT 1'
+    'SELECT stage_id, assignee_id, due_date, memo, nas_path, design_stage_id FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY id LIMIT 1'
   );
   const insert = (o, stage) => {
     const sib = groupSibling.get(o.channel, o.channel_order_id);
-    return insertRow.run(
+    const result = insertRow.run(
       o.channel, o.channel_order_id, o.channel_item_id, o.item_type || 'main', o.product_name, o.option_text, o.quantity,
       o.buyer_name, o.receiver_name, o.receiver_phone, o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed,
       o.claim_type || null, o.claim_status || null,
       sib && sib.stage_id ? sib.stage_id : stage, sib ? sib.assignee_id : null,
       sib ? sib.due_date : null, sib ? sib.memo : null, sib ? sib.nas_path : null
     );
+    // 같은 주문의 디자인 단계도 이어받는다
+    if (sib && sib.design_stage_id) {
+      db.prepare('UPDATE orders SET design_stage_id = ? WHERE id = ?').run(sib.design_stage_id, result.lastInsertRowid);
+    }
+    return result;
   };
   // 채널에서 온 칸만 고친다. 담당자·작업 단계·메모 같은 사내 칸은 건드리지 않는다.
   const update = db.prepare(`

@@ -49,6 +49,8 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'depositor', 'TEXT');
   addColumn(db, 'orders', 'buyer_phone', 'TEXT');
   widenOrderActions(db);
+  // 디자인 단계 (비어 있으면 첫 번째 디자인 단계로 본다)
+  addColumn(db, 'orders', 'design_stage_id', 'INTEGER REFERENCES design_stages(id)');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.
@@ -171,6 +173,14 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_order_actions_order ON order_actions(channel, channel_order_id);
 
+    -- 디자인 단계 (디자이너가 고르는 진행 상태). 주문 단계(발주·발주확인·발송)와 따로 관리한다
+    CREATE TABLE IF NOT EXISTS design_stages (
+      id         INTEGER PRIMARY KEY,
+      name       TEXT    NOT NULL UNIQUE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      active     INTEGER NOT NULL DEFAULT 1
+    );
+
     -- 회사 일정 (주문 목록 옆 달력). 승인된 직원 누구나 넣고, 넣은 사람과 관리자만 고치거나 지운다
     CREATE TABLE IF NOT EXISTS events (
       id          INTEGER PRIMARY KEY,
@@ -197,14 +207,48 @@ function migrate(db) {
   `);
 }
 
-// 디자이너가 고르는 단계 (발주·발주확인·발송은 채널 처리에 따라 자동으로 움직인다)
-const DESIGN_STAGE_NAMES = ['디자인작업 전', '작업 중', '컨펌 후 파일전송'];
+// 주문 단계: 채널 처리(발주확인·발송처리)에 따라 자동으로 움직인다
+const ORDER_STAGE_NAMES = ['발주', '발주확인', '발송'];
+// 디자인 단계: 디자이너가 직접 고른다 (관리자가 이름·순서를 바꿀 수 있음)
+const DESIGN_STAGE_NAMES = ['디자인 작업 전', '디자인 작업 중', '컨펌 후 파일전송'];
+
+// 예전에는 디자인 단계가 주문 단계 사이에 섞여 있었다 (발주 → 발주확인 → 디자인… → 발송).
+// 한 번만: 그 단계들을 design_stages 로 옮기고, 그 단계에 있던 주문은 디자인 단계를 그대로 기억한 채
+// 주문 단계를 발주확인(채널에서 발주확인됨) 또는 발주로 되돌린다.
+function splitDesignStages(db, insertSetting) {
+  if (db.prepare("SELECT value FROM settings WHERE key = 'design_split_v1'").get()) return;
+  const setting = key => Number((db.prepare('SELECT value FROM settings WHERE key = ?').get(key) || {}).value) || null;
+  const stageNew = setting('stage_new');
+  const stageConfirmed = setting('stage_confirmed');
+  const last = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
+  const keep = new Set([stageNew, stageConfirmed, last && last.id].filter(Boolean));
+  const old = db.prepare('SELECT * FROM work_stages ORDER BY sort_order').all().filter(s => !keep.has(s.id));
+
+  const hasDesign = db.prepare('SELECT COUNT(*) AS n FROM design_stages').get().n > 0;
+  const insertDesign = db.prepare('INSERT OR IGNORE INTO design_stages (name, sort_order, active) VALUES (?, ?, ?)');
+  const idOf = name => db.prepare('SELECT id FROM design_stages WHERE name = ?').get(name).id;
+  if (!hasDesign) {
+    const source = old.length ? old.map(s => [s.name, s.active]) : DESIGN_STAGE_NAMES.map(n => [n, 1]);
+    source.forEach(([name, active], i) => insertDesign.run(name, (i + 1) * 10, active));
+  }
+  for (const s of old) {
+    const designId = hasDesign ? null : idOf(s.name);
+    db.prepare(`
+      UPDATE orders SET design_stage_id = COALESCE(?, design_stage_id),
+        stage_id = CASE WHEN channel != 'manual' AND channel_confirmed = 1 THEN ? ELSE ? END,
+        version = version + 1
+      WHERE stage_id = ?
+    `).run(designId, stageConfirmed || stageNew, stageNew, s.id);
+    db.prepare('DELETE FROM work_stages WHERE id = ?').run(s.id);
+  }
+  insertSetting.run('design_split_v1', '1');
+}
 
 // 예전 기본 단계 이름을 새 이름으로 한 번만 바꾼다 (관리자가 이미 다른 이름으로 바꿨으면 건드리지 않음)
 function renameDesignStages(db, insertSetting) {
   const done = db.prepare("SELECT value FROM settings WHERE key = 'stage_names_v2'").get();
   if (done) return;
-  const pairs = [['디자인작업', DESIGN_STAGE_NAMES[0]], ['컨펌', DESIGN_STAGE_NAMES[1]], ['제작', DESIGN_STAGE_NAMES[2]]];
+  const pairs = [['디자인작업', '디자인작업 전'], ['컨펌', '작업 중'], ['제작', '컨펌 후 파일전송']];
   for (const [from, to] of pairs) {
     const taken = db.prepare('SELECT 1 FROM work_stages WHERE name = ?').get(to);
     if (!taken) db.prepare('UPDATE work_stages SET name = ? WHERE name = ?').run(to, from);
@@ -227,10 +271,11 @@ function seed(db) {
   transaction(db, () => {
     const hasStages = db.prepare('SELECT COUNT(*) AS n FROM work_stages').get().n > 0;
     if (!hasStages) {
-      ['발주', '발주확인', ...DESIGN_STAGE_NAMES, '발송'].forEach((name, i) =>
-        insertStage.run(name, (i + 1) * 10)
-      );
+      ORDER_STAGE_NAMES.forEach((name, i) => insertStage.run(name, (i + 1) * 10));
+      DESIGN_STAGE_NAMES.forEach((name, i) =>
+        db.prepare('INSERT OR IGNORE INTO design_stages (name, sort_order) VALUES (?, ?)').run(name, (i + 1) * 10));
       insertSetting.run('stage_names_v2', '1');
+      insertSetting.run('design_split_v1', '1');
     }
     renameDesignStages(db, insertSetting);
 
@@ -250,6 +295,8 @@ function seed(db) {
     const confirmedStage = stageId('발주확인');
     if (newStage) insertSetting.run('stage_new', newStage);
     if (confirmedStage) insertSetting.run('stage_confirmed', confirmedStage);
+
+    splitDesignStages(db, insertSetting);
 
     insertSetting.run('unassigned_threshold', '5');      // 미지정 알림 기준 건수
     insertSetting.run('unassigned_repeat_minutes', '30'); // 해소될 때까지 다시 알리는 간격

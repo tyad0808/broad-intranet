@@ -28,6 +28,7 @@ async function setup(t) {
   ctx.idOf = item => db.prepare('SELECT id FROM orders WHERE channel_item_id = ?').get(item).id;
   ctx.row = item => ({ ...db.prepare('SELECT * FROM orders WHERE channel_item_id = ?').get(item) });
   ctx.stageId = name => db.prepare('SELECT id FROM work_stages WHERE name = ?').get(name).id;
+  ctx.designId = name => db.prepare('SELECT id FROM design_stages WHERE name = ?').get(name).id;
   ctx.kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   return ctx;
 }
@@ -53,17 +54,17 @@ test('승인 대기 직원은 주문 카드에 들어갈 수 없다', async t =>
   assert.strictEqual((await b.request(`/orders/${idOf('P1')}`)).location, '/pending');
 });
 
-test('담당 디자이너, 작업 단계, 납기, 메모, NAS 경로를 저장한다', async t => {
-  const { kim, idOf, row, leeId, stageId } = await setup(t);
+test('담당 디자이너, 디자인 단계, 납기, 메모, NAS 경로를 저장한다', async t => {
+  const { kim, idOf, row, leeId, designId } = await setup(t);
   const res = await save(kim, idOf('P1'), {
-    assignee_id: String(leeId), stage_id: String(stageId('디자인작업 전')), due_date: '2026-10-20',
+    assignee_id: String(leeId), design_stage_id: String(designId('디자인 작업 중')), due_date: '2026-10-20',
     memo: '금박 추가 요청', nas_path: '\\\\NAS\\작업\\P1',
   });
   assert.strictEqual(res.status, 302);
   const r = row('P1');
   assert.deepStrictEqual(
-    [r.assignee_id, r.stage_id, r.due_date, r.memo, r.nas_path, r.version],
-    [leeId, stageId('디자인작업 전'), '2026-10-20', '금박 추가 요청', '\\\\NAS\\작업\\P1', 1]
+    [r.assignee_id, r.design_stage_id, r.due_date, r.memo, r.nas_path, r.version],
+    [leeId, designId('디자인 작업 중'), '2026-10-20', '금박 추가 요청', '\\\\NAS\\작업\\P1', 1]
   );
 });
 
@@ -212,14 +213,14 @@ test('목록에서 담당자를 지정하면 추가상품까지 같이 지정된
 });
 
 test('주문 카드에서 저장하면 같은 주문의 상품 모두에 적용되고, 카드에 상품이 모두 보인다', async t => {
-  const { kim, idOf, row, stageId } = await groupSetup(t);
+  const { kim, idOf, row, designId } = await groupSetup(t);
   const page = await kim.request(`/orders/${idOf('P1')}`);
   assert.match(page.text, /무료 양면테이프/);
   assert.match(page.text, /상품 2개에 함께 저장됩니다/);
-  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업 전')), due_date: '2026-10-22', memo: '같이 작업' });
+  await save(kim, idOf('P1'), { design_stage_id: String(designId('컨펌 후 파일전송')), due_date: '2026-10-22', memo: '같이 작업' });
   for (const p of ['P1', 'P9']) {
     const r = row(p);
-    assert.deepStrictEqual([r.stage_id, r.due_date, r.memo], [stageId('디자인작업 전'), '2026-10-22', '같이 작업']);
+    assert.deepStrictEqual([r.design_stage_id, r.due_date, r.memo], [designId('컨펌 후 파일전송'), '2026-10-22', '같이 작업']);
   }
 });
 
@@ -288,30 +289,7 @@ test('상태 칸의 큰 숫자는 판매자센터처럼 상품주문 단위로 �
   assert.match(text, /st-new [^"]*">\s*<span class="ship-label">신규주문<\/span>\s*<strong class="ship-count">4<small>건<\/small><\/strong>\s*<span class="ship-sub">주문 3건/);
 });
 
-test('탭 아래 단계 버튼에 단계별 건수가 보이고, 누르면 그 단계만 본다', async t => {
-  const { kim, idOf, stageId } = await setup(t);
-  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업 전')) });
-  const text = (await kim.request('/')).text;
-  assert.match(text, /모든 단계 <span class="count">3</);
-  assert.match(text, /디자인작업 전 <span class="count">1</);
-  assert.match(text, /발주 <span class="count">2</);
-  const design = (await kim.request(`/?stage=${stageId('디자인작업 전')}`)).text;
-  assert.match(design, />상품1</);
-  assert.doesNotMatch(design, />상품2</);
-  assert.match(design, /모든 단계 <span class="count">3</, '단계를 골라도 다른 단계 건수는 그대로 보인다');
-});
 
-test('목록에서 작업 단계를 바로 바꾸면 추가상품까지 같이 바뀐다', async t => {
-  const { db, kim, idOf, row, stageId } = await setup(t);
-  applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '추가품' })]);
-  const list = (await kim.request('/')).text;
-  assert.match(list, new RegExp(`action="/orders/${idOf('P1')}/stage"`));
-  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('작업 중')), back: '/' });
-  assert.deepStrictEqual([row('P1').stage_id, row('P9').stage_id], [stageId('작업 중'), stageId('작업 중')]);
-  assert.strictEqual(row('P1').version, 1);
-  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: '9999', back: '/' });
-  assert.strictEqual(row('P1').stage_id, stageId('작업 중'), '없는 단계로는 못 바꾼다');
-});
 
 test('납기 날짜로 목록을 거르고, 달력에는 날짜별 출고 예정 건수가 보인다', async t => {
   const { db, kim, idOf } = await setup(t);
@@ -326,34 +304,7 @@ test('납기 날짜로 목록을 거르고, 달력에는 날짜별 출고 예정
   assert.ok(idOf('P1'));
 });
 
-test('목록의 단계 선택에는 디자인 단계만 있고, 디자이너가 아닌 직원은 단계를 바꿀 수 없다', async t => {
-  const { baseUrl, kim, idOf, row, stageId } = await setup(t);
-  const list = (await kim.request('/')).text;
-  const select = list.slice(list.indexOf('class="stage-select'), list.indexOf('</select>', list.indexOf('class="stage-select')));
-  assert.match(select, /디자인작업 전/);
-  assert.match(select, /컨펌 후 파일전송/);
-  assert.doesNotMatch(select, new RegExp(`value="${stageId('발송')}"`), '자동 단계(발송)는 고를 수 없다');
-  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('발송')), back: '/' });
-  assert.strictEqual(row('P1').stage_id, stageId('발주'));
 
-  const cs = await loginAs(baseUrl, 'cs@broad.test');
-  const csList = (await cs.request('/')).text;
-  assert.doesNotMatch(csList, /class="stage-select/);
-  await cs.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('작업 중')), back: '/' });
-  assert.strictEqual(row('P1').stage_id, stageId('발주'));
-  await save(cs, idOf('P1'), { stage_id: String(stageId('작업 중')) });
-  assert.strictEqual(row('P1').stage_id, stageId('발주'), '주문 카드에서도 못 바꾼다');
-  await save(cs, idOf('P1'), { memo: 'CS 메모' });
-  assert.strictEqual(row('P1').memo, 'CS 메모', '단계 말고 다른 칸은 저장된다');
-});
-
-test('관리자는 주문 카드에서 자동 단계(발송 등)도 손으로 고칠 수 있다', async t => {
-  const { db, baseUrl, idOf, row, stageId } = await setup(t);
-  addUser(db, { email: 'boss@broad.test', role: 'admin' });
-  const boss = await loginAs(baseUrl, 'boss@broad.test');
-  await save(boss, idOf('P1'), { stage_id: String(stageId('발송')) });
-  assert.strictEqual(row('P1').stage_id, stageId('발송'));
-});
 
 test('카드에는 구매자 이름을 먼저, 받는 분이 다르면 괄호로 함께 보여준다', async t => {
   const { db, kim } = await setup(t);
@@ -363,19 +314,57 @@ test('카드에는 구매자 이름을 먼저, 받는 분이 다르면 괄호로
   assert.match(text, /<strong class="buyer">박지호<\/strong> ·/);
 });
 
-test("디자인 단계를 잘못 골랐으면 '선택 안 함' 으로 원래 자동 단계(발주·발주확인)로 되돌린다", async t => {
-  const { db, kim, idOf, row, stageId } = await setup(t);
-  applyOrders(db, [order(2, { channel_confirmed: 1 })]);
-  for (const [item, back] of [['P1', '발주'], ['P2', '발주확인']]) {
-    await kim.submit('/', `/orders/${idOf(item)}/stage`, { stage_id: String(stageId('디자인작업 전')), back: '/' });
-    assert.strictEqual(row(item).stage_id, stageId('디자인작업 전'));
-    const list = (await kim.request('/')).text;
-    assert.match(list, new RegExp(`<option value="reset">선택 안 함 \\(${back}\\)`));
-    await kim.submit('/', `/orders/${idOf(item)}/stage`, { stage_id: 'reset', back: '/' });
-    assert.strictEqual(row(item).stage_id, stageId(back));
-  }
-  // 주문 카드에서도
-  await save(kim, idOf('P1'), { stage_id: String(stageId('작업 중')) });
-  await save(kim, idOf('P1'), { stage_id: 'reset' });
-  assert.strictEqual(row('P1').stage_id, stageId('발주'));
+
+test('주문 단계·디자인 단계 버튼이 따로 있고 건수가 보이며, 누르면 그 단계만 본다', async t => {
+  const { kim, idOf, designId, stageId } = await setup(t);
+  await save(kim, idOf('P1'), { design_stage_id: String(designId('디자인 작업 중')) });
+  const text = (await kim.request('/')).text;
+  assert.match(text, /aria-label="주문 단계"[\s\S]*?발주 <span class="count">3</);
+  assert.match(text, /aria-label="디자인 단계"[\s\S]*?디자인 작업 전 <span class="count">2</);
+  assert.match(text, /디자인 작업 중 <span class="count">1</);
+  const working = (await kim.request(`/?ds=${designId('디자인 작업 중')}`)).text;
+  assert.match(working, />상품1</);
+  assert.doesNotMatch(working, />상품2</);
+  assert.match(working, /디자인 작업 전 <span class="count">2</, '디자인 단계를 골라도 다른 디자인 단계 건수는 그대로');
+  const byStage = (await kim.request(`/?stage=${stageId('발주')}`)).text;
+  assert.match(byStage, />상품2</);
+});
+
+test('새 주문의 디자인 단계는 디자인 작업 전이고, 목록에서 디자이너가 바로 바꾸면 추가상품까지 같이 바뀐다', async t => {
+  const { db, kim, idOf, row, designId } = await setup(t);
+  applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '추가품' })]);
+  const list = (await kim.request('/')).text;
+  const select = list.slice(list.indexOf(`action="/orders/${idOf('P1')}/design"`));
+  assert.match(select.slice(0, 900), new RegExp(`value="${designId('디자인 작업 전')}" selected>디자인 작업 전`));
+  assert.match(list, /class="pill stage"[^>]*>발주</, '주문 단계는 따로 표시');
+  await kim.submit('/', `/orders/${idOf('P1')}/design`, { design_stage_id: String(designId('디자인 작업 중')), back: '/' });
+  assert.deepStrictEqual([row('P1').design_stage_id, row('P9').design_stage_id], [designId('디자인 작업 중'), designId('디자인 작업 중')]);
+  // 잘못 골랐으면 다시 '디자인 작업 전' 으로
+  await kim.submit('/', `/orders/${idOf('P1')}/design`, { design_stage_id: String(designId('디자인 작업 전')), back: '/' });
+  assert.strictEqual(row('P1').design_stage_id, designId('디자인 작업 전'));
+  assert.strictEqual(row('P1').stage_id, row('P2').stage_id, '디자인 단계를 바꿔도 주문 단계는 그대로');
+});
+
+test('디자이너가 아닌 직원은 디자인 단계를, 관리자가 아닌 직원은 주문 단계를 바꿀 수 없다', async t => {
+  const { db, baseUrl, kim, idOf, row, designId, stageId } = await setup(t);
+  const cs = await loginAs(baseUrl, 'cs@broad.test');
+  assert.doesNotMatch((await cs.request('/')).text, /\/design"/);
+  await cs.submit('/', `/orders/${idOf('P1')}/design`, { design_stage_id: String(designId('디자인 작업 중')), back: '/' });
+  await save(cs, idOf('P1'), { design_stage_id: String(designId('디자인 작업 중')) });
+  assert.strictEqual(row('P1').design_stage_id, null);
+  await save(cs, idOf('P1'), { memo: 'CS 메모' });
+  assert.strictEqual(row('P1').memo, 'CS 메모', '다른 칸은 저장된다');
+
+  await save(kim, idOf('P1'), { stage_id: String(stageId('발송')) });
+  assert.strictEqual(row('P1').stage_id, stageId('발주'), '디자이너도 주문 단계는 못 바꾼다');
+  addUser(db, { email: 'boss@broad.test', role: 'admin' });
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  await save(boss, idOf('P1'), { stage_id: String(stageId('발송')) });
+  assert.strictEqual(row('P1').stage_id, stageId('발송'), '관리자는 주문 단계를 손으로 고칠 수 있다');
+});
+
+test('수기 주문 등록 버튼은 목록 바로 위 오른쪽에 있다', async t => {
+  const { kim } = await setup(t);
+  const text = (await kim.request('/')).text;
+  assert.match(text, /class="list-toolbar"[\s\S]*?＋ 수기 주문 등록/);
 });

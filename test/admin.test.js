@@ -103,25 +103,39 @@ test('작업 단계를 추가·이름변경·순서변경·숨기기 할 수 있
   const page = '/admin/stages';
 
   await press(admin, '/admin/stages', { name: '후가공' }, page);
-  assert.deepStrictEqual(names(), ['발주', '발주확인', '디자인작업 전', '작업 중', '컨펌 후 파일전송', '발송', '후가공']);
+  assert.deepStrictEqual(names(), ['발주', '발주확인', '발송', '후가공']);
 
   await press(admin, `/admin/stages/${idOf('후가공')}/move`, { dir: 'up' }, page);
   assert.deepStrictEqual(names().slice(-2), ['후가공', '발송']);
 
-  await press(admin, `/admin/stages/${idOf('디자인작업 전')}/rename`, { name: '시안' }, page);
-  assert.ok(names().includes('시안'));
+  await press(admin, `/admin/stages/${idOf('발주')}/rename`, { name: '접수' }, page);
+  assert.ok(names().includes('접수'));
 
-  await press(admin, `/admin/stages/${idOf('작업 중')}/toggle`, {}, page);
-  assert.ok(!names().includes('작업 중'));
+  await press(admin, `/admin/stages/${idOf('후가공')}/toggle`, {}, page);
+  assert.ok(!names().includes('후가공'));
+});
+
+test('디자인 단계도 같은 화면에서 추가·이름변경·순서변경·숨기기 할 수 있다', async t => {
+  const { db, admin } = await setup(t);
+  const names = () => db.prepare('SELECT name FROM design_stages WHERE active = 1 ORDER BY sort_order').all().map(r => r.name);
+  const idOf = name => db.prepare('SELECT id FROM design_stages WHERE name = ?').get(name).id;
+  const page = '/admin/stages';
+  assert.match((await admin.request(page)).text, /디자인 단계/);
+  await press(admin, '/admin/design-stages', { name: '시안 수정' }, page);
+  await press(admin, `/admin/design-stages/${idOf('시안 수정')}/move`, { dir: 'up' }, page);
+  assert.deepStrictEqual(names(), ['디자인 작업 전', '디자인 작업 중', '시안 수정', '컨펌 후 파일전송']);
+  await press(admin, `/admin/design-stages/${idOf('디자인 작업 중')}/rename`, { name: '작업 중' }, page);
+  await press(admin, `/admin/design-stages/${idOf('시안 수정')}/toggle`, {}, page);
+  assert.deepStrictEqual(names(), ['디자인 작업 전', '작업 중', '컨펌 후 파일전송']);
 });
 
 test('이미 있는 이름으로 바꾸면 거부하고 안내한다', async t => {
   const { db, admin } = await setup(t);
-  const id = db.prepare("SELECT id FROM work_stages WHERE name = '컨펌 후 파일전송'").get().id;
+  const id = db.prepare("SELECT id FROM work_stages WHERE name = '발주확인'").get().id;
   await press(admin, `/admin/stages/${id}/rename`, { name: '발송' }, '/admin/stages');
   const page = await admin.request('/admin/stages');
   assert.match(page.text, /이미 있는 이름/);
-  assert.strictEqual(db.prepare('SELECT name FROM work_stages WHERE id = ?').get(id).name, '컨펌 후 파일전송');
+  assert.strictEqual(db.prepare('SELECT name FROM work_stages WHERE id = ?').get(id).name, '발주확인');
 });
 
 test('작업 단계는 최소 1개는 남아야 한다', async t => {

@@ -5,7 +5,7 @@
 // 담당자·작업 단계·납기·메모는 주문 단위로 함께 바뀐다.
 const express = require('express');
 const { CHANNELS } = require('../channels/labels');
-const { ENDED_SQL, getSetting } = require('../collector');
+const { ENDED_SQL } = require('../collector');
 const { buildMonth, COLORS } = require('./calendar');
 const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
@@ -46,14 +46,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
     return row ? row.id : -1;
   };
   const stages = () => db.prepare('SELECT id, name, active FROM work_stages ORDER BY sort_order').all();
-  // 발주·발주확인·발송(마지막 단계)은 채널 처리에 따라 자동으로 움직이는 단계.
-  // 그 사이의 단계(디자인작업 전·작업 중·컨펌 후 파일전송 등)만 디자이너가 직접 고른다.
-  const autoStageIds = () => new Set(
-    [Number(getSetting(db, 'stage_new')), Number(getSetting(db, 'stage_confirmed')), lastStageId()].filter(Boolean)
-  );
-  const designStages = () => {
-    const auto = autoStageIds();
-    return stages().filter(s => s.active && !auto.has(s.id));
+  // 디자인 단계 (주문 단계와 따로). 비어 있는 주문은 첫 번째 디자인 단계로 본다
+  const designStages = () => db.prepare('SELECT id, name, active FROM design_stages ORDER BY sort_order').all();
+  const firstDesignId = () => {
+    const row = db.prepare('SELECT id FROM design_stages WHERE active = 1 ORDER BY sort_order LIMIT 1').get();
+    return row ? row.id : null;
   };
   // 담당 디자이너로 고를 수 있는 사람: 승인된 계정 + '디자이너 목록'이 켜진 직무
   const designers = () => db.prepare(`
@@ -61,17 +58,6 @@ function orderRoutes(db, notifier, actions, collector = null) {
     WHERE u.status = 'active' AND j.is_designer = 1 ORDER BY u.name
   `).all();
   // 실제 주문이 있는 채널만 골라 보기 목록에 보여준다
-  // '선택 안 함' 으로 되돌릴 때 갈 자동 단계: 채널에서 발주확인된 주문이면 발주확인, 아니면 발주
-  const resetStageId = order => {
-    const confirmed = order.channel !== 'manual' && groupItems(order).every(i => i.channel_confirmed);
-    return Number(getSetting(db, confirmed ? 'stage_confirmed' : 'stage_new')) || null;
-  };
-  const resetStageName = order => {
-    const id = resetStageId(order);
-    const row = id && db.prepare('SELECT name FROM work_stages WHERE id = ?').get(id);
-    return row ? row.name : '처음 단계';
-  };
-
   // 디자인 단계를 고를 수 있는 사람: 디자이너 + 관리자
   const canPickStage = user => user.role === 'admin' || designers().some(d => d.id === user.id);
   const channelsInUse = () => db.prepare('SELECT DISTINCT channel FROM orders ORDER BY channel').all().map(r => r.channel);
@@ -81,6 +67,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const st = SHIP_STATES[req.query.st] ? req.query.st : '';
     const view = st ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
     const stageFilter = Number(req.query.stage) || null;
+    // 디자인 단계 거르기 (ds). 비어 있는 주문은 첫 번째 디자인 단계로 본다
+    const designFilter = Number(req.query.ds) || null;
+    const firstDesign = firstDesignId() || -1;
+    const DESIGN_OF = `COALESCE(o.design_stage_id, ${Number(firstDesign)})`;
     const channel = CHANNELS[req.query.ch] ? req.query.ch : '';
     const sort = req.query.sort === 'due' ? 'due' : 'recent';
     const q = String(req.query.q || '').trim().slice(0, 50);
@@ -113,8 +103,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
       params.push(...Array(7).fill(`%${q}%`));
     }
     const sqlWhere = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
-    const whereSql = sqlWhere(stageFilter ? [...where, 'o.stage_id = ?'] : where);
-    const listParams = stageFilter ? [...params, stageFilter] : params;
+    // 단계 건수를 셀 때는 그 단계 필터만 빼고 센다
+    const withStage = (list, p) => (stageFilter ? [[...list, 'o.stage_id = ?'], [...p, stageFilter]] : [list, p]);
+    const withDesign = (list, p) => (designFilter ? [[...list, `${DESIGN_OF} = ?`], [...p, designFilter]] : [list, p]);
+    const [listWhere, listParams] = withDesign(...withStage(where, params));
+    const whereSql = sqlWhere(listWhere);
     // 묶음 단위 조건: 진행 중 탭들은 채널에서 끝난 주문을 빼고, 상태 칸을 눌렀으면 그 상태만
     const having = [];
     if (view !== 'all') having.push(`${GROUP_ENDED} = 0`);
@@ -159,18 +152,23 @@ function orderRoutes(db, notifier, actions, collector = null) {
       g.shipped = g.items.find(i => i.shipped_at) || null;
     }
 
-    // 단계 버튼에 보여줄 건수: 지금 탭·검색 조건 그대로, 단계만 빼고 센다
-    const stageCounts = {};
-    let stageTotal = 0;
-    for (const r of db.prepare(`
-      SELECT stage_id, COUNT(*) AS n FROM (
-        SELECT MIN(o.stage_id) AS stage_id FROM orders o ${sqlWhere(where)}
-        GROUP BY o.channel, o.channel_order_id ${havingSql}
-      ) GROUP BY stage_id
-    `).all(...params)) {
-      stageCounts[r.stage_id] = r.n;
-      stageTotal += r.n;
-    }
+    // 단계 버튼에 보여줄 건수: 지금 탭·검색 조건 그대로, 그 단계 필터만 빼고 센다
+    const countBy = (expr, [list, p]) => {
+      const out = {};
+      let total = 0;
+      for (const r of db.prepare(`
+        SELECT k, COUNT(*) AS n FROM (
+          SELECT MIN(${expr}) AS k FROM orders o ${sqlWhere(list)}
+          GROUP BY o.channel, o.channel_order_id ${havingSql}
+        ) GROUP BY k
+      `).all(...p)) {
+        out[r.k] = r.n;
+        total += r.n;
+      }
+      return { counts: out, total };
+    };
+    const stageCount = countBy('o.stage_id', withDesign(where, params));
+    const designCount = countBy(DESIGN_OF, withStage(where, params));
 
     // 탭 건수와 채널 상태 칸 건수 (주문 묶음 단위, 채널을 골랐으면 그 채널만)
     const countWhere = channel ? 'WHERE o.channel = ?' : '';
@@ -219,8 +217,12 @@ function orderRoutes(db, notifier, actions, collector = null) {
       st,
       SHIP_STATES,
       itemCounts,
-      stageCounts,
-      stageTotal,
+      stageCounts: stageCount.counts,
+      stageTotal: stageCount.total,
+      designCounts: designCount.counts,
+      designTotal: designCount.total,
+      designFilter,
+      firstDesign,
       stageFilter,
       due,
       channel,
@@ -230,7 +232,6 @@ function orderRoutes(db, notifier, actions, collector = null) {
       stages: stages(),
       designStages: designStages(),
       canPickStage: canPickStage(req.user),
-      resetStageName,
       designers: designers(),
       today: kstToday(),
       currentUrl: req.originalUrl,
@@ -258,26 +259,21 @@ function orderRoutes(db, notifier, actions, collector = null) {
     }
   });
 
-  // 목록에서 바로 작업 단계 바꾸기 (주문 묶음 전체)
-  router.post('/orders/:id/stage', (req, res) => {
+  // 목록에서 바로 디자인 단계 바꾸기 (주문 묶음 전체, 디자이너·관리자만)
+  router.post('/orders/:id/design', (req, res) => {
     const back = safeBack(req.body.back);
     const order = findOrder(req.params.id);
     if (!order) return flashBack(req, res, back, { type: 'error', message: '주문을 찾을 수 없습니다.' });
     if (!canPickStage(req.user)) {
       return flashBack(req, res, back, { type: 'error', message: '디자인 단계는 디자이너만 바꿀 수 있습니다.' });
     }
-    // '선택 안 함': 잘못 고른 디자인 단계를 원래 자동 단계로 되돌린다
-    const stageId = req.body.stage_id === 'reset' ? resetStageId(order) : Number(req.body.stage_id);
-    const stage = req.body.stage_id === 'reset'
-      ? stages().find(s => s.id === stageId)
-      : designStages().find(s => s.id === stageId);
-    if (!stage) return flashBack(req, res, back, { type: 'error', message: '고를 수 없는 작업 단계입니다.' });
+    const stage = designStages().find(s => s.id === Number(req.body.design_stage_id) && s.active);
+    if (!stage) return flashBack(req, res, back, { type: 'error', message: '고를 수 없는 디자인 단계입니다.' });
     const items = groupItems(order);
     db.prepare(
-      "UPDATE orders SET stage_id = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?"
+      "UPDATE orders SET design_stage_id = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?"
     ).run(stage.id, order.channel, order.channel_order_id);
     notifier.ordersChanged(items.map(i => i.id), req.user.id);
-    notifier.checkUnassigned();
     req.session.flash = { type: 'ok', message: `'${items[0].product_name}' → ${stage.name}` };
     res.redirect(`${back}#o${items[0].id}`);
   });
@@ -441,8 +437,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
       designers: designers(),
       isDesigner: designers().some(d => d.id === req.user.id),
       designStages: designStages(),
+      currentDesignId: items[0].design_stage_id || firstDesignId(),
       canPickStage: canPickStage(req.user),
-      resetStageName,
       back: safeBack(req.query.back),
       today: kstToday(),
     });
@@ -470,10 +466,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
 
     // 같은 주문번호의 상품(본상품 + 추가상품)에 모두 같은 값을 넣는다
     db.prepare(`
-      UPDATE orders SET assignee_id = ?, stage_id = ?, due_date = ?, memo = ?, nas_path = ?,
+      UPDATE orders SET assignee_id = ?, stage_id = ?, design_stage_id = ?, due_date = ?, memo = ?, nas_path = ?,
         version = version + 1, updated_at = datetime('now')
       WHERE channel = ? AND channel_order_id = ?
-    `).run(changes.assignee_id, changes.stage_id, changes.due_date, changes.memo, changes.nas_path,
+    `).run(changes.assignee_id, changes.stage_id, changes.design_stage_id, changes.due_date, changes.memo, changes.nas_path,
       order.channel, order.channel_order_id);
 
     notifier.ordersChanged(groupItems(order).map(i => i.id), req.user.id);
@@ -493,14 +489,18 @@ function orderRoutes(db, notifier, actions, collector = null) {
       return { error: '담당 디자이너로 지정할 수 없는 직원입니다.' };
     }
 
-    // 관리자: 모든 단계(자동 단계를 손으로 고쳐야 할 때), 디자이너: 디자인 단계만, 그 밖의 직원: 바꿀 수 없음
-    const allowedStageIds = new Set(
-      (user.role === 'admin' ? stages().filter(s => s.active) : canPickStage(user) ? designStages() : []).map(s => s.id)
-    );
-    if (canPickStage(user)) allowedStageIds.add(resetStageId(order));
-    const stage = body.stage_id === 'reset' ? resetStageId(order) : body.stage_id ? Number(body.stage_id) : order.stage_id;
-    if (stage !== order.stage_id && !allowedStageIds.has(stage)) {
-      return { error: canPickStage(user) ? '고를 수 없는 작업 단계입니다.' : '작업 단계는 디자이너만 바꿀 수 있습니다.' };
+    // 주문 단계(발주·발주확인·발송)는 보통 자동. 손으로 고치는 건 관리자만 (판매자센터에서 직접 처리한 주문 맞추기)
+    const stage = body.stage_id ? Number(body.stage_id) : order.stage_id;
+    if (stage !== order.stage_id) {
+      if (user.role !== 'admin') return { error: '주문 단계는 관리자만 바꿀 수 있습니다.' };
+      if (!stages().some(s => s.active && s.id === stage)) return { error: '고를 수 없는 주문 단계입니다.' };
+    }
+    // 디자인 단계: 디자이너·관리자만
+    const currentDesign = order.design_stage_id || firstDesignId();
+    const design = body.design_stage_id ? Number(body.design_stage_id) : currentDesign;
+    if (design !== currentDesign) {
+      if (!canPickStage(user)) return { error: '디자인 단계는 디자이너만 바꿀 수 있습니다.' };
+      if (!designStages().some(s => s.active && s.id === design)) return { error: '고를 수 없는 디자인 단계입니다.' };
     }
 
     const due = String(body.due_date || '').trim();
@@ -509,6 +509,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
     return {
       assignee_id: assignee,
       stage_id: stage,
+      design_stage_id: design,
       due_date: due || null,
       memo: String(body.memo || '').slice(0, 2000) || null,
       nas_path: String(body.nas_path || '').trim().slice(0, 300) || null,

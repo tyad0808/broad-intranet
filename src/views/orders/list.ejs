@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view: st || view === 'active' ? '' : view, st, ch: channel, stage: stageFilter || '', due, sort: sort === 'recent' ? '' : sort, q, ...changes };
+    const merged = { view: st || view === 'active' ? '' : view, st, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -15,7 +15,6 @@
 <div class="list-head">
   <div class="title-row">
     <h1 class="page-title">주문</h1>
-    <a href="/orders/new?back=<%= encodeURIComponent(currentUrl) %>" class="btn-sm primary new-order">＋ 수기 주문</a>
     <% if (canCollect) { %>
       <form method="post" action="/orders/collect" class="collect-form" data-once>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -64,10 +63,20 @@
     <p class="muted small st-note"><strong><%= SHIP_STATES[st] %></strong> 주문을 작업 단계와 상관없이 모두 보여줍니다. <a href="<%= link({ st: '', stage: '' }) %>">해제</a></p>
   <% } %>
 
-  <nav class="stage-chips" aria-label="작업 단계">
-    <a href="<%= link({ stage: '' }) %>" class="chip <%= stageFilter ? '' : 'on' %>">모든 단계 <span class="count"><%= stageTotal %></span></a>
+  <nav class="stage-chips" aria-label="주문 단계">
+    <span class="chips-label">주문</span>
+    <a href="<%= link({ stage: '' }) %>" class="chip <%= stageFilter ? '' : 'on' %>">전체 <span class="count"><%= stageTotal %></span></a>
     <% stages.forEach(s => { const n = stageCounts[s.id] || 0; if (!s.active && !n) return; %>
       <a href="<%= link({ stage: s.id }) %>" class="chip <%= stageFilter === s.id ? 'on' : '' %> <%= n ? '' : 'zero' %>">
+        <%= s.name %><%= s.active ? '' : ' (숨김)' %> <span class="count"><%= n %></span>
+      </a>
+    <% }) %>
+  </nav>
+  <nav class="stage-chips" aria-label="디자인 단계">
+    <span class="chips-label">디자인</span>
+    <a href="<%= link({ ds: '' }) %>" class="chip <%= designFilter ? '' : 'on' %>">전체 <span class="count"><%= designTotal %></span></a>
+    <% designStages.forEach(s => { const n = designCounts[s.id] || 0; if (!s.active && !n) return; %>
+      <a href="<%= link({ ds: s.id }) %>" class="chip design <%= designFilter === s.id ? 'on' : '' %> <%= n ? '' : 'zero' %>">
         <%= s.name %><%= s.active ? '' : ' (숨김)' %> <span class="count"><%= n %></span>
       </a>
     <% }) %>
@@ -79,6 +88,7 @@
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
   <% if (stageFilter) { %><input type="hidden" name="stage" value="<%= stageFilter %>"><% } %>
   <% if (due) { %><input type="hidden" name="due" value="<%= due %>"><% } %>
+  <% if (designFilter) { %><input type="hidden" name="ds" value="<%= designFilter %>"><% } %>
   <select name="sort" aria-label="정렬">
     <option value="">최근 주문순</option>
     <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>
@@ -99,9 +109,12 @@
 
 <div id="live-list">
 <% const anyAction = groups.some(g => g.canConfirm || g.canDispatch); %>
-<% if (anyAction) { %>
-  <label class="check-all"><input type="checkbox" data-check-all> 처리할 수 있는 주문 모두 선택</label>
-<% } %>
+<div class="list-toolbar">
+  <% if (anyAction) { %>
+    <label class="check-all"><input type="checkbox" data-check-all> 처리할 수 있는 주문 모두 선택</label>
+  <% } %>
+  <a href="/orders/new?back=<%= encodeURIComponent(currentUrl) %>" class="btn-sm primary new-order">＋ 수기 주문 등록</a>
+</div>
 <% if (groups.length === 0) { %>
   <section class="card"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>
 <% } else { %>
@@ -141,21 +154,23 @@
           </ul>
         </a>
         <div class="oi-meta">
-          <% const inDesign = designStages.some(s => s.id === o.stage_id); %>
+          <%# 주문 단계: 채널 처리에 따라 자동 (발주·발주확인·발송) %>
+          <span class="pill stage" title="주문 단계 (자동)"><%= o.stage_name || '단계 없음' %></span>
+          <%# 디자인 단계: 디자이너·관리자가 고른다 (비어 있으면 첫 단계) %>
+          <% const curDesign = o.design_stage_id || firstDesign; const curDesignName = (designStages.find(s => s.id === curDesign) || {}).name || '-'; %>
           <% if (canPickStage && o.channel_status !== 'CANCELED') { %>
-            <form method="post" action="/orders/<%= o.id %>/stage" class="inline" data-autosubmit>
+            <form method="post" action="/orders/<%= o.id %>/design" class="inline" data-autosubmit>
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <input type="hidden" name="back" value="<%= currentUrl %>">
-              <select name="stage_id" class="stage-select <%= inDesign ? 'on' : '' %>" aria-label="디자인 단계">
-                <% if (!inDesign) { %><option value="" selected><%= o.stage_name || '단계 없음' %></option><% } else { %><option value="reset">선택 안 함 (<%= resetStageName(o) %>)</option><% } %>
-                <% designStages.forEach(s => { %>
-                  <option value="<%= s.id %>" <%= s.id === o.stage_id ? 'selected' : '' %>><%= s.name %></option>
+              <select name="design_stage_id" class="stage-select design" aria-label="디자인 단계">
+                <% designStages.forEach(s => { if (!s.active && s.id !== curDesign) return; %>
+                  <option value="<%= s.id %>" <%= s.id === curDesign ? 'selected' : '' %>><%= s.name %></option>
                 <% }) %>
               </select>
               <noscript><button type="submit" class="btn-sm">변경</button></noscript>
             </form>
           <% } else { %>
-            <span class="pill stage"><%= o.stage_name || '단계 없음' %></span>
+            <span class="pill design"><%= curDesignName %></span>
           <% } %>
           <form method="post" action="/orders/<%= o.id %>/assign" class="inline" data-autosubmit>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">

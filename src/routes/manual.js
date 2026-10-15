@@ -135,9 +135,9 @@ function manualRoutes(db, notifier) {
       const insertItem = db.prepare(`
         INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
           buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-          stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version)
+          stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id)
         SELECT channel, channel_order_id, ?, 'main', ?, ?, ?, buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address,
-          paid_at, channel_status, 1, stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version
+          paid_at, channel_status, 1, stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id
         FROM orders WHERE id = ?
       `);
       let seq = Math.max(0, ...items.map(i => Number(String(i.channel_item_id).split('-').pop()) || 0));

@@ -190,17 +190,28 @@ test('판매자센터에서 발주확인되면 발주 단계 카드가 발주확
   assert.strictEqual(stageName(db, 'P1'), '발주확인');
 });
 
-test('직원이 이미 다음 단계로 옮긴 카드는 되돌리지 않고, 사내 메모·담당자도 그대로 둔다', () => {
+test('관리자가 이미 다음 단계로 옮긴 카드는 되돌리지 않고, 디자인 단계·메모·담당자도 그대로 둔다', () => {
   const db = openDb(':memory:');
   const designer = addUser(db, { email: 'd@broad.test' });
   applyOrders(db, [order(1)]);
-  const design = db.prepare("SELECT id FROM work_stages WHERE name = '디자인작업 전'").get().id;
-  db.prepare("UPDATE orders SET stage_id = ?, assignee_id = ?, memo = '금박 추가' WHERE channel_item_id = 'P1'").run(design, designer);
+  const sent = db.prepare("SELECT id FROM work_stages WHERE name = '발송'").get().id;
+  const working = db.prepare("SELECT id FROM design_stages WHERE name = '디자인 작업 중'").get().id;
+  db.prepare("UPDATE orders SET stage_id = ?, design_stage_id = ?, assignee_id = ?, memo = '금박 추가' WHERE channel_item_id = 'P1'")
+    .run(sent, working, designer);
 
   applyOrders(db, [order(1, { channel_confirmed: 1, channel_status: 'DELIVERING' })]);
-  const row = db.prepare("SELECT assignee_id, memo, channel_status FROM orders WHERE channel_item_id = 'P1'").get();
-  assert.strictEqual(stageName(db, 'P1'), '디자인작업 전');
-  assert.deepStrictEqual({ ...row }, { assignee_id: designer, memo: '금박 추가', channel_status: 'DELIVERING' });
+  const row = db.prepare("SELECT design_stage_id, assignee_id, memo, channel_status FROM orders WHERE channel_item_id = 'P1'").get();
+  assert.strictEqual(stageName(db, 'P1'), '발송');
+  assert.deepStrictEqual({ ...row }, { design_stage_id: working, assignee_id: designer, memo: '금박 추가', channel_status: 'DELIVERING' });
+});
+
+test('같은 주문에 나중에 들어온 추가상품은 디자인 단계도 이어받는다', () => {
+  const db = openDb(':memory:');
+  applyOrders(db, [order(1)]);
+  const working = db.prepare("SELECT id FROM design_stages WHERE name = '디자인 작업 중'").get().id;
+  db.prepare("UPDATE orders SET design_stage_id = ? WHERE channel_item_id = 'P1'").run(working);
+  applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon' })]);
+  assert.strictEqual(db.prepare("SELECT design_stage_id FROM orders WHERE channel_item_id = 'P9'").get().design_stage_id, working);
 });
 
 test('고객이 취소를 요청하면 한 번만 클레임으로 알려주고 상태를 저장한다', () => {

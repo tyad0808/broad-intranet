@@ -237,9 +237,19 @@ function adminRoutes(db, sessionStore, collector, notifier) {
       SELECT s.*, (SELECT COUNT(*) FROM orders o WHERE o.stage_id = s.id) AS order_count
       FROM work_stages s ORDER BY s.sort_order
     `).all();
-    res.render('admin/stages', { title: '작업 단계', tab: 'stages', stages });
+    const designStages = db.prepare(`
+      SELECT s.*, (
+        SELECT COUNT(DISTINCT o.channel || ':' || o.channel_order_id) FROM orders o
+        WHERE COALESCE(o.design_stage_id, (SELECT id FROM design_stages WHERE active = 1 ORDER BY sort_order LIMIT 1)) = s.id
+      ) AS order_count
+      FROM design_stages s ORDER BY s.sort_order
+    `).all();
+    res.render('admin/stages', { title: '작업 단계', tab: 'stages', stages, designStages });
   });
-  listEditor({ table: 'work_stages', path: 'stages', label: '작업 단계' });
+  listEditor({ table: 'work_stages', path: 'stages', label: '주문 단계' });
+  // 디자인 단계: 편집 뒤에는 같은 '작업 단계' 화면으로 돌아간다
+  router.get('/design-stages', (req, res) => res.redirect('/admin/stages'));
+  listEditor({ table: 'design_stages', path: 'design-stages', label: '디자인 단계' });
 
   router.get('/jobs', (req, res) => {
     const jobs = db.prepare(`

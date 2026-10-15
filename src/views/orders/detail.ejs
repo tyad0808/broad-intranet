@@ -27,24 +27,30 @@
       <input type="hidden" name="version" value="<%= order.version %>">
       <input type="hidden" name="back" value="<%= back %>">
 
-      <label>작업 단계
-        <% if (user.role === 'admin') { %>
-          <select name="stage_id">
-            <% stages.forEach(s => { if (!s.active && s.id !== order.stage_id) return; %>
-              <option value="<%= s.id %>" <%= s.id === order.stage_id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %><%= designStages.some(d => d.id === s.id) || !s.active ? '' : ' (자동)' %></option>
-            <% }) %>
-          </select>
-        <% } else if (canPickStage) { %>
-          <select name="stage_id">
-            <% if (!designStages.some(d => d.id === order.stage_id)) { %><option value="<%= order.stage_id || '' %>" selected><%= order.stage_name || '단계 없음' %></option><% } else { %><option value="reset">선택 안 함 (<%= resetStageName(order) %>)</option><% } %>
-            <% designStages.forEach(s => { %>
-              <option value="<%= s.id %>" <%= s.id === order.stage_id ? 'selected' : '' %>><%= s.name %></option>
-            <% }) %>
-          </select>
-        <% } else { %>
-          <p class="readonly-value"><%= order.stage_name || '단계 없음' %> <span class="muted small">(디자이너만 바꿀 수 있음)</span></p>
-        <% } %>
-      </label>
+      <div class="two-fields">
+        <label>주문 단계 <span class="muted small">(자동)</span>
+          <% if (user.role === 'admin') { %>
+            <select name="stage_id">
+              <% stages.forEach(s => { if (!s.active && s.id !== order.stage_id) return; %>
+                <option value="<%= s.id %>" <%= s.id === order.stage_id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %></option>
+              <% }) %>
+            </select>
+          <% } else { %>
+            <span class="readonly-value"><%= order.stage_name || '단계 없음' %></span>
+          <% } %>
+        </label>
+        <label>디자인 단계
+          <% if (canPickStage) { %>
+            <select name="design_stage_id">
+              <% designStages.forEach(s => { if (!s.active && s.id !== currentDesignId) return; %>
+                <option value="<%= s.id %>" <%= s.id === currentDesignId ? 'selected' : '' %>><%= s.name %></option>
+              <% }) %>
+            </select>
+          <% } else { %>
+            <span class="readonly-value"><%= (designStages.find(s => s.id === currentDesignId) || {}).name || '-' %> <span class="muted small">(디자이너만 변경)</span></span>
+          <% } %>
+        </label>
+      </div>
 
       <label>담당 디자이너
         <select name="assignee_id">
