@@ -368,3 +368,24 @@ test('수기 주문 등록 버튼은 목록 바로 위 오른쪽에 있다', asy
   const text = (await kim.request('/')).text;
   assert.match(text, /class="list-toolbar"[\s\S]*?＋ 수기 주문 등록/);
 });
+
+test('팝업(iframe) 안에서 열린 주문 카드는 위쪽 메뉴 없이 닫기 버튼과 함께 보인다', async t => {
+  const { kim, idOf } = await setup(t);
+  const normal = (await kim.request(`/orders/${idOf('P1')}`)).text;
+  assert.match(normal, /class="topbar"/);
+  assert.match(normal, /← 목록으로/);
+  const embed = (await kim.request(`/orders/${idOf('P1')}?embed=1`)).text;
+  assert.doesNotMatch(embed, /class="topbar"/);
+  assert.doesNotMatch(embed, /← 목록으로/);
+  assert.match(embed, /\/embed\.js/);
+  assert.doesNotMatch(embed, /\/live\.js/, '팝업 안에서는 알림이 두 번 뜨지 않게 실시간 연결을 하지 않는다');
+  assert.match((await kim.request('/')).text, /\/modal\.js/);
+});
+
+test('관리자 메뉴는 주문 화면에서 새 탭으로 열린다', async t => {
+  const { db, baseUrl } = await setup(t);
+  addUser(db, { email: 'boss@broad.test', role: 'admin' });
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  assert.match((await boss.request('/')).text, /href="\/admin\/users" target="_blank"/);
+  assert.doesNotMatch((await boss.request('/admin/users')).text, /href="\/admin\/users" target="_blank"/, '관리자 화면 안에서는 같은 탭');
+});

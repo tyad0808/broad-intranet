@@ -7,13 +7,14 @@
   <link rel="stylesheet" href="/style.css">
   <link rel="icon" href="data:,">
 </head>
-<body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %>>
+<body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %><% if (locals.embed) { %> class="embed"<% } %>>
+  <% if (!locals.embed) { %>
   <header class="topbar">
     <a class="brand" href="/">브로애드 인트라넷</a>
     <% if (locals.user) { %>
       <nav class="me">
         <% if (user.role === 'admin' && user.status === 'active') { %>
-          <a href="/admin/users">관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
+          <a href="/admin/users"<%- locals.tab ? "" : " target=\"_blank\" rel=\"noopener\"" %>>관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
         <% } %>
         <button type="button" id="enable-notify" class="link" hidden>알림 켜기</button>
         <span><%= user.name %></span>
@@ -28,6 +29,7 @@
     <a class="alert-bar" id="unassigned-bar" href="/?view=unassigned">
       담당 디자이너가 없는 주문이 <strong><%= unassignedAlert.count %>건</strong>입니다 (기준 <%= unassignedAlert.threshold %>건). 눌러서 확인하세요.
     </a>
+  <% } %>
   <% } %>
   <main class="container<%= locals.sideCalendar ? ' container-side' : '' %>">
     <% if (locals.flash) { %>

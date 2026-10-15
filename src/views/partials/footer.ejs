@@ -1,4 +1,8 @@
   </main>
-  <% if (locals.user && user.status === 'active') { %><script src="/live.js"></script><% } %>
+  <% if (locals.embed) { %>
+    <script src="/embed.js"></script>
+  <% } else if (locals.user && user.status === 'active') { %>
+    <script src="/live.js"></script>
+  <% } %>
 </body>
 </html>

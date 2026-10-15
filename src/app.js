@@ -73,7 +73,14 @@ function createApp({
   if (isProd) app.set('trust proxy', 1);
 
   // 보안 관련 HTTP 헤더 자동 설정 (클릭재킹, 스크립트 주입 등 방어)
-  app.use(helmet());
+  app.use(helmet({
+    contentSecurityPolicy: {
+      directives: {
+        // 운영(HTTPS)에서만 http 요청을 https 로 올린다. 개발(http://localhost)에서 켜 두면 팝업 안 저장이 막힌다
+        upgradeInsecureRequests: isProd ? [] : null,
+      },
+    },
+  }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
   app.use(express.urlencoded({ extended: false }));
 
@@ -99,6 +106,8 @@ function createApp({
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;
     res.locals.tab = null;
+    // 주문 목록 위 팝업(iframe) 안에서 열린 화면이면 위쪽 메뉴 없이 내용만 보여준다
+    res.locals.embed = req.get('sec-fetch-dest') === 'iframe' || req.query.embed === '1';
     res.locals.pendingCount =
       req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
     res.locals.unassignedAlert = notifier.unassignedBanner(req.user);

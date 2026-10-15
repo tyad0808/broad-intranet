@@ -120,6 +120,9 @@
     }, 400);
   }
 
+  // 주문 팝업을 닫을 때 modal.js 가 부른다
+  if (liveList) window.refreshOrderList = refreshList;
+
   function showStaleBanner() {
     if (document.getElementById('stale-banner')) return;
     const banner = document.createElement('p');
