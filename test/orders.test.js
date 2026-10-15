@@ -56,14 +56,14 @@ test('승인 대기 직원은 주문 카드에 들어갈 수 없다', async t =>
 test('담당 디자이너, 작업 단계, 납기, 메모, NAS 경로를 저장한다', async t => {
   const { kim, idOf, row, leeId, stageId } = await setup(t);
   const res = await save(kim, idOf('P1'), {
-    assignee_id: String(leeId), stage_id: String(stageId('디자인작업')), due_date: '2026-10-20',
+    assignee_id: String(leeId), stage_id: String(stageId('디자인작업 전')), due_date: '2026-10-20',
     memo: '금박 추가 요청', nas_path: '\\\\NAS\\작업\\P1',
   });
   assert.strictEqual(res.status, 302);
   const r = row('P1');
   assert.deepStrictEqual(
     [r.assignee_id, r.stage_id, r.due_date, r.memo, r.nas_path, r.version],
-    [leeId, stageId('디자인작업'), '2026-10-20', '금박 추가 요청', '\\\\NAS\\작업\\P1', 1]
+    [leeId, stageId('디자인작업 전'), '2026-10-20', '금박 추가 요청', '\\\\NAS\\작업\\P1', 1]
   );
 });
 
@@ -216,10 +216,10 @@ test('주문 카드에서 저장하면 같은 주문의 상품 모두에 적용�
   const page = await kim.request(`/orders/${idOf('P1')}`);
   assert.match(page.text, /무료 양면테이프/);
   assert.match(page.text, /상품 2개에 함께 저장됩니다/);
-  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업')), due_date: '2026-10-22', memo: '같이 작업' });
+  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업 전')), due_date: '2026-10-22', memo: '같이 작업' });
   for (const p of ['P1', 'P9']) {
     const r = row(p);
-    assert.deepStrictEqual([r.stage_id, r.due_date, r.memo], [stageId('디자인작업'), '2026-10-22', '같이 작업']);
+    assert.deepStrictEqual([r.stage_id, r.due_date, r.memo], [stageId('디자인작업 전'), '2026-10-22', '같이 작업']);
   }
 });
 
@@ -290,12 +290,12 @@ test('상태 칸의 큰 숫자는 판매자센터처럼 상품주문 단위로 �
 
 test('탭 아래 단계 버튼에 단계별 건수가 보이고, 누르면 그 단계만 본다', async t => {
   const { kim, idOf, stageId } = await setup(t);
-  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업')) });
+  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업 전')) });
   const text = (await kim.request('/')).text;
   assert.match(text, /모든 단계 <span class="count">3</);
-  assert.match(text, /디자인작업 <span class="count">1</);
+  assert.match(text, /디자인작업 전 <span class="count">1</);
   assert.match(text, /발주 <span class="count">2</);
-  const design = (await kim.request(`/?stage=${stageId('디자인작업')}`)).text;
+  const design = (await kim.request(`/?stage=${stageId('디자인작업 전')}`)).text;
   assert.match(design, />상품1</);
   assert.doesNotMatch(design, />상품2</);
   assert.match(design, /모든 단계 <span class="count">3</, '단계를 골라도 다른 단계 건수는 그대로 보인다');
@@ -306,11 +306,11 @@ test('목록에서 작업 단계를 바로 바꾸면 추가상품까지 같이 �
   applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '추가품' })]);
   const list = (await kim.request('/')).text;
   assert.match(list, new RegExp(`action="/orders/${idOf('P1')}/stage"`));
-  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('컨펌')), back: '/' });
-  assert.deepStrictEqual([row('P1').stage_id, row('P9').stage_id], [stageId('컨펌'), stageId('컨펌')]);
+  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('작업 중')), back: '/' });
+  assert.deepStrictEqual([row('P1').stage_id, row('P9').stage_id], [stageId('작업 중'), stageId('작업 중')]);
   assert.strictEqual(row('P1').version, 1);
   await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: '9999', back: '/' });
-  assert.strictEqual(row('P1').stage_id, stageId('컨펌'), '없는 단계로는 못 바꾼다');
+  assert.strictEqual(row('P1').stage_id, stageId('작업 중'), '없는 단계로는 못 바꾼다');
 });
 
 test('납기 날짜로 목록을 거르고, 달력에는 날짜별 출고 예정 건수가 보인다', async t => {
@@ -324,4 +324,33 @@ test('납기 날짜로 목록을 거르고, 달력에는 날짜별 출고 예정
   const panel = (await kim.request('/calendar?month=2026-12')).text;
   assert.match(panel, /href="\/\?due=2026-12-10"[^>]*>출고 1건</);
   assert.ok(idOf('P1'));
+});
+
+test('목록의 단계 선택에는 디자인 단계만 있고, 디자이너가 아닌 직원은 단계를 바꿀 수 없다', async t => {
+  const { baseUrl, kim, idOf, row, stageId } = await setup(t);
+  const list = (await kim.request('/')).text;
+  const select = list.slice(list.indexOf('class="stage-select'), list.indexOf('</select>', list.indexOf('class="stage-select')));
+  assert.match(select, /디자인작업 전/);
+  assert.match(select, /컨펌 후 파일전송/);
+  assert.doesNotMatch(select, new RegExp(`value="${stageId('발송')}"`), '자동 단계(발송)는 고를 수 없다');
+  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('발송')), back: '/' });
+  assert.strictEqual(row('P1').stage_id, stageId('발주'));
+
+  const cs = await loginAs(baseUrl, 'cs@broad.test');
+  const csList = (await cs.request('/')).text;
+  assert.doesNotMatch(csList, /class="stage-select/);
+  await cs.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('작업 중')), back: '/' });
+  assert.strictEqual(row('P1').stage_id, stageId('발주'));
+  await save(cs, idOf('P1'), { stage_id: String(stageId('작업 중')) });
+  assert.strictEqual(row('P1').stage_id, stageId('발주'), '주문 카드에서도 못 바꾼다');
+  await save(cs, idOf('P1'), { memo: 'CS 메모' });
+  assert.strictEqual(row('P1').memo, 'CS 메모', '단계 말고 다른 칸은 저장된다');
+});
+
+test('관리자는 주문 카드에서 자동 단계(발송 등)도 손으로 고칠 수 있다', async t => {
+  const { db, baseUrl, idOf, row, stageId } = await setup(t);
+  addUser(db, { email: 'boss@broad.test', role: 'admin' });
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  await save(boss, idOf('P1'), { stage_id: String(stageId('발송')) });
+  assert.strictEqual(row('P1').stage_id, stageId('발송'));
 });

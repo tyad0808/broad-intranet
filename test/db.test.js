@@ -7,7 +7,7 @@ const { openDb } = require('../src/db');
 test('기본 작업 단계 6개가 순서대로 들어간다', () => {
   const db = openDb(':memory:');
   const names = db.prepare('SELECT name FROM work_stages ORDER BY sort_order').all().map(r => r.name);
-  assert.deepStrictEqual(names, ['발주', '발주확인', '디자인작업', '컨펌', '제작', '발송']);
+  assert.deepStrictEqual(names, ['발주', '발주확인', '디자인작업 전', '작업 중', '컨펌 후 파일전송', '발송']);
 });
 
 test('기본 직무 중 디자이너만 담당 디자이너 대상이다', () => {
@@ -45,12 +45,29 @@ test('관리자가 단계를 바꾼 뒤 다시 열어도 기본값으로 덮어�
   const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'intranet-')), 'test.db');
 
   const db1 = openDb(file);
-  db1.prepare("UPDATE work_stages SET name = '시안' WHERE name = '디자인작업'").run();
+  db1.prepare("UPDATE work_stages SET name = '시안' WHERE name = '디자인작업 전'").run();
   db1.close();
 
   const db2 = openDb(file);
   const names = db2.prepare('SELECT name FROM work_stages ORDER BY sort_order').all().map(r => r.name);
   assert.ok(names.includes('시안'));
-  assert.ok(!names.includes('디자인작업'));
+  assert.ok(!names.includes('디자인작업 전'));
+  db2.close();
+});
+
+test('예전 기본 단계 이름(디자인작업·컨펌·제작)은 한 번만 새 이름으로 바뀐다', () => {
+  const path = require('path');
+  const os = require('os');
+  const fs = require('fs');
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'stg-')), 'old.db');
+  const db1 = openDb(file);
+  db1.prepare("DELETE FROM settings WHERE key = 'stage_names_v2'").run();
+  db1.prepare("UPDATE work_stages SET name = '디자인작업' WHERE name = '디자인작업 전'").run();
+  db1.prepare("UPDATE work_stages SET name = '컨펌' WHERE name = '작업 중'").run();
+  db1.prepare("UPDATE work_stages SET name = '샘플 제작' WHERE name = '컨펌 후 파일전송'").run(); // 관리자가 바꾼 이름
+  db1.close();
+  const db2 = openDb(file);
+  const names = db2.prepare('SELECT name FROM work_stages ORDER BY sort_order').all().map(r => r.name);
+  assert.deepStrictEqual(names, ['발주', '발주확인', '디자인작업 전', '작업 중', '샘플 제작', '발송']);
   db2.close();
 });

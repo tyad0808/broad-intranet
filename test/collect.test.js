@@ -194,12 +194,12 @@ test('직원이 이미 다음 단계로 옮긴 카드는 되돌리지 않고, �
   const db = openDb(':memory:');
   const designer = addUser(db, { email: 'd@broad.test' });
   applyOrders(db, [order(1)]);
-  const design = db.prepare("SELECT id FROM work_stages WHERE name = '디자인작업'").get().id;
+  const design = db.prepare("SELECT id FROM work_stages WHERE name = '디자인작업 전'").get().id;
   db.prepare("UPDATE orders SET stage_id = ?, assignee_id = ?, memo = '금박 추가' WHERE channel_item_id = 'P1'").run(design, designer);
 
   applyOrders(db, [order(1, { channel_confirmed: 1, channel_status: 'DELIVERING' })]);
   const row = db.prepare("SELECT assignee_id, memo, channel_status FROM orders WHERE channel_item_id = 'P1'").get();
-  assert.strictEqual(stageName(db, 'P1'), '디자인작업');
+  assert.strictEqual(stageName(db, 'P1'), '디자인작업 전');
   assert.deepStrictEqual({ ...row }, { assignee_id: designer, memo: '금박 추가', channel_status: 'DELIVERING' });
 });
 

@@ -197,6 +197,21 @@ function migrate(db) {
   `);
 }
 
+// 디자이너가 고르는 단계 (발주·발주확인·발송은 채널 처리에 따라 자동으로 움직인다)
+const DESIGN_STAGE_NAMES = ['디자인작업 전', '작업 중', '컨펌 후 파일전송'];
+
+// 예전 기본 단계 이름을 새 이름으로 한 번만 바꾼다 (관리자가 이미 다른 이름으로 바꿨으면 건드리지 않음)
+function renameDesignStages(db, insertSetting) {
+  const done = db.prepare("SELECT value FROM settings WHERE key = 'stage_names_v2'").get();
+  if (done) return;
+  const pairs = [['디자인작업', DESIGN_STAGE_NAMES[0]], ['컨펌', DESIGN_STAGE_NAMES[1]], ['제작', DESIGN_STAGE_NAMES[2]]];
+  for (const [from, to] of pairs) {
+    const taken = db.prepare('SELECT 1 FROM work_stages WHERE name = ?').get(to);
+    if (!taken) db.prepare('UPDATE work_stages SET name = ? WHERE name = ?').run(to, from);
+  }
+  insertSetting.run('stage_names_v2', '1');
+}
+
 // 처음 실행할 때만 기본값을 넣는다 (이미 있으면 건드리지 않음)
 function seed(db) {
   const insertStage = db.prepare(
@@ -212,10 +227,12 @@ function seed(db) {
   transaction(db, () => {
     const hasStages = db.prepare('SELECT COUNT(*) AS n FROM work_stages').get().n > 0;
     if (!hasStages) {
-      ['발주', '발주확인', '디자인작업', '컨펌', '제작', '발송'].forEach((name, i) =>
+      ['발주', '발주확인', ...DESIGN_STAGE_NAMES, '발송'].forEach((name, i) =>
         insertStage.run(name, (i + 1) * 10)
       );
+      insertSetting.run('stage_names_v2', '1');
     }
+    renameDesignStages(db, insertSetting);
 
     const hasJobs = db.prepare('SELECT COUNT(*) AS n FROM jobs').get().n > 0;
     if (!hasJobs) {

@@ -141,17 +141,22 @@
           </ul>
         </a>
         <div class="oi-meta">
-          <form method="post" action="/orders/<%= o.id %>/stage" class="inline" data-autosubmit>
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="back" value="<%= currentUrl %>">
-            <select name="stage_id" class="stage-select" aria-label="작업 단계">
-              <% if (!stages.some(s => s.active && s.id === o.stage_id)) { %><option value="" selected><%= o.stage_name || '단계 없음' %></option><% } %>
-              <% stages.forEach(s => { if (!s.active) return; %>
-                <option value="<%= s.id %>" <%= s.id === o.stage_id ? 'selected' : '' %>><%= s.name %></option>
-              <% }) %>
-            </select>
-            <noscript><button type="submit" class="btn-sm">변경</button></noscript>
-          </form>
+          <% const inDesign = designStages.some(s => s.id === o.stage_id); %>
+          <% if (canPickStage && o.channel_status !== 'CANCELED') { %>
+            <form method="post" action="/orders/<%= o.id %>/stage" class="inline" data-autosubmit>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="back" value="<%= currentUrl %>">
+              <select name="stage_id" class="stage-select <%= inDesign ? 'on' : '' %>" aria-label="디자인 단계">
+                <% if (!inDesign) { %><option value="" selected><%= o.stage_name || '단계 없음' %></option><% } %>
+                <% designStages.forEach(s => { %>
+                  <option value="<%= s.id %>" <%= s.id === o.stage_id ? 'selected' : '' %>><%= s.name %></option>
+                <% }) %>
+              </select>
+              <noscript><button type="submit" class="btn-sm">변경</button></noscript>
+            </form>
+          <% } else { %>
+            <span class="pill stage"><%= o.stage_name || '단계 없음' %></span>
+          <% } %>
           <form method="post" action="/orders/<%= o.id %>/assign" class="inline" data-autosubmit>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= currentUrl %>">
