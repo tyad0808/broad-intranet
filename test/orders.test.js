@@ -362,3 +362,20 @@ test('카드에는 구매자 이름을 먼저, 받는 분이 다르면 괄호로
   assert.match(text, /<strong class="buyer">김현진<\/strong> \(받는 분 이서연\)/);
   assert.match(text, /<strong class="buyer">박지호<\/strong> ·/);
 });
+
+test("디자인 단계를 잘못 골랐으면 '선택 안 함' 으로 원래 자동 단계(발주·발주확인)로 되돌린다", async t => {
+  const { db, kim, idOf, row, stageId } = await setup(t);
+  applyOrders(db, [order(2, { channel_confirmed: 1 })]);
+  for (const [item, back] of [['P1', '발주'], ['P2', '발주확인']]) {
+    await kim.submit('/', `/orders/${idOf(item)}/stage`, { stage_id: String(stageId('디자인작업 전')), back: '/' });
+    assert.strictEqual(row(item).stage_id, stageId('디자인작업 전'));
+    const list = (await kim.request('/')).text;
+    assert.match(list, new RegExp(`<option value="reset">선택 안 함 \\(${back}\\)`));
+    await kim.submit('/', `/orders/${idOf(item)}/stage`, { stage_id: 'reset', back: '/' });
+    assert.strictEqual(row(item).stage_id, stageId(back));
+  }
+  // 주문 카드에서도
+  await save(kim, idOf('P1'), { stage_id: String(stageId('작업 중')) });
+  await save(kim, idOf('P1'), { stage_id: 'reset' });
+  assert.strictEqual(row('P1').stage_id, stageId('발주'));
+});

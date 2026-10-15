@@ -61,6 +61,17 @@ function orderRoutes(db, notifier, actions, collector = null) {
     WHERE u.status = 'active' AND j.is_designer = 1 ORDER BY u.name
   `).all();
   // 실제 주문이 있는 채널만 골라 보기 목록에 보여준다
+  // '선택 안 함' 으로 되돌릴 때 갈 자동 단계: 채널에서 발주확인된 주문이면 발주확인, 아니면 발주
+  const resetStageId = order => {
+    const confirmed = order.channel !== 'manual' && groupItems(order).every(i => i.channel_confirmed);
+    return Number(getSetting(db, confirmed ? 'stage_confirmed' : 'stage_new')) || null;
+  };
+  const resetStageName = order => {
+    const id = resetStageId(order);
+    const row = id && db.prepare('SELECT name FROM work_stages WHERE id = ?').get(id);
+    return row ? row.name : '처음 단계';
+  };
+
   // 디자인 단계를 고를 수 있는 사람: 디자이너 + 관리자
   const canPickStage = user => user.role === 'admin' || designers().some(d => d.id === user.id);
   const channelsInUse = () => db.prepare('SELECT DISTINCT channel FROM orders ORDER BY channel').all().map(r => r.channel);
@@ -219,6 +230,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       stages: stages(),
       designStages: designStages(),
       canPickStage: canPickStage(req.user),
+      resetStageName,
       designers: designers(),
       today: kstToday(),
       currentUrl: req.originalUrl,
@@ -254,8 +266,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
     if (!canPickStage(req.user)) {
       return flashBack(req, res, back, { type: 'error', message: '디자인 단계는 디자이너만 바꿀 수 있습니다.' });
     }
-    const stageId = Number(req.body.stage_id);
-    const stage = designStages().find(s => s.id === stageId);
+    // '선택 안 함': 잘못 고른 디자인 단계를 원래 자동 단계로 되돌린다
+    const stageId = req.body.stage_id === 'reset' ? resetStageId(order) : Number(req.body.stage_id);
+    const stage = req.body.stage_id === 'reset'
+      ? stages().find(s => s.id === stageId)
+      : designStages().find(s => s.id === stageId);
     if (!stage) return flashBack(req, res, back, { type: 'error', message: '고를 수 없는 작업 단계입니다.' });
     const items = groupItems(order);
     db.prepare(
@@ -427,6 +442,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       isDesigner: designers().some(d => d.id === req.user.id),
       designStages: designStages(),
       canPickStage: canPickStage(req.user),
+      resetStageName,
       back: safeBack(req.query.back),
       today: kstToday(),
     });
@@ -481,7 +497,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const allowedStageIds = new Set(
       (user.role === 'admin' ? stages().filter(s => s.active) : canPickStage(user) ? designStages() : []).map(s => s.id)
     );
-    const stage = body.stage_id ? Number(body.stage_id) : order.stage_id;
+    if (canPickStage(user)) allowedStageIds.add(resetStageId(order));
+    const stage = body.stage_id === 'reset' ? resetStageId(order) : body.stage_id ? Number(body.stage_id) : order.stage_id;
     if (stage !== order.stage_id && !allowedStageIds.has(stage)) {
       return { error: canPickStage(user) ? '고를 수 없는 작업 단계입니다.' : '작업 단계는 디자이너만 바꿀 수 있습니다.' };
     }

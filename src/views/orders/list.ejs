@@ -147,7 +147,7 @@
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <input type="hidden" name="back" value="<%= currentUrl %>">
               <select name="stage_id" class="stage-select <%= inDesign ? 'on' : '' %>" aria-label="디자인 단계">
-                <% if (!inDesign) { %><option value="" selected><%= o.stage_name || '단계 없음' %></option><% } %>
+                <% if (!inDesign) { %><option value="" selected><%= o.stage_name || '단계 없음' %></option><% } else { %><option value="reset">선택 안 함 (<%= resetStageName(o) %>)</option><% } %>
                 <% designStages.forEach(s => { %>
                   <option value="<%= s.id %>" <%= s.id === o.stage_id ? 'selected' : '' %>><%= s.name %></option>
                 <% }) %>

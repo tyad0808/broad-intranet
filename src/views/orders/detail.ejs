@@ -36,7 +36,7 @@
           </select>
         <% } else if (canPickStage) { %>
           <select name="stage_id">
-            <% if (!designStages.some(d => d.id === order.stage_id)) { %><option value="<%= order.stage_id || '' %>" selected><%= order.stage_name || '단계 없음' %></option><% } %>
+            <% if (!designStages.some(d => d.id === order.stage_id)) { %><option value="<%= order.stage_id || '' %>" selected><%= order.stage_name || '단계 없음' %></option><% } else { %><option value="reset">선택 안 함 (<%= resetStageName(order) %>)</option><% } %>
             <% designStages.forEach(s => { %>
               <option value="<%= s.id %>" <%= s.id === order.stage_id ? 'selected' : '' %>><%= s.name %></option>
             <% }) %>
