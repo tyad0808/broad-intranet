@@ -267,3 +267,59 @@ test('관리자가 "지금 수집"을 누르면 주문이 들어오고 화면에
   assert.match(page.text, /수집 완료: 새 주문 3건/);
   assert.match(page.text, /저장된 주문 <strong>3건/);
 });
+
+// ───────── 첫 수집 때 지난 주문 처리 ─────────
+
+test('처음 보는 주문이 이미 배송·구매확정이면 마지막 단계로 넣고 알림을 보내지 않는다', () => {
+  const db = openDb(':memory:');
+  const r = applyOrders(db, [
+    order(1, { channel_status: 'PURCHASE_DECIDED' }),
+    order(2, { channel_status: 'DELIVERED' }),
+    order(3, { channel_status: 'DELIVERING' }),
+    order(4),
+  ]);
+  assert.deepStrictEqual([r.created, r.archived], [1, 3]);
+  assert.strictEqual(stageName(db, 'P1'), '발송');
+  assert.strictEqual(stageName(db, 'P4'), '발주');
+  const n = db.prepare("SELECT COUNT(*) AS n FROM notifications WHERE type = 'new_order'").get().n;
+  assert.strictEqual(n, 1, '진짜 새 주문 1건만 알림');
+});
+
+test('처음 보는 주문이 이미 취소됐으면 카드를 만들지 않는다', () => {
+  const db = openDb(':memory:');
+  const r = applyOrders(db, [order(1, { channel_status: 'CANCELED' })]);
+  assert.deepStrictEqual([r.created, r.archived], [0, 0]);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 0);
+});
+
+test('이미 있는 카드는 나중에 배송완료·취소가 되어도 직원이 둔 단계를 바꾸지 않는다', () => {
+  const db = openDb(':memory:');
+  applyOrders(db, [order(1)]);
+  applyOrders(db, [order(1, { channel_status: 'CANCELED' })]);
+  assert.strictEqual(stageName(db, 'P1'), '발주');
+  assert.strictEqual(db.prepare("SELECT channel_status FROM orders WHERE channel_item_id = 'P1'").get().channel_status, 'CANCELED');
+});
+
+test('지난 주문 정리: 미리보기는 바꾸지 않고, --apply 는 손대지 않은 카드만 옮긴다', () => {
+  const { tidyOrders } = require('../scripts/tidy-orders');
+  const db = openDb(':memory:');
+  // 고치기 전 수집기가 만든 상황을 재현: 지난 주문이 '발주' 단계로 들어가 있음
+  const early = db.prepare("SELECT id FROM work_stages WHERE name = '발주'").get().id;
+  const ins = db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, channel_status, stage_id) VALUES ('smartstore', ?, ?, '상품', ?, ?)");
+  ins.run('O1', 'P1', 'PURCHASE_DECIDED', early);
+  ins.run('O2', 'P2', 'DELIVERED', early);
+  ins.run('O3', 'P3', 'CANCELED', early);
+  ins.run('O4', 'P4', 'PAYED', early);               // 진짜 진행 중 → 그대로
+  ins.run('O5', 'P5', 'DELIVERED', early);
+  const staff = addUser(db, { email: 's@broad.test' });
+  db.prepare("UPDATE orders SET assignee_id = ? WHERE channel_item_id = 'P5'").run(staff); // 직원이 맡음 → 그대로
+
+  const preview = tidyOrders(db);
+  assert.strictEqual(preview.total, 3);
+  assert.strictEqual(preview.moved, 0);
+  assert.strictEqual(stageName(db, 'P1'), '발주', '미리보기는 바꾸지 않음');
+
+  const done = tidyOrders(db, { apply: true });
+  assert.strictEqual(done.moved, 3);
+  assert.deepStrictEqual(['P1', 'P2', 'P3', 'P4', 'P5'].map(p => stageName(db, p)), ['발송', '발송', '발송', '발주', '발주']);
+});

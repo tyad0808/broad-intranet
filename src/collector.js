@@ -3,7 +3,18 @@
 const { transaction } = require('./db');
 
 const UNPAID = new Set(['PAYMENT_WAITING', 'CANCELED_BY_NOPAYMENT']); // 결제 전 주문은 카드로 만들지 않는다
+// 처음 보는 주문인데 이미 취소된 것 → 작업할 일이 없으므로 카드를 만들지 않는다
+const CANCELED = new Set(['CANCELED']);
+// 처음 보는 주문인데 이미 배송이 시작됐거나 끝난 것 → 지난 주문이므로 마지막 단계(발송)로 바로 넣는다.
+// (최근 며칠 동안 '구매확정' 등으로 상태만 바뀐 오래된 주문이 새 주문처럼 쌓이는 것을 막는다)
+const ALREADY_DONE = new Set(['DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED', 'EXCHANGED', 'RETURNED']);
 const OVERLAP_MS = 10 * 60 * 1000; // 경계에서 빠지는 주문이 없도록 지난 수집 끝 시각보다 10분 앞부터 다시 본다
+
+// 마지막 작업 단계 (보통 '발송'): 여기 있는 주문은 끝난 것으로 본다
+function lastStageId(db) {
+  const row = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
+  return row ? row.id : null;
+}
 
 function getSetting(db, key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
@@ -20,6 +31,7 @@ function setSetting(db, key, value) {
 function applyOrders(db, orders) {
   const stageNew = Number(getSetting(db, 'stage_new')) || null;
   const stageConfirmed = Number(getSetting(db, 'stage_confirmed')) || null;
+  const lastStage = lastStageId(db);
 
   const find = db.prepare('SELECT id, stage_id, channel_confirmed FROM orders WHERE channel = ? AND channel_item_id = ?');
   const insert = db.prepare(`
@@ -37,14 +49,23 @@ function applyOrders(db, orders) {
   const moveStage = db.prepare("UPDATE orders SET stage_id = ?, updated_at = datetime('now') WHERE id = ?");
   const notify = db.prepare("INSERT INTO notifications (type, message, order_id) VALUES ('new_order', ?, ?)");
 
-  const result = { created: 0, updated: 0, createdIds: [] };
+  const result = { created: 0, updated: 0, createdIds: [], archived: 0 };
 
   transaction(db, () => {
     for (const o of orders) {
       const existing = find.get(o.channel, o.channel_item_id);
 
       if (!existing) {
-        if (UNPAID.has(o.channel_status)) continue;
+        if (UNPAID.has(o.channel_status) || CANCELED.has(o.channel_status)) continue;
+        if (ALREADY_DONE.has(o.channel_status)) {
+          insert.run(
+            o.channel, o.channel_order_id, o.channel_item_id, o.product_name, o.option_text, o.quantity,
+            o.buyer_name, o.receiver_name, o.receiver_phone, o.receiver_address, o.paid_at,
+            o.channel_status, o.channel_confirmed, lastStage
+          );
+          result.archived += 1; // 알림 없이 '전체' 탭에서만 보인다
+          continue;
+        }
         const stage = o.channel_confirmed && stageConfirmed ? stageConfirmed : stageNew;
         const info = insert.run(
           o.channel, o.channel_order_id, o.channel_item_id, o.product_name, o.option_text, o.quantity,
@@ -123,4 +144,4 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
   };
 }
 
-module.exports = { createCollector, applyOrders, getSetting, setSetting };
+module.exports = { createCollector, applyOrders, getSetting, setSetting, lastStageId, ALREADY_DONE, CANCELED };

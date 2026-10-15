@@ -13,7 +13,8 @@
     "dev": "node --disable-warning=ExperimentalWarning --watch src/server.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
     "create-admin": "node --disable-warning=ExperimentalWarning scripts/create-admin.js",
-    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js"
+    "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
+    "tidy-orders": "node --disable-warning=ExperimentalWarning scripts/tidy-orders.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

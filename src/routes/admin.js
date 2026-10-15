@@ -335,7 +335,8 @@ function adminRoutes(db, sessionStore, collector, notifier) {
     }
     const result = await collector.run();
     if (result.ok) {
-      flash(req, 'ok', `수집 완료: 새 주문 ${result.created}건, 바뀐 주문 ${result.updated}건`);
+      flash(req, 'ok', `수집 완료: 새 주문 ${result.created}건, 바뀐 주문 ${result.updated}건` +
+        (result.archived ? `, 이미 배송된 지난 주문 ${result.archived}건(전체 탭에 보관)` : ''));
     } else {
       flash(req, 'error', `수집 실패: ${result.error}`);
     }
