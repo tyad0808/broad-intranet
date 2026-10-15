@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt'];
+  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm'];
   var CHECKS = ['fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -13,7 +13,7 @@
   }
 
   function readOptions() {
-    var o = { target: radio('target'), dimTarget: radio('dimTarget') };
+    var o = { target: radio('target'), dimTarget: radio('dimTarget'), splitDir: radio('splitDir') };
     CHECKS.forEach(function (c) { o[c] = $(c).checked; });
     SELECTS.forEach(function (c) { o[c] = $(c).value; });
     FIELDS.forEach(function (f) { o[f] = parseFloat($(f).value); });
@@ -28,6 +28,7 @@
     if (!o) return;
     if (o.target) setRadio('target', o.target);
     if (o.dimTarget) setRadio('dimTarget', o.dimTarget);
+    if (o.splitDir) setRadio('splitDir', o.splitDir);
     SELECTS.forEach(function (c) { if (typeof o[c] === 'string') $(c).value = o[c]; });
     FIELDS.forEach(function (f) { if (typeof o[f] === 'number' && !isNaN(o[f])) $(f).value = o[f]; });
     CHECKS.forEach(function (c) { if (typeof o[c] === 'boolean') $(c).checked = o[c]; });
@@ -90,6 +91,11 @@
     });
   });
   $('grommetRemove').addEventListener('click', function () { call('domboPanelGrommetRemove'); });
+  $('split').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelSplit', { direction: o.splitDir, count: o.splitCount, overlapMm: o.splitOverlapMm, gapMm: o.splitGapMm });
+  });
   $('count').addEventListener('click', function () { call('domboPanelCount'); });
 
   // ---- 칸 순서·이름 바꾸기 (이 컴퓨터에 기억) ----

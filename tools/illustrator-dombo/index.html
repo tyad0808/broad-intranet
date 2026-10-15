@@ -108,6 +108,17 @@
     <p class="hint">개수는 모서리 포함 (1개면 가운데). 여백은 테두리에서 원 바깥선까지. 겹치는 자리는 하나만 찍습니다. 클리핑 마스크는 마스크 모양 기준. '아일렛' 레이어에 먹 100% 선으로.</p>
   </details>
 
+  <details open data-id="split">
+    <summary>분할 (N등분)</summary>
+    <label><input type="radio" name="splitDir" value="h" checked> 가로 분할 (|||, 좌우로 나눔)</label>
+    <label><input type="radio" name="splitDir" value="v"> 세로 분할 (≡, 위아래로 나눔)</label>
+    <div class="num">분할 개수 <input id="splitCount" type="number" step="1" min="2" value="3"></div>
+    <div class="num">겹침 (mm) <input id="splitOverlapMm" type="number" step="1" min="0" value="20"></div>
+    <div class="num">늘어놓는 간격 (mm) <input id="splitGapMm" type="number" step="1" min="0" value="20"></div>
+    <button id="split">분할하기</button>
+    <p class="hint">클리핑 마스크는 보이는 영역(마스크) 기준으로 똑같이 나눕니다. 겹침은 이음매마다 양쪽 합계. 원본은 그대로 두고 조각을 원본 아래 '분할' 레이어에 늘어놓습니다.</p>
+  </details>
+
   <details open data-id="dim">
     <summary>치수 표시</summary>
     <label><input type="radio" name="dimTarget" value="each" checked> 선택한 것마다</label>

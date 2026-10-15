@@ -290,3 +290,67 @@ test('아일렛: 너무 작으면 건너뛰고, 잘못된 값은 거절', () => 
   // 패널·대화상자에서 온 글자 숫자
   assert.strictEqual(core.domboGrommetCenters([0, 500 * MM, 1000 * MM, 0], { top: '3', bottom: '0', marginMm: '20' }).centers.length, 3);
 });
+
+test('분할: 가로 3등분, 안쪽 이음매만 겹침 절반씩', () => {
+  // 900 x 300mm, 겹침 20mm → 조각 300mm, 이음매 양쪽 10mm
+  const b = [0, 300 * MM, 900 * MM, 0];
+  const r = Array.from(core.domboSplitRects(b, { count: 3, overlapMm: 20 }), x => Array.from(x));
+  nearPts(r.map(x => [x[0], x[2]]), mmPts([[0, 310], [290, 610], [590, 900]]));
+  r.forEach(x => { near(x[1], 300 * MM); near(x[3], 0); });
+  // 세로 2등분: 위쪽부터
+  const v = Array.from(core.domboSplitRects(b, { direction: 'v', count: 2, overlapMm: 10 }), x => Array.from(x));
+  nearPts(v.map(x => [x[1], x[3]]), mmPts([[300, 145], [155, 0]]));
+  v.forEach(x => { near(x[0], 0); near(x[2], 900 * MM); });
+});
+
+test('분할: 원본 아래 50mm 부터 간격을 두고 위에서 아래로 늘어놓는다', () => {
+  const b = [100, 300 * MM, 900 * MM, 0];
+  const rects = core.domboSplitRects(b, { count: 3, overlapMm: 0 });
+  const m = Array.from(core.domboSplitMoves(b, rects, 20 * MM), x => Array.from(x));
+  // 각 조각의 왼쪽 위가 (원본 왼쪽, 아래 50mm), 그다음은 조각 높이 + 20mm 아래
+  rects.forEach((r, i) => {
+    near(r[0] + m[i][0], 100);
+    near(r[1] + m[i][1], -50 * MM - i * (300 + 20) * MM);
+  });
+});
+
+test('분할: 잘못된 값은 거절', () => {
+  const b = [0, 100 * MM, 100 * MM, 0];
+  assert.throws(() => core.domboSplitRects(b, { count: 1 }), /2 ~ 100/);
+  assert.throws(() => core.domboSplitRects(b, { count: 2.5 }), /정수/);
+  assert.throws(() => core.domboSplitRects(b, { count: 5, overlapMm: 40 }), /겹침이 조각 크기보다/);
+  assert.throws(() => core.domboSplitRects(b, { direction: 'x' }), /방향/);
+});
+
+test('분할: 조각마다 원본 복제 + 맨 위 사각형으로 클리핑 마스크, 원본은 그대로', () => {
+  const groups = [];
+  const mkGroup = () => {
+    const g = {
+      typename: 'GroupItem', kids: [], dx: 0, dy: 0,
+      pathItems: { rectangle: (t, l, w, h) => { const r = { typename: 'PathItem', rect: [l, t, l + w, t - h], move(tg, where) { g.kids.splice(g.kids.indexOf(r), 1); where === 'begin' ? g.kids.unshift(r) : g.kids.push(r); } }; g.kids.push(r); return r; } },
+      translate(dx, dy) { g.dx += dx; g.dy += dy; },
+    };
+    groups.push(g);
+    return g;
+  };
+  const art = pathItem([0, 300 * MM, 900 * MM, 0], { duplicate(target) { const c = { typename: 'PathItem', copyOf: 'art' }; target.kids.push(c); return c; } });
+  const lyr = { name: '분할', locked: false, visible: true, groupItems: { add: mkGroup }, zOrder() {} };
+  const doc = {
+    selection: [art], layers: { length: 1, 0: lyr, add: () => lyr },
+  };
+  doc.layers[0] = lyr;
+  core.app = { documents: { length: 1 }, activeDocument: doc };
+  core.ElementPlacement = { PLACEATEND: 'end', PLACEATBEGINNING: 'begin' };
+  const msg = core.domboSplit({ count: 3, overlapMm: 20 });
+  assert.match(msg, /가로로 3등분/);
+  assert.strictEqual(groups.length, 3);
+  groups.forEach((g, i) => {
+    assert.strictEqual(g.clipped, true);
+    assert.strictEqual(g.kids[0].typename, 'PathItem');
+    assert.ok(g.kids[0].rect, '맨 위가 조각 사각형');
+    assert.strictEqual(g.kids[1].copyOf, 'art', '그 아래 원본 복제');
+    assert.strictEqual(g.name, `분할 ${i + 1}/3`);
+  });
+  near(groups[1].kids[0].rect[0], 290 * MM);
+  assert.deepStrictEqual(art.geometricBounds, [0, 300 * MM, 900 * MM, 0], '원본은 그대로');
+});

@@ -1,5 +1,5 @@
 ﻿// 브로애드 일러스트레이터 도구 핵심 기능 (ExtendScript, ES3 문법만 사용)
-// 돔보마크, 칼선, 격자 칼선, 막대 + 박스, 아일렛, 치수 표시, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
+// 돔보마크, 칼선, 격자 칼선, 막대 + 박스, 아일렛, 분할, 치수 표시, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
@@ -141,7 +141,7 @@ function domboHasSelection(doc) {
 
 // 레이어(하위 레이어 포함)에서 보이는 맨 위 개체들을 모은다. 돔보·칼선·치수 레이어는 뺀다.
 function domboLayerItems(layer, out) {
-  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER || layer.name === DOMBO_GROMMET_LAYER) return;
+  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER || layer.name === DOMBO_GROMMET_LAYER || layer.name === DOMBO_SPLIT_LAYER) return;
   for (var i = 0; i < layer.pageItems.length; i++) out.push(layer.pageItems[i]);
   for (var j = 0; j < layer.layers.length; j++) domboLayerItems(layer.layers[j], out);
 }
@@ -647,6 +647,104 @@ function domboGrommetRemove() {
   return '아일렛을 모두 지웠습니다.';
 }
 
+// ---- 분할 (N등분, 겹침) ----
+
+var DOMBO_SPLIT_LAYER = '분할';
+
+function domboSplitDefaults() {
+  return {
+    direction: 'h',    // 'h' 가로 분할 (|||, 좌우로 나눔) / 'v' 세로 분할 (≡, 위아래로 나눔)
+    count: 3,          // 몇 등분
+    overlapMm: 20,     // 이음매마다 겹치는 폭 (양쪽 합계)
+    gapMm: 20          // 조각을 늘어놓을 때 사이 간격
+  };
+}
+
+function domboSplitMerge(opts) {
+  var o = domboSplitDefaults();
+  if (opts) {
+    for (var k in opts) {
+      if (opts.hasOwnProperty(k) && opts[k] !== undefined && opts[k] !== null && opts[k] !== '') o[k] = opts[k];
+    }
+  }
+  o.count = Number(o.count);
+  o.overlapMm = Number(o.overlapMm);
+  o.gapMm = Number(o.gapMm);
+  if (o.direction !== 'h' && o.direction !== 'v') throw new Error('분할 방향이 잘못됐습니다.');
+  if (!(o.count >= 2) || Math.floor(o.count) !== o.count || o.count > 100) throw new Error('분할 개수는 2 ~ 100 사이의 정수여야 합니다.');
+  if (!(o.overlapMm >= 0)) throw new Error('겹침은 0 이상이어야 합니다.');
+  if (!(o.gapMm >= 0)) throw new Error('늘어놓는 간격은 0 이상이어야 합니다.');
+  return o;
+}
+
+// 전체 범위를 N등분한 조각 범위들 (일러스트레이터 없이도 동작, 단위 pt)
+// 안쪽 이음매는 양쪽으로 겹침의 절반씩 늘린다 (바깥 테두리는 그대로).
+// 결과: [[왼, 위, 오른, 아래], ...] 가로 분할은 왼쪽부터, 세로 분할은 위쪽부터
+function domboSplitRects(bounds, opts) {
+  var o = domboSplitMerge(opts);
+  var L = bounds[0], T = bounds[1], R = bounds[2], B = bounds[3];
+  var half = o.overlapMm * DOMBO_PT_PER_MM / 2, n = o.count, out = [], i;
+  var step = o.direction === 'h' ? (R - L) / n : (T - B) / n;
+  if (step <= half * 2) throw new Error('겹침이 조각 크기보다 큽니다. 겹침을 줄이거나 개수를 줄이세요.');
+  for (i = 0; i < n; i++) {
+    if (o.direction === 'h') {
+      var x0 = L + step * i, x1 = x0 + step;
+      out.push([i === 0 ? x0 : x0 - half, T, i === n - 1 ? x1 : x1 + half, B]);
+    } else {
+      var y0 = T - step * i, y1 = y0 - step;
+      out.push([L, i === 0 ? y0 : y0 + half, R, i === n - 1 ? y1 : y1 - half]);
+    }
+  }
+  return out;
+}
+
+// 조각들을 원본 아래 50mm 부터 간격을 두고 위에서 아래로 늘어놓을 때의 이동량 [dx, dy]
+function domboSplitMoves(bounds, rects, gapPt) {
+  var y = bounds[3] - 50 * DOMBO_PT_PER_MM, out = [];
+  for (var i = 0; i < rects.length; i++) {
+    var r = rects[i];
+    out.push([bounds[0] - r[0], y - r[1]]);
+    y -= (r[1] - r[3]) + gapPt;
+  }
+  return out;
+}
+
+function domboSplit(opts) {
+  var doc = domboDoc();
+  var o = domboSplitMerge(opts);
+  if (!domboHasSelection(doc)) throw new Error('분할할 객체를 선택하세요.');
+  var items = [], i, j, all = null;
+  for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+  for (i = 0; i < items.length; i++) {
+    var b = domboItemBounds(items[i], true);
+    if (b) all = domboUnion(all, b);
+  }
+  if (!all) throw new Error('선택한 것에 보이는 모양이 없습니다.');
+  var rects = domboSplitRects(all, o);
+  var moves = domboSplitMoves(all, rects, o.gapMm * DOMBO_PT_PER_MM);
+
+  var layer = domboGetLayer(doc, DOMBO_SPLIT_LAYER), pieces = [];
+  for (i = 0; i < rects.length; i++) {
+    // 원본을 복제해 그룹에 담고, 맨 위에 조각 사각형을 놓아 클리핑 마스크로
+    var grp = layer.groupItems.add();
+    for (j = 0; j < items.length; j++) items[j].duplicate(grp, ElementPlacement.PLACEATEND);
+    var r = rects[i];
+    var mask = grp.pathItems.rectangle(r[1], r[0], r[2] - r[0], r[1] - r[3]);
+    mask.move(grp, ElementPlacement.PLACEATBEGINNING);
+    grp.clipped = true;
+    grp.name = '분할 ' + (i + 1) + '/' + rects.length;
+    grp.translate(moves[i][0], moves[i][1]);
+    pieces.push(grp);
+  }
+  doc.selection = null;
+  for (i = 0; i < pieces.length; i++) pieces[i].selected = true;
+
+  var k = DOMBO_PT_PER_MM, first = rects[0], mid = rects[Math.min(1, rects.length - 1)];
+  var size = function (rc) { return Math.round((rc[2] - rc[0]) / k) + '×' + Math.round((rc[1] - rc[3]) / k) + 'mm'; };
+  return (o.direction === 'h' ? '가로로 ' : '세로로 ') + rects.length + '등분했습니다 (겹침 ' + o.overlapMm + 'mm).\n' +
+    '조각 크기: 끝 ' + size(first) + (rects.length > 2 ? ', 가운데 ' + size(mid) : '') + '. 원본 아래에 늘어놓았습니다.';
+}
+
 // ---- 치수 표시 ----
 
 var DOMBO_DIM_LAYER = '치수';
@@ -874,6 +972,7 @@ function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
 function domboPanelCount() { return domboCall(domboCount); }
 function domboPanelBarBox(opts) { return domboCall(domboBarBox, opts); }
 function domboPanelDim(opts) { return domboCall(domboDimension, opts); }
+function domboPanelSplit(opts) { return domboCall(domboSplit, opts); }
 function domboPanelGrommet(opts) { return domboCall(domboGrommet, opts); }
 function domboPanelGrommetRemove() { return domboCall(domboGrommetRemove); }
 function domboPanelDimRemove() { return domboCall(domboDimRemove); }
