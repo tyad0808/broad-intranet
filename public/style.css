@@ -714,3 +714,4 @@ button.secondary:disabled, button.secondary:disabled:hover { background: #fff; }
 .cal-del:hover { background: var(--error-bg); color: var(--error); }
 .stage-select:not(.on) { background-color: #fff; border-color: var(--line); color: var(--muted); font-weight: 500; }
 .readonly-value { margin: 6px 0 14px; font-weight: 600; }
+.oi-head .buyer { color: var(--text); font-weight: 700; }

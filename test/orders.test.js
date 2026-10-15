@@ -354,3 +354,11 @@ test('관리자는 주문 카드에서 자동 단계(발송 등)도 손으로 �
   await save(boss, idOf('P1'), { stage_id: String(stageId('발송')) });
   assert.strictEqual(row('P1').stage_id, stageId('발송'));
 });
+
+test('카드에는 구매자 이름을 먼저, 받는 분이 다르면 괄호로 함께 보여준다', async t => {
+  const { db, kim } = await setup(t);
+  applyOrders(db, [order(4, { buyer_name: '김현진', receiver_name: '이서연' }), order(5, { buyer_name: '박지호', receiver_name: '박지호' })]);
+  const text = (await kim.request('/')).text;
+  assert.match(text, /<strong class="buyer">김현진<\/strong> \(받는 분 이서연\)/);
+  assert.match(text, /<strong class="buyer">박지호<\/strong> ·/);
+});
