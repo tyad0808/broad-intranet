@@ -402,3 +402,33 @@ test('수집이 꺼져 있으면 목록에 지금 수집 버튼이 없다', asyn
   const b = await loginAs(baseUrl, 'staff@broad.test');
   assert.doesNotMatch((await b.request('/')).text, /지금 수집/);
 });
+
+test('네이버가 429(요청이 많음)로 거절하면 잠시 기다렸다가 다시 시도한다', async () => {
+  let tries = 0;
+  const waits = [];
+  const fetchFn = async url => {
+    if (url.includes('/v1/oauth2/token')) return Response.json({ access_token: 'tok', expires_in: 10800 });
+    tries++;
+    return tries < 3 ? Response.json({ message: '요청이 많아' }, { status: 429 }) : Response.json({ data: { ok: 1 } });
+  };
+  const client = createNaverClient({
+    clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn, minGapMs: 0,
+    sleep: async ms => { waits.push(ms); },
+  });
+  const body = await client.request('POST', '/v1/pay-order/seller/product-orders/query', { json: {} });
+  assert.deepStrictEqual(body, { data: { ok: 1 } });
+  assert.strictEqual(tries, 3);
+  assert.deepStrictEqual(waits, [1000, 2000]);
+});
+
+test('429 가 계속되면 몇 번 시도한 뒤 오류로 알린다', async () => {
+  let tries = 0;
+  const fetchFn = async url => {
+    if (url.includes('/v1/oauth2/token')) return Response.json({ access_token: 'tok', expires_in: 10800 });
+    tries++;
+    return Response.json({ message: '요청이 많아' }, { status: 429 });
+  };
+  const client = createNaverClient({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn, minGapMs: 0, sleep: async () => {} });
+  await assert.rejects(client.request('POST', '/v1/pay-order/seller/product-orders/query', { json: {} }), /429/);
+  assert.strictEqual(tries, 5);
+});
