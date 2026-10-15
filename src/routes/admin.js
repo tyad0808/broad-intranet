@@ -330,7 +330,7 @@ function adminRoutes(db, sessionStore, collector, notifier) {
 
   router.post('/collect', async (req, res) => {
     if (!collector) {
-      flash(req, 'error', '주문 수집기가 설정되지 않았습니다.');
+      flash(req, 'error', '주문 수집이 꺼져 있습니다 (ORDER_SOURCE=off).');
       return res.redirect('/admin/collect');
     }
     const result = await collector.run();

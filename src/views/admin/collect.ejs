@@ -5,7 +5,8 @@
 <section class="card">
   <h2>주문 수집</h2>
   <% if (!source) { %>
-    <p class="error">주문 수집기가 설정되지 않았습니다.</p>
+    <p class="notice">주문 수집이 <strong>꺼져</strong> 있습니다 (.env 의 ORDER_SOURCE=off).
+      네이버 커머스 API 키를 .env 에 넣고 ORDER_SOURCE=naver 로 바꾼 뒤 서버를 다시 시작하면 수집이 시작됩니다.</p>
   <% } else { %>
     <p>
       출처: <strong><%= source.label %></strong>
