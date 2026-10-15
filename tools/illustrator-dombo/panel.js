@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm'];
+  var FIELDS = ['diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt'];
   var CHECKS = ['fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -81,6 +81,15 @@
     });
   });
   $('dimRemove').addEventListener('click', function () { call('domboPanelDimRemove'); });
+  $('grommet').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelGrommet', {
+      top: o.gTop, bottom: o.gBottom, left: o.gLeft, right: o.gRight,
+      marginMm: o.gMarginMm, diameterMm: o.gDiameterMm, strokePt: o.gStrokePt
+    });
+  });
+  $('grommetRemove').addEventListener('click', function () { call('domboPanelGrommetRemove'); });
   $('count').addEventListener('click', function () { call('domboPanelCount'); });
 
   // ---- 칸 순서·이름 바꾸기 (이 컴퓨터에 기억) ----

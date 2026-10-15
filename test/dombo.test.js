@@ -262,3 +262,31 @@ test('돔보·개수 세기 전체 기준에서 치수 레이어는 뺀다', () 
   ]);
   assert.deepStrictEqual(Array.from(core.domboArtworkBounds(doc)), [0, 100, 100, 0]);
 });
+
+test('아일렛: 원 바깥선이 테두리에서 여백만큼, 모서리 포함 똑같이 나누고 겹치면 하나만', () => {
+  // 현수막 1000 x 500mm, 여백 10mm, 지름 5mm → 중심선은 테두리에서 12.5mm 안쪽
+  const banner = [0, 500 * MM, 1000 * MM, 0];
+  const r = core.domboGrommetCenters(banner, {});
+  near(r.radius, 2.5 * MM);
+  nearPts(Array.from(r.centers), mmPts([[12.5, 487.5], [987.5, 487.5], [12.5, 12.5], [987.5, 12.5]]));
+
+  // 위 5개, 왼쪽 3개 (모서리는 위·아래와 겹치니 가운데 하나만 더)
+  const r2 = core.domboGrommetCenters(banner, { top: 5, bottom: 2, left: 3 });
+  assert.strictEqual(r2.centers.length, 5 + 2 + 1);
+  const step = (987.5 - 12.5) / 4;
+  nearPts(Array.from(r2.centers).slice(0, 5), mmPts([0, 1, 2, 3, 4].map(i => [12.5 + step * i, 487.5])));
+  nearPts([r2.centers[7]], mmPts([[12.5, 250]]));
+
+  // 1개면 가운데
+  const r3 = core.domboGrommetCenters(banner, { top: 1, bottom: 0 });
+  nearPts(Array.from(r3.centers), mmPts([[500, 487.5]]));
+});
+
+test('아일렛: 너무 작으면 건너뛰고, 잘못된 값은 거절', () => {
+  assert.strictEqual(core.domboGrommetCenters([0, 20 * MM, 20 * MM, 0], {}).centers.length, 0);
+  assert.throws(() => core.domboGrommetCenters(art, { top: 1.5 }), /정수/);
+  assert.throws(() => core.domboGrommetCenters(art, { top: 0, bottom: 0 }), /하나 이상/);
+  assert.throws(() => core.domboGrommetCenters(art, { diameterMm: 0 }), /타공 크기/);
+  // 패널·대화상자에서 온 글자 숫자
+  assert.strictEqual(core.domboGrommetCenters([0, 500 * MM, 1000 * MM, 0], { top: '3', bottom: '0', marginMm: '20' }).centers.length, 3);
+});

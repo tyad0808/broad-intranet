@@ -94,6 +94,20 @@
     개수 세기: 선택한 것만(없으면 문서 전체) 글자 수와 아웃라인 도형 수를 그룹 안까지 셉니다.</p>
   </details>
 
+  <details open data-id="grommet">
+    <summary>아일렛 (타공)</summary>
+    <div class="num">위 개수 <input id="gTop" type="number" step="1" min="0" value="2"></div>
+    <div class="num">아래 개수 <input id="gBottom" type="number" step="1" min="0" value="2"></div>
+    <div class="num">왼쪽 개수 <input id="gLeft" type="number" step="1" min="0" value="0"></div>
+    <div class="num">오른쪽 개수 <input id="gRight" type="number" step="1" min="0" value="0"></div>
+    <div class="num">외곽 여백 (mm) <input id="gMarginMm" type="number" step="1" min="0" value="10"></div>
+    <div class="num">타공 크기 (mm) <input id="gDiameterMm" type="number" step="0.5" min="0.5" value="5"></div>
+    <div class="num">선 두께 (pt) <input id="gStrokePt" type="number" step="0.25" min="0.1" value="1"></div>
+    <button id="grommet">아일렛 표시</button>
+    <button id="grommetRemove">아일렛 지우기</button>
+    <p class="hint">개수는 모서리 포함 (1개면 가운데). 여백은 테두리에서 원 바깥선까지. 겹치는 자리는 하나만 찍습니다. 클리핑 마스크는 마스크 모양 기준. '아일렛' 레이어에 먹 100% 선으로.</p>
+  </details>
+
   <details open data-id="dim">
     <summary>치수 표시</summary>
     <label><input type="radio" name="dimTarget" value="each" checked> 선택한 것마다</label>

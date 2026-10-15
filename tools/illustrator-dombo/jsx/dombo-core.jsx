@@ -1,5 +1,5 @@
 ﻿// 브로애드 일러스트레이터 도구 핵심 기능 (ExtendScript, ES3 문법만 사용)
-// 돔보마크, 칼선, 격자 칼선, 막대 + 박스, 치수 표시, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
+// 돔보마크, 칼선, 격자 칼선, 막대 + 박스, 아일렛, 치수 표시, 개수 세기. 패널(index.html)과 단독 스크립트(jsx/*.jsx)가 함께 쓴다.
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
@@ -141,7 +141,7 @@ function domboHasSelection(doc) {
 
 // 레이어(하위 레이어 포함)에서 보이는 맨 위 개체들을 모은다. 돔보·칼선·치수 레이어는 뺀다.
 function domboLayerItems(layer, out) {
-  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER) return;
+  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER || layer.name === DOMBO_GROMMET_LAYER) return;
   for (var i = 0; i < layer.pageItems.length; i++) out.push(layer.pageItems[i]);
   for (var j = 0; j < layer.layers.length; j++) domboLayerItems(layer.layers[j], out);
 }
@@ -537,6 +537,116 @@ function domboBarBox(opts) {
   return made + '개 객체 기준으로 ' + (o.useBar ? '막대와 박스를' : '박스를') + ' 만들었습니다.';
 }
 
+// ---- 아일렛(타공) 표시 ----
+
+var DOMBO_GROMMET_LAYER = '아일렛';
+
+function domboGrommetDefaults() {
+  return {
+    top: 2, bottom: 2, left: 0, right: 0, // 변마다 개수 (모서리 포함)
+    marginMm: 10,      // 테두리에서 원 바깥선까지
+    diameterMm: 5,     // 타공 크기 (지름)
+    strokePt: 1        // 원 선 두께 (pt)
+  };
+}
+
+function domboGrommetMerge(opts) {
+  var o = domboGrommetDefaults();
+  if (opts) {
+    for (var k in opts) {
+      if (opts.hasOwnProperty(k) && opts[k] !== undefined && opts[k] !== null && opts[k] !== '') o[k] = opts[k];
+    }
+  }
+  var counts = ['top', 'bottom', 'left', 'right'], i;
+  for (i = 0; i < counts.length; i++) {
+    var n = Number(o[counts[i]]);
+    if (!(n >= 0) || Math.floor(n) !== n || n > 200) throw new Error('개수는 0 ~ 200 사이의 정수여야 합니다.');
+    o[counts[i]] = n;
+  }
+  o.marginMm = Number(o.marginMm);
+  o.diameterMm = Number(o.diameterMm);
+  o.strokePt = Number(o.strokePt);
+  if (!(o.marginMm >= 0)) throw new Error('여백은 0 이상이어야 합니다.');
+  if (!(o.diameterMm > 0)) throw new Error('타공 크기는 0보다 커야 합니다.');
+  if (!(o.strokePt > 0)) throw new Error('선 두께는 0보다 커야 합니다.');
+  if (o.top + o.bottom + o.left + o.right === 0) throw new Error('개수를 하나 이상 넣으세요.');
+  return o;
+}
+
+// 범위를 받아 타공 원 중심 목록을 계산한다 (일러스트레이터 없이도 동작, 단위 pt)
+// 원 바깥선이 테두리에서 여백만큼 떨어지도록 중심선은 (여백 + 반지름) 안쪽.
+// 변마다 모서리를 포함해 똑같이 나눈다 (1개면 가운데). 모서리처럼 겹치는 자리는 하나만.
+// 결과: { radius, centers: [[x, y], ...] } 또는 너무 작으면 centers 가 빈 목록
+function domboGrommetCenters(bounds, opts) {
+  var o = domboGrommetMerge(opts), k = DOMBO_PT_PER_MM;
+  var r = o.diameterMm * k / 2, d = o.marginMm * k + r;
+  var L = bounds[0] + d, T = bounds[1] - d, R = bounds[2] - d, B = bounds[3] + d;
+  var out = [];
+  if (R - L < 1 || T - B < 1) return { radius: r, centers: out };
+  function add(x, y) {
+    for (var i = 0; i < out.length; i++) if (Math.abs(out[i][0] - x) < 1 && Math.abs(out[i][1] - y) < 1) return;
+    out.push([x, y]);
+  }
+  function spread(x1, y1, x2, y2, n) {
+    if (n < 1) return;
+    if (n === 1) { add((x1 + x2) / 2, (y1 + y2) / 2); return; }
+    for (var i = 0; i < n; i++) {
+      var t = i / (n - 1);
+      add(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
+    }
+  }
+  spread(L, T, R, T, o.top);
+  spread(L, B, R, B, o.bottom);
+  spread(L, T, L, B, o.left);
+  spread(R, T, R, B, o.right);
+  return { radius: r, centers: out };
+}
+
+function domboGrommet(opts) {
+  var doc = domboDoc();
+  var o = domboGrommetMerge(opts);
+  if (!domboHasSelection(doc)) throw new Error('아일렛을 표시할 객체를 선택하세요.');
+  var items = [], i, j;
+  for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+
+  var layer = domboGetLayer(doc, DOMBO_GROMMET_LAYER);
+  layer.zOrder(ZOrderMethod.BRINGTOFRONT);
+  var black = domboBlack(doc), made = [], small = 0, targets = 0;
+  for (i = 0; i < items.length; i++) {
+    var b = domboItemBounds(items[i], true);
+    if (!b) continue;
+    targets++;
+    var g = domboGrommetCenters(b, o);
+    if (g.centers.length === 0) { small++; continue; }
+    for (j = 0; j < g.centers.length; j++) {
+      var c = g.centers[j], dup = false;
+      // 붙어 있는 객체끼리 같은 자리에 두 번 찍지 않는다
+      for (var m = 0; m < made.length && !dup; m++) dup = Math.abs(made[m][0] - c[0]) < 1 && Math.abs(made[m][1] - c[1]) < 1;
+      if (dup) continue;
+      var hole = layer.pathItems.ellipse(c[1] + g.radius, c[0] - g.radius, 2 * g.radius, 2 * g.radius);
+      hole.filled = false;
+      hole.stroked = true;
+      hole.strokeColor = black;
+      hole.strokeWidth = o.strokePt;
+      hole.name = '아일렛_' + (made.length + 1);
+      made.push(c);
+    }
+  }
+  if (targets === 0) throw new Error('선택한 것에 보이는 모양이 없습니다.');
+  var msg = '아일렛 ' + made.length + '개를 표시했습니다.';
+  if (small) msg += ' ' + small + '개는 여백에 비해 너무 작아서 건너뛰었습니다.';
+  return msg;
+}
+
+function domboGrommetRemove() {
+  var doc = domboDoc();
+  var layer = domboFindLayer(doc, DOMBO_GROMMET_LAYER);
+  if (!layer) return '지울 아일렛이 없습니다.';
+  layer.locked = false;
+  layer.remove();
+  return '아일렛을 모두 지웠습니다.';
+}
+
 // ---- 치수 표시 ----
 
 var DOMBO_DIM_LAYER = '치수';
@@ -764,4 +874,6 @@ function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
 function domboPanelCount() { return domboCall(domboCount); }
 function domboPanelBarBox(opts) { return domboCall(domboBarBox, opts); }
 function domboPanelDim(opts) { return domboCall(domboDimension, opts); }
+function domboPanelGrommet(opts) { return domboCall(domboGrommet, opts); }
+function domboPanelGrommetRemove() { return domboCall(domboGrommetRemove); }
 function domboPanelDimRemove() { return domboCall(domboDimRemove); }
