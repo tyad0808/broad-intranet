@@ -134,10 +134,96 @@
       <ul class="history">
         <% history.forEach(h => { %>
           <li>
-            <span class="result r-<%= h.result %>"><%= { ok: '완료', partial: '일부', fail: '실패', unknown: '확인 필요', practice: '연습' }[h.result] %></span>
-            <%= h.action === 'confirm' ? '발주확인' : '발송처리' %>
+            <span class="result r-<%= h.result %>"><%= RESULT_LABELS[h.result] %></span>
+            <%= ACTION_LABELS[h.action] || h.action %>
             <span class="muted">· <%= h.user_name || '-' %> · <%= kst(h.created_at) %></span>
-            <% if (h.result !== 'ok') { %><div class="muted small"><%= h.message %></div><% } %>
+            <% if (h.result !== 'ok' || h.mode === 'local') { %><div class="muted small"><%= h.message %></div><% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+  <% } else if (order.channel === 'manual') { %>
+  <% const st = order.channel_status; const editUrl = `/orders/${order.id}/manual-edit${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}`; %>
+  <section class="card process-card">
+    <h2>수기 주문</h2>
+    <ol class="steps">
+      <li class="<%= st !== 'PAYMENT_WAITING' && st !== 'CANCELED' ? 'done' : '' %>">입금 <span><%= st === 'PAYMENT_WAITING' ? '대기' : st === 'CANCELED' ? '-' : '완료' %></span></li>
+      <li class="<%= st === 'DELIVERED' ? 'done' : '' %>">발송 <span><%= st === 'DELIVERED' ? '완료' : st === 'CANCELED' ? '-' : '대기' %></span></li>
+    </ol>
+    <% if (st === 'CANCELED') { %><p class="claim-box"><strong>취소된 주문</strong></p><% } %>
+    <dl class="info manual-pay">
+      <dt>결제 방법</dt><dd><%= PAY_METHODS[order.pay_method] || '-' %></dd>
+      <dt>금액</dt><dd><%= order.amount != null ? `${Number(order.amount).toLocaleString('ko-KR')}원` : '-' %></dd>
+      <dt>입금자명</dt><dd><%= order.depositor || order.buyer_name || '-' %></dd>
+    </dl>
+
+    <% if (st === 'PAYMENT_WAITING') { %>
+      <form method="post" action="/orders/<%= order.id %>/manual/paid" data-once
+            data-confirm="<%= order.depositor || order.buyer_name %> 님 입금을 확인했나요?">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <button type="submit" class="wide">입금 확인</button>
+      </form>
+    <% } %>
+
+    <% if (st === 'PAYED' || st === 'PAYMENT_WAITING') { %>
+      <form method="post" action="/orders/<%= order.id %>/manual/dispatch" class="dispatch-form" data-once
+            data-confirm="{ship} 로 발송 완료 기록할까요?<%= st === 'PAYMENT_WAITING' ? '&#10;※ 아직 입금대기 상태입니다.' : '' %>">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <label>배송 방법
+          <select name="method" data-ship-method>
+            <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { %>
+              <option value="<%= code %>" <%= code === DEFAULT_METHOD ? 'selected' : '' %>><%= label %></option>
+            <% }) %>
+          </select>
+        </label>
+        <div data-ship-fields>
+          <label>택배사
+            <select name="company">
+              <% Object.entries(COURIERS).forEach(([code, label]) => { %>
+                <option value="<%= code %>" <%= code === DEFAULT_COURIER ? 'selected' : '' %>><%= label %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label>송장번호
+            <input type="text" name="tracking" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
+          </label>
+        </div>
+        <button type="submit" class="wide secondary">발송 완료 기록</button>
+      </form>
+      <p class="muted small">수기 주문은 인트라넷에만 기록됩니다. 고객 안내(문자 등)는 따로 해 주세요.</p>
+    <% } %>
+
+    <% if (shipped) { %>
+      <p class="shipped-line">
+        <%= shipMethodLabel(shipped.ship_method) %><% if (shipped.ship_company) { %> · <%= courierLabel(shipped.ship_company) %> <%= shipped.tracking_no %><% } %>
+        <span class="muted">(<%= kst(shipped.shipped_at) %>)</span>
+      </p>
+    <% } %>
+
+    <div class="form-actions manual-actions">
+      <a class="btn-sm" href="<%= editUrl %>">주문 정보 수정</a>
+      <% if (st !== 'CANCELED') { %>
+        <form method="post" action="/orders/<%= order.id %>/manual/cancel" class="inline" data-once
+              data-confirm="이 수기 주문을 취소할까요?">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="back" value="<%= back %>">
+          <button type="submit" class="btn-sm danger">주문 취소</button>
+        </form>
+      <% } %>
+    </div>
+
+    <% if (history.length) { %>
+      <h3>처리 기록</h3>
+      <ul class="history">
+        <% history.forEach(h => { %>
+          <li>
+            <span class="result r-<%= h.result %>"><%= RESULT_LABELS[h.result] %></span>
+            <%= ACTION_LABELS[h.action] || h.action %>
+            <span class="muted">· <%= h.user_name || '-' %> · <%= kst(h.created_at) %></span>
+            <% if (h.result !== 'ok' || h.mode === 'local') { %><div class="muted small"><%= h.message %></div><% } %>
           </li>
         <% }) %>
       </ul>
@@ -150,7 +236,7 @@
     <dl class="info">
       <dt>채널</dt><dd><%= channelInfo(order.channel).name %></dd>
       <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
-      <dt>결제일</dt><dd><%= kst(order.paid_at) %></dd>
+      <dt><%= order.channel === 'manual' ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
     </dl>
     <h2>상품별 상태</h2>
     <dl class="info">
@@ -158,18 +244,18 @@
         <dt><%= i.item_type === 'addon' ? '추가상품' : '상품' %></dt>
         <dd>
           <%= i.product_name %>
-          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= channelStatusLabel(i.channel_status) %> · <%= i.channel_confirmed ? '발주확인됨' : '발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %></div>
+          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= channelStatusLabel(i.channel_status, i.channel) %><%= i.channel === 'manual' ? '' : i.channel_confirmed ? ' · 발주확인됨' : ' · 발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %></div>
         </dd>
       <% }) %>
     </dl>
     <h2>배송지</h2>
     <dl class="info">
-      <dt>주문자</dt><dd><%= order.buyer_name || '-' %></dd>
+      <dt>주문자</dt><dd><%= order.buyer_name || '-' %><% if (order.buyer_phone) { %> · <a href="tel:<%= order.buyer_phone %>"><%= order.buyer_phone %></a><% } %></dd>
       <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
       <dt>연락처</dt><dd><% if (order.receiver_phone) { %><a href="tel:<%= order.receiver_phone %>"><%= order.receiver_phone %></a><% } else { %>-<% } %></dd>
       <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
     </dl>
-    <p class="muted">주문 정보와 배송지는 <%= channelInfo(order.channel).name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p>
+    <% if (order.channel !== 'manual') { %><p class="muted">주문 정보와 배송지는 <%= channelInfo(order.channel).name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p><% } %>
   </section>
   </div>
 </div>

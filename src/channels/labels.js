@@ -6,6 +6,7 @@ const CHANNELS = {
   godo: { name: '자사몰', mark: 'B', cls: 'own' },
   coupang: { name: '쿠팡', mark: 'C', cls: 'coupang' },
   esm: { name: 'G마켓·옥션', mark: 'G', cls: 'esm' },
+  manual: { name: '수기 주문', mark: '수', cls: 'manual' },
 };
 
 function channelInfo(key) {
@@ -24,7 +25,16 @@ const SMARTSTORE_STATUS = {
   CANCELED_BY_NOPAYMENT: '미결제취소',
 };
 
-function channelStatusLabel(code) {
+// 수기 주문(계좌이체 등)은 같은 상태 코드를 쓰되 이름만 다르게 보여준다
+const MANUAL_STATUS = {
+  PAYMENT_WAITING: '입금대기',
+  PAYED: '입금완료',
+  DELIVERED: '발송완료',
+  CANCELED: '취소',
+};
+
+function channelStatusLabel(code, channel) {
+  if (channel === 'manual' && MANUAL_STATUS[code]) return MANUAL_STATUS[code];
   return SMARTSTORE_STATUS[code] || code || '-';
 }
 

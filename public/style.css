@@ -531,3 +531,25 @@ button.secondary:disabled, button.secondary:disabled:hover { background: #fff; }
   .ship-arrow { font-size: 16px; }
 }
 .ship-sub { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ch-manual { background: #0f766e; }
+
+/* 수기 주문 */
+.manual-form fieldset { margin: 0 0 16px; padding: 12px 14px 4px; border: 1px solid var(--line); border-radius: 10px; }
+.manual-form legend { padding: 0 6px; font-weight: 700; }
+.manual-form .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; }
+.manual-form .two-col .wide { grid-column: 1 / -1; }
+.item-rows { display: grid; gap: 8px; margin-bottom: 8px; }
+.item-row { display: grid; grid-template-columns: 2fr 2fr 80px; gap: 8px; }
+.item-row input { margin-top: 0; }
+#add-item { margin-bottom: 12px; }
+.pay-status { display: flex; align-items: center; gap: 16px; margin: 8px 0 14px; }
+.pay-status .radio { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; }
+.pay-status .radio input { width: auto; margin: 0; }
+.pill.wait { background: #fff4e0; border-color: #f5d9a8; color: #9a6700; font-weight: 600; }
+.manual-pay { margin: 0 0 12px; }
+@media (max-width: 760px) {
+  .manual-form .two-col { grid-template-columns: 1fr; }
+  .item-row { grid-template-columns: 1fr 70px; }
+  .item-row input[name="item_name"] { grid-column: 1 / -1; }
+}
+.new-order { text-decoration: none; } .manual-actions { margin-top: 8px; align-items: center; } .manual-actions form { margin: 0; }

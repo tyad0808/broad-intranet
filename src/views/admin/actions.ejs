@@ -25,7 +25,7 @@
               <td class="nowrap"><%= kst(a.created_at) %></td>
               <td class="nowrap"><%= a.user_name || '-' %></td>
               <td class="nowrap">
-                <%= a.action === 'confirm' ? '발주확인' : '발송처리' %>
+                <%= ACTION_LABELS[a.action] || a.action %>
                 <% if (d && d.method) { %><div class="muted"><%= d.company ? `${courierLabel(d.company)} ${d.tracking}` : shipMethodLabel(d.method) %></div><% } %>
               </td>
               <td class="product">
@@ -33,7 +33,7 @@
                 <div class="muted"><%= a.channel_order_id %> · 상품 <%= JSON.parse(a.item_ids).length %>개</div>
               </td>
               <td class="nowrap">
-                <span class="result r-<%= a.result %>"><%= { ok: '완료', partial: '일부', fail: '실패', unknown: '확인 필요', practice: '연습' }[a.result] %></span>
+                <span class="result r-<%= a.result %>"><%= RESULT_LABELS[a.result] %></span>
               </td>
               <td class="muted"><%= a.message || '' %></td>
             </tr>

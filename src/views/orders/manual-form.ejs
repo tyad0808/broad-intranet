@@ -1,0 +1,92 @@
+<%- include('../partials/header') %>
+<% const isNew = mode === 'new'; const v = values || {}; %>
+<p class="back-row"><a href="<%= isNew ? back : `/orders/${order.id}${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}` %>" class="btn-back">← <%= isNew ? '목록으로' : '주문으로' %></a></p>
+
+<section class="card manual-form-card">
+  <h1><%= isNew ? '수기 주문 등록' : `수기 주문 수정 (${order.channel_order_id})` %></h1>
+  <p class="muted">계좌이체·전화 주문처럼 쇼핑몰을 거치지 않은 주문을 직접 적습니다. 네이버 등 바깥으로는 아무것도 보내지 않습니다.</p>
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
+
+  <form method="post" action="<%= isNew ? '/orders/new' : `/orders/${order.id}/manual-edit` %>" class="manual-form" data-once>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="back" value="<%= back %>">
+    <% if (!isNew) { %><input type="hidden" name="version" value="<%= order.version %>"><% } %>
+
+    <fieldset>
+      <legend>상품</legend>
+      <div class="item-rows" id="item-rows">
+        <% items.forEach((it, n) => { %>
+          <div class="item-row">
+            <% if (it.id) { %><input type="hidden" name="item_id" value="<%= it.id %>"><% } else { %><input type="hidden" name="item_id" value=""><% } %>
+            <input type="text" name="item_name" value="<%= it.name || '' %>" maxlength="200" placeholder="상품명 <%= n === 0 ? '(필수)' : '' %>" aria-label="상품명" <%= n === 0 ? 'required' : '' %>>
+            <input type="text" name="item_option" value="<%= it.option || '' %>" maxlength="300" placeholder="옵션·사이즈 (예: 90x50 / 500매)" aria-label="옵션">
+            <input type="number" name="item_qty" value="<%= it.qty || 1 %>" min="1" max="99999" aria-label="수량" class="qty">
+          </div>
+        <% }) %>
+      </div>
+      <button type="button" class="btn-sm" id="add-item">＋ 상품 추가</button>
+    </fieldset>
+
+    <fieldset class="two-col">
+      <legend>주문자 · 받는 분</legend>
+      <label>주문자 이름 (필수)<input type="text" name="buyer_name" value="<%= v.buyer_name || '' %>" maxlength="50" required></label>
+      <label>주문자 연락처<input type="tel" name="buyer_phone" value="<%= v.buyer_phone || '' %>" maxlength="30" placeholder="010-0000-0000"></label>
+      <label>받는 분 <span class="muted small">(비우면 주문자와 같음)</span><input type="text" name="receiver_name" value="<%= v.receiver_name || '' %>" maxlength="50"></label>
+      <label>받는 분 연락처<input type="tel" name="receiver_phone" value="<%= v.receiver_phone || '' %>" maxlength="30"></label>
+      <label class="wide">배송지 주소<input type="text" name="receiver_address" value="<%= v.receiver_address || '' %>" maxlength="300" placeholder="(우편번호) 주소 상세주소"></label>
+    </fieldset>
+
+    <fieldset class="two-col">
+      <legend>결제</legend>
+      <label>결제 방법
+        <select name="pay_method">
+          <% Object.entries(PAY_METHODS).forEach(([code, label]) => { %>
+            <option value="<%= code %>" <%= (v.pay_method || 'BANK') === code ? 'selected' : '' %>><%= label %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>금액 (원)<input type="text" name="amount" inputmode="numeric" value="<%= v.amount != null ? v.amount : '' %>" maxlength="15" placeholder="예: 55000"></label>
+      <label>입금자명<input type="text" name="depositor" value="<%= v.depositor || '' %>" maxlength="50" placeholder="주문자와 다를 때"></label>
+      <% if (isNew) { %>
+        <div class="pay-status">
+          <span>입금 상태</span>
+          <label class="radio"><input type="radio" name="pay_status" value="waiting" <%= v.pay_status !== 'paid' ? 'checked' : '' %>> 입금대기</label>
+          <label class="radio"><input type="radio" name="pay_status" value="paid" <%= v.pay_status === 'paid' ? 'checked' : '' %>> 입금완료</label>
+        </div>
+      <% } %>
+    </fieldset>
+
+    <fieldset class="two-col">
+      <legend>사내</legend>
+      <label>담당 디자이너
+        <select name="assignee_id">
+          <option value="">미지정</option>
+          <% if (v.assignee_id && !designers.some(d => d.id === Number(v.assignee_id))) { %>
+            <option value="<%= v.assignee_id %>" selected>현재 담당자 (디자이너 아님)</option>
+          <% } %>
+          <% designers.forEach(d => { %>
+            <option value="<%= d.id %>" <%= Number(v.assignee_id) === d.id ? 'selected' : '' %>><%= d.name %><%= d.id === user.id ? ' (나)' : '' %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>납기<input type="date" name="due_date" value="<%= v.due_date || '' %>"></label>
+      <label class="wide">메모<textarea name="memo" rows="3" maxlength="2000" placeholder="작업 요청사항, 통화 내용 등"><%= v.memo || '' %></textarea></label>
+    </fieldset>
+
+    <div class="form-actions">
+      <button type="submit"><%= isNew ? '주문 등록' : '수정 저장' %></button>
+    </div>
+  </form>
+</section>
+
+<template id="item-row-template">
+  <div class="item-row">
+    <input type="hidden" name="item_id" value="">
+    <input type="text" name="item_name" maxlength="200" placeholder="상품명" aria-label="상품명">
+    <input type="text" name="item_option" maxlength="300" placeholder="옵션·사이즈" aria-label="옵션">
+    <input type="number" name="item_qty" value="1" min="1" max="99999" aria-label="수량" class="qty">
+  </div>
+</template>
+<script src="/confirm.js"></script>
+<script src="/manual.js"></script>
+<%- include('../partials/footer') %>

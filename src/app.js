@@ -11,6 +11,7 @@ const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { orderRoutes } = require('./routes/orders');
+const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { channelStatusLabel, channelInfo, claimLabel, claimLevel } = require('./channels/labels');
@@ -46,6 +47,10 @@ function createApp({
   app.locals.shipMethodLabel = shipMethodLabel;
   app.locals.courierLabel = courierLabel;
   app.locals.actionMode = actions.mode;
+  app.locals.PAY_METHODS = PAY_METHODS;
+  // 처리 기록에 보여줄 이름
+  app.locals.ACTION_LABELS = { confirm: '발주확인', dispatch: '발송처리', create: '수기 등록', paid: '입금확인', edit: '수정', cancel: '취소' };
+  app.locals.RESULT_LABELS = { ok: '완료', partial: '일부', fail: '실패', unknown: '확인 필요', practice: '연습' };
   // 납기 표시: 지났으면 빨강, 오늘·내일이면 주황 (today 는 한국 날짜 YYYY-MM-DD)
   app.locals.dueInfo = (due, today) => {
     if (!due) return { cls: '', text: '' };
@@ -112,6 +117,8 @@ function createApp({
   });
 
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier));
+  // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
+  app.use(requireActive, manualRoutes(db, notifier));
   app.use(requireActive, orderRoutes(db, notifier, actions, collector));
 
   app.use((req, res) => {

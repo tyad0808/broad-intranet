@@ -43,6 +43,29 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'ship_company', 'TEXT');
   addColumn(db, 'orders', 'tracking_no', 'TEXT');
   addColumn(db, 'orders', 'shipped_at', 'TEXT');
+  // 수기 주문(계좌이체 등): 결제 방법·금액·입금자명·주문자 연락처
+  addColumn(db, 'orders', 'pay_method', 'TEXT');
+  addColumn(db, 'orders', 'amount', 'INTEGER');
+  addColumn(db, 'orders', 'depositor', 'TEXT');
+  addColumn(db, 'orders', 'buyer_phone', 'TEXT');
+  widenOrderActions(db);
+}
+
+// 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.
+// SQLite 는 CHECK 조건을 바로 고칠 수 없어서, 새 표를 만들어 옮겨 담는다 (기존 기록은 그대로).
+function widenOrderActions(db) {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'order_actions'").get();
+  if (!row || row.sql.includes("'create'")) return;
+  transaction(db, () => {
+    db.exec('ALTER TABLE order_actions RENAME TO order_actions_old');
+    db.exec('DROP INDEX IF EXISTS idx_order_actions_order');
+    migrate(db); // 새 모양의 order_actions 를 만든다 (다른 표는 이미 있어서 그대로)
+    db.exec(`
+      INSERT INTO order_actions (id, created_at, user_id, action, channel, channel_order_id, item_ids, detail, mode, result, message)
+      SELECT id, created_at, user_id, action, channel, channel_order_id, item_ids, detail, mode, result, message FROM order_actions_old;
+      DROP TABLE order_actions_old;
+    `);
+  });
 }
 
 function migrate(db) {
@@ -137,12 +160,12 @@ function migrate(db) {
       id               INTEGER PRIMARY KEY,
       created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
       user_id          INTEGER REFERENCES users(id),
-      action           TEXT    NOT NULL CHECK (action IN ('confirm', 'dispatch')),
+      action           TEXT    NOT NULL CHECK (action IN ('confirm', 'dispatch', 'create', 'paid', 'edit', 'cancel')),
       channel          TEXT    NOT NULL,
       channel_order_id TEXT    NOT NULL,
       item_ids         TEXT    NOT NULL,          -- 대상 상품주문번호 목록 (JSON)
       detail           TEXT,                      -- 배송 방법·택배사·송장번호 (JSON)
-      mode             TEXT    NOT NULL CHECK (mode IN ('live', 'practice')),
+      mode             TEXT    NOT NULL CHECK (mode IN ('live', 'practice', 'local')), -- local: 인트라넷 안에서만 기록 (수기 주문)
       result           TEXT    NOT NULL CHECK (result IN ('ok', 'partial', 'fail', 'practice', 'unknown')),
       message          TEXT
     );

@@ -25,12 +25,13 @@ const GROUP_KEY = "o.channel || ':' || o.channel_order_id";
 // 묶음의 모든 상품이 채널에서 끝났으면(배송중·배송완료·취소·반품 등) 1, 아니면 0
 const GROUP_ENDED = `MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END)`;
 // 판매자센터 '판매 관리' 처럼 보는 채널 상태 (주문 묶음 하나는 가장 앞 단계 하나로 센다)
+// 수기 주문은 발송 기록 = 끝(배송완료로 저장)이라 배송완료 칸에는 넣지 않는다 (계속 쌓이기만 하므로)
 const SHIP_STATES = { new: '신규주문', ready: '배송준비', shipping: '배송중', delivered: '배송완료' };
 const GROUP_SHIP_STATE = `CASE
   WHEN MAX(o.channel_status = 'PAYED' AND o.channel_confirmed = 0) THEN 'new'
   WHEN MAX(o.channel_status = 'PAYED' AND o.channel_confirmed = 1) THEN 'ready'
   WHEN MAX(o.channel_status = 'DELIVERING') THEN 'shipping'
-  WHEN MAX(o.channel_status = 'DELIVERED') THEN 'delivered'
+  WHEN MAX(o.channel_status = 'DELIVERED' AND o.channel != 'manual') THEN 'delivered'
   ELSE '' END`;
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
 const ITEM_ORDER = "CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id";
@@ -150,7 +151,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
           MAX(CASE WHEN o.stage_id IS NULL OR o.stage_id != ? THEN 1 ELSE 0 END) AND ${GROUP_ENDED} = 0 AS open,
           MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
           MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned,
-          ${GROUP_SHIP_STATE} AS ship_state
+          ${GROUP_SHIP_STATE} AS ship_state,
+          o.channel AS ch
         FROM orders o ${countWhere}
         GROUP BY o.channel, o.channel_order_id
       )
@@ -159,21 +161,22 @@ function orderRoutes(db, notifier, actions, collector = null) {
         COALESCE(SUM(open AND mine), 0) AS mine,
         COALESCE(SUM(open AND unassigned), 0) AS unassigned,
         COUNT(*) AS "all",
-        COALESCE(SUM(ship_state = 'new'), 0) AS st_new,
-        COALESCE(SUM(ship_state = 'ready'), 0) AS st_ready,
+        COALESCE(SUM(ship_state = 'new' AND (? OR ch != 'manual')), 0) AS st_new,
+        COALESCE(SUM(ship_state = 'ready' AND (? OR ch != 'manual')), 0) AS st_ready,
         COALESCE(SUM(ship_state = 'shipping'), 0) AS st_shipping,
         COALESCE(SUM(ship_state = 'delivered'), 0) AS st_delivered
       FROM grp
-    `).get(last, req.user.id, ...(channel ? [channel] : []));
+    `).get(last, req.user.id, ...(channel ? [channel] : []), channel ? 1 : 0, channel ? 1 : 0);
 
     // 상태 칸의 큰 숫자는 판매자센터와 같은 '상품주문' 단위 (추가상품·옵션별 상품도 하나씩 센다)
+    // 전체 채널일 때는 판매자센터 숫자와 비교하기 쉽게 수기 주문을 뺀다
     const itemCounts = db.prepare(`
       SELECT
         COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 0), 0) AS new,
         COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 1), 0) AS ready,
         COALESCE(SUM(o.channel_status = 'DELIVERING'), 0) AS shipping,
-        COALESCE(SUM(o.channel_status = 'DELIVERED'), 0) AS delivered
-      FROM orders o ${countWhere}
+        COALESCE(SUM(o.channel_status = 'DELIVERED' AND o.channel != 'manual'), 0) AS delivered
+      FROM orders o ${channel ? countWhere : "WHERE o.channel != 'manual'"}
     `).get(...(channel ? [channel] : []));
 
     const lastRun = db.prepare('SELECT started_at, ok FROM collect_runs ORDER BY id DESC LIMIT 1').get() || null;
