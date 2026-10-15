@@ -389,3 +389,14 @@ test('관리자 메뉴는 주문 화면에서 새 탭으로 열린다', async t 
   assert.match((await boss.request('/')).text, /href="\/admin\/users" target="_blank"/);
   assert.doesNotMatch((await boss.request('/admin/users')).text, /href="\/admin\/users" target="_blank"/, '관리자 화면 안에서는 같은 탭');
 });
+
+test('진행 중 탭에서도 발송 버튼에는 발송된 주문 수가 나오고, 누르면 전체 탭에서 보여준다', async t => {
+  const { db, kim, stageId } = await setup(t);
+  db.prepare("UPDATE orders SET stage_id = ? WHERE channel_item_id IN ('P1', 'P2')").run(stageId('발송'));
+  const text = (await kim.request('/')).text;
+  assert.match(text, new RegExp(`href="/\\?view=all&amp;stage=${stageId('발송')}"`));
+  assert.match(text, /발송 <span class="count">2</);
+  const shipped = (await kim.request(`/?view=all&stage=${stageId('발송')}`)).text;
+  assert.match(shipped, />상품1</);
+  assert.doesNotMatch(shipped, />상품3</);
+});

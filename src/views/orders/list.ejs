@@ -66,8 +66,13 @@
   <nav class="stage-chips" aria-label="주문 단계">
     <span class="chips-label">주문</span>
     <a href="<%= link({ stage: '' }) %>" class="chip <%= stageFilter ? '' : 'on' %>">전체 <span class="count"><%= stageTotal %></span></a>
-    <% stages.forEach(s => { const n = stageCounts[s.id] || 0; if (!s.active && !n) return; %>
-      <a href="<%= link({ stage: s.id }) %>" class="chip <%= stageFilter === s.id ? 'on' : '' %> <%= n ? '' : 'zero' %>">
+    <% stages.forEach(s => {
+         const shipped = s.id === lastStage && shippedCount !== null; // 진행 중 탭에서 본 발송(끝난 주문)
+         const n = shipped ? shippedCount : stageCounts[s.id] || 0;
+         if (!s.active && !n) return; %>
+      <a href="<%= shipped ? link({ view: 'all', st: '', stage: s.id }) : link({ stage: s.id }) %>"
+         class="chip <%= stageFilter === s.id ? 'on' : '' %> <%= n ? '' : 'zero' %>"
+         <% if (shipped) { %>title="끝난 주문이라 '전체' 탭에서 보여줍니다"<% } %>>
         <%= s.name %><%= s.active ? '' : ' (숨김)' %> <span class="count"><%= n %></span>
       </a>
     <% }) %>

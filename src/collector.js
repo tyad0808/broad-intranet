@@ -81,10 +81,19 @@ function applyOrders(db, orders) {
     "UPDATE orders SET stage_id = ?, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ? AND stage_id = ?"
   );
   const notify = db.prepare("INSERT INTO notifications (type, message, order_id) VALUES ('new_order', ?, ?)");
+  const endedList = [...ALREADY_DONE, ...CANCELED, 'CANCELED_BY_NOPAYMENT'].map(x => `'${x}'`).join(', ');
+  const moveShippedGroup = db.prepare(`
+    UPDATE orders SET stage_id = ? WHERE channel = ? AND channel_order_id = ? AND (stage_id IS NULL OR stage_id != ?)
+      AND NOT EXISTS (
+        SELECT 1 FROM orders x WHERE x.channel = ? AND x.channel_order_id = ?
+          AND (x.channel_status IS NULL OR x.channel_status NOT IN (${endedList}))
+      )
+  `);
 
   // claims: 이번 수집에서 새로 생긴 취소·반품·교환 요청 (알림용)
   const result = { created: 0, updated: 0, createdIds: [], archived: 0, claims: [] };
 
+  const shippedGroups = new Set();
   transaction(db, () => {
     for (const o of orders) {
       const existing = find.get(o.channel, o.channel_item_id);
@@ -121,7 +130,14 @@ function applyOrders(db, orders) {
       if (o.channel_confirmed && stageConfirmed && stageNew) {
         moveGroupStage.run(stageConfirmed, o.channel, o.channel_order_id, stageNew);
       }
+      if (ALREADY_DONE.has(o.channel_status)) shippedGroups.add(JSON.stringify([o.channel, o.channel_order_id]));
       result.updated += 1;
+    }
+    // 판매자센터에서 바로 발송처리한 주문: 묶음이 모두 끝났고(발송·취소 등) 하나라도 발송됐으면 '발송' 단계로.
+    // 같은 수집에 들어온 추가상품까지 다 넣은 뒤에 판단한다
+    for (const key of shippedGroups) {
+      const [channel, orderId] = JSON.parse(key);
+      if (lastStage) moveShippedGroup.run(lastStage, channel, orderId, lastStage, channel, orderId);
     }
   });
 

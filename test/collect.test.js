@@ -443,3 +443,13 @@ test('429 가 계속되면 몇 번 시도한 뒤 오류로 알린다', async () 
   await assert.rejects(client.request('POST', '/v1/pay-order/seller/product-orders/query', { json: {} }), /429/);
   assert.strictEqual(tries, 5);
 });
+
+test('판매자센터에서 바로 발송한 주문은 묶음이 모두 끝나면 발송 단계로 옮긴다', () => {
+  const db = openDb(':memory:');
+  applyOrders(db, [order(1, { channel_confirmed: 1 }), order(9, { channel_order_id: 'O1', item_type: 'addon', channel_confirmed: 1 })]);
+  applyOrders(db, [order(1, { channel_confirmed: 1, channel_status: 'DELIVERING' })]);
+  assert.strictEqual(stageName(db, 'P1'), '발주확인', '추가상품이 아직 결제완료면 그대로');
+  applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon', channel_confirmed: 1, channel_status: 'DELIVERING' })]);
+  assert.strictEqual(stageName(db, 'P1'), '발송');
+  assert.strictEqual(stageName(db, 'P9'), '발송');
+});

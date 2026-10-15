@@ -244,6 +244,23 @@ function splitDesignStages(db, insertSetting) {
   insertSetting.run('design_split_v1', '1');
 }
 
+// 한 번만: 판매자센터에서 바로 발송된 주문(묶음이 모두 끝났고 하나라도 발송됨)이 발주확인 등에 남아 있으면 '발송' 단계로
+function moveShippedToLastStage(db, insertSetting) {
+  if (db.prepare("SELECT value FROM settings WHERE key = 'ship_stage_fix_v1'").get()) return;
+  const last = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
+  if (last) {
+    const shipped = "'DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED', 'EXCHANGED', 'RETURNED'";
+    const ended = `${shipped}, 'CANCELED', 'CANCELED_BY_NOPAYMENT'`;
+    db.prepare(`
+      UPDATE orders SET stage_id = ? WHERE (stage_id IS NULL OR stage_id != ?) AND (channel, channel_order_id) IN (
+        SELECT channel, channel_order_id FROM orders GROUP BY channel, channel_order_id
+        HAVING MIN(channel_status IN (${ended})) = 1 AND MAX(channel_status IN (${shipped})) = 1
+      )
+    `).run(last.id, last.id);
+  }
+  insertSetting.run('ship_stage_fix_v1', '1');
+}
+
 // 예전 기본 단계 이름을 새 이름으로 한 번만 바꾼다 (관리자가 이미 다른 이름으로 바꿨으면 건드리지 않음)
 function renameDesignStages(db, insertSetting) {
   const done = db.prepare("SELECT value FROM settings WHERE key = 'stage_names_v2'").get();
@@ -297,6 +314,7 @@ function seed(db) {
     if (confirmedStage) insertSetting.run('stage_confirmed', confirmedStage);
 
     splitDesignStages(db, insertSetting);
+    moveShippedToLastStage(db, insertSetting);
 
     insertSetting.run('unassigned_threshold', '5');      // 미지정 알림 기준 건수
     insertSetting.run('unassigned_repeat_minutes', '30'); // 해소될 때까지 다시 알리는 간격

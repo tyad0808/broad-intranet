@@ -169,6 +169,23 @@ function orderRoutes(db, notifier, actions, collector = null) {
     };
     const stageCount = countBy('o.stage_id', withDesign(where, params));
     const designCount = countBy(DESIGN_OF, withStage(where, params));
+    // '진행 중'·'내 담당'·'미지정' 탭은 끝난 주문(발송)을 빼고 보여주므로, 발송 버튼에는 탭과 상관없이
+    // 발송 단계에 있는 주문 수를 보여주고 누르면 '전체' 탭에서 본다
+    let shippedCount = null;
+    if (view !== 'all') {
+      const base = [];
+      const baseParams = [];
+      if (channel) { base.push('o.channel = ?'); baseParams.push(channel); }
+      if (due) { base.push('o.due_date = ?'); baseParams.push(due); }
+      if (q) {
+        base.push('(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ? OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ?)');
+        baseParams.push(...Array(7).fill(`%${q}%`));
+      }
+      const [list, p] = withDesign([...base, 'o.stage_id = ?'], [...baseParams, last]);
+      shippedCount = db.prepare(`
+        SELECT COUNT(*) AS n FROM (SELECT 1 FROM orders o ${sqlWhere(list)} GROUP BY o.channel, o.channel_order_id)
+      `).get(...p).n;
+    }
 
     // 탭 건수와 채널 상태 칸 건수 (주문 묶음 단위, 채널을 골랐으면 그 채널만)
     const countWhere = channel ? 'WHERE o.channel = ?' : '';
@@ -219,6 +236,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
       itemCounts,
       stageCounts: stageCount.counts,
       stageTotal: stageCount.total,
+      lastStage: last,
+      shippedCount,
       designCounts: designCount.counts,
       designTotal: designCount.total,
       designFilter,
