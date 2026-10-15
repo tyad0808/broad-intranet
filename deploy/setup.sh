@@ -98,6 +98,8 @@ BACKUP_KEEP_DAYS=14
 ORDER_SOURCE=off
 NAVER_CLIENT_ID=
 NAVER_CLIENT_SECRET=
+# 발주확인·발송처리: off = 연습 모드(네이버로 보내지 않음), on = 실제로 보냄
+NAVER_WRITE=off
 COLLECT_INTERVAL_MINUTES=5
 ENV
   echo ".env 를 새로 만들었습니다 (세션 비밀값 자동 생성)."

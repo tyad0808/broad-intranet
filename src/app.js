@@ -12,7 +12,9 @@ const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { orderRoutes } = require('./routes/orders');
 const { createNotifier } = require('./notifier');
-const { channelStatusLabel, channelInfo } = require('./channels/labels');
+const { createOrderActions } = require('./actions');
+const { channelStatusLabel, channelInfo, claimLabel, claimLevel } = require('./channels/labels');
+const { shipMethodLabel, courierLabel } = require('./channels/shipping');
 
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -24,7 +26,13 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ db, collector = null, notifier = createNotifier({ db }), secret = sessionSecret() }) {
+function createApp({
+  db,
+  collector = null,
+  notifier = createNotifier({ db }),
+  actions = createOrderActions({ db }), // 기본은 연습 모드 (네이버로 보내지 않음)
+  secret = sessionSecret(),
+}) {
   const app = express();
   const isProd = process.env.NODE_ENV === 'production';
   const store = new SqliteSessionStore(db);
@@ -33,6 +41,11 @@ function createApp({ db, collector = null, notifier = createNotifier({ db }), se
   app.set('views', path.join(__dirname, 'views'));
   app.locals.channelStatusLabel = channelStatusLabel;
   app.locals.channelInfo = channelInfo;
+  app.locals.claimLabel = claimLabel;
+  app.locals.claimLevel = claimLevel;
+  app.locals.shipMethodLabel = shipMethodLabel;
+  app.locals.courierLabel = courierLabel;
+  app.locals.actionMode = actions.mode;
   // 납기 표시: 지났으면 빨강, 오늘·내일이면 주황 (today 는 한국 날짜 YYYY-MM-DD)
   app.locals.dueInfo = (due, today) => {
     if (!due) return { cls: '', text: '' };
@@ -99,7 +112,7 @@ function createApp({ db, collector = null, notifier = createNotifier({ db }), se
   });
 
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier));
-  app.use(requireActive, orderRoutes(db, notifier));
+  app.use(requireActive, orderRoutes(db, notifier, actions));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });

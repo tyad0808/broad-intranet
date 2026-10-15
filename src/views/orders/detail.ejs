@@ -5,6 +5,12 @@
   <section class="card">
     <% const c = channelInfo(order.channel); %>
     <p class="detail-channel"><span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %> · 주문번호 <%= order.channel_order_id %></p>
+    <% claimItems.forEach(i => { const level = claimLevel(i.claim_status); if (!level) return; %>
+      <p class="claim-box <%= level === 'done' ? 'done' : '' %>">
+        <strong><%= claimLabel(i.claim_status) %></strong>
+        <%= i.product_name %><%= level === 'open' ? ' — 판매자센터에서 먼저 처리하세요. 처리 전에는 발주확인·발송처리를 막아 둡니다.' : '' %>
+      </p>
+    <% }) %>
     <ul class="oi-items detail-items">
       <% items.forEach(i => { %>
         <li class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
@@ -62,6 +68,83 @@
     </form>
   </section>
 
+  <div class="detail-side">
+  <% if (order.channel === 'smartstore') { %>
+  <section class="card process-card">
+    <h2>스마트스토어 처리</h2>
+    <% if (actionMode === 'practice') { %>
+      <p class="practice-note"><strong>연습 모드</strong> 버튼을 눌러도 네이버로 보내지 않고 기록만 남깁니다.</p>
+    <% } %>
+    <% const allConfirmed = items.every(i => i.channel_confirmed); %>
+    <ol class="steps">
+      <li class="<%= allConfirmed ? 'done' : '' %>">발주확인 <span><%= allConfirmed ? '완료' : canConfirm ? '대기' : '-' %></span></li>
+      <li class="<%= shipped ? 'done' : '' %>">발송처리 <span><%= shipped ? '완료' : canDispatch ? '대기' : '-' %></span></li>
+    </ol>
+
+    <% if (canConfirm) { %>
+      <form method="post" action="/orders/<%= order.id %>/confirm" data-once
+            data-confirm="'<%= items[0].product_name %>' 주문을 스마트스토어에 발주확인할까요?&#10;고객에게 발주확인 알림이 가고, 되돌릴 수 없습니다.">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <button type="submit" class="wide">발주확인 보내기</button>
+      </form>
+    <% } %>
+
+    <% if (canDispatch) { %>
+      <form method="post" action="/orders/<%= order.id %>/dispatch" class="dispatch-form" data-once
+            data-confirm="{ship} 로 발송처리할까요?&#10;고객에게 발송 알림이 가고, 되돌리기 어렵습니다.">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <label>배송 방법
+          <select name="method" data-ship-method>
+            <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { %>
+              <option value="<%= code %>" <%= code === DEFAULT_METHOD ? 'selected' : '' %>><%= label %></option>
+            <% }) %>
+          </select>
+        </label>
+        <div data-ship-fields>
+          <label>택배사
+            <select name="company">
+              <% Object.entries(COURIERS).forEach(([code, label]) => { %>
+                <option value="<%= code %>" <%= code === DEFAULT_COURIER ? 'selected' : '' %>><%= label %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label>송장번호
+            <input type="text" name="tracking" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
+          </label>
+        </div>
+        <button type="submit" class="wide">발송처리 보내기</button>
+      </form>
+    <% } else if (canConfirm) { %>
+      <p class="muted">발주확인을 하면 송장 입력 칸이 나타납니다.</p>
+    <% } else if (!shipped) { %>
+      <p class="muted">지금은 처리할 수 있는 상품이 없습니다 (결제완료가 아니거나 취소·반품 요청 중).</p>
+    <% } %>
+
+    <% if (shipped) { %>
+      <p class="shipped-line">
+        <%= shipMethodLabel(shipped.ship_method) %><% if (shipped.ship_company) { %> · <%= courierLabel(shipped.ship_company) %> <%= shipped.tracking_no %><% } %>
+        <span class="muted">(<%= kst(shipped.shipped_at) %>)</span>
+      </p>
+    <% } %>
+
+    <% if (history.length) { %>
+      <h3>처리 기록</h3>
+      <ul class="history">
+        <% history.forEach(h => { %>
+          <li>
+            <span class="result r-<%= h.result %>"><%= { ok: '완료', partial: '일부', fail: '실패', unknown: '확인 필요', practice: '연습' }[h.result] %></span>
+            <%= h.action === 'confirm' ? '발주확인' : '발송처리' %>
+            <span class="muted">· <%= h.user_name || '-' %> · <%= kst(h.created_at) %></span>
+            <% if (h.result !== 'ok') { %><div class="muted small"><%= h.message %></div><% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+  <% } %>
+
   <section class="card">
     <h2>주문 정보</h2>
     <dl class="info">
@@ -75,7 +158,7 @@
         <dt><%= i.item_type === 'addon' ? '추가상품' : '상품' %></dt>
         <dd>
           <%= i.product_name %>
-          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= channelStatusLabel(i.channel_status) %> · <%= i.channel_confirmed ? '발주확인됨' : '발주확인 전' %></div>
+          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= channelStatusLabel(i.channel_status) %> · <%= i.channel_confirmed ? '발주확인됨' : '발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %></div>
         </dd>
       <% }) %>
     </dl>
@@ -88,5 +171,8 @@
     </dl>
     <p class="muted">주문 정보와 배송지는 <%= channelInfo(order.channel).name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p>
   </section>
+  </div>
 </div>
+<script src="/confirm.js"></script>
+<script src="/orders.js"></script>
 <%- include('../partials/footer') %>

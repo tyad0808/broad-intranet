@@ -44,18 +44,27 @@ function naverItem(id, { confirmed = false, status = 'PAYED' } = {}) {
 
 // ───────── 안전장치 ─────────
 
-test('조회용 주소 2개 말고는 네이버 API 를 호출할 수 없다', async () => {
+test('허용 목록 밖의 네이버 API 는 호출할 수 없다', async () => {
   const { fetchFn, calls } = fakeNaver({});
-  const client = createNaverClient({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn });
+  const client = createNaverClient({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn, allowWrite: true });
   const forbidden = [
-    ['POST', '/v1/pay-order/seller/product-orders/confirm'],   // 발주확인
-    ['POST', '/v1/pay-order/seller/product-orders/dispatch'],  // 발송처리
     ['GET', '/v1/products/search'],
+    ['POST', '/v1/pay-order/seller/product-orders/cancel/approve'],
+    ['GET', '/v1/pay-order/seller/product-orders/confirm'],
   ];
   for (const [method, p] of forbidden) {
     await assert.rejects(client.request(method, p), /허용되지 않은/);
   }
   assert.strictEqual(calls.length, 0, '막힌 요청은 네이버로 아무것도 보내지 않아야 한다');
+});
+
+test('상태 변경(발주확인·발송처리)은 쓰기를 켠 클라이언트만 보낼 수 있다', async () => {
+  const { fetchFn, calls } = fakeNaver({});
+  const client = createNaverClient({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn });
+  for (const p of ['/v1/pay-order/seller/product-orders/confirm', '/v1/pay-order/seller/product-orders/dispatch']) {
+    await assert.rejects(client.request('POST', p, { json: {} }), /꺼져 있습니다/);
+  }
+  assert.strictEqual(calls.length, 0);
 });
 
 test('소스 코드 어디에도 허용 목록 밖의 네이버 API 주소가 없다', () => {
@@ -76,10 +85,14 @@ test('소스 코드 어디에도 허용 목록 밖의 네이버 API 주소가 �
   }
 });
 
-test('허용 목록에는 조회용 주소만 있다', () => {
+test('허용 목록은 조회 2개 + 상태 변경 2개(발주확인·발송처리)뿐이다', () => {
   assert.ok(isAllowed('GET', '/v1/pay-order/seller/product-orders/last-changed-statuses'));
   assert.ok(isAllowed('POST', '/v1/pay-order/seller/product-orders/query'));
-  assert.strictEqual(ALLOWED.length, 2);
+  assert.deepStrictEqual(ALLOWED.filter(a => a.write).map(a => a.path).sort(), [
+    '/v1/pay-order/seller/product-orders/confirm',
+    '/v1/pay-order/seller/product-orders/dispatch',
+  ]);
+  assert.strictEqual(ALLOWED.length, 4);
 });
 
 // ───────── 스마트스토어 응답 처리 ─────────

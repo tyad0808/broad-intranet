@@ -14,7 +14,12 @@ function browser(baseUrl) {
         ...(cookie ? { cookie } : {}),
         ...(form ? { 'content-type': 'application/x-www-form-urlencoded' } : {}),
       },
-      body: form ? new URLSearchParams(form).toString() : undefined,
+      // 값이 배열이면 같은 이름으로 여러 번 보낸다 (체크박스 여러 개 = ids=1&ids=2)
+      body: form instanceof URLSearchParams
+        ? form.toString()
+        : form
+          ? new URLSearchParams(Object.entries(form).flatMap(([k, v]) => (Array.isArray(v) ? v : [v]).map(x => [k, x]))).toString()
+          : undefined,
     });
     const setCookie = res.headers.get('set-cookie');
     if (setCookie) cookie = setCookie.split(';')[0];
@@ -30,8 +35,8 @@ function browser(baseUrl) {
   return { request, submit, cookie: () => cookie };
 }
 
-async function startServer({ db = openDb(':memory:'), collector = null } = {}) {
-  const app = createApp({ db, collector, secret: 'test-secret' });
+async function startServer({ db = openDb(':memory:'), collector = null, actions, notifier } = {}) {
+  const app = createApp({ db, collector, secret: 'test-secret', ...(actions ? { actions } : {}), ...(notifier ? { notifier } : {}) });
   const server = await new Promise(resolve => {
     const s = app.listen(0, () => resolve(s));
   });

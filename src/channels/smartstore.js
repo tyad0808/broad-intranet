@@ -1,4 +1,4 @@
-// 스마트스토어 주문 가져오기 (조회 전용)
+// 스마트스토어 주문 가져오기(조회)와 발주확인·발송처리(createSmartstoreWriter)
 //
 // 흐름: ① "이 시간 동안 바뀐 주문" 목록을 받고 → ② 그 주문들의 상세 정보를 받아
 //       → ③ 인트라넷 DB 에 넣기 좋은 모양(normalize)으로 바꿔 돌려준다.
@@ -96,4 +96,20 @@ function createSmartstoreSource(options = {}) {
   };
 }
 
-module.exports = { createSmartstoreSource, normalize, toKstIso };
+// 주문 상태를 바꾸는 쪽 (2차). allowWrite 를 켠 클라이언트로만 만든다.
+// 서버에서는 .env 의 NAVER_WRITE=on 일 때만 이 함수를 부른다 (src/server.js).
+function createSmartstoreWriter(options = {}) {
+  const client = options.client || createNaverClient({ ...options, allowWrite: true });
+  return {
+    // 발주확인: { productOrderIds: [...] }
+    confirm(productOrderIds) {
+      return client.request('POST', '/v1/pay-order/seller/product-orders/confirm', { json: { productOrderIds } });
+    },
+    // 발송처리: [{ productOrderId, deliveryMethod, deliveryCompanyCode, trackingNumber, dispatchDate }]
+    dispatch(dispatchProductOrders) {
+      return client.request('POST', '/v1/pay-order/seller/product-orders/dispatch', { json: { dispatchProductOrders } });
+    },
+  };
+}
+
+module.exports = { createSmartstoreWriter, createSmartstoreSource, normalize, toKstIso };

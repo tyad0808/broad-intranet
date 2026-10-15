@@ -31,5 +31,10 @@
   <% } %>
   <main class="container">
     <% if (locals.flash) { %>
-      <p class="<%= flash.type === 'error' ? 'error' : 'notice' %> flash"><%= flash.message %></p>
+      <div class="<%= flash.type === 'error' ? 'error' : flash.type === 'warn' ? 'warn-box' : 'notice' %> flash">
+        <%= flash.message %>
+        <% if (flash.details && flash.details.length) { %>
+          <ul class="flash-details"><% flash.details.forEach(d => { %><li><%= d %></li><% }) %></ul>
+        <% } %>
+      </div>
     <% } %>

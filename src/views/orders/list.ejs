@@ -49,7 +49,21 @@
   <button type="submit" class="btn-sm">검색</button>
 </form>
 
+<% if (actionMode === 'practice') { %>
+  <p class="practice-note"><strong>연습 모드</strong> 발주확인·발송처리 버튼을 눌러도 네이버로 보내지 않고 기록만 남깁니다.</p>
+<% } %>
+
+<%# 일괄 처리용 폼: 체크박스는 목록 안에 있고 form="bulk-form" 으로 이 폼에 연결된다 %>
+<form id="bulk-form" method="post" action="/orders/bulk/confirm" data-once>
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <input type="hidden" name="back" value="<%= currentUrl %>">
+</form>
+
 <div id="live-list">
+<% const anyAction = groups.some(g => g.canConfirm || g.canDispatch); %>
+<% if (anyAction) { %>
+  <label class="check-all"><input type="checkbox" data-check-all> 처리할 수 있는 주문 모두 선택</label>
+<% } %>
 <% if (groups.length === 0) { %>
   <section class="card"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>
 <% } else { %>
@@ -61,10 +75,21 @@
          const keepCurrent = o.assignee_id && !designers.some(d => d.id === o.assignee_id);
          const confirmed = g.items.every(i => i.channel_confirmed);
     %>
-      <li id="o<%= o.id %>" class="order-item">
+      <li id="o<%= o.id %>" class="order-item<%= g.claim && claimLevel(g.claim.claim_status) === 'open' ? ' has-claim' : '' %>">
+        <% if (anyAction) { %>
+          <span class="oi-check">
+            <% if (g.canConfirm || g.canDispatch) { %>
+              <input type="checkbox" name="ids" value="<%= o.id %>" form="bulk-form" aria-label="선택: <%= o.product_name %>"
+                     data-can="<%= [g.canConfirm ? 'confirm' : '', g.canDispatch ? 'dispatch' : ''].join(' ').trim() %>">
+            <% } %>
+          </span>
+        <% } %>
         <a class="oi-main" href="/orders/<%= o.id %>?back=<%= encodeURIComponent(currentUrl) %>">
           <div class="oi-head">
             <span class="ch ch-<%= c.cls %>" title="<%= c.name %>"><%= c.mark %></span>
+            <% if (g.claim && claimLevel(g.claim.claim_status)) { %>
+              <span class="claim-badge <%= claimLevel(g.claim.claim_status) %>"><%= claimLabel(g.claim.claim_status) %></span>
+            <% } %>
             <span class="muted"><%= o.receiver_name || o.buyer_name || '-' %> · <%= kst(o.paid_at) %> 결제<% if (g.items.length > 1) { %> · 상품 <%= g.items.length %>개<% } %></span>
           </div>
           <ul class="oi-items">
@@ -92,7 +117,11 @@
             <noscript><button type="submit" class="btn-sm">지정</button></noscript>
           </form>
           <% if (due.text) { %><span class="pill <%= due.cls %>">납기 <%= due.text %></span><% } %>
-          <span class="pill light"><%= channelStatusLabel(o.channel_status) %><%= confirmed ? ' · 발주확인됨' : '' %></span>
+          <% if (g.shipped) { %>
+            <span class="pill shipped" title="<%= kst(g.shipped.shipped_at) %>">발송 · <%= g.shipped.ship_company ? `${courierLabel(g.shipped.ship_company)} ${g.shipped.tracking_no}` : shipMethodLabel(g.shipped.ship_method) %></span>
+          <% } else { %>
+            <span class="pill light"><%= channelStatusLabel(o.channel_status) %><%= confirmed ? ' · 발주확인됨' : '' %></span>
+          <% } %>
         </div>
       </li>
     <% }) %>
@@ -101,5 +130,14 @@
 <% } %>
 </div>
 
+<div id="bulk-bar" class="bulk-bar" hidden>
+  <span><strong data-bulk-count>0</strong>건 선택</span>
+  <button type="submit" form="bulk-form" formaction="/orders/bulk/confirm"
+          data-confirm="체크한 주문을 스마트스토어에 발주확인할까요?&#10;고객에게 발주확인 알림이 가고, 되돌릴 수 없습니다.&#10;(이미 발주확인된 주문은 건너뜁니다)" data-bulk-kind="confirm">발주확인 <span data-n>0</span>건</button>
+  <button type="submit" form="bulk-form" formaction="/orders/bulk/dispatch-form" class="secondary" data-bulk-kind="dispatch">송장 입력·발송처리 <span data-n>0</span>건…</button>
+  <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>
+</div>
+
+<script src="/confirm.js"></script>
 <script src="/orders.js"></script>
 <%- include('../partials/footer') %>

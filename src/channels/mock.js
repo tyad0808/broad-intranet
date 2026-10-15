@@ -1,6 +1,6 @@
 // 가짜 주문 (개발용). .env 의 ORDER_SOURCE=mock 일 때 사용한다.
 // 실제 네이버 API 는 등록된 서버 IP 에서만 응답하므로, 서버에 올리기 전까지는 이걸로 화면과 기능을 만든다.
-// 진짜 스마트스토어처럼: 수집할 때마다 새 주문이 0~2건 들어오고, 일부는 판매자센터에서 발주확인된 것처럼 바뀐다.
+// 진짜 스마트스토어처럼: 수집할 때마다 새 주문이 0~2건 들어오고, 일부는 판매자센터에서 발주확인되거나 가끔 취소 요청이 들어온다.
 
 const PRODUCTS = [
   { name: '명함 (고급지 250g)', options: ['양면 / 200매', '단면 / 500매', '양면 / 1000매'] },
@@ -78,9 +78,16 @@ function createMockSource({ random = Math.random, now = () => new Date() } = {})
         }
       }
       // 아직 발주확인 안 된 기존 주문 중 일부를 "판매자센터에서 발주확인함" 으로 바꾼다
+      // 가끔은 고객이 취소를 요청한 것처럼 바꾼다 (빨간 표시·알림 확인용)
       for (const o of orders) {
-        if (!o.channel_confirmed && !changed.includes(o) && random() < 0.4) {
+        if (changed.includes(o) || o.claim_status || o.item_type === 'addon') continue;
+        const roll = random();
+        if (!o.channel_confirmed && roll < 0.15) {
           o.channel_confirmed = 1;
+          changed.push(o);
+        } else if (roll > 0.97) {
+          o.claim_type = 'CANCEL';
+          o.claim_status = 'CANCEL_REQUEST';
           changed.push(o);
         }
       }

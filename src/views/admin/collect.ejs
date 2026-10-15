@@ -15,7 +15,7 @@
     </p>
     <% if (source.isMock) { %>
       <p class="muted">지금은 가짜 주문으로 동작합니다. 서버에 올린 뒤 .env 의 ORDER_SOURCE 를 naver 로 바꾸면 실제 스마트스토어 주문을 가져옵니다.
-        네이버에는 주문을 조회만 하고, 주문 상태를 바꾸는 요청은 보내지 않습니다.</p>
+        발주확인·발송처리는 .env 의 NAVER_WRITE=on 일 때만 네이버로 보냅니다.</p>
     <% } %>
     <form method="post" action="/admin/collect" class="inline">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">

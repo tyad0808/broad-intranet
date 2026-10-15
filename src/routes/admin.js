@@ -328,6 +328,30 @@ function adminRoutes(db, sessionStore, collector, notifier) {
     });
   });
 
+  // 발주확인·발송처리 기록 (최근 200건)
+  router.get('/actions', (req, res) => {
+    const filter = ['problem', 'live', 'practice'].includes(req.query.f) ? req.query.f : '';
+    const where = {
+      problem: "WHERE a.result IN ('fail', 'partial', 'unknown')",
+      live: "WHERE a.mode = 'live'",
+      practice: "WHERE a.mode = 'practice'",
+    }[filter] || '';
+    const actions = db.prepare(`
+      SELECT a.*, u.name AS user_name,
+        (SELECT o.id FROM orders o WHERE o.channel = a.channel AND o.channel_order_id = a.channel_order_id
+          ORDER BY CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id LIMIT 1) AS order_id,
+        (SELECT o.product_name FROM orders o WHERE o.channel = a.channel AND o.channel_order_id = a.channel_order_id
+          ORDER BY CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id LIMIT 1) AS product_name
+      FROM order_actions a LEFT JOIN users u ON u.id = a.user_id
+      ${where}
+      ORDER BY a.id DESC LIMIT 200
+    `).all();
+    for (const a of actions) {
+      try { a.detailObj = a.detail ? JSON.parse(a.detail) : null; } catch { a.detailObj = null; }
+    }
+    res.render('admin/actions', { title: '처리 기록', tab: 'actions', actions, filter });
+  });
+
   router.post('/collect', async (req, res) => {
     if (!collector) {
       flash(req, 'error', '주문 수집이 꺼져 있습니다 (ORDER_SOURCE=off).');

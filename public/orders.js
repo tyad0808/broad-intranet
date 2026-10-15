@@ -4,3 +4,46 @@ document.addEventListener('change', event => {
   const select = event.target;
   if (select.matches('form[data-autosubmit] select')) select.form.submit();
 });
+
+// 발송처리: 배송 방법이 택배일 때만 택배사·송장번호 칸을 보여준다
+function syncShipFields(select) {
+  const box = select.closest('form, tr, .ship-row');
+  const fields = box && box.querySelector('[data-ship-fields]');
+  if (!fields) return;
+  const show = select.value === 'DELIVERY';
+  fields.hidden = !show;
+  fields.querySelectorAll('input, select').forEach(el => { el.disabled = !show; });
+}
+document.querySelectorAll('[data-ship-method]').forEach(syncShipFields);
+document.addEventListener('change', event => {
+  if (event.target.matches('[data-ship-method]')) syncShipFields(event.target);
+});
+
+// 주문 목록 일괄 처리: 체크한 주문 수를 아래 막대에 보여주고, 전체 선택
+function syncBulkBar() {
+  const bar = document.getElementById('bulk-bar');
+  if (!bar) return;
+  const checked = [...document.querySelectorAll('input[name="ids"][form="bulk-form"]:checked')];
+  bar.hidden = checked.length === 0;
+  bar.querySelector('[data-bulk-count]').textContent = checked.length;
+  // 버튼마다 실제로 처리할 수 있는 주문 수 (발주확인 전 / 발송 가능)
+  for (const button of bar.querySelectorAll('[data-bulk-kind]')) {
+    const kind = button.dataset.bulkKind;
+    const n = checked.filter(box => (box.dataset.can || '').split(' ').includes(kind)).length;
+    button.querySelector('[data-n]').textContent = n;
+    button.disabled = n === 0;
+  }
+}
+document.addEventListener('change', event => {
+  if (event.target.matches('[data-check-all]')) {
+    document.querySelectorAll('input[name="ids"][form="bulk-form"]').forEach(box => { box.checked = event.target.checked; });
+  }
+  if (event.target.matches('input[name="ids"], [data-check-all]')) syncBulkBar();
+});
+document.addEventListener('click', event => {
+  if (event.target.matches('[data-bulk-clear]')) {
+    document.querySelectorAll('input[name="ids"][form="bulk-form"], [data-check-all]').forEach(box => { box.checked = false; });
+    syncBulkBar();
+  }
+});
+syncBulkBar();

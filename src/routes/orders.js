@@ -5,6 +5,12 @@
 // 담당자·작업 단계·납기·메모는 주문 단위로 함께 바뀐다.
 const express = require('express');
 const { CHANNELS } = require('../channels/labels');
+const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
+const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
+
+const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
+
+const RESULT_WORD = { ok: '완료', partial: '일부 완료', fail: '실패', unknown: '확인 필요', practice: '연습', skip: '건너뜀' };
 
 const VIEWS = {
   active: '진행 중',
@@ -18,7 +24,7 @@ const GROUP_KEY = "o.channel || ':' || o.channel_order_id";
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
 const ITEM_ORDER = "CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id";
 
-function orderRoutes(db, notifier) {
+function orderRoutes(db, notifier, actions) {
   const router = express.Router();
 
   // 마지막 단계(보통 '발송')에 있는 주문은 끝난 것으로 보고 '진행 중' 목록에서 뺀다
@@ -97,6 +103,13 @@ function orderRoutes(db, notifier) {
       if (current && current.rnk === row.rnk) current.items.push(row);
       else groups.push({ rnk: row.rnk, main: row, items: [row] });
     }
+    // 카드에 보여줄 처리 가능 여부와 클레임 표시
+    for (const g of groups) {
+      g.canConfirm = g.items.some(canConfirm);
+      g.canDispatch = g.items.some(canDispatch);
+      g.claim = g.items.find(hasOpenClaim) || g.items.find(i => i.claim_status) || null;
+      g.shipped = g.items.find(i => i.shipped_at) || null;
+    }
 
     // 탭에 보여줄 건수 (주문 묶음 단위, 채널을 골랐으면 그 채널만)
     const countWhere = channel ? 'WHERE o.channel = ?' : '';
@@ -157,6 +170,112 @@ function orderRoutes(db, notifier) {
     res.redirect(`${back}#o${items[0].id}`);
   });
 
+  // ───────── 2차: 스마트스토어 발주확인·발송처리 ─────────
+  // ※ '/orders/bulk/...' 를 '/orders/:id' 보다 먼저 등록해야 bulk 가 주문 번호로 읽히지 않는다
+
+  // 여러 주문 일괄 발주확인
+  router.post('/orders/bulk/confirm', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const ids = pickIds(req.body.ids);
+      if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
+      const results = [];
+      for (const id of ids) results.push(await actions.confirm(id, req.user.id));
+      afterActions(results, req.user.id);
+      req.session.flash = summarize('발주확인', results);
+      res.redirect(back);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // 여러 주문 일괄 발송처리 ① 송장 입력 화면 (아직 아무것도 보내지 않음)
+  router.post('/orders/bulk/dispatch-form', (req, res) => {
+    const back = safeBack(req.body.back);
+    const ids = pickIds(req.body.ids);
+    if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
+    const rows = [];
+    const skipped = [];
+    for (const id of ids) {
+      const order = findOrder(id);
+      if (!order) continue;
+      const items = groupItems(order);
+      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch) });
+      else skipped.push(items[0].product_name);
+    }
+    if (rows.length === 0) {
+      return flashBack(req, res, back, {
+        type: 'error',
+        message: '고른 주문 중 발송처리할 수 있는 주문이 없습니다 (발주확인 전이거나 이미 발송된 주문).',
+      });
+    }
+    res.render('orders/bulk-dispatch', {
+      title: '일괄 발송처리', rows, skipped, back, SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER,
+    });
+  });
+
+  // 여러 주문 일괄 발송처리 ② 보내기
+  router.post('/orders/bulk/dispatch', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const ids = pickIds(req.body.ids);
+      if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
+      // 먼저 모든 줄을 검사하고, 하나라도 틀리면 아무것도 보내지 않는다
+      const inputs = [];
+      for (const id of ids) {
+        const input = checkDispatchInput({
+          method: req.body[`method_${id}`],
+          company: req.body[`company_${id}`],
+          tracking: req.body[`tracking_${id}`],
+        });
+        if (input.error) {
+          const order = findOrder(id);
+          const name = order ? groupItems(order)[0].product_name : `주문 ${id}`;
+          return flashBack(req, res, back, { type: 'error', message: `'${name}': ${input.error} 아무것도 보내지 않았습니다.` });
+        }
+        inputs.push([id, input]);
+      }
+      const results = [];
+      for (const [id, input] of inputs) results.push(await actions.dispatch(id, req.user.id, input));
+      afterActions(results, req.user.id);
+      req.session.flash = summarize('발송처리', results);
+      res.redirect(back);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // 주문 하나 발주확인
+  router.post('/orders/:id/confirm', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const result = await actions.confirm(req.params.id, req.user.id);
+      afterActions([result], req.user.id);
+      req.session.flash = single('발주확인', result);
+      res.redirect(selfUrl(req.params.id, back));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // 주문 하나 발송처리
+  router.post('/orders/:id/dispatch', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const input = checkDispatchInput({ method: req.body.method, company: req.body.company, tracking: req.body.tracking });
+      if (input.error) {
+        return flashBack(req, res, selfUrl(req.params.id, back), { type: 'error', message: input.error });
+      }
+      const result = await actions.dispatch(req.params.id, req.user.id, input);
+      if (result.result === 'ok' || result.result === 'partial') result.message += ` (${describeShipping(input)})`;
+      afterActions([result], req.user.id);
+      req.session.flash = single('발송처리', result);
+      res.redirect(selfUrl(req.params.id, back));
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.get('/orders/:id', (req, res) => {
     const order = findOrder(req.params.id);
     if (!order) {
@@ -167,6 +286,15 @@ function orderRoutes(db, notifier) {
       title: items[0].product_name,
       order,
       items,
+      canConfirm: items.some(canConfirm),
+      canDispatch: items.some(canDispatch),
+      claimItems: items.filter(i => i.claim_status),
+      shipped: items.find(i => i.shipped_at) || null,
+      history: history(order),
+      SHIP_METHODS,
+      COURIERS,
+      DEFAULT_METHOD,
+      DEFAULT_COURIER,
       stages: stages(),
       designers: designers(),
       isDesigner: designers().some(d => d.id === req.user.id),
@@ -255,7 +383,61 @@ function orderRoutes(db, notifier) {
     `).all(order.channel, order.channel_order_id);
   }
 
+  // 이 주문 묶음의 처리 기록 (최근 20개)
+  function history(order) {
+    return db.prepare(`
+      SELECT a.*, u.name AS user_name FROM order_actions a LEFT JOIN users u ON u.id = a.user_id
+      WHERE a.channel = ? AND a.channel_order_id = ? ORDER BY a.id DESC LIMIT 20
+    `).all(order.channel, order.channel_order_id);
+  }
+
+  // 처리가 끝나면 다른 직원 화면도 새로 고친다
+  function afterActions(results, userId) {
+    const ids = results.flatMap(r => r.itemIds || []);
+    if (ids.length) notifier.ordersChanged(ids, userId);
+  }
+
   return router;
+}
+
+// 체크한 주문 번호들 (숫자만, 중복 제거, 최대 BULK_MAX 개)
+function pickIds(raw) {
+  const list = (Array.isArray(raw) ? raw : raw ? [raw] : []).map(Number).filter(n => Number.isInteger(n) && n > 0);
+  const ids = [...new Set(list)];
+  if (ids.length === 0) return { error: '처리할 주문을 먼저 체크하세요.' };
+  if (ids.length > BULK_MAX) return { error: `한 번에 ${BULK_MAX}건까지만 처리할 수 있습니다.` };
+  return ids;
+}
+
+function flashBack(req, res, url, flash) {
+  req.session.flash = flash;
+  res.redirect(url);
+}
+
+function selfUrl(id, back) {
+  return `/orders/${Number(id)}${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}`;
+}
+
+// 주문 하나 처리 결과 → 화면 안내 문구
+function single(label, r) {
+  const type = r.result === 'ok' ? 'ok' : r.result === 'practice' ? 'ok' : r.result === 'fail' || r.result === 'skip' ? 'error' : 'warn';
+  return { type, message: `${label} ${RESULT_WORD[r.result] || ''}: ${r.message}` };
+}
+
+// 여러 주문 처리 결과 → "완료 3건, 실패 1건" + 주문별 사유
+function summarize(label, results) {
+  const count = {};
+  for (const r of results) count[r.result] = (count[r.result] || 0) + 1;
+  const parts = Object.keys(RESULT_WORD).filter(k => count[k]).map(k => `${RESULT_WORD[k]} ${count[k]}건`);
+  const problems = results.filter(r => r.result !== 'ok');
+  const type = problems.some(r => r.result === 'unknown' || r.result === 'partial' || r.result === 'fail')
+    ? 'warn'
+    : results.every(r => r.result === 'skip') ? 'error' : 'ok';
+  return {
+    type,
+    message: `${label} ${results.length}건: ${parts.join(', ')}`,
+    details: problems.slice(0, 20).map(r => r.message),
+  };
 }
 
 // 목록으로 돌아갈 주소: 우리 사이트의 목록 주소만 허용 (다른 사이트로 튕기는 것 방지)

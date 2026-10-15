@@ -1,8 +1,8 @@
-// 네이버 커머스 API 연결 (조회 전용)
+// 네이버 커머스 API 연결
 //
-// 안전장치: 아래 ALLOWED 목록에 있는 주소만 호출할 수 있다.
-// 1차는 주문을 "조회만" 하기로 했으므로 발주확인·발송처리 같은 상태 변경 API 는 목록에 없고,
-// 코드 어디에서 실수로 부르더라도 요청을 보내기 전에 오류로 막힌다.
+// 안전장치 1: 아래 ALLOWED 목록에 있는 주소만 호출할 수 있다. 목록 밖 주소는 요청을 보내기 전에 오류로 막힌다.
+// 안전장치 2: 주문 상태를 바꾸는 주소(write: true)는 allowWrite 를 켠 클라이언트에서만 부를 수 있다.
+//            (.env 의 NAVER_WRITE=on 일 때만 켜진다. 기본은 꺼짐 = 연습 모드)
 const bcrypt = require('bcryptjs');
 
 const BASE_URL = 'https://api.commerce.naver.com/external';
@@ -13,10 +13,19 @@ const ALLOWED = [
   { method: 'GET', path: '/v1/pay-order/seller/product-orders/last-changed-statuses' },
   // 상품 주문 상세 내역 조회 (방식은 POST 지만 조회만 한다)
   { method: 'POST', path: '/v1/pay-order/seller/product-orders/query' },
+  // ── 2차: 상태를 바꾸는 주소는 이 2개뿐 ──
+  // 발주확인
+  { method: 'POST', path: '/v1/pay-order/seller/product-orders/confirm', write: true },
+  // 발송처리 (송장 입력)
+  { method: 'POST', path: '/v1/pay-order/seller/product-orders/dispatch', write: true },
 ];
 
+function findAllowed(method, path) {
+  return ALLOWED.find(a => a.method === method && a.path === path);
+}
+
 function isAllowed(method, path) {
-  return ALLOWED.some(a => a.method === method && a.path === path);
+  return Boolean(findAllowed(method, path));
 }
 
 class NaverApiError extends Error {
@@ -26,6 +35,13 @@ class NaverApiError extends Error {
     this.status = status;
     this.body = body;
   }
+}
+
+// 네이버로 요청을 보내기 전에 막힌 오류 (확실히 아무것도 보내지 않았음)
+function notSent(message) {
+  const err = new Error(message);
+  err.notSent = true;
+  return err;
 }
 
 // 커머스 API 전자서명: bcrypt(clientId_timestamp, clientSecret) 결과를 base64 로 인코딩
@@ -39,6 +55,7 @@ function createNaverClient({
   clientId = process.env.NAVER_CLIENT_ID,
   clientSecret = process.env.NAVER_CLIENT_SECRET,
   fetchFn = fetch,
+  allowWrite = false,
 } = {}) {
   let token = null;
   let tokenExpiresAt = 0;
@@ -46,11 +63,12 @@ function createNaverClient({
   async function getAccessToken() {
     if (token && Date.now() < tokenExpiresAt) return token;
     if (!clientId || !clientSecret) {
-      throw new Error('NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 이 .env 에 없습니다.');
+      throw notSent('NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 이 .env 에 없습니다.');
     }
     const timestamp = Date.now();
     const res = await fetchFn(BASE_URL + TOKEN_PATH, {
       method: 'POST',
+      signal: AbortSignal.timeout(30_000),
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
         client_id: clientId,
@@ -71,17 +89,28 @@ function createNaverClient({
   }
 
   async function request(method, path, { query, json } = {}) {
-    if (!isAllowed(method, path)) {
-      throw new Error(`허용되지 않은 네이버 API 호출입니다: ${method} ${path} (1차는 조회 전용)`);
+    const rule = findAllowed(method, path);
+    if (!rule) {
+      throw notSent(`허용되지 않은 네이버 API 호출입니다: ${method} ${path}`);
+    }
+    if (rule.write && !allowWrite) {
+      throw notSent(`주문 상태 변경이 꺼져 있습니다 (NAVER_WRITE=on 이 아님): ${method} ${path}`);
     }
     const url = new URL(BASE_URL + path);
     for (const [key, value] of Object.entries(query || {})) {
       if (value !== undefined && value !== null) url.searchParams.set(key, String(value));
     }
+    // 토큰은 먼저 받아 둔다 (토큰 받기 실패 = 주문 요청은 보내지 않은 것)
+    const accessToken = await getAccessToken().catch(e => {
+      e.notSent = true;
+      throw e;
+    });
     const res = await fetchFn(url.toString(), {
       method,
+      // 응답이 30초 넘게 없으면 끊는다 (이때 상태 변경 요청은 결과를 알 수 없음으로 처리)
+      signal: AbortSignal.timeout(30_000),
       headers: {
-        authorization: `Bearer ${await getAccessToken()}`,
+        authorization: `Bearer ${accessToken}`,
         ...(json ? { 'content-type': 'application/json' } : {}),
       },
       body: json ? JSON.stringify(json) : undefined,

@@ -4,7 +4,9 @@
 //  미지정 초과 담당자 없는 진행 중 주문이 기준 건수를 넘을 때
 //              (넘는 순간 1회, 해소될 때까지 정해진 간격마다 다시) → 관리자 + 관리자가 지정한 직원
 //  가입 신청   직원이 회원가입할 때           → 관리자
+//  클레임      고객이 취소·반품·교환을 요청할 때 → 관리자 + 그 주문 담당자
 const { EventHub } = require('./events');
+const { claimLabel } = require('./channels/labels');
 
 function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
   const activeUserStmt = db.prepare("SELECT id, role FROM users WHERE id = ? AND status = 'active'");
@@ -101,8 +103,30 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
         url: '/?view=unassigned',
       }, everyone);
     }
+    claims(result.claims || []);
     if (result.created > 0 || result.updated > 0) ordersChanged(result.createdIds || []);
     checkUnassigned();
+  }
+
+  // 취소·반품·교환 요청: 주문 묶음마다 1번, 관리자와 그 주문 담당자에게
+  function claims(list) {
+    const seen = new Set();
+    for (const c of list) {
+      const order = db.prepare('SELECT id, channel, channel_order_id, assignee_id FROM orders WHERE id = ?').get(c.id);
+      if (!order) continue;
+      const key = `${order.channel}:${order.channel_order_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const main = db.prepare(
+        "SELECT id, product_name FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY CASE WHEN item_type = 'addon' THEN 1 ELSE 0 END, id LIMIT 1"
+      ).get(order.channel, order.channel_order_id);
+      const label = claimLabel(c.claim_status);
+      notify('claim', {
+        title: `${label}: 확인이 필요합니다`,
+        body: `${main.product_name} (주문번호 ${order.channel_order_id})`,
+        url: `/orders/${main.id}`,
+      }, receivers(u => u.role === 'admin' || u.id === order.assignee_id));
+    }
   }
 
   function signup(user) {

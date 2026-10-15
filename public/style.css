@@ -379,3 +379,87 @@ button.secondary:hover { background: var(--notice-bg); }
 .brand { white-space: nowrap; }
 .me { flex-wrap: wrap; justify-content: flex-end; row-gap: 4px; }
 .me > * { white-space: nowrap; }
+
+/* ───────── 2차: 발주확인·발송처리 ───────── */
+.warn-box { background: #fff4e0; color: #7a5200; padding: 10px 12px; border-radius: 8px; }
+.flash-details { margin: 6px 0 0; padding-left: 20px; font-size: 14px; }
+.small { font-size: 13px; }
+.practice-note {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px dashed #c9a227;
+  border-radius: 8px;
+  background: #fffbea;
+  color: #6b5200;
+  font-size: 14px;
+}
+.practice-note strong { margin-right: 6px; }
+
+.detail-side { display: grid; gap: 16px; }
+.process-card h3 { margin: 16px 0 6px; font-size: 15px; }
+.process-card form { margin: 0 0 12px; }
+button.wide { width: 100%; }
+.steps { list-style: none; display: flex; gap: 8px; margin: 0 0 12px; padding: 0; }
+.steps li {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.steps li span { float: right; }
+.steps li.done { border-color: #a6dcb8; background: #ecf8f0; color: #1a7f37; font-weight: 600; }
+.shipped-line { margin: 0 0 8px; font-weight: 600; }
+.history { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.result { display: inline-block; min-width: 40px; padding: 0 6px; border-radius: 4px; font-size: 12px; font-weight: 700; text-align: center; }
+.r-ok { background: #ecf8f0; color: #1a7f37; }
+.r-partial, .r-unknown { background: #fff4e0; color: #9a6700; }
+.r-fail { background: var(--error-bg); color: var(--error); }
+.r-practice { background: #eef1f4; color: var(--muted); }
+
+/* 취소·반품·교환 표시 */
+.claim-box { margin: 0 0 12px; padding: 10px 12px; border-radius: 8px; background: var(--error-bg); color: var(--error); font-size: 14px; }
+.claim-box strong { margin-right: 6px; }
+.claim-box.done { background: #eef1f4; color: var(--muted); }
+.claim-badge { padding: 1px 8px; border-radius: 4px; background: var(--error); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.claim-badge.done { background: #8c959f; }
+.order-item.has-claim { border-color: #f3c4c0; box-shadow: inset 4px 0 0 var(--error); }
+.pill.shipped { background: #ecf8f0; border-color: #a6dcb8; color: #1a7f37; }
+
+/* 목록 체크박스와 일괄 처리 막대 */
+.oi-check { flex: none; width: 22px; display: flex; align-self: flex-start; padding-top: 2px; }
+.oi-check input, .check-all input { width: 20px; height: 20px; margin: 0; }
+.check-all { display: inline-flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 14px; color: var(--muted); }
+.bulk-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--primary);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+.bulk-bar[hidden] { display: none; }
+.bulk-bar > span { margin-right: auto; }
+.bulk-bar button { width: auto; margin: 0; }
+
+/* 일괄 발송처리 입력 */
+.ship-rows { display: grid; gap: 8px; margin-bottom: 16px; }
+.ship-row { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.ship-order { flex: 1 1 260px; min-width: 0; }
+.ship-inputs { display: flex; flex-wrap: wrap; gap: 6px; flex: 0 1 auto; }
+.ship-fields { display: contents; }
+.ship-fields[hidden] { display: none; }
+.ship-inputs select, .ship-inputs input { width: auto; margin-top: 0; padding: 8px 10px; }
+.ship-inputs input { width: 170px; }
+button:disabled, button:disabled:hover { opacity: 0.45; cursor: default; background: var(--primary); }
+button.secondary:disabled, button.secondary:disabled:hover { background: #fff; }
+.form-actions a.btn-sm { display: inline-flex; align-items: center; white-space: nowrap; text-decoration: none; color: var(--text); }
+@media (max-width: 760px) { .bulk-bar { padding: 8px 10px; } .bulk-bar button { padding: 8px 12px; font-size: 15px; } }

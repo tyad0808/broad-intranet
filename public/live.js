@@ -98,12 +98,16 @@
         const res = await fetch(location.href, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
         if (!res.ok || res.redirected) return;
         const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        // 일괄 처리용으로 체크해 둔 주문은 새로 그린 뒤에도 체크된 채로 둔다
+        const checked = new Set([...liveList.querySelectorAll('input[name="ids"]:checked')].map(box => box.value));
         // 탭 건수와 주문 목록만 바꾼다 (검색창은 건드리지 않아 입력 중인 글자가 지워지지 않음)
         for (const id of ['live-tabs', 'live-list']) {
           const fresh = doc.getElementById(id);
           const current = document.getElementById(id);
           if (fresh && current) current.innerHTML = fresh.innerHTML;
         }
+        liveList.querySelectorAll('input[name="ids"]').forEach(box => { box.checked = checked.has(box.value); });
+        if (typeof window.syncBulkBar === 'function') window.syncBulkBar();
         // 미지정 초과 배너: 새로 생기거나, 건수가 바뀌거나, 해소되어 사라지는 것을 반영
         const freshBar = doc.getElementById('unassigned-bar');
         const bar = document.getElementById('unassigned-bar');

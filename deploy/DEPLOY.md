@@ -131,6 +131,20 @@ cd /opt/broad-intranet/app && sudo -u intranet npm run create-admin
 
 ---
 
+## 8. 발주확인·발송처리 켜기 (2차)
+
+처음에는 **연습 모드**(`NAVER_WRITE=off`)입니다. 버튼을 눌러도 네이버로 보내지 않고 기록만 남습니다.
+
+1. 업데이트 후 연습 모드에서 버튼·확인창·처리 기록이 잘 보이는지 확인
+2. 설정 파일 열기: `nano /opt/broad-intranet/app/.env`
+   - `NAVER_WRITE=off` 줄이 있으면 `on` 으로 바꾸고, 없으면 맨 아래에 `NAVER_WRITE=on` 을 추가
+3. 재시작: `systemctl restart broad-intranet`
+4. 확인: `journalctl -u broad-intranet -n 5 --no-pager` 에 `실제로 네이버에 보냄` 이 보이면 켜진 것
+5. **처음에는 주문 1건만** 발주확인 → 발송처리 해 보고, 판매자센터에서 택배사·송장번호가 맞게 들어갔는지 확인
+6. 문제가 생기면 2번에서 다시 `off` 로 바꾸고 재시작
+
+---
+
 ## 평소에 쓰는 명령어 (서버에서)
 
 | 하고 싶은 일 | 명령어 |
