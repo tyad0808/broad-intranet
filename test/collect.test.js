@@ -118,6 +118,8 @@ test('바뀐 주문 목록 → 상세 조회 → 인트라넷 형식으로 바�
     paid_at: '2026-10-14T10:00:00.0+09:00',
     channel_status: 'PAYED',
     channel_confirmed: 0,
+    claim_type: null,
+    claim_status: null,
   });
   assert.strictEqual(orders[1].channel_confirmed, 1);
 
@@ -186,6 +188,18 @@ test('직원이 이미 다음 단계로 옮긴 카드는 되돌리지 않고, �
   const row = db.prepare("SELECT assignee_id, memo, channel_status FROM orders WHERE channel_item_id = 'P1'").get();
   assert.strictEqual(stageName(db, 'P1'), '디자인작업');
   assert.deepStrictEqual({ ...row }, { assignee_id: designer, memo: '금박 추가', channel_status: 'DELIVERING' });
+});
+
+test('고객이 취소를 요청하면 한 번만 클레임으로 알려주고 상태를 저장한다', () => {
+  const db = openDb(':memory:');
+  applyOrders(db, [order(1)]);
+  const r1 = applyOrders(db, [order(1, { claim_type: 'CANCEL', claim_status: 'CANCEL_REQUEST' })]);
+  assert.strictEqual(r1.claims.length, 1);
+  assert.strictEqual(r1.claims[0].claim_status, 'CANCEL_REQUEST');
+  const r2 = applyOrders(db, [order(1, { claim_type: 'CANCEL', claim_status: 'CANCEL_REQUEST' })]);
+  assert.strictEqual(r2.claims.length, 0, '같은 요청은 다시 알리지 않는다');
+  const row = db.prepare("SELECT claim_type, claim_status FROM orders WHERE channel_item_id = 'P1'").get();
+  assert.deepStrictEqual({ ...row }, { claim_type: 'CANCEL', claim_status: 'CANCEL_REQUEST' });
 });
 
 test('결제 전 주문은 카드로 만들지 않는다', () => {

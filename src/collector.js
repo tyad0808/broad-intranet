@@ -16,6 +16,12 @@ function lastStageId(db) {
   return row ? row.id : null;
 }
 
+// 고객이 취소·반품·교환을 '요청'한 상태 (알림을 보낼 시점)
+const CLAIM_REQUESTS = new Set(['CANCEL_REQUEST', 'RETURN_REQUEST', 'EXCHANGE_REQUEST']);
+function isClaimRequest(status) {
+  return CLAIM_REQUESTS.has(status);
+}
+
 function getSetting(db, key) {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
   return row ? row.value : null;
@@ -33,12 +39,12 @@ function applyOrders(db, orders) {
   const stageConfirmed = Number(getSetting(db, 'stage_confirmed')) || null;
   const lastStage = lastStageId(db);
 
-  const find = db.prepare('SELECT id, stage_id, channel_confirmed FROM orders WHERE channel = ? AND channel_item_id = ?');
+  const find = db.prepare('SELECT id, stage_id, channel_confirmed, claim_status FROM orders WHERE channel = ? AND channel_item_id = ?');
   const insertRow = db.prepare(`
     INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
       buyer_name, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-      stage_id, assignee_id, due_date, memo, nas_path)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      claim_type, claim_status, stage_id, assignee_id, due_date, memo, nas_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   // 같은 주문번호의 다른 상품이 이미 카드로 있으면 그 카드의 사내 칸(단계·담당자·납기·메모)을 이어받는다
   const groupSibling = db.prepare(
@@ -49,6 +55,7 @@ function applyOrders(db, orders) {
     return insertRow.run(
       o.channel, o.channel_order_id, o.channel_item_id, o.item_type || 'main', o.product_name, o.option_text, o.quantity,
       o.buyer_name, o.receiver_name, o.receiver_phone, o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed,
+      o.claim_type || null, o.claim_status || null,
       sib && sib.stage_id ? sib.stage_id : stage, sib ? sib.assignee_id : null,
       sib ? sib.due_date : null, sib ? sib.memo : null, sib ? sib.nas_path : null
     );
@@ -57,7 +64,7 @@ function applyOrders(db, orders) {
   const update = db.prepare(`
     UPDATE orders SET product_name = ?, option_text = ?, quantity = ?, buyer_name = ?, receiver_name = ?,
       receiver_phone = ?, receiver_address = ?, paid_at = ?, channel_status = ?, channel_confirmed = ?,
-      item_type = ?, updated_at = datetime('now')
+      item_type = ?, claim_type = ?, claim_status = ?, updated_at = datetime('now')
     WHERE id = ?
   `);
   // 발주확인은 주문 단위로 본다: 같은 주문번호에서 아직 '발주' 단계인 상품을 모두 '발주확인'으로
@@ -66,7 +73,8 @@ function applyOrders(db, orders) {
   );
   const notify = db.prepare("INSERT INTO notifications (type, message, order_id) VALUES ('new_order', ?, ?)");
 
-  const result = { created: 0, updated: 0, createdIds: [], archived: 0 };
+  // claims: 이번 수집에서 새로 생긴 취소·반품·교환 요청 (알림용)
+  const result = { created: 0, updated: 0, createdIds: [], archived: 0, claims: [] };
 
   transaction(db, () => {
     for (const o of orders) {
@@ -93,8 +101,12 @@ function applyOrders(db, orders) {
 
       update.run(
         o.product_name, o.option_text, o.quantity, o.buyer_name, o.receiver_name, o.receiver_phone,
-        o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed, o.item_type || 'main', existing.id
+        o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed, o.item_type || 'main',
+        o.claim_type || null, o.claim_status || null, existing.id
       );
+      if (isClaimRequest(o.claim_status) && o.claim_status !== existing.claim_status) {
+        result.claims.push({ id: existing.id, claim_status: o.claim_status });
+      }
       // 판매자센터에서 발주확인됨 → 카드가 아직 '발주' 단계면 '발주확인' 으로 옮긴다.
       // 직원이 이미 다음 단계로 옮겼다면 그대로 둔다 (뒤로 되돌리지 않음).
       if (o.channel_confirmed && stageConfirmed && stageNew) {
@@ -162,4 +174,4 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
   };
 }
 
-module.exports = { createCollector, applyOrders, getSetting, setSetting, lastStageId, ALREADY_DONE, CANCELED };
+module.exports = { createCollector, applyOrders, getSetting, setSetting, lastStageId, isClaimRequest, ALREADY_DONE, CANCELED };

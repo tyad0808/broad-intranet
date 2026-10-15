@@ -35,6 +35,14 @@ function addMissingColumns(db) {
   // 본상품(main) / 추가상품(addon). 같은 주문번호 안에서 추가상품은 본상품 아래에 묶어 보여준다
   addColumn(db, 'orders', 'item_type', "TEXT NOT NULL DEFAULT 'main'");
   db.exec('CREATE INDEX IF NOT EXISTS idx_orders_group ON orders(channel, channel_order_id)');
+  // 2차: 고객의 취소·반품·교환 요청 (채널에서 조회한 값)
+  addColumn(db, 'orders', 'claim_type', 'TEXT');
+  addColumn(db, 'orders', 'claim_status', 'TEXT');
+  // 2차: 발송 정보 (인트라넷에서 발송처리한 값)
+  addColumn(db, 'orders', 'ship_method', 'TEXT');
+  addColumn(db, 'orders', 'ship_company', 'TEXT');
+  addColumn(db, 'orders', 'tracking_no', 'TEXT');
+  addColumn(db, 'orders', 'shipped_at', 'TEXT');
 }
 
 function migrate(db) {
@@ -123,6 +131,22 @@ function migrate(db) {
       updated     INTEGER NOT NULL DEFAULT 0,
       error       TEXT
     );
+
+    -- 처리 기록: 누가 언제 어떤 주문에 발주확인·발송처리를 눌렀고 결과가 어땠는지 (2차)
+    CREATE TABLE IF NOT EXISTS order_actions (
+      id               INTEGER PRIMARY KEY,
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      user_id          INTEGER REFERENCES users(id),
+      action           TEXT    NOT NULL CHECK (action IN ('confirm', 'dispatch')),
+      channel          TEXT    NOT NULL,
+      channel_order_id TEXT    NOT NULL,
+      item_ids         TEXT    NOT NULL,          -- 대상 상품주문번호 목록 (JSON)
+      detail           TEXT,                      -- 배송 방법·택배사·송장번호 (JSON)
+      mode             TEXT    NOT NULL CHECK (mode IN ('live', 'practice')),
+      result           TEXT    NOT NULL CHECK (result IN ('ok', 'partial', 'fail', 'practice', 'unknown')),
+      message          TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_actions_order ON order_actions(channel, channel_order_id);
 
     -- 알림 기록
     CREATE TABLE IF NOT EXISTS notifications (

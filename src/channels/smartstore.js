@@ -40,6 +40,9 @@ function normalize(item) {
     receiver_address: joinAddress(addr),
     paid_at: order.paymentDate || null,
     channel_status: po.productOrderStatus || null,
+    // 고객의 취소·반품·교환 요청 (예: claimType CANCEL, claimStatus CANCEL_REQUEST)
+    claim_type: po.claimType || null,
+    claim_status: po.claimStatus || null,
     // 판매자센터에서 발주확인을 하면 placeOrderStatus 가 'OK' 가 된다 (조회로 알아내기만 함)
     channel_confirmed: po.placeOrderStatus === 'OK' ? 1 : 0,
   };
