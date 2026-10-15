@@ -29,7 +29,7 @@
       담당 디자이너가 없는 주문이 <strong><%= unassignedAlert.count %>건</strong>입니다 (기준 <%= unassignedAlert.threshold %>건). 눌러서 확인하세요.
     </a>
   <% } %>
-  <main class="container">
+  <main class="container<%= locals.sideCalendar ? ' container-side' : '' %>">
     <% if (locals.flash) { %>
       <div class="<%= flash.type === 'error' ? 'error' : flash.type === 'warn' ? 'warn-box' : 'notice' %> flash">
         <%= flash.message %>

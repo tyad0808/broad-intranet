@@ -1,0 +1,44 @@
+<%# 일정 보기·추가·수정 창 (달력 칸 밖에 있어서 달을 넘겨도 그대로 남는다) %>
+<dialog id="ev-view" class="ev-dialog">
+  <div class="ev-view-body">
+    <p class="ev-view-when muted"></p>
+    <h2 class="ev-view-title"></h2>
+    <p class="ev-view-memo"></p>
+    <p class="ev-view-by muted small"></p>
+  </div>
+  <div class="ev-actions">
+    <button type="button" class="btn-sm" data-ev-edit hidden>수정</button>
+    <form method="post" class="inline" data-ev-delete hidden data-confirm="이 일정을 지울까요?">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="back" value="<%= currentUrl %>">
+      <button type="submit" class="btn-sm danger">삭제</button>
+    </form>
+    <button type="button" class="btn-sm" data-ev-close>닫기</button>
+  </div>
+</dialog>
+
+<dialog id="ev-form" class="ev-dialog">
+  <form method="post" action="/calendar/events" class="ev-form" data-once>
+    <h2 data-ev-form-title>일정 추가</h2>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="back" value="<%= currentUrl %>">
+    <label>제목<input type="text" name="title" maxlength="100" required placeholder="예: 거래처 미팅, 휴무, 납품"></label>
+    <div class="ev-row">
+      <label>날짜<input type="date" name="start_date" required></label>
+      <label>끝나는 날 <span class="muted small">(여러 날일 때)</span><input type="date" name="end_date"></label>
+    </div>
+    <div class="ev-row">
+      <label>시간 <span class="muted small">(비우면 종일)</span><input type="time" name="time"></label>
+      <label>색
+        <select name="color">
+          <% Object.entries(COLORS).forEach(([key, name]) => { %><option value="<%= key %>"><%= name %></option><% }) %>
+        </select>
+      </label>
+    </div>
+    <label>내용<textarea name="memo" rows="3" maxlength="1000" placeholder="장소, 준비물, 참석자 등"></textarea></label>
+    <div class="ev-actions">
+      <button type="submit" class="btn-sm primary">저장</button>
+      <button type="button" class="btn-sm" data-ev-close>취소</button>
+    </div>
+  </form>
+</dialog>

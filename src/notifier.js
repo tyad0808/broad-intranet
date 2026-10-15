@@ -136,13 +136,18 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
     }
   }
 
+  // 달력 일정이 바뀌면 다른 직원 화면의 달력도 새로 그린다
+  function calendarChanged(actorId = null) {
+    hub.send('calendar-changed', { actorId }, everyone);
+  }
+
   function signup(user) {
     const message = `${user.name}(${user.email}) 님이 가입을 신청했습니다.`;
     record.run('signup', message, null);
     notify('signup', { title: '가입 신청', body: message, url: '/admin/users' }, admins);
   }
 
-  return { hub, notify, ordersChanged, checkUnassigned, afterCollect, signup, unassignedCount, unassignedBanner };
+  return { hub, notify, ordersChanged, calendarChanged, checkUnassigned, afterCollect, signup, unassignedCount, unassignedBanner };
 }
 
 module.exports = { createNotifier };

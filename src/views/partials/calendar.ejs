@@ -1,0 +1,51 @@
+<%# 회사 일정 달력 칸. 달 넘기기·실시간 새로고침 때 이 내용만 새로 받아 바꿔 끼운다 %>
+<%
+  const evData = e => JSON.stringify({
+    id: e.id, title: e.title, start: e.start_date, end: e.end_date, time: e.time, memo: e.memo,
+    color: e.color, creator: e.creator_name, canEdit: e.canEdit,
+  });
+  const md = s => `${Number(s.slice(5, 7))}/${Number(s.slice(8))}`;
+%>
+<div class="cal" data-month="<%= cal.month %>">
+  <div class="cal-head">
+    <button type="button" class="cal-nav" data-cal-month="<%= cal.prev %>" aria-label="이전 달">‹</button>
+    <strong class="cal-title"><%= cal.label %></strong>
+    <button type="button" class="cal-nav" data-cal-month="<%= cal.next %>" aria-label="다음 달">›</button>
+    <button type="button" class="cal-today" data-cal-month="<%= cal.today.slice(0, 7) %>">오늘</button>
+    <button type="button" class="cal-add" data-cal-add="<%= cal.month === cal.today.slice(0, 7) ? cal.today : cal.month + '-01' %>">＋ 일정</button>
+  </div>
+  <div class="cal-grid" role="grid">
+    <% ['일', '월', '화', '수', '목', '금', '토'].forEach((w, i) => { %>
+      <div class="cal-wd <%= i === 0 ? 'sun' : i === 6 ? 'sat' : '' %>"><%= w %></div>
+    <% }) %>
+    <% cal.weeks.forEach(week => { week.forEach(d => { %>
+      <div class="cal-day <%= d.inMonth ? '' : 'out' %> <%= d.isToday ? 'today' : '' %> <%= d.weekday === 0 ? 'sun' : d.weekday === 6 ? 'sat' : '' %>"
+           data-date="<%= d.date %>" title="<%= d.date %> 에 일정 추가">
+        <span class="cal-num"><%= d.day %></span>
+        <% d.events.slice(0, 2).forEach(e => { %>
+          <button type="button" class="ev ev-<%= e.color %>" data-event="<%= evData(e) %>"><%= e.title %></button>
+        <% }) %>
+        <% if (d.events.length > 2) { %><span class="ev-more">+<%= d.events.length - 2 %></span><% } %>
+      </div>
+    <% }) }) %>
+  </div>
+
+  <div class="cal-list">
+    <h3>이달의 일정 <span class="muted"><%= cal.monthEvents.length %></span></h3>
+    <% if (cal.monthEvents.length === 0) { %>
+      <p class="muted small">날짜를 누르면 일정을 넣을 수 있습니다.</p>
+    <% } else { %>
+      <ul>
+        <% cal.monthEvents.forEach(e => { %>
+          <li>
+            <button type="button" class="cal-item" data-event="<%= evData(e) %>">
+              <span class="dot ev-<%= e.color %>"></span>
+              <span class="cal-when"><%= md(e.start_date) %><%= e.end_date ? `~${md(e.end_date)}` : '' %><%= e.time ? ` ${e.time}` : '' %></span>
+              <span class="cal-what"><%= e.title %></span>
+            </button>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </div>
+</div>

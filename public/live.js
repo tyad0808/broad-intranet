@@ -139,6 +139,11 @@
     systemNotify(data);
   });
 
+  source.addEventListener('calendar-changed', e => {
+    const { actorId } = JSON.parse(e.data);
+    if (actorId !== me && typeof window.reloadCalendar === 'function') window.reloadCalendar();
+  });
+
   source.addEventListener('orders-changed', e => {
     const { ids, actorId } = JSON.parse(e.data);
     if (liveList) refreshList();

@@ -10,6 +10,8 @@
   };
 %>
 
+<div class="with-side">
+<div class="side-main">
 <div class="list-head">
   <div class="title-row">
     <h1 class="page-title">주문</h1>
@@ -170,6 +172,14 @@
   <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>
 </div>
 
+</div>
+<aside id="calendar-panel" class="side-cal" aria-label="회사 일정">
+  <%- include('../partials/calendar', { cal }) %>
+</aside>
+</div>
+<%- include('../partials/calendar-dialogs') %>
+
 <script src="/confirm.js"></script>
 <script src="/orders.js"></script>
+<script src="/calendar.js"></script>
 <%- include('../partials/footer') %>

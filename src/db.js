@@ -171,6 +171,21 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_order_actions_order ON order_actions(channel, channel_order_id);
 
+    -- 회사 일정 (주문 목록 옆 달력). 승인된 직원 누구나 넣고, 넣은 사람과 관리자만 고치거나 지운다
+    CREATE TABLE IF NOT EXISTS events (
+      id          INTEGER PRIMARY KEY,
+      title       TEXT    NOT NULL,
+      start_date  TEXT    NOT NULL,              -- YYYY-MM-DD (한국 날짜)
+      end_date    TEXT,                          -- 여러 날 일정이면 마지막 날, 하루면 비움
+      time        TEXT,                          -- HH:MM, 종일이면 비움
+      memo        TEXT,
+      color       TEXT    NOT NULL DEFAULT 'blue',
+      created_by  INTEGER REFERENCES users(id),
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_date);
+
     -- 알림 기록
     CREATE TABLE IF NOT EXISTS notifications (
       id         INTEGER PRIMARY KEY,

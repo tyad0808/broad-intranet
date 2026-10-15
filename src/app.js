@@ -12,6 +12,7 @@ const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { orderRoutes } = require('./routes/orders');
 const { manualRoutes, PAY_METHODS } = require('./routes/manual');
+const { calendarRoutes } = require('./routes/calendar');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { channelStatusLabel, channelInfo, claimLabel, claimLevel } = require('./channels/labels');
@@ -118,6 +119,7 @@ function createApp({
 
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
+  app.use(requireActive, calendarRoutes(db, notifier));
   app.use(requireActive, manualRoutes(db, notifier));
   app.use(requireActive, orderRoutes(db, notifier, actions, collector));
 

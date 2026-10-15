@@ -6,6 +6,7 @@
 const express = require('express');
 const { CHANNELS } = require('../channels/labels');
 const { ENDED_SQL } = require('../collector');
+const { buildMonth, COLORS } = require('./calendar');
 const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
 
@@ -202,6 +203,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
       today: kstToday(),
       currentUrl: req.originalUrl,
       canCollect: Boolean(collector),
+      // 넓은 PC 화면에서만 오른쪽에 보이는 회사 일정 달력
+      sideCalendar: true,
+      cal: buildMonth(db, req.query.cal, req.user),
+      COLORS,
       lastRun,
     });
   });
