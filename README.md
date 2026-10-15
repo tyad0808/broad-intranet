@@ -43,6 +43,11 @@ npm run create-admin
 - 미지정 기준 건수·반복 간격·받는 사람은 관리자 메뉴 → **알림 설정**에서 바꿉니다.
 - 운영 서버에서 Nginx 를 앞에 둘 때는 `/events` 주소의 버퍼링을 꺼야 실시간 소식이 바로 전달됩니다 (7단계에서 설정).
 
+## 운영 서버
+
+설치·업데이트·백업 방법은 [deploy/DEPLOY.md](deploy/DEPLOY.md) 를 보세요.
+운영 서버(`NODE_ENV=production`)에서는 가짜 주문을 쓸 수 없고, 네이버 키를 넣기 전에는 `ORDER_SOURCE=off` 로 둡니다.
+
 ## 테스트
 
 ```bash

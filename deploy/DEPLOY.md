@@ -1,0 +1,158 @@
+# 서버 설치 안내서 (iwinv · Ubuntu 24.04)
+
+인트라넷을 `https://intranet.broadstore.co.kr` 로 여는 순서입니다.
+명령어는 **한 줄씩** 복사해서 붙여넣고 Enter 를 누르세요.
+
+| 항목 | 값 |
+|---|---|
+| 서버 | iwinv `broad-intranet` (Ubuntu 24.04) |
+| 공인 IP | `49.247.133.38` |
+| 주소 | `intranet.broadstore.co.kr` |
+
+---
+
+## 1. 주소 연결 (가비아, 브라우저에서)
+
+1. 가비아 로그인 → **My가비아** → **도메인** → `broadstore.co.kr` 의 **관리**
+2. **DNS 정보 → DNS 관리**(또는 "DNS 설정") → **레코드 수정**
+3. **레코드 추가**를 누르고 아래처럼 입력 → **저장**
+
+   | 타입 | 호스트 | 값/위치 | TTL |
+   |---|---|---|---|
+   | A | `intranet` | `49.247.133.38` | 600 |
+
+> ⚠️ 이미 있는 다른 레코드(`@`, `www` 등)는 **절대 고치거나 지우지 마세요.** 자사몰 접속이 끊깁니다.
+> 화면에 "가비아 네임서버를 사용하지 않습니다" 같은 안내가 나오면 멈추고 알려주세요. 다른 곳에서 설정해야 합니다.
+
+반영까지 보통 몇 분, 길면 1시간 정도 걸립니다.
+
+---
+
+## 2. 서버 접속 (내 PC 의 PowerShell)
+
+```powershell
+ssh root@49.247.133.38
+```
+
+- 처음 접속하면 `Are you sure you want to continue connecting (yes/no)?` → `yes` 입력
+- `password:` → iwinv 에서 정한(또는 메일로 받은) **root 비밀번호** 입력. 입력해도 화면에 안 보이는 게 정상입니다.
+- 접속되면 앞부분이 `root@broad-intranet:~#` 처럼 바뀝니다. 이제부터 명령어는 **서버에서** 실행됩니다.
+- 접속을 끝낼 때는 `exit`
+
+---
+
+## 3. 코드 내려받기 (서버에서)
+
+저장소가 비공개라서, 서버 전용 "읽기 전용 열쇠"(Deploy key)를 만들어 GitHub 에 등록합니다.
+
+**3-1. 열쇠 만들기**
+```bash
+apt-get update && apt-get install -y git
+```
+```bash
+ssh-keygen -t ed25519 -N "" -f /root/.ssh/broad_deploy -C broad-intranet-server
+```
+```bash
+cat /root/.ssh/broad_deploy.pub
+```
+`ssh-ed25519 AAAA... broad-intranet-server` 로 시작하는 한 줄이 나옵니다. 이 줄 전체를 복사하세요
+(PowerShell 에서는 드래그 후 마우스 오른쪽 클릭 = 복사).
+
+> 이 한 줄은 공개해도 되는 "자물쇠" 쪽입니다. `/root/.ssh/broad_deploy`(`.pub` 없는 파일)는 열쇠이니 절대 밖으로 꺼내지 마세요.
+
+**3-2. GitHub 에 등록 (브라우저에서)**
+1. https://github.com/tyad0808/broad-intranet → **Settings** → 왼쪽 **Deploy keys** → **Add deploy key**
+2. Title: `iwinv 서버`, Key: 복사한 줄 붙여넣기
+3. **Allow write access 는 체크하지 마세요** (서버는 읽기만)
+4. **Add key**
+
+**3-3. 내려받기 (서버에서)**
+```bash
+git clone -c core.sshCommand="ssh -i /root/.ssh/broad_deploy -o StrictHostKeyChecking=accept-new" git@github.com:tyad0808/broad-intranet.git /opt/broad-intranet/app
+```
+`Receiving objects: 100%` 가 나오면 성공입니다.
+
+---
+
+## 4. 설치 (서버에서, 5~10분)
+
+먼저 주소 연결이 끝났는지 확인합니다.
+```bash
+getent hosts intranet.broadstore.co.kr
+```
+`49.247.133.38  intranet.broadstore.co.kr` 이 나오면 준비 완료. 아무것도 안 나오면 1번이 아직 반영되지 않은 것이니 조금 기다리세요.
+
+```bash
+bash /opt/broad-intranet/app/deploy/setup.sh intranet.broadstore.co.kr
+```
+
+끝나면 `설치 완료` 상자와 함께 **네이버에 등록할 IP** 가 표시됩니다.
+
+---
+
+## 5. 관리자 계정 만들기 (서버에서)
+
+```bash
+cd /opt/broad-intranet/app && sudo -u intranet npm run create-admin
+```
+내 PC 에서 연습할 때와 같습니다. 이메일, 이름, 비밀번호 입력.
+
+---
+
+## 6. 접속 확인
+
+- PC 와 **휴대폰**(와이파이를 끄고 LTE 로도)에서 `https://intranet.broadstore.co.kr`
+- 주소창에 자물쇠 🔒 가 보이면 HTTPS 정상
+- 처음 접속 때 "안전하지 않음"이 잠깐 보이면 1~2분 뒤 새로고침 (인증서 발급 중)
+
+---
+
+## 7. 네이버 연결 (실제 주문 수집 시작)
+
+1. **네이버 커머스 API센터** → 내 애플리케이션 → **API 호출 IP** 에 4번에서 표시된 IP(`49.247.133.38` 예상) 등록
+2. 애플리케이션 ID / 시크릿 확인
+3. 서버에서 설정 파일 열기
+   ```bash
+   nano /opt/broad-intranet/app/.env
+   ```
+   아래 세 줄을 고칩니다 (화살표 키로 이동).
+   ```
+   ORDER_SOURCE=naver
+   NAVER_CLIENT_ID=발급받은ID
+   NAVER_CLIENT_SECRET=발급받은시크릿
+   ```
+   저장: `Ctrl + O` → Enter, 나가기: `Ctrl + X`
+4. 재시작
+   ```bash
+   systemctl restart broad-intranet
+   ```
+5. 인트라넷 **관리자 → 주문 수집 → 지금 수집**. "성공"과 함께 최근 3일 주문이 들어오면 완료입니다.
+   "실패"가 나오면 비고 칸의 내용을 알려주세요.
+
+---
+
+## 평소에 쓰는 명령어 (서버에서)
+
+| 하고 싶은 일 | 명령어 |
+|---|---|
+| 새 코드로 업데이트 | `bash /opt/broad-intranet/app/deploy/update.sh` |
+| 인트라넷이 켜져 있는지 | `systemctl status broad-intranet` (q 로 나가기) |
+| 최근 기록(오류 확인) | `journalctl -u broad-intranet -n 50 --no-pager` |
+| 재시작 | `systemctl restart broad-intranet` |
+| 지금 바로 백업 | `systemctl start broad-intranet-backup` |
+| 백업 목록 | `ls -lh /var/lib/broad-intranet/backups` |
+
+- 백업은 매일 새벽 3시 자동, 14일치 보관 (`/var/lib/broad-intranet/backups`)
+- 서버가 재부팅돼도 인트라넷은 자동으로 다시 켜집니다
+- 보안 업데이트는 매일 자동 설치됩니다
+
+## 백업에서 되살리기 (사고가 났을 때만)
+
+```bash
+systemctl stop broad-intranet
+cp /var/lib/broad-intranet/intranet.db /var/lib/broad-intranet/intranet.db.before-restore
+cp /var/lib/broad-intranet/backups/intranet-날짜-시각.db /var/lib/broad-intranet/intranet.db
+rm -f /var/lib/broad-intranet/intranet.db-wal /var/lib/broad-intranet/intranet.db-shm
+chown intranet:intranet /var/lib/broad-intranet/intranet.db
+systemctl start broad-intranet
+```
