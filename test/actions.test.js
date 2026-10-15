@@ -123,6 +123,25 @@ test('네이버가 거절하면 실패, 응답이 끊기거나 이상하면 "확
   }
 });
 
+test('발주확인 응답의 성공 목록(successProductOrderInfos)을 읽는다', async () => {
+  const { db, row, idOf, userId } = setupDb();
+  const writer = fakeWriter({
+    confirm: ids => ({ data: { successProductOrderInfos: ids.map(id => ({ productOrderId: id, isReceiverAddressChanged: false })), failProductOrderInfos: [] } }),
+  });
+  const r = await createOrderActions({ db, writer }).confirm(idOf('P1'), userId);
+  assert.strictEqual(r.result, 'ok');
+  assert.strictEqual(row('P1').channel_confirmed, 1);
+});
+
+test('성공도 실패도 없는 응답은 실패가 아니라 "확인 필요" 로, 응답 내용과 함께 남긴다', async () => {
+  const { db, row, idOf, logs, userId } = setupDb();
+  const writer = fakeWriter({ confirm: () => ({ data: { failProductOrderInfos: [], somethingNew: [1] } }) });
+  const r = await createOrderActions({ db, writer }).confirm(idOf('P1'), userId);
+  assert.strictEqual(r.result, 'unknown');
+  assert.match(logs()[0].message, /somethingNew/);
+  assert.strictEqual(row('P1').channel_confirmed, 0);
+});
+
 test('같은 주문을 연달아 두 번 눌러도 네이버에는 한 번만 보낸다', async () => {
   const { db, idOf, userId } = setupDb();
   let release;

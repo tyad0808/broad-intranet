@@ -44,15 +44,36 @@ function describeShipping({ method, company, tracking }) {
 }
 
 // 네이버 응답에서 성공·실패 상품주문번호를 꺼낸다. 모양이 예상과 다르면 null (= 결과를 알 수 없음)
+// 성공 목록은 API 에 따라 이름이 다르다:
+//   발주확인 → successProductOrderInfos: [{ productOrderId, isReceiverAddressChanged }]
+//   발송처리 → successProductOrderIds: ['...']
 function parseResult(body, ids) {
   const data = body && body.data;
-  if (!data || (!Array.isArray(data.successProductOrderIds) && !Array.isArray(data.failProductOrderInfos))) return null;
-  const success = (data.successProductOrderIds || []).map(String).filter(id => ids.includes(id));
-  const fail = (data.failProductOrderInfos || []).map(f => ({
+  if (!data) return null;
+  const okIds = Array.isArray(data.successProductOrderIds) ? data.successProductOrderIds : null;
+  const okInfos = Array.isArray(data.successProductOrderInfos) ? data.successProductOrderInfos : null;
+  const fails = Array.isArray(data.failProductOrderInfos) ? data.failProductOrderInfos : null;
+  if (!okIds && !okInfos && !fails) return null;
+  const success = [
+    ...(okIds || []).map(String),
+    ...(okInfos || []).map(i => String((i && i.productOrderId) || '')),
+  ].filter(id => ids.includes(id));
+  const fail = (fails || []).map(f => ({
     id: String(f.productOrderId || ''),
     message: f.message || f.code || '실패',
   }));
+  // 성공도 실패도 없다고 답하면 무슨 일이 있었는지 알 수 없다
+  if (success.length === 0 && fail.length === 0) return null;
   return { success, fail };
+}
+
+// "확인 필요" 기록에 남길 네이버 응답 앞부분 (원인 확인용, 비밀값은 들어 있지 않음)
+function snippet(body) {
+  try {
+    return JSON.stringify(body).slice(0, 300);
+  } catch {
+    return String(body).slice(0, 300);
+  }
 }
 
 function createOrderActions({ db, writer = null, now = () => new Date() }) {
@@ -112,7 +133,7 @@ function createOrderActions({ db, writer = null, now = () => new Date() }) {
 
       const parsed = parseResult(body, ids);
       if (!parsed) {
-        return record('unknown', '네이버 응답을 이해하지 못했습니다. 판매자센터에서 처리됐는지 꼭 확인하세요.');
+        return record('unknown', `네이버 응답을 이해하지 못했습니다. 판매자센터에서 처리됐는지 꼭 확인하세요. 응답: ${snippet(body)}`);
       }
       if (parsed.success.length > 0) {
         transaction(db, () => {
