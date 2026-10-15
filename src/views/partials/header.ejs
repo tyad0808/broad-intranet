@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><%= title %> · 브로애드 인트라넷</title>
+  <title><%= title === '주문' ? '통합 어드민(브로애드)' : `${title} · 통합 어드민(브로애드)` %></title>
   <link rel="stylesheet" href="/style.css">
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 </head>
 <body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %><% if (locals.embed) { %> class="embed"<% } %>>
   <% if (!locals.embed) { %>
   <header class="topbar">
-    <a class="brand" href="/">브로애드 인트라넷</a>
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">B</span>통합 어드민(브로애드)</a>
     <% if (locals.user) { %>
       <nav class="me">
         <% if (user.role === 'admin' && user.status === 'active') { %>

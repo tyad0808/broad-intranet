@@ -100,3 +100,14 @@ test('같은 이메일로 두 번 가입할 수 없다', async t => {
   assert.strictEqual(res.status, 400);
   assert.match(res.text, /이미 가입된 이메일/);
 });
+
+test('탭 제목은 통합 어드민(브로애드), 아이콘은 검정 바탕 흰 B', async t => {
+  const { server, baseUrl } = await require('./helpers').startServer();
+  t.after(() => server.close());
+  const page = await (await fetch(baseUrl + '/login')).text();
+  assert.match(page, /<title>[^<]*통합 어드민\(브로애드\)<\/title>/);
+  assert.match(page, /rel="icon" href="\/favicon\.svg"/);
+  const icon = await (await fetch(baseUrl + '/favicon.svg')).text();
+  assert.match(icon, /fill="#000"/);
+  assert.match(icon, />B</);
+});
