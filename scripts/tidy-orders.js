@@ -3,7 +3,7 @@
 // 실행 (미리보기, 아무것도 바꾸지 않음):  npm run tidy-orders
 // 실제로 옮기기:                          npm run tidy-orders -- --apply
 // 최근 3일 주문 다시 읽기(추가상품 표시 갱신): npm run tidy-orders -- --refetch
-// 지난 N일(최대 30일) 주문 다시 읽기:         npm run tidy-orders -- --days 30
+// 지난 N일(최대 90일) 주문 다시 읽기:         npm run tidy-orders -- --days 60
 //   (인트라넷을 켜기 전부터 진행 중이던 주문을 가져와 판매자센터 건수와 맞춘다)
 //
 // 직원이 손댄 카드(담당자 지정, 저장 이력 있음)는 절대 건드리지 않는다.
@@ -47,8 +47,8 @@ if (require.main === module) {
   const daysAt = process.argv.indexOf('--days');
   if (daysAt !== -1) {
     const days = Number(process.argv[daysAt + 1]);
-    if (!Number.isInteger(days) || days < 1 || days > 30) {
-      console.log('일수는 1~30 사이 숫자로 적어 주세요. 예: npm run tidy-orders -- --days 30');
+    if (!Number.isInteger(days) || days < 1 || days > 90) {
+      console.log('일수는 1~90 사이 숫자로 적어 주세요. 예: npm run tidy-orders -- --days 30');
       db.close();
       return;
     }
