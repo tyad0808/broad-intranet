@@ -770,3 +770,5 @@ body.embed .container { padding-top: 56px; }
   .order-modal { padding: 0; }
   .order-modal-box { width: 100%; height: 100%; border-radius: 0; }
 }
+.form-actions .btn-sm { width: auto; white-space: nowrap; flex: none; }
+.bulk-done .form-actions { margin-top: 12px; }

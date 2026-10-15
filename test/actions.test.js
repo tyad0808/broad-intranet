@@ -351,3 +351,33 @@ test('관리자 메뉴 처리 기록: 누가 언제 무엇을 했는지 보인�
   assert.match(page.text, /상품1/);
   assert.notStrictEqual((await kim.request('/admin/actions')).status, 200);
 });
+
+test('일괄 발송처리: 틀린 줄이 있으면 입력값을 그대로 둔 채 다시 보여주고, 팝업 안에서는 결과를 팝업에 보여준다', async t => {
+  const { db, kim, idOf, row } = await setupServer(t, { writer: fakeWriter() });
+  applyOrders(db, [order(1, { channel_confirmed: 1 }), order(2, { channel_confirmed: 1 })]);
+  const p1 = idOf('P1');
+  const p2 = idOf('P2');
+  const form = await kim.submit('/', '/orders/bulk/dispatch-form?embed=1', { ids: [String(p1), String(p2)], back: '/' });
+  assert.match(form.text, /data-close-modal/, '팝업 안에서는 취소 = 닫기');
+  const token = /name="_csrf" value="([^"]+)"/.exec(form.text)[1];
+  const bad = await kim.request('/orders/bulk/dispatch?embed=1', { method: 'POST', form: {
+    _csrf: token, back: '/', ids: [String(p1), String(p2)],
+    [`method_${p1}`]: 'DELIVERY', [`company_${p1}`]: 'KDEXP', [`tracking_${p1}`]: '111122223333',
+    [`method_${p2}`]: 'DELIVERY', [`company_${p2}`]: 'KGB', [`tracking_${p2}`]: '',
+  } });
+  assert.strictEqual(bad.status, 400);
+  assert.match(bad.text, /아무것도 보내지 않았습니다/);
+  assert.match(bad.text, /value="111122223333"/, '입력한 송장번호는 그대로 남는다');
+  assert.match(bad.text, /value="KDEXP" selected/);
+  assert.strictEqual(row('P1').shipped_at, null);
+
+  const ok = await kim.request('/orders/bulk/dispatch?embed=1', { method: 'POST', form: {
+    _csrf: token, back: '/', ids: [String(p1), String(p2)],
+    [`method_${p1}`]: 'DELIVERY', [`company_${p1}`]: 'KDEXP', [`tracking_${p1}`]: '111122223333',
+    [`method_${p2}`]: 'QUICK_SVC',
+  } });
+  assert.strictEqual(ok.status, 200, '팝업 안에서는 목록으로 가지 않고 결과를 보여준다');
+  assert.match(ok.text, /발송처리 2건: 완료 2건/);
+  assert.match(ok.text, /data-close-modal/);
+  assert.ok(row('P1').shipped_at);
+});

@@ -1,5 +1,5 @@
 <%- include('../partials/header') %>
-<p class="back-row"><a href="<%= back %>" class="btn-back">← 목록으로</a></p>
+<% if (!locals.embed) { %><p class="back-row"><a href="<%= back %>" class="btn-back">← 목록으로</a></p><% } %>
 
 <section class="card">
   <h1>일괄 발송처리 (<%= rows.length %>건)</h1>
@@ -7,6 +7,7 @@
     <p class="practice-note"><strong>연습 모드</strong> 보내기를 눌러도 네이버로 보내지 않고 기록만 남깁니다.</p>
   <% } %>
   <p class="muted">주문마다 배송 방법과 송장번호를 넣고 맨 아래 <strong>발송처리 보내기</strong>를 누르세요. 한 줄이라도 틀리면 아무것도 보내지 않습니다.</p>
+  <% if (error) { %><p class="error"><%= error %></p><% } %>
   <% if (skipped.length) { %>
     <p class="warn-box">발송처리할 수 없어 뺀 주문 <%= skipped.length %>건: <%= skipped.slice(0, 5).join(', ') %><%= skipped.length > 5 ? ' 외' : '' %> (발주확인 전이거나 이미 발송됨)</p>
   <% } %>
@@ -26,16 +27,16 @@
           <div class="ship-inputs">
             <select name="method_<%= id %>" data-ship-method aria-label="배송 방법">
               <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { %>
-                <option value="<%= code %>" <%= code === DEFAULT_METHOD ? 'selected' : '' %>><%= label %></option>
+                <option value="<%= code %>" <%= code === (values[`method_${id}`] || DEFAULT_METHOD) ? 'selected' : '' %>><%= label %></option>
               <% }) %>
             </select>
             <span data-ship-fields class="ship-fields">
               <select name="company_<%= id %>" aria-label="택배사">
                 <% Object.entries(COURIERS).forEach(([code, label]) => { %>
-                  <option value="<%= code %>" <%= code === DEFAULT_COURIER ? 'selected' : '' %>><%= label %></option>
+                  <option value="<%= code %>" <%= code === (values[`company_${id}`] || DEFAULT_COURIER) ? 'selected' : '' %>><%= label %></option>
                 <% }) %>
               </select>
-              <input type="text" name="tracking_<%= id %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="송장번호" aria-label="송장번호">
+              <input type="text" name="tracking_<%= id %>" value="<%= values[`tracking_${id}`] || '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="송장번호" aria-label="송장번호">
             </span>
           </div>
         </div>
@@ -43,7 +44,7 @@
     </div>
     <div class="form-actions">
       <button type="submit">발송처리 보내기</button>
-      <a class="btn-sm" href="<%= back %>">취소</a>
+      <% if (locals.embed) { %><button type="button" class="btn-sm" data-close-modal>취소</button><% } else { %><a class="btn-sm" href="<%= back %>">취소</a><% } %>
     </div>
   </form>
 </section>

@@ -207,7 +207,7 @@
   <span><strong data-bulk-count>0</strong>건 선택</span>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/confirm"
           data-confirm="체크한 주문을 스마트스토어에 발주확인할까요?&#10;고객에게 발주확인 알림이 가고, 되돌릴 수 없습니다.&#10;(이미 발주확인된 주문은 건너뜁니다)" data-bulk-kind="confirm">발주확인 <span data-n>0</span>건</button>
-  <button type="submit" form="bulk-form" formaction="/orders/bulk/dispatch-form" class="secondary" data-bulk-kind="dispatch">송장 입력·발송처리 <span data-n>0</span>건…</button>
+  <button type="submit" form="bulk-form" formaction="/orders/bulk/dispatch-form" formtarget="order-modal-frame" data-modal class="secondary" data-bulk-kind="dispatch">송장 입력·발송처리 <span data-n>0</span>건…</button>
   <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>
 </div>
 

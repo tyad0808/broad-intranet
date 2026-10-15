@@ -1,0 +1,12 @@
+<%- include('../partials/header') %>
+<section class="card bulk-done">
+  <h1><%= result.type === 'error' ? '처리하지 못했습니다' : '처리 결과' %></h1>
+  <div class="<%= result.type === 'error' ? 'error' : result.type === 'warn' ? 'warn-box' : 'notice' %>">
+    <%= result.message %>
+    <% if (result.details && result.details.length) { %>
+      <ul class="flash-details"><% result.details.forEach(d => { %><li><%= d %></li><% }) %></ul>
+    <% } %>
+  </div>
+  <div class="form-actions"><button type="button" data-close-modal>닫기</button></div>
+</section>
+<%- include('../partials/footer') %>

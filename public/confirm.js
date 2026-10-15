@@ -32,7 +32,9 @@
       event.preventDefault();
       return;
     }
-    if (form.hasAttribute('data-once')) lock(form);
+    // 팝업(iframe)으로 보내는 제출은 이 화면이 그대로 남으므로 잠그지 않는다
+    const toPopup = (button && button.getAttribute('formtarget')) || form.getAttribute('target');
+    if (form.hasAttribute('data-once') && !toPopup) lock(form);
   });
 
   // '뒤로 가기'로 돌아왔을 때 잠긴 버튼이 그대로 남지 않게 새로 불러온다

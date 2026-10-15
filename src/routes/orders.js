@@ -350,25 +350,15 @@ function orderRoutes(db, notifier, actions, collector = null) {
   router.post('/orders/bulk/dispatch-form', (req, res) => {
     const back = safeBack(req.body.back);
     const ids = pickIds(req.body.ids);
-    if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
-    const rows = [];
-    const skipped = [];
-    for (const id of ids) {
-      const order = findOrder(id);
-      if (!order) continue;
-      const items = groupItems(order);
-      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch) });
-      else skipped.push(items[0].product_name);
-    }
+    if (ids.error) return finish(req, res, back, { type: 'error', message: ids.error });
+    const { rows, skipped } = dispatchRows(ids);
     if (rows.length === 0) {
-      return flashBack(req, res, back, {
+      return finish(req, res, back, {
         type: 'error',
         message: '고른 주문 중 발송처리할 수 있는 주문이 없습니다 (발주확인 전이거나 이미 발송된 주문).',
       });
     }
-    res.render('orders/bulk-dispatch', {
-      title: '일괄 발송처리', rows, skipped, back, SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER,
-    });
+    renderBulkDispatch(res, { rows, skipped, back });
   });
 
   // 여러 주문 일괄 발송처리 ② 보내기
@@ -376,8 +366,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
     try {
       const back = safeBack(req.body.back);
       const ids = pickIds(req.body.ids);
-      if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
-      // 먼저 모든 줄을 검사하고, 하나라도 틀리면 아무것도 보내지 않는다
+      if (ids.error) return finish(req, res, back, { type: 'error', message: ids.error });
+      // 먼저 모든 줄을 검사하고, 하나라도 틀리면 아무것도 보내지 않는다 (입력한 값은 그대로 다시 보여준다)
       const inputs = [];
       for (const id of ids) {
         const input = checkDispatchInput({
@@ -388,19 +378,49 @@ function orderRoutes(db, notifier, actions, collector = null) {
         if (input.error) {
           const order = findOrder(id);
           const name = order ? groupItems(order)[0].product_name : `주문 ${id}`;
-          return flashBack(req, res, back, { type: 'error', message: `'${name}': ${input.error} 아무것도 보내지 않았습니다.` });
+          const { rows, skipped } = dispatchRows(ids);
+          return renderBulkDispatch(res, {
+            status: 400, rows, skipped, back, values: req.body,
+            error: `'${name}': ${input.error} 아무것도 보내지 않았습니다.`,
+          });
         }
         inputs.push([id, input]);
       }
       const results = [];
       for (const [id, input] of inputs) results.push(await actions.dispatch(id, req.user.id, input));
       afterActions(results, req.user.id);
-      req.session.flash = summarize('발송처리', results);
-      res.redirect(back);
+      finish(req, res, back, summarize('발송처리', results));
     } catch (e) {
       next(e);
     }
   });
+
+  // 일괄 발송처리 입력 줄: 발송처리할 수 있는 주문만, 나머지는 '뺀 주문'
+  function dispatchRows(ids) {
+    const rows = [];
+    const skipped = [];
+    for (const id of ids) {
+      const order = findOrder(id);
+      if (!order) continue;
+      const items = groupItems(order);
+      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch) });
+      else skipped.push(items[0].product_name);
+    }
+    return { rows, skipped };
+  }
+
+  function renderBulkDispatch(res, { status = 200, rows, skipped, back, values = {}, error = null }) {
+    res.status(status).render('orders/bulk-dispatch', {
+      title: '일괄 발송처리', rows, skipped, back, values, error, SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER,
+    });
+  }
+
+  // 일괄 처리가 끝난 뒤: 팝업 안이면 결과를 팝업에 보여주고, 아니면 목록으로 돌아가 안내한다
+  function finish(req, res, back, flash) {
+    if (res.locals.embed) return res.render('orders/bulk-done', { title: '처리 결과', result: flash });
+    req.session.flash = flash;
+    res.redirect(back);
+  }
 
   // 주문 하나 발주확인
   router.post('/orders/:id/confirm', async (req, res, next) => {
