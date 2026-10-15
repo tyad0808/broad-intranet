@@ -54,6 +54,15 @@
   }
 
   panel.addEventListener('click', event => {
+    if (event.target.closest('a')) return; // '출고 N건' 링크는 그대로 이동
+    const del = event.target.closest('[data-ev-delete-id]');
+    if (del) {
+      if (!window.confirm(`'${del.dataset.title}' 일정을 지울까요?`)) return;
+      const form = viewDialog.querySelector('[data-ev-delete]');
+      form.action = `/calendar/events/${del.dataset.evDeleteId}/delete`;
+      form.submit();
+      return;
+    }
     const nav = event.target.closest('[data-cal-month]');
     if (nav) return load(nav.dataset.calMonth);
     const add = event.target.closest('[data-cal-add]');

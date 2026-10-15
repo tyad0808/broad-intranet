@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view: st || view === 'active' ? '' : view, st, ch: channel, stage: stageFilter || '', sort: sort === 'recent' ? '' : sort, q, ...changes };
+    const merged = { view: st || view === 'active' ? '' : view, st, ch: channel, stage: stageFilter || '', due, sort: sort === 'recent' ? '' : sort, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -57,6 +57,9 @@
       </a>
     <% }) %>
   </nav>
+  <% if (due) { %>
+    <p class="muted small st-note"><strong>납기 <%= due %></strong> 주문만 보는 중입니다. <a href="<%= link({ due: '' }) %>">해제</a></p>
+  <% } %>
   <% if (st) { %>
     <p class="muted small st-note"><strong><%= SHIP_STATES[st] %></strong> 주문을 작업 단계와 상관없이 모두 보여줍니다. <a href="<%= link({ st: '', stage: '' }) %>">해제</a></p>
   <% } %>
@@ -75,6 +78,7 @@
   <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active') { %><input type="hidden" name="view" value="<%= view %>"><% } %>
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
   <% if (stageFilter) { %><input type="hidden" name="stage" value="<%= stageFilter %>"><% } %>
+  <% if (due) { %><input type="hidden" name="due" value="<%= due %>"><% } %>
   <select name="sort" aria-label="정렬">
     <option value="">최근 주문순</option>
     <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>
@@ -137,7 +141,17 @@
           </ul>
         </a>
         <div class="oi-meta">
-          <span class="pill stage"><%= o.stage_name || '단계 없음' %></span>
+          <form method="post" action="/orders/<%= o.id %>/stage" class="inline" data-autosubmit>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="back" value="<%= currentUrl %>">
+            <select name="stage_id" class="stage-select" aria-label="작업 단계">
+              <% if (!stages.some(s => s.active && s.id === o.stage_id)) { %><option value="" selected><%= o.stage_name || '단계 없음' %></option><% } %>
+              <% stages.forEach(s => { if (!s.active) return; %>
+                <option value="<%= s.id %>" <%= s.id === o.stage_id ? 'selected' : '' %>><%= s.name %></option>
+              <% }) %>
+            </select>
+            <noscript><button type="submit" class="btn-sm">변경</button></noscript>
+          </form>
           <form method="post" action="/orders/<%= o.id %>/assign" class="inline" data-autosubmit>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= currentUrl %>">

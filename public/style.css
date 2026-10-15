@@ -671,3 +671,44 @@ button.secondary:disabled, button.secondary:disabled:hover { background: #fff; }
 .ev-actions button { width: auto; }
 .ev-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
 @media (min-width: 1700px) { .with-side { grid-template-columns: minmax(0, 1fr) 440px; } .cal-day { min-height: 74px; } }
+.stage-select {
+  width: auto;
+  margin-top: 0;
+  padding: 3px 28px 3px 10px;
+  border: 1px solid #cddcfb;
+  border-radius: 12px;
+  background-color: var(--notice-bg);
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.cal-due {
+  display: block;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.cal-due:hover { background: #e2e8f0; }
+.cal-due.over { background: var(--error-bg); color: var(--error); }
+.cal-list li { display: flex; align-items: center; }
+.cal-list li .cal-item { flex: 1; min-width: 0; }
+.cal-del {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #98a2b3;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
+.cal-del:hover { background: var(--error-bg); color: var(--error); }

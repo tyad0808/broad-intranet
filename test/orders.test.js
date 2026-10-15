@@ -300,3 +300,28 @@ test('탭 아래 단계 버튼에 단계별 건수가 보이고, 누르면 그 �
   assert.doesNotMatch(design, />상품2</);
   assert.match(design, /모든 단계 <span class="count">3</, '단계를 골라도 다른 단계 건수는 그대로 보인다');
 });
+
+test('목록에서 작업 단계를 바로 바꾸면 추가상품까지 같이 바뀐다', async t => {
+  const { db, kim, idOf, row, stageId } = await setup(t);
+  applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '추가품' })]);
+  const list = (await kim.request('/')).text;
+  assert.match(list, new RegExp(`action="/orders/${idOf('P1')}/stage"`));
+  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: String(stageId('컨펌')), back: '/' });
+  assert.deepStrictEqual([row('P1').stage_id, row('P9').stage_id], [stageId('컨펌'), stageId('컨펌')]);
+  assert.strictEqual(row('P1').version, 1);
+  await kim.submit('/', `/orders/${idOf('P1')}/stage`, { stage_id: '9999', back: '/' });
+  assert.strictEqual(row('P1').stage_id, stageId('컨펌'), '없는 단계로는 못 바꾼다');
+});
+
+test('납기 날짜로 목록을 거르고, 달력에는 날짜별 출고 예정 건수가 보인다', async t => {
+  const { db, kim, idOf } = await setup(t);
+  db.prepare("UPDATE orders SET due_date = '2026-12-10' WHERE channel_item_id IN ('P1', 'P2')").run();
+  applyOrders(db, [order(2, { channel_status: 'DELIVERING' })]); // 이미 발송된 주문은 세지 않는다
+  const list = (await kim.request('/?due=2026-12-10')).text;
+  assert.match(list, />상품1</);
+  assert.doesNotMatch(list, />상품3</);
+  assert.match(list, /납기 2026-12-10<\/strong> 주문만/);
+  const panel = (await kim.request('/calendar?month=2026-12')).text;
+  assert.match(panel, /href="\/\?due=2026-12-10"[^>]*>출고 1건</);
+  assert.ok(idOf('P1'));
+});

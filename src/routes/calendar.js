@@ -4,6 +4,7 @@
 // - 고치기·지우기는 넣은 사람과 관리자만
 // - 달을 넘길 때는 /calendar?month=YYYY-MM 으로 달력 칸만 새로 받아 바꿔 끼운다 (목록은 그대로)
 const express = require('express');
+const { lastStageId, ENDED_SQL } = require('../collector');
 
 const COLORS = { blue: '파랑', green: '초록', orange: '주황', red: '빨강', purple: '보라' };
 const MAX_DAYS = 62; // 여러 날 일정은 최대 두 달
@@ -38,6 +39,17 @@ function buildMonth(db, monthParam, user) {
     canEdit: Boolean(user) && (user.role === 'admin' || e.created_by === user.id),
   }));
 
+  // 납기(출고 예정): 날짜별로 아직 끝나지 않은 주문 수 (주문번호 단위)
+  const dueCounts = {};
+  for (const r of db.prepare(`
+    SELECT due, COUNT(*) AS n FROM (
+      SELECT MIN(o.due_date) AS due FROM orders o
+      WHERE o.due_date BETWEEN ? AND ? AND (o.stage_id IS NULL OR o.stage_id != ?)
+      GROUP BY o.channel, o.channel_order_id
+      HAVING MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END) = 0
+    ) GROUP BY due
+  `).all(gridStart, gridEnd, lastStageId(db) || -1)) dueCounts[r.due] = r.n;
+
   const weeks = [];
   for (let w = 0; w < weeksCount; w++) {
     const days = [];
@@ -50,6 +62,7 @@ function buildMonth(db, monthParam, user) {
         isToday: date === today,
         weekday: d,
         events: events.filter(e => e.start_date <= date && (e.end_date || e.start_date) >= date),
+        due: dueCounts[date] || 0,
       });
     }
     weeks.push(days);

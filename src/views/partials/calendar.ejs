@@ -22,6 +22,9 @@
       <div class="cal-day <%= d.inMonth ? '' : 'out' %> <%= d.isToday ? 'today' : '' %> <%= d.weekday === 0 ? 'sun' : d.weekday === 6 ? 'sat' : '' %>"
            data-date="<%= d.date %>" title="<%= d.date %> 에 일정 추가">
         <span class="cal-num"><%= d.day %></span>
+        <% if (d.due) { %>
+          <a class="cal-due <%= d.date < cal.today ? 'over' : '' %>" href="/?due=<%= d.date %>" title="납기 <%= d.date %> 주문 보기">출고 <%= d.due %>건</a>
+        <% } %>
         <% d.events.slice(0, 2).forEach(e => { %>
           <button type="button" class="ev ev-<%= e.color %>" data-event="<%= evData(e) %>"><%= e.title %></button>
         <% }) %>
@@ -43,6 +46,9 @@
               <span class="cal-when"><%= md(e.start_date) %><%= e.end_date ? `~${md(e.end_date)}` : '' %><%= e.time ? ` ${e.time}` : '' %></span>
               <span class="cal-what"><%= e.title %></span>
             </button>
+            <% if (e.canEdit) { %>
+              <button type="button" class="cal-del" data-ev-delete-id="<%= e.id %>" data-title="<%= e.title %>" aria-label="<%= e.title %> 삭제" title="삭제">×</button>
+            <% } %>
           </li>
         <% }) %>
       </ul>

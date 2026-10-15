@@ -83,3 +83,11 @@ test('승인 대기 직원은 달력을 볼 수 없다', async t => {
   const b = await loginAs(ctx.baseUrl, 'wait@broad.test');
   assert.strictEqual((await b.request('/calendar')).location, '/pending');
 });
+
+test('이달의 일정 목록에는 고칠 수 있는 사람에게만 삭제(×) 버튼이 있다', async t => {
+  const ctx = await setup(t);
+  await ctx.kim.submit('/', '/calendar/events', { title: '휴무', start_date: '2026-12-24' });
+  assert.match((await ctx.kim.request('/calendar?month=2026-12')).text, /data-ev-delete-id=/);
+  const lee = await loginAs(ctx.baseUrl, 'lee@broad.test');
+  assert.doesNotMatch((await lee.request('/calendar?month=2026-12')).text, /data-ev-delete-id=/);
+});

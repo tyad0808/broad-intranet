@@ -62,6 +62,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const channel = CHANNELS[req.query.ch] ? req.query.ch : '';
     const sort = req.query.sort === 'due' ? 'due' : 'recent';
     const q = String(req.query.q || '').trim().slice(0, 50);
+    // 달력의 '출고 N건' 을 누르면 그날 납기인 주문만
+    const due = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.due || '')) ? req.query.due : '';
     const last = lastStageId();
 
     // 상품 단위 조건 (단계 필터는 단계별 건수를 셀 때 빼야 해서 따로 둔다)
@@ -80,6 +82,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
       params.push(req.user.id);
     }
     if (view === 'unassigned') where.push('o.assignee_id IS NULL');
+    if (due) {
+      where.push('o.due_date = ?');
+      params.push(due);
+    }
     if (q) {
       where.push('(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ? OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ?)');
       params.push(...Array(7).fill(`%${q}%`));
@@ -194,6 +200,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       stageCounts,
       stageTotal,
       stageFilter,
+      due,
       channel,
       channels: channelsInUse(),
       sort,
@@ -224,6 +231,24 @@ function orderRoutes(db, notifier, actions, collector = null) {
     } catch (e) {
       next(e);
     }
+  });
+
+  // 목록에서 바로 작업 단계 바꾸기 (주문 묶음 전체)
+  router.post('/orders/:id/stage', (req, res) => {
+    const back = safeBack(req.body.back);
+    const order = findOrder(req.params.id);
+    if (!order) return flashBack(req, res, back, { type: 'error', message: '주문을 찾을 수 없습니다.' });
+    const stageId = Number(req.body.stage_id);
+    const stage = stages().find(s => s.id === stageId && s.active);
+    if (!stage) return flashBack(req, res, back, { type: 'error', message: '고를 수 없는 작업 단계입니다.' });
+    const items = groupItems(order);
+    db.prepare(
+      "UPDATE orders SET stage_id = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?"
+    ).run(stage.id, order.channel, order.channel_order_id);
+    notifier.ordersChanged(items.map(i => i.id), req.user.id);
+    notifier.checkUnassigned();
+    req.session.flash = { type: 'ok', message: `'${items[0].product_name}' → ${stage.name}` };
+    res.redirect(`${back}#o${items[0].id}`);
   });
 
   // 목록에서 바로 담당 디자이너 지정 (주문 묶음 전체의 담당자 칸만 바꾼다)
