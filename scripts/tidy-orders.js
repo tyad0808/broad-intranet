@@ -3,6 +3,8 @@
 // 실행 (미리보기, 아무것도 바꾸지 않음):  npm run tidy-orders
 // 실제로 옮기기:                          npm run tidy-orders -- --apply
 // 최근 3일 주문 다시 읽기(추가상품 표시 갱신): npm run tidy-orders -- --refetch
+// 지난 N일(최대 30일) 주문 다시 읽기:         npm run tidy-orders -- --days 30
+//   (인트라넷을 켜기 전부터 진행 중이던 주문을 가져와 판매자센터 건수와 맞춘다)
 //
 // 직원이 손댄 카드(담당자 지정, 저장 이력 있음)는 절대 건드리지 않는다.
 require('dotenv').config({ quiet: true });
@@ -41,6 +43,28 @@ function tidyOrders(db, { apply = false } = {}) {
 if (require.main === module) {
   const apply = process.argv.includes('--apply');
   const db = openDb();
+
+  const daysAt = process.argv.indexOf('--days');
+  if (daysAt !== -1) {
+    const days = Number(process.argv[daysAt + 1]);
+    if (!Number.isInteger(days) || days < 1 || days > 30) {
+      console.log('일수는 1~30 사이 숫자로 적어 주세요. 예: npm run tidy-orders -- --days 30');
+      db.close();
+      return;
+    }
+    // 마지막 수집 시각을 N일 전으로 돌리면, 다음 수집 때 그동안 바뀐 주문을 모두 다시 읽는다.
+    // 이미 있는 주문은 채널 정보만 고쳐지고, 사내 칸(담당자·단계·메모)은 그대로 남는다.
+    const from = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const keys = db.prepare("SELECT key FROM settings WHERE key LIKE 'collect_last_to_%'").all().map(r => r.key);
+    for (const key of keys.length ? keys : ['collect_last_to_smartstore']) {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, from);
+    }
+    console.log(`다음 수집 때 최근 ${days}일 동안 바뀐 주문을 다시 읽습니다.`);
+    console.log('인트라넷 주문 화면에서 [↻ 지금 수집] 을 누르세요 (1~2분 걸릴 수 있음).');
+    console.log('수집이 "실패"로 나오면: sudo -u intranet npm run tidy-orders -- --refetch  (최근 3일만 다시 읽기로 되돌림)');
+    db.close();
+    return;
+  }
 
   if (process.argv.includes('--refetch')) {
     // 마지막 수집 시각을 지우면 다음 수집 때 최근 3일치를 처음처럼 다시 읽는다.

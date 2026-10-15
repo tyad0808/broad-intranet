@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view, ch: channel, stage: stageFilter || '', sort: sort === 'recent' ? '' : sort, q, ...changes };
+    const merged = { view: st || view === 'active' ? '' : view, st, ch: channel, stage: stageFilter || '', sort: sort === 'recent' ? '' : sort, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -34,23 +34,43 @@
   <% } %>
 </div>
 
-<nav class="tabs" id="live-tabs">
-  <% Object.entries(VIEWS).forEach(([key, label]) => { %>
-    <a href="<%= link({ view: key === 'active' ? '' : key }) %>" class="<%= view === key ? 'on' : '' %>">
-      <%= label %> <span class="count"><%= counts[key] || 0 %></span>
-    </a>
-  <% }) %>
-</nav>
+<%# 실시간 새로고침 때 이 칸 전체(상태 칸·탭·단계 버튼)를 새 건수로 바꾼다 %>
+<div id="live-tabs">
+  <nav class="ship-board" aria-label="채널 주문 상태">
+    <% Object.entries(SHIP_STATES).forEach(([key, label], n) => { %>
+      <% if (n > 0) { %><span class="ship-arrow" aria-hidden="true">›</span><% } %>
+      <a href="<%= st === key ? link({ st: '', stage: '' }) : link({ st: key, view: '', stage: '' }) %>" class="ship-tile st-<%= key %> <%= st === key ? 'on' : '' %>">
+        <span class="ship-label"><%= label %></span>
+        <strong class="ship-count"><%= counts['st_' + key] || 0 %><small>건</small></strong>
+      </a>
+    <% }) %>
+  </nav>
+
+  <nav class="tabs">
+    <% Object.entries(VIEWS).forEach(([key, label]) => { %>
+      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', stage: '' }) %>" class="<%= !st && view === key ? 'on' : '' %>">
+        <%= label %> <span class="count"><%= counts[key] || 0 %></span>
+      </a>
+    <% }) %>
+  </nav>
+  <% if (st) { %>
+    <p class="muted small st-note"><strong><%= SHIP_STATES[st] %></strong> 주문을 작업 단계와 상관없이 모두 보여줍니다. <a href="<%= link({ st: '', stage: '' }) %>">해제</a></p>
+  <% } %>
+
+  <nav class="stage-chips" aria-label="작업 단계">
+    <a href="<%= link({ stage: '' }) %>" class="chip <%= stageFilter ? '' : 'on' %>">모든 단계 <span class="count"><%= stageTotal %></span></a>
+    <% stages.forEach(s => { const n = stageCounts[s.id] || 0; if (!s.active && !n) return; %>
+      <a href="<%= link({ stage: s.id }) %>" class="chip <%= stageFilter === s.id ? 'on' : '' %> <%= n ? '' : 'zero' %>">
+        <%= s.name %><%= s.active ? '' : ' (숨김)' %> <span class="count"><%= n %></span>
+      </a>
+    <% }) %>
+  </nav>
+</div>
 
 <form method="get" action="/" class="filters" data-autosubmit>
-  <% if (view !== 'active') { %><input type="hidden" name="view" value="<%= view %>"><% } %>
+  <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active') { %><input type="hidden" name="view" value="<%= view %>"><% } %>
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
-  <select name="stage" aria-label="작업 단계">
-    <option value="">모든 단계</option>
-    <% stages.forEach(s => { %>
-      <option value="<%= s.id %>" <%= stageFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %></option>
-    <% }) %>
-  </select>
+  <% if (stageFilter) { %><input type="hidden" name="stage" value="<%= stageFilter %>"><% } %>
   <select name="sort" aria-label="정렬">
     <option value="">최근 주문순</option>
     <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>

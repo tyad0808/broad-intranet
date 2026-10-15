@@ -264,3 +264,31 @@ test('추가상품만 남아 있고 본상품이 배송 중이어도, 하나라�
   ]);
   assert.match((await kim.request('/')).text, />상품1</);
 });
+
+test('판매자센터처럼 신규주문·배송준비·배송중·배송완료 건수를 보여주고, 누르면 그 주문만 본다', async t => {
+  const { db, kim } = await setup(t);
+  // 1: 신규주문, 2: 배송준비(발주확인됨), 3: 배송중, 4: 배송완료
+  applyOrders(db, [order(2, { channel_confirmed: 1 }), order(3, { channel_confirmed: 1, channel_status: 'DELIVERING' })]);
+  applyOrders(db, [order(4, { channel_confirmed: 1, channel_status: 'DELIVERED' })]);
+  const text = (await kim.request('/')).text;
+  const count = key => new RegExp(`st-${key} [^"]*">\\s*<span class="ship-label">[^<]+</span>\\s*<strong class="ship-count">(\\d+)`).exec(text)[1];
+  assert.deepStrictEqual(['new', 'ready', 'shipping', 'delivered'].map(count), ['1', '1', '1', '1']);
+
+  const shipping = (await kim.request('/?st=shipping')).text;
+  assert.match(shipping, />상품3</);
+  assert.doesNotMatch(shipping, />상품1</);
+  assert.match(shipping, /배송중<\/strong> 주문을 작업 단계와 상관없이/);
+});
+
+test('탭 아래 단계 버튼에 단계별 건수가 보이고, 누르면 그 단계만 본다', async t => {
+  const { kim, idOf, stageId } = await setup(t);
+  await save(kim, idOf('P1'), { stage_id: String(stageId('디자인작업')) });
+  const text = (await kim.request('/')).text;
+  assert.match(text, /모든 단계 <span class="count">3</);
+  assert.match(text, /디자인작업 <span class="count">1</);
+  assert.match(text, /발주 <span class="count">2</);
+  const design = (await kim.request(`/?stage=${stageId('디자인작업')}`)).text;
+  assert.match(design, />상품1</);
+  assert.doesNotMatch(design, />상품2</);
+  assert.match(design, /모든 단계 <span class="count">3</, '단계를 골라도 다른 단계 건수는 그대로 보인다');
+});

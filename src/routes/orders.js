@@ -24,6 +24,14 @@ const VIEWS = {
 const GROUP_KEY = "o.channel || ':' || o.channel_order_id";
 // 묶음의 모든 상품이 채널에서 끝났으면(배송중·배송완료·취소·반품 등) 1, 아니면 0
 const GROUP_ENDED = `MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END)`;
+// 판매자센터 '판매 관리' 처럼 보는 채널 상태 (주문 묶음 하나는 가장 앞 단계 하나로 센다)
+const SHIP_STATES = { new: '신규주문', ready: '배송준비', shipping: '배송중', delivered: '배송완료' };
+const GROUP_SHIP_STATE = `CASE
+  WHEN MAX(o.channel_status = 'PAYED' AND o.channel_confirmed = 0) THEN 'new'
+  WHEN MAX(o.channel_status = 'PAYED' AND o.channel_confirmed = 1) THEN 'ready'
+  WHEN MAX(o.channel_status = 'DELIVERING') THEN 'shipping'
+  WHEN MAX(o.channel_status = 'DELIVERED') THEN 'delivered'
+  ELSE '' END`;
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
 const ITEM_ORDER = "CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id";
 
@@ -45,13 +53,16 @@ function orderRoutes(db, notifier, actions, collector = null) {
   const channelsInUse = () => db.prepare('SELECT DISTINCT channel FROM orders ORDER BY channel').all().map(r => r.channel);
 
   router.get('/', (req, res) => {
-    const view = VIEWS[req.query.view] ? req.query.view : 'active';
+    // st(채널 상태 칸: 신규주문·배송준비·배송중·배송완료)을 누르면 탭과 상관없이 그 상태의 주문을 모두 보여준다
+    const st = SHIP_STATES[req.query.st] ? req.query.st : '';
+    const view = st ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
     const stageFilter = Number(req.query.stage) || null;
     const channel = CHANNELS[req.query.ch] ? req.query.ch : '';
     const sort = req.query.sort === 'due' ? 'due' : 'recent';
     const q = String(req.query.q || '').trim().slice(0, 50);
     const last = lastStageId();
 
+    // 상품 단위 조건 (단계 필터는 단계별 건수를 셀 때 빼야 해서 따로 둔다)
     const where = [];
     const params = [];
     if (channel) {
@@ -67,15 +78,18 @@ function orderRoutes(db, notifier, actions, collector = null) {
       params.push(req.user.id);
     }
     if (view === 'unassigned') where.push('o.assignee_id IS NULL');
-    if (stageFilter) {
-      where.push('o.stage_id = ?');
-      params.push(stageFilter);
-    }
     if (q) {
       where.push('(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ? OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ?)');
       params.push(...Array(7).fill(`%${q}%`));
     }
-    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+    const sqlWhere = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
+    const whereSql = sqlWhere(stageFilter ? [...where, 'o.stage_id = ?'] : where);
+    const listParams = stageFilter ? [...params, stageFilter] : params;
+    // 묶음 단위 조건: 진행 중 탭들은 채널에서 끝난 주문을 빼고, 상태 칸을 눌렀으면 그 상태만
+    const having = [];
+    if (view !== 'all') having.push(`${GROUP_ENDED} = 0`);
+    if (st) having.push(`${GROUP_SHIP_STATE} = '${st}'`);
+    const havingSql = having.length ? 'HAVING ' + having.join(' AND ') : '';
 
     const groupOrder = sort === 'due'
       ? 'g_due IS NULL, g_due ASC, g_paid DESC, oid DESC'
@@ -87,7 +101,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
         SELECT o.channel AS ch, o.channel_order_id AS oid, MAX(o.paid_at) AS g_paid, MIN(o.due_date) AS g_due
         FROM orders o ${whereSql}
         GROUP BY o.channel, o.channel_order_id
-        ${view !== 'all' ? `HAVING ${GROUP_ENDED} = 0` : ''}
+        ${havingSql}
         ORDER BY ${groupOrder}
         LIMIT 300
       ), r AS (
@@ -99,7 +113,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       LEFT JOIN work_stages s ON s.id = o.stage_id
       LEFT JOIN users u ON u.id = o.assignee_id
       ORDER BY r.rnk, ${ITEM_ORDER}
-    `).all(...params);
+    `).all(...listParams);
 
     const groups = [];
     for (const row of rows) {
@@ -115,15 +129,28 @@ function orderRoutes(db, notifier, actions, collector = null) {
       g.shipped = g.items.find(i => i.shipped_at) || null;
     }
 
-    // 탭에 보여줄 건수 (주문 묶음 단위, 채널을 골랐으면 그 채널만)
+    // 단계 버튼에 보여줄 건수: 지금 탭·검색 조건 그대로, 단계만 빼고 센다
+    const stageCounts = {};
+    let stageTotal = 0;
+    for (const r of db.prepare(`
+      SELECT stage_id, COUNT(*) AS n FROM (
+        SELECT MIN(o.stage_id) AS stage_id FROM orders o ${sqlWhere(where)}
+        GROUP BY o.channel, o.channel_order_id ${havingSql}
+      ) GROUP BY stage_id
+    `).all(...params)) {
+      stageCounts[r.stage_id] = r.n;
+      stageTotal += r.n;
+    }
+
+    // 탭 건수와 채널 상태 칸 건수 (주문 묶음 단위, 채널을 골랐으면 그 채널만)
     const countWhere = channel ? 'WHERE o.channel = ?' : '';
-    // 탭 건수: 주문 묶음마다 '진행 중인지(마지막 단계 전 + 채널에서 안 끝남)' 를 먼저 구해서 센다
     const counts = db.prepare(`
       WITH grp AS (
         SELECT
           MAX(CASE WHEN o.stage_id IS NULL OR o.stage_id != ? THEN 1 ELSE 0 END) AND ${GROUP_ENDED} = 0 AS open,
           MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
-          MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned
+          MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned,
+          ${GROUP_SHIP_STATE} AS ship_state
         FROM orders o ${countWhere}
         GROUP BY o.channel, o.channel_order_id
       )
@@ -131,7 +158,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
         COALESCE(SUM(open), 0) AS active,
         COALESCE(SUM(open AND mine), 0) AS mine,
         COALESCE(SUM(open AND unassigned), 0) AS unassigned,
-        COUNT(*) AS "all"
+        COUNT(*) AS "all",
+        COALESCE(SUM(ship_state = 'new'), 0) AS st_new,
+        COALESCE(SUM(ship_state = 'ready'), 0) AS st_ready,
+        COALESCE(SUM(ship_state = 'shipping'), 0) AS st_shipping,
+        COALESCE(SUM(ship_state = 'delivered'), 0) AS st_delivered
       FROM grp
     `).get(last, req.user.id, ...(channel ? [channel] : []));
 
@@ -143,6 +174,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
       counts,
       VIEWS,
       view,
+      st,
+      SHIP_STATES,
+      stageCounts,
+      stageTotal,
       stageFilter,
       channel,
       channels: channelsInUse(),

@@ -465,3 +465,68 @@ button.secondary:disabled, button.secondary:disabled:hover { background: #fff; }
 @media (max-width: 760px) { .bulk-bar { padding: 8px 10px; } .bulk-bar button { padding: 8px 12px; font-size: 15px; } }
 .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .collect-form { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+
+/* 목록으로 버튼 */
+.back-row { margin: 0 0 12px; }
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.btn-back:hover { border-color: var(--primary); color: var(--primary); }
+
+/* 판매자센터처럼 보는 채널 상태 칸 */
+.ship-board {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  margin: 12px 0 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card);
+}
+.ship-tile {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: var(--text);
+  text-decoration: none;
+}
+.ship-tile:hover { background: var(--bg); }
+.ship-tile.on { border-color: #03c75a; background: #effaf3; }
+.ship-label { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.ship-count { font-size: 24px; line-height: 1.2; }
+.ship-count small { margin-left: 2px; font-size: 15px; font-weight: 600; }
+.st-new .ship-count { color: #03a14b; }
+.ship-arrow { align-self: center; color: #c0c6cf; font-size: 22px; }
+.st-note { margin: -8px 0 8px; }
+
+/* 작업 단계 버튼 */
+.stage-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.stage-chips .chip .count { color: var(--muted); font-size: 13px; }
+.stage-chips .chip.on .count { color: var(--primary-dark); }
+.stage-chips .chip.zero { opacity: 0.55; }
+
+@media (max-width: 760px) {
+  .ship-board { padding: 8px 4px; gap: 0; }
+  .ship-tile { padding: 6px 6px; align-items: center; }
+  .ship-label { font-size: 12px; }
+  .ship-count { font-size: 19px; }
+  .ship-count small { font-size: 12px; }
+  .ship-arrow { font-size: 16px; }
+}
