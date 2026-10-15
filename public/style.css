@@ -530,3 +530,4 @@ button.secondary:disabled, button.secondary:disabled:hover { background: #fff; }
   .ship-count small { font-size: 12px; }
   .ship-arrow { font-size: 16px; }
 }
+.ship-sub { font-size: 12px; color: var(--muted); white-space: nowrap; }

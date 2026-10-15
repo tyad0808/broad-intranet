@@ -36,12 +36,13 @@
 
 <%# 실시간 새로고침 때 이 칸 전체(상태 칸·탭·단계 버튼)를 새 건수로 바꾼다 %>
 <div id="live-tabs">
-  <nav class="ship-board" aria-label="채널 주문 상태">
+  <nav class="ship-board" aria-label="채널 주문 상태" title="큰 숫자는 판매자센터와 같은 상품주문 단위, 작은 숫자는 주문번호 단위입니다">
     <% Object.entries(SHIP_STATES).forEach(([key, label], n) => { %>
       <% if (n > 0) { %><span class="ship-arrow" aria-hidden="true">›</span><% } %>
       <a href="<%= st === key ? link({ st: '', stage: '' }) : link({ st: key, view: '', stage: '' }) %>" class="ship-tile st-<%= key %> <%= st === key ? 'on' : '' %>">
         <span class="ship-label"><%= label %></span>
-        <strong class="ship-count"><%= counts['st_' + key] || 0 %><small>건</small></strong>
+        <strong class="ship-count"><%= itemCounts[key] || 0 %><small>건</small></strong>
+        <span class="ship-sub">주문 <%= counts['st_' + key] || 0 %>건</span>
       </a>
     <% }) %>
   </nav>

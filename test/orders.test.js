@@ -273,11 +273,19 @@ test('판매자센터처럼 신규주문·배송준비·배송중·배송완료 
   const text = (await kim.request('/')).text;
   const count = key => new RegExp(`st-${key} [^"]*">\\s*<span class="ship-label">[^<]+</span>\\s*<strong class="ship-count">(\\d+)`).exec(text)[1];
   assert.deepStrictEqual(['new', 'ready', 'shipping', 'delivered'].map(count), ['1', '1', '1', '1']);
+  assert.match(text, /주문 1건/);
 
   const shipping = (await kim.request('/?st=shipping')).text;
   assert.match(shipping, />상품3</);
   assert.doesNotMatch(shipping, />상품1</);
   assert.match(shipping, /배송중<\/strong> 주문을 작업 단계와 상관없이/);
+});
+
+test('상태 칸의 큰 숫자는 판매자센터처럼 상품주문 단위로 센다 (추가상품도 1건)', async t => {
+  const { db, kim } = await setup(t);
+  applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '추가품' })]);
+  const text = (await kim.request('/')).text;
+  assert.match(text, /st-new [^"]*">\s*<span class="ship-label">신규주문<\/span>\s*<strong class="ship-count">4<small>건<\/small><\/strong>\s*<span class="ship-sub">주문 3건/);
 });
 
 test('탭 아래 단계 버튼에 단계별 건수가 보이고, 누르면 그 단계만 본다', async t => {

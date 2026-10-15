@@ -166,6 +166,16 @@ function orderRoutes(db, notifier, actions, collector = null) {
       FROM grp
     `).get(last, req.user.id, ...(channel ? [channel] : []));
 
+    // 상태 칸의 큰 숫자는 판매자센터와 같은 '상품주문' 단위 (추가상품·옵션별 상품도 하나씩 센다)
+    const itemCounts = db.prepare(`
+      SELECT
+        COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 0), 0) AS new,
+        COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 1), 0) AS ready,
+        COALESCE(SUM(o.channel_status = 'DELIVERING'), 0) AS shipping,
+        COALESCE(SUM(o.channel_status = 'DELIVERED'), 0) AS delivered
+      FROM orders o ${countWhere}
+    `).get(...(channel ? [channel] : []));
+
     const lastRun = db.prepare('SELECT started_at, ok FROM collect_runs ORDER BY id DESC LIMIT 1').get() || null;
 
     res.render('orders/list', {
@@ -176,6 +186,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       view,
       st,
       SHIP_STATES,
+      itemCounts,
       stageCounts,
       stageTotal,
       stageFilter,
