@@ -48,6 +48,9 @@ function createApp({
   app.locals.shipMethodLabel = shipMethodLabel;
   app.locals.courierLabel = courierLabel;
   app.locals.actionMode = actions.mode;
+  // 채널별 연습/실제 모드 { smartstore: 'live', coupang: 'practice' }
+  app.locals.actionModes = actions.modes || { smartstore: actions.mode };
+  app.locals.WRITE_CHANNEL_NAMES = { smartstore: '네이버로', coupang: '쿠팡으로' };
   app.locals.PAY_METHODS = PAY_METHODS;
   // 처리 기록에 보여줄 이름
   app.locals.ACTION_LABELS = { confirm: '발주확인', dispatch: '발송처리', create: '수기 등록', paid: '입금확인', edit: '수정', cancel: '취소' };

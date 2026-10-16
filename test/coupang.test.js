@@ -50,17 +50,21 @@ test('쿠팡 서명: 시각(UTC yyMMddTHHmmssZ) + 메서드 + 경로 + 쿼리로
   assert.strictEqual(auth, `CEA algorithm=HmacSHA256, access-key=ak-test, signed-date=261016T010203Z, signature=${expected}`);
 });
 
-test('쿠팡: 발주서 목록 조회 말고는 호출할 수 없다 (상태 변경 주소는 막힘)', async () => {
+test('쿠팡: 허용된 주소 3개(조회 1 + 상품준비중·송장 2)만, 상태 변경은 쓰기를 켠 클라이언트만', async () => {
   let sent = 0;
-  const client = createCoupangClient({ ...KEYS, fetchFn: async () => { sent++; }, minGapMs: 0 });
-  assert.ok(isAllowed('GET', '/v2/providers/openapi/apis/api/v4/vendors/A00012345/ordersheets'));
+  const base = '/v2/providers/openapi/apis/api/v4/vendors/A00012345';
+  const client = createCoupangClient({ ...KEYS, fetchFn: async () => { sent++; }, minGapMs: 0, allowWrite: true });
+  assert.ok(isAllowed('GET', `${base}/ordersheets`));
   for (const [m, p] of [
-    ['PUT', '/v2/providers/openapi/apis/api/v4/vendors/A00012345/ordersheets/acknowledgement'],
-    ['POST', '/v2/providers/openapi/apis/api/v4/vendors/A00012345/orders/invoices'],
-    ['GET', '/v2/providers/openapi/apis/api/v4/vendors/A00012345/ordersheets/123'],
+    ['GET', `${base}/ordersheets/123`],
+    ['PUT', `${base}/ordersheets/123/stop`],
+    ['POST', `${base}/returnRequests`],
   ]) {
     await assert.rejects(client.request(m, p), /허용되지 않은/);
   }
+  const readOnly = createCoupangClient({ ...KEYS, fetchFn: async () => { sent++; }, minGapMs: 0 });
+  await assert.rejects(readOnly.request('PUT', `${base}/ordersheets/acknowledgement`, { json: {} }), /꺼져 있습니다/);
+  await assert.rejects(readOnly.request('POST', `${base}/orders/invoices`, { json: {} }), /꺼져 있습니다/);
   assert.strictEqual(sent, 0);
 });
 
@@ -137,4 +141,96 @@ test('채널 여러 개를 함께 수집하고, 한 채널이 실패해도 다�
   assert.strictEqual(r.createdOrders, 1);
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders').get().n, 1);
   applyOrders(db, []);
+});
+
+// ───────── 2단계: 상품준비중 처리 · 송장 업로드 ─────────
+const { createCoupangWriter, toCommonResult } = require('../src/channels/coupang');
+const { createOrderActions } = require('../src/actions');
+const { addUser } = require('./helpers');
+
+function writeSetup(responses = {}) {
+  const db = openDb(':memory:');
+  applyOrders(db, normalize(sheet(1)));
+  const userId = addUser(db, { email: 'kim@broad.test' });
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    const u = new URL(url);
+    calls.push({ method: init.method, path: u.pathname, raw: init.body, body: init.body ? JSON.parse(init.body.replace(/:(\d{15,})/g, ':"$1"')) : null });
+    const key = `${init.method} ${u.pathname.split('/').slice(-2).join('/')}`;
+    const make = responses[key];
+    const body = make ? make(calls[calls.length - 1]) : { code: 200, data: { responseList: [] } };
+    return new Response(JSON.stringify(body), { status: 200 });
+  };
+  const writer = createCoupangWriter({ ...KEYS, fetchFn, minGapMs: 0 });
+  const row = () => ({ ...db.prepare("SELECT * FROM orders WHERE channel = 'coupang'").get() });
+  return { db, userId, calls, writer, row };
+}
+
+test('쿠팡 발주확인 = 상품준비중 처리: 배송번호를 숫자 그대로 보내고, 성공하면 발주확인으로 반영', async () => {
+  const ok = c => ({ code: 200, data: { responseCode: 0, responseList: c.body.shipmentBoxIds.map(id => ({ shipmentBoxId: id, succeed: true })) } });
+  const { db, userId, calls, writer, row } = writeSetup({ 'PUT ordersheets/acknowledgement': ok });
+  const actions = createOrderActions({ db, writers: { coupang: writer } });
+  assert.strictEqual(actions.modeOf('coupang'), 'live');
+  assert.strictEqual(actions.modeOf('smartstore'), 'practice', '채널마다 따로');
+  const r = await actions.confirm(row().id, userId);
+  assert.strictEqual(r.result, 'ok');
+  assert.strictEqual(calls[0].method, 'PUT');
+  assert.strictEqual(calls[0].path, '/v2/providers/openapi/apis/api/v4/vendors/A00012345/ordersheets/acknowledgement');
+  assert.match(calls[0].raw, /"shipmentBoxIds":\[642538970006401\]/, '긴 번호는 따옴표 없는 숫자로');
+  assert.strictEqual(calls[0].body.vendorId, 'A00012345');
+  assert.strictEqual(row().channel_confirmed, 1);
+  const log = db.prepare('SELECT * FROM order_actions').get();
+  assert.deepStrictEqual([log.channel, log.mode, log.result], ['coupang', 'live', 'ok']);
+});
+
+test('쿠팡 송장 업로드: 배송번호·주문번호·옵션번호·택배사·송장번호를 보내고, 성공하면 발송으로 반영', async () => {
+  const ok = c => ({ code: 200, data: { responseList: c.body.orderSheetInvoiceApplyDtos.map(d => ({ shipmentBoxId: d.shipmentBoxId, succeed: true })) } });
+  const { db, userId, calls, writer, row } = writeSetup({ 'POST orders/invoices': ok });
+  db.prepare("UPDATE orders SET channel_confirmed = 1 WHERE channel = 'coupang'").run();
+  const actions = createOrderActions({ db, writers: { coupang: writer } });
+  const r = await actions.dispatch(row().id, userId, { method: 'DELIVERY', company: 'KGB', tracking: '123456789012' });
+  assert.strictEqual(r.result, 'ok');
+  assert.deepStrictEqual(calls[0].body.orderSheetInvoiceApplyDtos, [{
+    shipmentBoxId: '642538970006401', orderId: 910004186321, vendorItemId: 3000000011,
+    deliveryCompanyCode: 'KGB', invoiceNumber: '123456789012', splitShipping: false, preSplitShipped: false, estimatedShippingDate: '',
+  }]);
+  assert.match(calls[0].raw, /"orderId":910004186321,/);
+  assert.deepStrictEqual([row().channel_status, row().tracking_no], ['DELIVERING', '123456789012']);
+});
+
+test('쿠팡: 실패 응답은 실패로, 모르는 응답은 확인 필요로, 퀵·직접전달은 받지 않는다', async () => {
+  const fail = c => ({ code: 200, data: { responseList: c.body.shipmentBoxIds.map(id => ({ shipmentBoxId: id, succeed: false, resultMessage: '이미 처리된 주문' })) } });
+  const a = writeSetup({ 'PUT ordersheets/acknowledgement': fail });
+  const r1 = await createOrderActions({ db: a.db, writers: { coupang: a.writer } }).confirm(a.row().id, a.userId);
+  assert.strictEqual(r1.result, 'fail');
+  assert.match(r1.message, /이미 처리된 주문/);
+  assert.strictEqual(a.row().channel_confirmed, 0);
+
+  const b = writeSetup({ 'PUT ordersheets/acknowledgement': () => ({ code: 200, data: { something: 1 } }) });
+  const r2 = await createOrderActions({ db: b.db, writers: { coupang: b.writer } }).confirm(b.row().id, b.userId);
+  assert.strictEqual(r2.result, 'unknown');
+
+  const c = writeSetup();
+  c.db.prepare("UPDATE orders SET channel_confirmed = 1 WHERE channel = 'coupang'").run();
+  const r3 = await createOrderActions({ db: c.db, writers: { coupang: c.writer } }).dispatch(c.row().id, c.userId, { method: 'QUICK_SVC', company: null, tracking: null });
+  assert.strictEqual(r3.result, 'skip');
+  assert.match(r3.message, /택배/);
+  assert.strictEqual(c.calls.length, 0);
+});
+
+test('쿠팡 연습 모드(COUPANG_WRITE 꺼짐): 쿠팡으로 보내지 않고 기록만 남긴다', async () => {
+  const { db, userId, calls, row } = writeSetup();
+  const actions = createOrderActions({ db });
+  const r = await actions.confirm(row().id, userId);
+  assert.strictEqual(r.result, 'practice');
+  assert.match(r.message, /쿠팡으로 보내지 않았습니다/);
+  assert.strictEqual(calls.length, 0);
+  assert.strictEqual(row().channel_confirmed, 0);
+});
+
+test('쿠팡 응답 → 공통 모양: 배송번호별 성공을 상품 번호로 바꾼다', () => {
+  const body = { code: 200, data: { responseList: [{ shipmentBoxId: '11', succeed: true }, { shipmentBoxId: '22', succeed: false, resultMessage: '안 됨' }] } };
+  assert.deepStrictEqual(toCommonResult(body, ['11-1', '11-2', '22-1']), {
+    data: { successProductOrderIds: ['11-1', '11-2'], failProductOrderInfos: [{ productOrderId: '22', message: '안 됨' }] },
+  });
 });

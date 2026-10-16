@@ -102,8 +102,9 @@
   <button type="submit" class="btn-sm">검색</button>
 </form>
 
-<% if (actionMode === 'practice') { %>
-  <p class="practice-note"><strong>연습 모드</strong> 발주확인·발송처리 버튼을 눌러도 네이버로 보내지 않고 기록만 남깁니다.</p>
+<% const practiceChannels = Object.keys(actionModes).filter(ch => actionModes[ch] !== 'live' && (ch === 'smartstore' || channels.includes(ch))); %>
+<% if (practiceChannels.length) { %>
+  <p class="practice-note"><strong>연습 모드</strong> <%= practiceChannels.map(ch => channelInfo(ch).name).join(' · ') %> 발주확인·발송처리 버튼을 눌러도 보내지 않고 기록만 남깁니다.</p>
 <% } %>
 
 <%# 일괄 처리용 폼: 체크박스는 목록 안에 있고 form="bulk-form" 으로 이 폼에 연결된다 %>

@@ -3,8 +3,9 @@
 
 <section class="card">
   <h1>일괄 발송처리 (<%= rows.length %>건)</h1>
-  <% if (actionMode === 'practice') { %>
-    <p class="practice-note"><strong>연습 모드</strong> 보내기를 눌러도 네이버로 보내지 않고 기록만 남깁니다.</p>
+  <% const practice = [...new Set(rows.map(r => r.main.channel))].filter(ch => actionModes[ch] !== 'live'); %>
+  <% if (practice.length) { %>
+    <p class="practice-note"><strong>연습 모드</strong> <%= practice.map(ch => channelInfo(ch).name).join(' · ') %> 주문은 보내기를 눌러도 보내지 않고 기록만 남깁니다.</p>
   <% } %>
   <p class="muted">주문마다 배송 방법과 송장번호를 넣고 맨 아래 <strong>발송처리 보내기</strong>를 누르세요. 한 줄이라도 틀리면 아무것도 보내지 않습니다.</p>
   <% if (error) { %><p class="error"><%= error %></p><% } %>
@@ -21,12 +22,12 @@
         <div class="ship-row">
           <input type="hidden" name="ids" value="<%= id %>">
           <div class="ship-order">
-            <strong><%= n + 1 %>. <%= main.product_name %></strong><% if (items.length > 1) { %> <span class="muted">외 <%= items.length - 1 %>개</span><% } %>
+            <strong><%= n + 1 %>. <span class="ch ch-<%= channelInfo(main.channel).cls %>"><%= channelInfo(main.channel).mark %></span> <%= main.product_name %></strong><% if (items.length > 1) { %> <span class="muted">외 <%= items.length - 1 %>개</span><% } %>
             <div class="muted small"><%= main.receiver_name || '-' %> · <%= main.receiver_address || '' %></div>
           </div>
           <div class="ship-inputs">
             <select name="method_<%= id %>" data-ship-method aria-label="배송 방법">
-              <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { %>
+              <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { if (main.channel === 'coupang' && code !== 'DELIVERY') return; %>
                 <option value="<%= code %>" <%= code === (values[`method_${id}`] || DEFAULT_METHOD) ? 'selected' : '' %>><%= label %></option>
               <% }) %>
             </select>

@@ -102,4 +102,66 @@ function createCoupangSource(options = {}) {
   };
 }
 
-module.exports = { createCoupangSource, normalize, STATUS_MAP, kstIso };
+// ───────── 주문 상태 바꾸기 (3차 2단계) ─────────
+// 인트라넷의 상품 번호(channel_item_id) = '배송번호-옵션번호' (shipmentBoxId-vendorItemId)
+const splitItemId = id => {
+  const [shipmentBoxId, vendorItemId] = String(id).split('-');
+  return { shipmentBoxId, vendorItemId };
+};
+
+// 쿠팡 응답(data.responseList: 배송번호별 성공 여부)을 네이버와 같은 모양으로 바꾼다
+//   → actions.js 가 채널 상관없이 '성공한 상품만 반영' 할 수 있게.  모양이 다르면 그대로 돌려줘서 '확인 필요' 가 된다
+function toCommonResult(body, itemIds) {
+  const list = body && body.data && Array.isArray(body.data.responseList) ? body.data.responseList : null;
+  if (!list) return body;
+  const okBoxes = new Set(list.filter(r => r.succeed === true).map(r => String(r.shipmentBoxId)));
+  const failed = list.filter(r => r.succeed !== true);
+  return {
+    data: {
+      successProductOrderIds: itemIds.filter(id => okBoxes.has(splitItemId(id).shipmentBoxId)),
+      failProductOrderInfos: failed.map(r => ({
+        productOrderId: String(r.shipmentBoxId),
+        message: r.resultMessage || r.resultCode || '실패',
+      })),
+    },
+  };
+}
+
+// 서버에서는 .env 의 COUPANG_WRITE=on 일 때만 만든다 (src/server.js)
+function createCoupangWriter(options = {}) {
+  const client = options.client || createCoupangClient({ ...options, allowWrite: true });
+  const base = () => `/v2/providers/openapi/apis/api/v4/vendors/${client.vendorId}`;
+  return {
+    // 상품준비중 처리: 배송번호 목록
+    async confirm(itemIds) {
+      const shipmentBoxIds = [...new Set(itemIds.map(id => splitItemId(id).shipmentBoxId))];
+      const body = await client.request('PUT', `${base()}/ordersheets/acknowledgement`, {
+        json: { vendorId: client.vendorId, shipmentBoxIds },
+      });
+      return toCommonResult(body, itemIds);
+    },
+    // 송장 업로드: 상품(옵션)마다 배송번호·주문번호·택배사·송장번호
+    async dispatch(list, targets) {
+      const orderIdOf = new Map(targets.map(t => [t.channel_item_id, t.channel_order_id]));
+      const dtos = list.map(l => {
+        const { shipmentBoxId, vendorItemId } = splitItemId(l.productOrderId);
+        return {
+          shipmentBoxId,
+          orderId: orderIdOf.get(l.productOrderId),
+          vendorItemId,
+          deliveryCompanyCode: l.deliveryCompanyCode,
+          invoiceNumber: l.trackingNumber,
+          splitShipping: false,
+          preSplitShipped: false,
+          estimatedShippingDate: '',
+        };
+      });
+      const body = await client.request('POST', `${base()}/orders/invoices`, {
+        json: { vendorId: client.vendorId, orderSheetInvoiceApplyDtos: dtos },
+      });
+      return toCommonResult(body, list.map(l => l.productOrderId));
+    },
+  };
+}
+
+module.exports = { createCoupangWriter, toCommonResult, splitItemId, createCoupangSource, normalize, STATUS_MAP, kstIso };

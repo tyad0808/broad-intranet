@@ -160,6 +160,15 @@ cd /opt/broad-intranet/app && sudo -u intranet npm run create-admin
 5. 인트라넷 **↻ 지금 수집** → "수집 완료" 면 성공. "일부 채널 수집 실패 (쿠팡: …)" 가 나오면 그 문구를 알려주세요.
 6. 문제가 생기면 `.env` 에 `COUPANG=off` 한 줄을 넣고 재시작하면 쿠팡만 꺼집니다 (스마트스토어는 그대로).
 
+### 쿠팡 발주확인(상품준비중)·송장 업로드 켜기
+
+처음에는 연습 모드입니다. 연습 모드에서 버튼·확인창·처리 기록을 확인한 뒤:
+```bash
+sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=on' >> /opt/broad-intranet/app/.env && systemctl restart broad-intranet
+```
+처음에는 **쿠팡 주문 1건만** 처리해 보고 Wing 에서 상품준비중·송장이 맞게 들어갔는지 확인하세요.
+되돌리기: `sed -i 's/^COUPANG_WRITE=on/COUPANG_WRITE=off/' /opt/broad-intranet/app/.env && systemctl restart broad-intranet`
+
 ---
 
 ## 평소에 쓰는 명령어 (서버에서)

@@ -1,7 +1,8 @@
-// 쿠팡 OPEN API 연결 (1단계: 조회 전용)
+// 쿠팡 OPEN API 연결
 //
-// 안전장치: 아래 ALLOWED 에 맞는 주소만 호출할 수 있다. 지금은 '발주서 목록 조회' 하나뿐이고,
-// 주문 상태를 바꾸는 주소(상품준비중 처리·송장 업로드)는 목록에 없어서 보내기 전에 막힌다.
+// 안전장치 1: 아래 ALLOWED 에 맞는 주소만 호출할 수 있다 (조회 1개 + 상태 변경 2개).
+// 안전장치 2: 상태 변경(상품준비중 처리·송장 업로드, write: true)은 allowWrite 를 켠 클라이언트만.
+//            .env 의 COUPANG_WRITE=on 일 때만 켜진다 (기본은 연습 모드).
 //
 // 인증(HMAC): 서명할 글 = 서명시각(yyMMddTHHmmssZ, UTC) + 메서드 + 경로 + 쿼리(? 없이)
 //            Authorization: CEA algorithm=HmacSHA256, access-key=…, signed-date=…, signature=…
@@ -12,10 +13,24 @@ const BASE_URL = 'https://api-gateway.coupang.com';
 const ALLOWED = [
   // 발주서 목록 조회 (일 단위 페이징)
   { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/ordersheets$/ },
+  // 상품준비중 처리 (= 발주확인)
+  { method: 'PUT', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/ordersheets\/acknowledgement$/, write: true },
+  // 송장 업로드 (= 발송처리)
+  { method: 'POST', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/orders\/invoices$/, write: true },
 ];
 
+function findAllowed(method, path) {
+  return ALLOWED.find(a => a.method === method && a.pattern.test(path));
+}
+
 function isAllowed(method, path) {
-  return ALLOWED.some(a => a.method === method && a.pattern.test(path));
+  return Boolean(findAllowed(method, path));
+}
+
+// 보낼 JSON: 긴 번호(배송번호 등)는 글자로 갖고 있다가 숫자 모양 그대로 보낸다
+function stringifyBody(body) {
+  return JSON.stringify(body).replace(/"(shipmentBoxId|orderId|vendorItemId)":"(\d+)"/g, '"$1":$2')
+    .replace(/"shipmentBoxIds":\[([^\]]*)\]/g, (m, inner) => `"shipmentBoxIds":[${inner.replace(/"(\d+)"/g, '$1')}]`);
 }
 
 class CoupangApiError extends Error {
@@ -58,12 +73,19 @@ function createCoupangClient({
   minGapMs = MIN_GAP_MS,
   sleep = realSleep,
   now = () => new Date(),
+  allowWrite = false,
 } = {}) {
   let nextSlot = 0;
 
-  async function request(method, path, { query = {} } = {}) {
-    if (!isAllowed(method, path)) {
+  async function request(method, path, { query = {}, json } = {}) {
+    const rule = findAllowed(method, path);
+    if (!rule) {
       const err = new Error(`허용되지 않은 쿠팡 API 호출입니다: ${method} ${path}`);
+      err.notSent = true;
+      throw err;
+    }
+    if (rule.write && !allowWrite) {
+      const err = new Error(`쿠팡 주문 상태 변경이 꺼져 있습니다 (COUPANG_WRITE=on 이 아님): ${method} ${path}`);
       err.notSent = true;
       throw err;
     }
@@ -88,10 +110,12 @@ function createCoupangClient({
           'content-type': 'application/json;charset=UTF-8',
           'x-requested-by': vendorId,
         },
+        body: json ? stringifyBody(json) : undefined,
       });
       const text = await res.text();
       let body = null;
       try { body = text ? parseJson(text) : null; } catch { body = null; }
+      // 429(요청이 많음)는 처리하지 않고 거절한 것이라 다시 보내도 안전하다
       if (res.status === 429 && attempt < RETRY_WAITS_MS.length) {
         await sleep(RETRY_WAITS_MS[attempt]);
         continue;
@@ -107,4 +131,4 @@ function createCoupangClient({
   return { request, vendorId };
 }
 
-module.exports = { createCoupangClient, isAllowed, ALLOWED, buildAuthorization, signedDate, parseJson, CoupangApiError };
+module.exports = { createCoupangClient, isAllowed, ALLOWED, stringifyBody, buildAuthorization, signedDate, parseJson, CoupangApiError };

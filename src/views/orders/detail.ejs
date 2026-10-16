@@ -88,11 +88,11 @@
   </section>
 
   <div class="detail-side">
-  <% if (order.channel === 'smartstore') { %>
+  <% if (order.channel === 'smartstore' || order.channel === 'coupang') { const isCoupang = order.channel === 'coupang'; %>
   <section class="card process-card">
-    <h2>스마트스토어 처리</h2>
-    <% if (actionMode === 'practice') { %>
-      <p class="practice-note"><strong>연습 모드</strong> 버튼을 눌러도 네이버로 보내지 않고 기록만 남깁니다.</p>
+    <h2><%= channelInfo(order.channel).name %> 처리</h2>
+    <% if (actionModes[order.channel] !== 'live') { %>
+      <p class="practice-note"><strong>연습 모드</strong> 버튼을 눌러도 <%= WRITE_CHANNEL_NAMES[order.channel] %> 보내지 않고 기록만 남깁니다.</p>
     <% } %>
     <% const allConfirmed = items.every(i => i.channel_confirmed); %>
     <ol class="steps">
@@ -102,10 +102,10 @@
 
     <% if (canConfirm) { %>
       <form method="post" action="/orders/<%= order.id %>/confirm" data-once
-            data-confirm="'<%= items[0].product_name %>' 주문을 스마트스토어에 발주확인할까요?&#10;고객에게 발주확인 알림이 가고, 되돌릴 수 없습니다.">
+            data-confirm="'<%= items[0].product_name %>' 주문을 <%= channelInfo(order.channel).name %>에 <%= isCoupang ? '상품준비중(발주확인)으로' : '발주확인' %> 처리할까요?&#10;고객에게 알림이 가고, 되돌릴 수 없습니다.">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
-        <button type="submit" class="wide">발주확인 보내기</button>
+        <button type="submit" class="wide"><%= isCoupang ? '발주확인 (상품준비중) 보내기' : '발주확인 보내기' %></button>
       </form>
     <% } %>
 
@@ -116,10 +116,11 @@
         <input type="hidden" name="back" value="<%= back %>">
         <label>배송 방법
           <select name="method" data-ship-method>
-            <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { %>
+            <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { if (isCoupang && code !== 'DELIVERY') return; %>
               <option value="<%= code %>" <%= code === DEFAULT_METHOD ? 'selected' : '' %>><%= label %></option>
             <% }) %>
           </select>
+          <% if (isCoupang) { %><span class="muted small">쿠팡은 택배(송장번호)로만 발송처리됩니다.</span><% } %>
         </label>
         <div data-ship-fields>
           <label>택배사

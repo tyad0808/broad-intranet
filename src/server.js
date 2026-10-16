@@ -5,7 +5,7 @@ const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
 const { createCollector, createMultiCollector } = require('./collector');
-const { createCoupangSource } = require('./channels/coupang');
+const { createCoupangSource, createCoupangWriter } = require('./channels/coupang');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { createSmartstoreWriter } = require('./channels/smartstore');
@@ -33,7 +33,13 @@ const liveWrite = process.env.NAVER_WRITE === 'on' && process.env.ORDER_SOURCE =
 if (process.env.NAVER_WRITE === 'on' && !liveWrite) {
   console.warn('[주의] NAVER_WRITE=on 이지만 ORDER_SOURCE 가 naver 가 아니라서 연습 모드로 실행합니다.');
 }
-const actions = createOrderActions({ db, writer: liveWrite ? createSmartstoreWriter() : null });
+// 쿠팡 상품준비중 처리·송장 업로드: COUPANG_WRITE=on 이고 쿠팡 수집이 켜져 있을 때만 (그 밖에는 연습 모드)
+const coupangLive = process.env.COUPANG_WRITE === 'on' && coupangReady && process.env.COUPANG !== 'off';
+const actions = createOrderActions({
+  db,
+  writer: liveWrite ? createSmartstoreWriter() : null,
+  writers: { coupang: coupangLive ? createCoupangWriter() : null },
+});
 const app = createApp({ db, collector, notifier, actions });
 
 // 미지정 초과 알림: 1분마다 확인 (해소될 때까지 정해진 간격으로 다시 알림)
@@ -58,6 +64,7 @@ if (collector) setInterval(collect, COLLECT_INTERVAL_MINUTES * 60 * 1000);
 app.listen(PORT, HOST, () => {
   console.log(`브로애드 인트라넷 실행 중: http://${HOST || 'localhost'}:${PORT}`);
   console.log(`발주확인·발송처리: ${actions.mode === 'live' ? '실제로 네이버에 보냄 (NAVER_WRITE=on)' : '연습 모드 (네이버로 보내지 않음)'}`);
+  if (coupangReady) console.log(`쿠팡 상품준비중·송장: ${coupangLive ? '실제로 쿠팡에 보냄 (COUPANG_WRITE=on)' : '연습 모드 (쿠팡으로 보내지 않음)'}`);
   if (collector) {
     console.log(`주문 출처: ${collector.source.label}, ${COLLECT_INTERVAL_MINUTES}분마다 자동 수집`);
     collect();
