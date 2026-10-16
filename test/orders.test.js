@@ -400,3 +400,28 @@ test('진행 중 탭에서도 발송 버튼에는 발송된 주문 수가 나오
   assert.match(shipped, />상품1</);
   assert.doesNotMatch(shipped, />상품3</);
 });
+
+test('채널 버튼 순서를 끌어다 바꾸면 내 계정에만 저장되고, 다음에 열어도 그 순서다', async t => {
+  const { db, kim, baseUrl } = await setup(t);
+  db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, channel_status) VALUES ('coupang', 'C1', 'C1-1', '쿠팡상품', 'PAYED')").run();
+  const order = text => [...text.matchAll(/data-channel="(\w+)"/g)].map(m => m[1]);
+  assert.deepStrictEqual(order((await kim.request('/')).text), ['coupang', 'smartstore'], '기본은 이름순');
+
+  const page = await kim.request('/');
+  const token = /data-csrf="([^"]+)"/.exec(page.text)[1];
+  const res = await fetch(baseUrl + '/me/channel-order', {
+    method: 'POST',
+    headers: { cookie: kim.cookie(), 'content-type': 'application/x-www-form-urlencoded', 'x-csrf-token': token },
+    body: 'order=smartstore,coupang,hacker',
+  });
+  assert.deepStrictEqual(await res.json(), { ok: true, order: ['smartstore', 'coupang'] }, '모르는 채널은 버린다');
+  assert.deepStrictEqual(order((await kim.request('/')).text), ['smartstore', 'coupang']);
+
+  const lee = await loginAs(baseUrl, 'lee@broad.test');
+  assert.deepStrictEqual(order((await lee.request('/')).text), ['coupang', 'smartstore'], '다른 직원 순서는 그대로');
+
+  const noToken = await fetch(baseUrl + '/me/channel-order', {
+    method: 'POST', headers: { cookie: kim.cookie(), 'content-type': 'application/x-www-form-urlencoded' }, body: 'order=coupang',
+  });
+  assert.strictEqual(noToken.status, 403);
+});

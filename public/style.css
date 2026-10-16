@@ -790,3 +790,5 @@ body.embed .container { padding-top: 56px; }
 @media (max-width: 760px) {
   .detail .detail-side { order: -1; }
 }
+.channel-chips [data-channel] { cursor: grab; }
+.channel-chips [data-channel].dragging { opacity: 0.4; cursor: grabbing; }

@@ -60,7 +60,14 @@ function orderRoutes(db, notifier, actions, collector = null) {
   // 실제 주문이 있는 채널만 골라 보기 목록에 보여준다
   // 디자인 단계를 고를 수 있는 사람: 디자이너 + 관리자
   const canPickStage = user => user.role === 'admin' || designers().some(d => d.id === user.id);
-  const channelsInUse = () => db.prepare('SELECT DISTINCT channel FROM orders ORDER BY channel').all().map(r => r.channel);
+  // 실제 주문이 있는 채널만, 직원이 끌어다 놓은 순서대로 (저장 안 했으면 기본 순서)
+  const channelsInUse = user => {
+    const inUse = db.prepare('SELECT DISTINCT channel FROM orders ORDER BY channel').all().map(r => r.channel);
+    let saved = [];
+    try { saved = JSON.parse(user.channel_order || '[]'); } catch { saved = []; }
+    const rank = ch => (saved.includes(ch) ? saved.indexOf(ch) : saved.length + inUse.indexOf(ch));
+    return inUse.sort((a, b) => rank(a) - rank(b));
+  };
 
   router.get('/', (req, res) => {
     // st(채널 상태 칸: 신규주문·배송준비·배송중·배송완료)을 누르면 탭과 상관없이 그 상태의 주문을 모두 보여준다
@@ -245,7 +252,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       stageFilter,
       due,
       channel,
-      channels: channelsInUse(),
+      channels: channelsInUse(req.user),
       sort,
       q,
       stages: stages(),
@@ -261,6 +268,14 @@ function orderRoutes(db, notifier, actions, collector = null) {
       COLORS,
       lastRun,
     });
+  });
+
+  // 채널 버튼 순서 저장 (끌어다 놓기). 내 계정에만 적용된다
+  router.post('/me/channel-order', (req, res) => {
+    const order = String(req.body.order || '').split(',').map(x => x.trim()).filter(ch => CHANNELS[ch]);
+    const unique = [...new Set(order)].slice(0, 20);
+    db.prepare('UPDATE users SET channel_order = ? WHERE id = ?').run(JSON.stringify(unique), req.user.id);
+    res.json({ ok: true, order: unique });
   });
 
   // 주문 목록에서 바로 '지금 수집' (조회만 하므로 승인된 직원 누구나)
