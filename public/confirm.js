@@ -11,6 +11,20 @@
     return `${company ? company.selectedOptions[0].text : ''} ${tracking ? tracking.value.trim() : ''}`.trim();
   }
 
+  // 일괄 발주확인 확인창: 체크한 주문의 채널 이름 ("스마트스토어 · 쿠팡")
+  function checkedChannels(form) {
+    const boxes = [...form.elements].filter(el => el.name === 'ids' && el.checked && (el.dataset.can || '').includes('confirm'));
+    return [...new Set(boxes.map(el => el.dataset.channelName).filter(Boolean))];
+  }
+
+  function fill(raw, form) {
+    const names = checkedChannels(form);
+    return raw
+      .replace('{ship}', shipSummary(form))
+      .replace('{channels}', names.join(' · ') || '각 채널')
+      .replace('{coupangNote}', names.includes('쿠팡') ? '\n(쿠팡은 상품준비중으로 처리됩니다)' : '');
+  }
+
   // 두 번 눌러 같은 요청이 두 번 가지 않도록, 확인 후에는 버튼을 잠근다
   const sent = new WeakSet();
 
@@ -28,7 +42,7 @@
       return;
     }
     const raw = (button && button.getAttribute('data-confirm')) || form.getAttribute('data-confirm');
-    if (raw && !window.confirm(raw.replace('{ship}', shipSummary(form)))) {
+    if (raw && !window.confirm(fill(raw, form))) {
       event.preventDefault();
       return;
     }
