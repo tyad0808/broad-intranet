@@ -384,8 +384,15 @@ function nestSelection(doc, what) {
   var sel = doc.selection;
   if (!sel || sel.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
   if (sel.length === 0) throw new Error(what + ' 선택하세요.');
-  var out = [];
-  for (var i = 0; i < sel.length; i++) out.push(sel[i]);
+  var out = [], i, j;
+  for (i = 0; i < sel.length; i++) {
+    // 그룹과 그 안의 것이 함께 선택돼 있으면 그룹만 (안 그러면 두 번 복제된다)
+    var inside = false;
+    for (var p = sel[i].parent; p && p.typename === 'GroupItem' && !inside; p = p.parent) {
+      for (j = 0; j < sel.length; j++) if (j !== i && sel[j] === p) { inside = true; break; }
+    }
+    if (!inside) out.push(sel[i]);
+  }
   return out;
 }
 
@@ -557,6 +564,36 @@ function nestSplitCompound(cp, layer, out) {
   cp.remove();
 }
 
+var NEST_UNIT_NOTE = 'broad-nest-unit';
+var NEST_WORK_LAYER = '네스팅 작업중';
+
+// 원본을 세트 수량만큼 복제해 글자(조각)로 풀고, '네스팅' 레이어로 옮긴 목록을 돌려준다.
+// 빈 작업 레이어에서 풀고, 글자 조각이 아닌 남은 것(아웃라인 뒤에 남은 글상자, 빈 그룹 등)은 지운다.
+function nestMakeUnits(doc, src, o) {
+  var old = null, i, q;
+  for (i = 0; i < doc.layers.length; i++) if (doc.layers[i].name === NEST_WORK_LAYER) old = doc.layers[i];
+  if (old) { old.locked = false; old.remove(); }
+  var work = doc.layers.add();
+  work.name = NEST_WORK_LAYER;
+  var units = [];
+  for (q = 0; q < o.quantity; q++) {
+    for (i = 0; i < src.length; i++) nestExplode(src[i].duplicate(work, ElementPlacement.PLACEATEND), work, o.unit, units);
+  }
+  for (i = 0; i < units.length; i++) units[i].note = NEST_UNIT_NOTE;
+  for (i = work.pageItems.length - 1; i >= 0; i--) {
+    var it = work.pageItems[i];
+    if (it.note !== NEST_UNIT_NOTE) it.remove();
+  }
+  var layer = nestGetLayer(doc), out = [];
+  for (i = 0; i < units.length; i++) {
+    units[i].note = '';
+    units[i].move(layer, ElementPlacement.PLACEATEND);
+    out.push(units[i]);
+  }
+  work.remove();
+  return out;
+}
+
 // 복제본을 글자(또는 조각) 단위로 풀어 out 에 모은다. 살아있는 글자는 아웃라인으로 바꾼다.
 function nestExplode(item, layer, unit, out) {
   if (item.hidden || item.guides) { item.remove(); return; }
@@ -610,13 +647,11 @@ function nestText(opts) {
   var o = nestCheckText(opts);
   var doc = nestDoc();
   var src = nestSelection(doc, '네스팅할 글자(살아있는 글자 또는 아웃라인)를');
-  var k = NEST_PT_PER_MM, layer = nestGetLayer(doc), units = [], i, q;
+  var k = NEST_PT_PER_MM, layer = nestGetLayer(doc), i;
   var start = nestStart(src, true);
 
   // 원본은 두고 복제본을 글자·조각으로 푼다
-  for (q = 0; q < o.quantity; q++) {
-    for (i = 0; i < src.length; i++) nestExplode(src[i].duplicate(layer, ElementPlacement.PLACEATEND), layer, o.unit, units);
-  }
+  var units = nestMakeUnits(doc, src, o);
   var sizes = [], names = [], kept = [];
   for (i = 0; i < units.length; i++) {
     var b = nestBounds(units[i], true);
@@ -722,11 +757,9 @@ function nestTextPrepare(opts) {
   var o = nestCheckText(opts);
   var doc = nestDoc();
   var src = nestSelection(doc, '네스팅할 글자(살아있는 글자 또는 아웃라인)를');
-  var layer = nestGetLayer(doc), units = [], i, q;
+  var i;
   var start = nestStart(src, true);
-  for (q = 0; q < o.quantity; q++) {
-    for (i = 0; i < src.length; i++) nestExplode(src[i].duplicate(layer, ElementPlacement.PLACEATEND), layer, o.unit, units);
-  }
+  var units = nestMakeUnits(doc, src, o);
   var kept = [], pieces = [], names = [], k = NEST_PT_PER_MM;
   for (i = 0; i < units.length; i++) {
     var b = nestBounds(units[i], true), polys = [];

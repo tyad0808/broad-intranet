@@ -177,7 +177,9 @@ function fakeIllustrator() {
     createOutline() {
       const g = new Item('GroupItem', { kids: [] });
       this.glyphs.forEach(gl => { const c = gl.clone(); c.parent = g; g.kids.push(c); });
-      const parent = this.parent; this.remove(); parent.adopt(g);
+      const parent = this.parent;
+      if (!this.keepsTextAfterOutline) this.remove(); // 어떤 버전에선 글상자가 남는다
+      parent.adopt(g);
       return g;
     }
   }
@@ -185,7 +187,12 @@ function fakeIllustrator() {
   const compound = (...paths) => { const c = new Item('CompoundPathItem', { kids: paths }); paths.forEach(p => { p.parent = c; }); return c; };
   const group = (...kids) => { const g = new Item('GroupItem', { kids, clipped: false }); kids.forEach(k => { k.parent = g; }); return g; };
   const mkLayer = name => {
-    const l = { name, items: [], locked: false, visible: true, adopt(it) { it.parent = this; this.items.push(it); } };
+    const l = {
+      name, items: [], locked: false, visible: true, typename: 'Layer',
+      adopt(it) { it.parent = this; this.items.push(it); },
+      get pageItems() { return this.items; },
+      remove() { layers.splice(layers.indexOf(this), 1); },
+    };
     l.pathItems = { rectangle: (t, left, w, h) => { const r = rectPath(left, t, left + w, t - h); l.adopt(r); return r; } };
     return l;
   };
@@ -354,4 +361,40 @@ test('모양대로 네스팅: 계산이 실패하면 준비한 복제본을 치�
   assert.strictEqual(layer.items.length, 0);
   assert.strictEqual(a.parent, f.layers[0]);
   assert.throws(() => ai.nestTextApply({ placements: [], bins: 0, area: 0 }), /준비된 글자가 없습니다/);
+});
+
+for (const method of ['shape', 'rect']) {
+  test(`세트 수량 1 이면 한 세트만: 아웃라인 뒤 글상자가 남아도, 그룹과 안의 글자가 같이 선택돼도 (${method})`, () => {
+    const f = fakeIllustrator();
+    const glyphA = f.rectPath(0, 100, 40, 0), glyphB = f.rectPath(50, 100, 90, 0);
+    const text = new f.Item('TextFrame', { b: [0, 100, 90, 0], glyphs: [glyphA, glyphB], keepsTextAfterOutline: true });
+    const grp = f.group(text);
+    f.layers[0].adopt(grp);
+    f.doc.selection = [grp, text]; // 그룹 + 그 안의 글상자
+    const ai = loadWith(f);
+    const opts = { sheetWMm: 200, sheetHMm: 200, quantity: 1, method };
+    if (method === 'shape') {
+      const data = JSON.parse(ai.nestTextPrepare(opts));
+      assert.strictEqual(data.pieces.length, 2, '글자 2개만 준비');
+      ai.nestTextApply(JSON.parse(JSON.stringify(nestShape.nest(data.pieces, { sheetW: 200 * MM, sheetH: 200 * MM, margin: 5 * MM, gap: 3 * MM, res: MM, allowRotate: true }))));
+    } else {
+      ai.nestText(opts);
+    }
+    const layer = f.layers.find(l => l.name === '네스팅');
+    const parts = layer.items.filter(it => !it.guides);
+    assert.strictEqual(parts.length, 2, '글자 2개 = 1세트');
+    assert.ok(parts.every(p => p.typename !== 'TextFrame'), '남은 글상자 없음');
+    assert.ok(!f.layers.some(l => l.name === '네스팅 작업중'), '작업 레이어는 지운다');
+    assert.ok(parts.every(p => !p.note), '표시용 메모는 지운다');
+  });
+}
+
+test('세트 수량 2 면 두 세트', () => {
+  const f = fakeIllustrator();
+  const text = new f.Item('TextFrame', { b: [0, 100, 90, 0], glyphs: [f.rectPath(0, 100, 40, 0), f.rectPath(50, 100, 90, 0)] });
+  f.layers[0].adopt(text);
+  f.doc.selection = [text];
+  const ai = loadWith(f);
+  const data = JSON.parse(ai.nestTextPrepare({ quantity: 2, method: 'shape' }));
+  assert.strictEqual(data.pieces.length, 4);
 });
