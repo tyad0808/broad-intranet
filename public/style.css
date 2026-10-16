@@ -786,3 +786,7 @@ body.embed .container { padding-top: 56px; }
   font-size: 16px;
   font-weight: 900;
 }
+/* 휴대폰: 주문 카드에서 스마트스토어 처리(발주확인·발송) 칸을 맨 위에 */
+@media (max-width: 760px) {
+  .detail .detail-side { order: -1; }
+}

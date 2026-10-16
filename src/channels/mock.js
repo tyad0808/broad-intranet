@@ -93,6 +93,10 @@ function createMockSource({ random = Math.random, now = () => new Date() } = {})
       }
       return changed.map(o => ({ ...o }));
     },
+    async fetchByIds(ids) {
+      const wanted = new Set(ids);
+      return orders.filter(o => wanted.has(o.channel_item_id)).map(o => ({ ...o }));
+    },
   };
 }
 

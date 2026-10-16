@@ -453,3 +453,43 @@ test('판매자센터에서 바로 발송한 주문은 묶음이 모두 끝나�
   assert.strictEqual(stageName(db, 'P1'), '발송');
   assert.strictEqual(stageName(db, 'P9'), '발송');
 });
+
+test('판매자센터에서 바로 발주확인한 주문도 다음 수집 때 알아낸다 (발주확인 전 주문은 따로 다시 읽음)', async () => {
+  const db = openDb(':memory:');
+  const state = { P1: order(1), P2: order(2) };
+  const asked = [];
+  const source = {
+    channel: 'smartstore',
+    label: '테스트',
+    async fetchChanges() { return []; }, // 발주확인은 '바뀐 주문 목록' 에 나오지 않는다
+    async fetchByIds(ids) { asked.push(ids); return ids.map(id => ({ ...state[id] })); },
+  };
+  applyOrders(db, [order(1), order(2)]);
+  const collector = createCollector({ db, source });
+
+  const quiet = await collector.run();
+  assert.deepStrictEqual(asked[0].sort(), ['P1', 'P2']);
+  assert.strictEqual(quiet.updated, 0, '바뀐 게 없으면 바뀐 주문으로 세지 않는다');
+
+  state.P1 = order(1, { channel_confirmed: 1 }); // 판매자센터에서 발주확인
+  const r = await collector.run();
+  assert.strictEqual(r.updated, 1);
+  assert.strictEqual(stageName(db, 'P1'), '발주확인');
+  assert.strictEqual(db.prepare("SELECT channel_confirmed FROM orders WHERE channel_item_id = 'P1'").get().channel_confirmed, 1);
+
+  await collector.run();
+  assert.deepStrictEqual(asked[2], ['P2'], '발주확인된 주문은 더 묻지 않는다');
+});
+
+test('스마트스토어: 상품주문번호로 상세를 다시 읽는다 (허용된 조회 주소만 사용)', async () => {
+  const { fetchFn, calls } = fakeNaver({
+    'POST /v1/pay-order/seller/product-orders/query': call => {
+      const ids = JSON.parse(call.body).productOrderIds;
+      return { data: ids.map(id => naverItem(id.slice(1), { confirmed: true })) };
+    },
+  });
+  const source = createSmartstoreSource({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn });
+  const items = await source.fetchByIds(['P7']);
+  assert.deepStrictEqual(items.map(i => [i.channel_item_id, i.channel_confirmed]), [['P7', 1]]);
+  assert.ok(calls.every(c => c.path === '/v1/oauth2/token' || isAllowed(c.method, c.path)));
+});

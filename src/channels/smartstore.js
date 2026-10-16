@@ -93,6 +93,13 @@ function createSmartstoreSource(options = {}) {
       const items = await details(ids);
       return items.map(normalize).filter(o => o.channel_item_id);
     },
+    // 상품주문번호로 지금 상태를 다시 읽는다.
+    // 판매자센터에서 누른 '발주확인' 은 바뀐 주문 목록(①)에 나오지 않아서, 발주확인 전 주문은 이걸로 따로 확인한다
+    async fetchByIds(ids) {
+      if (ids.length === 0) return [];
+      const items = await details(ids);
+      return items.map(normalize).filter(o => o.channel_item_id);
+    },
   };
 }
 

@@ -1,6 +1,8 @@
 // 주문 목록: 주문을 누르면 목록 위에 팝업으로 연다 (바깥을 누르거나 ✕·Esc 로 닫기)
 // 팝업 안은 주문 카드 화면 그대로(iframe)라서 저장·발주확인·발송처리 모두 그 안에서 된다.
 (() => {
+  // 휴대폰(좁은 화면)에서는 팝업 대신 화면 전체로 연다 (휴대폰 브라우저는 팝업 안 스크롤·확인창이 불안정)
+  const narrow = () => window.matchMedia('(max-width: 760px)').matches;
   let overlay = null;
 
   function close() {
@@ -36,7 +38,7 @@
   document.addEventListener('click', event => {
     const link = event.target.closest('a.oi-main');
     // Ctrl·Shift·가운데 버튼 클릭은 원래대로 (새 탭 등)
-    if (!link || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    if (!link || narrow() || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
     open(link.getAttribute('href'));
   });
@@ -49,6 +51,12 @@
   document.addEventListener('submit', event => {
     const button = event.submitter;
     if (event.defaultPrevented || !button || !button.hasAttribute('data-modal')) return;
+    if (narrow()) {
+      // 팝업 없이 이 화면에서 바로 연다
+      button.removeAttribute('formtarget');
+      return;
+    }
+    button.setAttribute('formtarget', 'order-modal-frame');
     open(null);
   });
 

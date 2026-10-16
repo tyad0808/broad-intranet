@@ -43,7 +43,7 @@ function applyOrders(db, orders) {
   const stageConfirmed = Number(getSetting(db, 'stage_confirmed')) || null;
   const lastStage = lastStageId(db);
 
-  const find = db.prepare('SELECT id, stage_id, channel_confirmed, claim_status FROM orders WHERE channel = ? AND channel_item_id = ?');
+  const find = db.prepare('SELECT id, stage_id, channel_status, channel_confirmed, claim_status FROM orders WHERE channel = ? AND channel_item_id = ?');
   const insertRow = db.prepare(`
     INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
       buyer_name, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
@@ -117,6 +117,11 @@ function applyOrders(db, orders) {
         continue;
       }
 
+      // 다시 읽기만 한 주문은 상태가 그대로면 건드리지 않는다
+      if (o.refreshOnly && existing.channel_status === o.channel_status
+        && Number(existing.channel_confirmed) === Number(o.channel_confirmed) && existing.claim_status === (o.claim_status || null)) {
+        continue;
+      }
       update.run(
         o.product_name, o.option_text, o.quantity, o.buyer_name, o.receiver_name, o.receiver_phone,
         o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed, o.item_type || 'main',
@@ -167,7 +172,19 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
     const runId = Number(run.lastInsertRowid);
 
     try {
-      const orders = await source.fetchChanges({ from, to });
+      let orders = await source.fetchChanges({ from, to });
+      // 발주확인 전 주문은 지금 상태를 따로 다시 읽는다 (판매자센터에서 바로 발주확인한 것을 알아내기 위해).
+      // 바뀐 게 없으면 '바뀐 주문' 건수에는 넣지 않는다
+      if (source.fetchByIds) {
+        const seen = new Set(orders.map(o => o.channel_item_id));
+        const open = db.prepare(
+          "SELECT channel_item_id FROM orders WHERE channel = ? AND channel_status = 'PAYED' AND channel_confirmed = 0"
+        ).all(source.channel).map(r => r.channel_item_id).filter(id => !seen.has(id));
+        if (open.length) {
+          const fresh = await source.fetchByIds(open);
+          orders = orders.concat(fresh.map(o => ({ ...o, refreshOnly: true })));
+        }
+      }
       const result = applyOrders(db, orders);
       setSetting(db, lastKey, to.toISOString());
       db.prepare(
