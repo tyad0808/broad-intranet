@@ -4,7 +4,8 @@ require('dotenv').config({ quiet: true });
 const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
-const { createCollector } = require('./collector');
+const { createCollector, createMultiCollector } = require('./collector');
+const { createCoupangSource } = require('./channels/coupang');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { createSmartstoreWriter } = require('./channels/smartstore');
@@ -17,9 +18,14 @@ const COLLECT_INTERVAL_MINUTES = Math.max(1, Number(process.env.COLLECT_INTERVAL
 const db = openDb();
 const notifier = createNotifier({ db });
 const source = createOrderSource();
-const collector = source
-  ? createCollector({ db, source, onResult: notifier.afterCollect })
-  : null; // ORDER_SOURCE=off
+// 채널별 수집기: 스마트스토어(ORDER_SOURCE) + 쿠팡(.env 에 쿠팡 키 3개가 모두 있으면)
+const collectors = [];
+if (source) collectors.push(createCollector({ db, source, onResult: notifier.afterCollect }));
+const coupangReady = ['COUPANG_VENDOR_ID', 'COUPANG_ACCESS_KEY', 'COUPANG_SECRET_KEY'].every(k => process.env[k]);
+if (coupangReady && process.env.COUPANG !== 'off') {
+  collectors.push(createCollector({ db, source: createCoupangSource(), onResult: notifier.afterCollect }));
+}
+const collector = collectors.length ? createMultiCollector(collectors) : null; // 아무 채널도 없으면 수집 꺼짐
 if (collector) collector.intervalMinutes = COLLECT_INTERVAL_MINUTES;
 // 발주확인·발송처리를 실제로 네이버에 보내는지: NAVER_WRITE=on 이고 실제 스마트스토어(ORDER_SOURCE=naver)일 때만.
 // 그 밖에는 연습 모드 (버튼은 보이지만 네이버로 보내지 않고 기록만 남김)
@@ -43,7 +49,8 @@ async function collect() {
   if (result.ok) {
     console.log(`[${time}] 주문 수집: 새 주문 ${result.createdOrders}건, 바뀐 상품주문 ${result.updated}건, 지난 주문 보관 ${result.archived || 0}건`);
   } else {
-    console.error(`[${time}] 주문 수집 실패: ${result.error}`);
+    const counts = result.createdOrders !== undefined ? ` (나머지 채널: 새 주문 ${result.createdOrders}건, 바뀐 상품주문 ${result.updated}건)` : '';
+    console.error(`[${time}] 주문 수집 실패: ${result.error}${counts}`);
   }
 }
 if (collector) setInterval(collect, COLLECT_INTERVAL_MINUTES * 60 * 1000);

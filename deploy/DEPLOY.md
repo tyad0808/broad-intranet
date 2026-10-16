@@ -145,6 +145,23 @@ cd /opt/broad-intranet/app && sudo -u intranet npm run create-admin
 
 ---
 
+## 9. 쿠팡 연결 (3차, 조회만)
+
+1. 쿠팡 Wing → 추가판매정보 → **OPEN API 키 발급** (업체코드·Access Key·Secret Key)
+2. 서버에서 설정 파일 열기: `nano /opt/broad-intranet/app/.env`
+3. 맨 아래에 세 줄 추가 (= 뒤에 값을 붙여넣기, 띄어쓰기·따옴표 없이)
+   ```
+   COUPANG_VENDOR_ID=업체코드
+   COUPANG_ACCESS_KEY=액세스키
+   COUPANG_SECRET_KEY=시크릿키
+   ```
+   저장: `Ctrl + O` → Enter, 나가기: `Ctrl + X`
+4. 재시작: `systemctl restart broad-intranet`
+5. 인트라넷 **↻ 지금 수집** → "수집 완료" 면 성공. "일부 채널 수집 실패 (쿠팡: …)" 가 나오면 그 문구를 알려주세요.
+6. 문제가 생기면 `.env` 에 `COUPANG=off` 한 줄을 넣고 재시작하면 쿠팡만 꺼집니다 (스마트스토어는 그대로).
+
+---
+
 ## 평소에 쓰는 명령어 (서버에서)
 
 | 하고 싶은 일 | 명령어 |

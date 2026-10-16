@@ -269,9 +269,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       const back = safeBack(req.body.back);
       if (!collector) return flashBack(req, res, back, { type: 'error', message: '주문 수집이 꺼져 있습니다 (ORDER_SOURCE=off).' });
       const result = await collector.run();
-      req.session.flash = result.ok
-        ? { type: 'ok', message: `수집 완료: 새 주문 ${result.createdOrders}건, 바뀐 상품주문 ${result.updated}건` }
-        : { type: 'error', message: `수집 실패: ${result.error}` };
+      req.session.flash = collectFlash(result);
       res.redirect(back);
     } catch (e) {
       next(e);
@@ -589,6 +587,14 @@ function orderRoutes(db, notifier, actions, collector = null) {
   return router;
 }
 
+// 수집 결과 안내 (여러 채널 중 일부만 실패하면 들어온 건수와 실패 이유를 함께)
+function collectFlash(result) {
+  const counts = `새 주문 ${result.createdOrders || 0}건, 바뀐 상품주문 ${result.updated || 0}건`;
+  if (result.ok) return { type: 'ok', message: `수집 완료: ${counts}` };
+  if (result.createdOrders !== undefined) return { type: 'warn', message: `일부 채널 수집 실패 (${result.error}) · ${counts}` };
+  return { type: 'error', message: `수집 실패: ${result.error}` };
+}
+
 // 체크한 주문 번호들 (숫자만, 중복 제거, 최대 BULK_MAX 개)
 function pickIds(raw) {
   const list = (Array.isArray(raw) ? raw : raw ? [raw] : []).map(Number).filter(n => Number.isInteger(n) && n > 0);
@@ -640,4 +646,4 @@ function kstToday() {
   return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-module.exports = { orderRoutes, safeBack };
+module.exports = { orderRoutes, safeBack, collectFlash };

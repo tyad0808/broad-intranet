@@ -80,7 +80,10 @@ test('소스 코드 어디에도 허용 목록 밖의 네이버 API 주소가 �
     const found = fs.readFileSync(file, 'utf8').match(/['"`](\/v\d+\/[^'"`?]+)['"`]/g) || [];
     for (const raw of found) {
       const p = raw.slice(1, -1);
-      assert.ok(allowed.has(p), `${path.basename(file)} 에 허용되지 않은 주소: ${p}`);
+      // 쿠팡 주소는 업체코드가 들어가는 모양이라 쿠팡 허용 목록(정규식)으로 검사한다
+      const coupangPath = p.replace(/\$\{[^}]+\}/g, 'A00012345');
+      const coupangOk = require('../src/channels/coupangClient').ALLOWED.some(a => a.pattern.test(coupangPath));
+      assert.ok(allowed.has(p) || coupangOk, `${path.basename(file)} 에 허용되지 않은 주소: ${p}`);
     }
   }
 });

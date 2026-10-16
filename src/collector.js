@@ -216,4 +216,34 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
   };
 }
 
-module.exports = { createCollector, applyOrders, getSetting, setSetting, lastStageId, isClaimRequest, ALREADY_DONE, CANCELED, ENDED, ENDED_SQL };
+// 여러 채널(스마트스토어 + 쿠팡 …)을 한 번에: '지금 수집' 과 자동 수집이 모두 돌게 한다.
+// 한 채널이 실패해도 다른 채널은 그대로 수집한다
+function createMultiCollector(collectors) {
+  if (collectors.length === 1) return collectors[0];
+  return {
+    source: {
+      label: collectors.map(c => c.source.label).join(' + '),
+      isMock: collectors.some(c => c.source.isMock),
+    },
+    collectors,
+    async run() {
+      const results = [];
+      for (const c of collectors) results.push(await c.run());
+      const ok = results.filter(r => r.ok);
+      const failed = results.map((r, i) => (r.ok ? null : `${collectors[i].source.label}: ${r.error}`)).filter(Boolean);
+      const sum = key => ok.reduce((n, r) => n + (r[key] || 0), 0);
+      return {
+        ok: failed.length === 0,
+        error: failed.join(' / ') || undefined,
+        created: sum('created'),
+        createdOrders: sum('createdOrders'),
+        updated: sum('updated'),
+        archived: sum('archived'),
+        createdIds: ok.flatMap(r => r.createdIds || []),
+        claims: ok.flatMap(r => r.claims || []),
+      };
+    },
+  };
+}
+
+module.exports = { createCollector, createMultiCollector, applyOrders, getSetting, setSetting, lastStageId, isClaimRequest, ALREADY_DONE, CANCELED, ENDED, ENDED_SQL };

@@ -1,6 +1,7 @@
 // 관리자 메뉴: 직원 관리, 작업 단계 편집, 직무 편집
 // 이 파일의 모든 주소는 app.js 에서 requireAdmin 을 거친 뒤에만 들어온다.
 const express = require('express');
+const { collectFlash } = require('./orders');
 const { transaction } = require('../db');
 
 const STATUS_LABELS = {
@@ -368,12 +369,8 @@ function adminRoutes(db, sessionStore, collector, notifier) {
       return res.redirect('/admin/collect');
     }
     const result = await collector.run();
-    if (result.ok) {
-      flash(req, 'ok', `수집 완료: 새 주문 ${result.createdOrders}건, 바뀐 상품주문 ${result.updated}건` +
-        (result.archived ? `, 이미 배송된 지난 주문 ${result.archived}건(전체 탭에 보관)` : ''));
-    } else {
-      flash(req, 'error', `수집 실패: ${result.error}`);
-    }
+    const f = collectFlash(result);
+    flash(req, f.type, f.message + (result.ok && result.archived ? `, 이미 배송된 지난 주문 ${result.archived}건(전체 탭에 보관)` : ''));
     res.redirect('/admin/collect');
   });
 
