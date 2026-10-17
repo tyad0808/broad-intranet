@@ -4,13 +4,26 @@
 
 <section class="card manual-form-card">
   <h1><%= isNew ? '수기 주문 등록' : `수기 주문 수정 (${order.channel_order_id})` %></h1>
-  <p class="muted">계좌이체·전화 주문처럼 쇼핑몰을 거치지 않은 주문을 직접 적습니다. 네이버 등 바깥으로는 아무것도 보내지 않습니다.</p>
+  <p class="muted">계좌이체·전화 주문, 연동되지 않은 쇼핑몰(G마켓·옥션 등) 주문을 직접 적습니다. 바깥 쇼핑몰로는 아무것도 보내지 않습니다.</p>
   <% if (error) { %><p class="error"><%= error %></p><% } %>
 
   <form method="post" action="<%= isNew ? '/orders/new' : `/orders/${order.id}/manual-edit` %>" class="manual-form" data-once>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="back" value="<%= back %>">
     <% if (!isNew) { %><input type="hidden" name="version" value="<%= order.version %>"><% } %>
+
+    <fieldset class="two-col">
+      <legend>주문 출처</legend>
+      <label>주문 출처
+        <select name="source_id">
+          <option value="" <%= v.source_id ? '' : 'selected' %>>출처 미지정</option>
+          <% sources.forEach(src => { %>
+            <option value="<%= src.id %>" <%= Number(v.source_id) === src.id ? 'selected' : '' %>><%= src.name %><%= src.active ? '' : ' (숨김)' %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>판매처 주문번호 <span class="muted small">(선택)</span><input type="text" name="source_order_no" value="<%= v.source_order_no || '' %>" maxlength="50" placeholder="G마켓·옥션 등의 주문번호"></label>
+    </fieldset>
 
     <fieldset>
       <legend>상품</legend>

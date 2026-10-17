@@ -163,3 +163,27 @@ test('숨긴 직무는 회원가입 화면에 나오지 않는다', async t => {
   const signup = await browser(baseUrl).request('/signup');
   assert.ok(!signup.text.includes('>CS<'));
 });
+
+test('수기 주문 출처를 추가·이름변경·순서변경·숨기기 하고, 수기 주문 채널 이름을 바꿀 수 있다', async t => {
+  const { db, admin } = await setup(t);
+  const names = () => db.prepare('SELECT name FROM order_sources WHERE active = 1 ORDER BY sort_order').all().map(r => r.name);
+  const idOf = name => db.prepare('SELECT id FROM order_sources WHERE name = ?').get(name).id;
+  const page = '/admin/sources';
+  assert.deepStrictEqual(names(), ['계좌·전화 주문', 'G마켓', '옥션', '기타'], '처음 목록');
+  assert.match((await admin.request(page)).text, /수기 주문 출처/);
+
+  await press(admin, '/admin/sources', { name: '11번가' }, page);
+  await press(admin, `/admin/sources/${idOf('11번가')}/move`, { dir: 'up' }, page);
+  await press(admin, `/admin/sources/${idOf('계좌·전화 주문')}/rename`, { name: '계좌 주문' }, page);
+  await press(admin, `/admin/sources/${idOf('기타')}/toggle`, {}, page);
+  assert.deepStrictEqual(names(), ['계좌 주문', 'G마켓', '옥션', '11번가']);
+
+  // 채널 이름·한 글자 표시 → 주문 목록 칩과 카드에 반영, 비우면 처음 이름으로
+  db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, quantity, channel_status, channel_confirmed)
+    VALUES ('manual', 'M261017-001', 'M261017-001-1', '명함', 1, 'PAYED', 1)`).run();
+  await press(admin, '/admin/manual-channel', { name: '직접 주문', mark: '직접' }, page);
+  const list = (await admin.request('/')).text;
+  assert.match(list, /<span class="ch ch-manual">직<\/span>직접 주문/);
+  await press(admin, '/admin/manual-channel', { name: '', mark: '' }, page);
+  assert.match((await admin.request('/')).text, /<span class="ch ch-manual">수<\/span>수기 주문/);
+});

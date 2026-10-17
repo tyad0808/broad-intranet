@@ -13,6 +13,19 @@ function channelInfo(key) {
   return CHANNELS[key] || { name: key || '기타', mark: '?', cls: 'etc' };
 }
 
+// 수기 주문 채널의 이름·한 글자 표시는 관리자가 바꿀 수 있다 (settings 의 manual_channel_name / manual_channel_mark)
+// → 화면마다 이 함수를 써서 바뀐 이름으로 보여준다
+function channelInfoWith(db) {
+  const get = db.prepare('SELECT value FROM settings WHERE key = ?');
+  return () => {
+    const name = (get.get('manual_channel_name') || {}).value;
+    const mark = (get.get('manual_channel_mark') || {}).value;
+    if (!name && !mark) return channelInfo;
+    const manual = { ...CHANNELS.manual, ...(name ? { name } : {}), ...(mark ? { mark } : {}) };
+    return key => (key === 'manual' ? manual : channelInfo(key));
+  };
+}
+
 const SMARTSTORE_STATUS = {
   PAYMENT_WAITING: '결제대기',
   PAYED: '결제완료',
@@ -74,4 +87,4 @@ function claimLevel(code) {
   return 'open';
 }
 
-module.exports = { CHANNELS, channelInfo, channelStatusLabel, claimLabel, claimLevel };
+module.exports = { CHANNELS, channelInfo, channelInfoWith, channelStatusLabel, claimLabel, claimLevel };

@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view: st || alert || view === 'active' ? '' : view, st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, ...changes };
+    const merged = { view: st || alert || view === 'active' ? '' : view, st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, src, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -26,9 +26,9 @@
   </div>
   <% if (channels.length > 0) { %>
     <nav class="channel-chips" aria-label="채널" data-csrf="<%= csrfToken %>">
-      <a href="<%= link({ ch: '' }) %>" class="chip <%= channel ? '' : 'on' %>">전체 채널</a>
+      <a href="<%= link({ ch: '', src: '' }) %>" class="chip <%= channel ? '' : 'on' %>">전체 채널</a>
       <% channels.forEach(key => { const c = channelInfo(key); %>
-        <a href="<%= link({ ch: key }) %>" class="chip <%= channel === key ? 'on' : '' %>" draggable="true" data-channel="<%= key %>" title="끌어서 순서를 바꿀 수 있습니다">
+        <a href="<%= link({ ch: key, src: '' }) %>" class="chip <%= channel === key ? 'on' : '' %>" draggable="true" data-channel="<%= key %>" title="끌어서 순서를 바꿀 수 있습니다">
           <span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %>
         </a>
       <% }) %>
@@ -38,6 +38,21 @@
 
 <%# 실시간 새로고침 때 이 칸 전체(상태 칸·탭·단계 버튼)를 새 건수로 바꾼다 %>
 <div id="live-tabs">
+  <% if (channel === 'manual' && sources.length) { %>
+    <%# 수기 주문 출처 칩 (관리자 → 주문 출처 에서 이름·순서를 바꾼다) %>
+    <nav class="stage-chips source-chips" aria-label="주문 출처">
+      <span class="chips-label">출처</span>
+      <a href="<%= link({ src: '' }) %>" class="chip <%= src ? '' : 'on' %>">전체 <span class="count"><%= sourceTotal %></span></a>
+      <% sources.forEach(s => { const n = sourceCounts[s.id] || 0; if (!s.active && !n) return; %>
+        <a href="<%= link({ src: s.id }) %>" class="chip <%= src === String(s.id) ? 'on' : '' %> <%= n ? '' : 'zero' %>">
+          <%= s.name %><%= s.active ? '' : ' (숨김)' %> <span class="count"><%= n %></span>
+        </a>
+      <% }) %>
+      <% if (sourceCounts[0]) { %>
+        <a href="<%= link({ src: 'none' }) %>" class="chip <%= src === 'none' ? 'on' : '' %>">출처 미지정 <span class="count"><%= sourceCounts[0] %></span></a>
+      <% } %>
+    </nav>
+  <% } %>
   <nav class="ship-board" aria-label="채널 주문 상태" title="큰 숫자는 판매자센터와 같은 상품주문 단위, 작은 숫자는 주문번호 단위입니다">
     <% Object.entries(SHIP_STATES).forEach(([key, label], n) => { %>
       <% if (n > 0) { %><span class="ship-arrow" aria-hidden="true">›</span><% } %>
@@ -104,6 +119,7 @@
   <% if (alert) { %><input type="hidden" name="alert" value="<%= alert %>"><% } %>
   <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active') { %><input type="hidden" name="view" value="<%= view %>"><% } %>
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
+  <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
   <% if (stageFilter) { %><input type="hidden" name="stage" value="<%= stageFilter %>"><% } %>
   <% if (due) { %><input type="hidden" name="due" value="<%= due %>"><% } %>
   <% if (designFilter) { %><input type="hidden" name="ds" value="<%= designFilter %>"><% } %>
@@ -158,10 +174,13 @@
         <a class="oi-main" href="/orders/<%= o.id %>?back=<%= encodeURIComponent(currentUrl) %>">
           <div class="oi-head">
             <span class="ch ch-<%= c.cls %>" title="<%= c.name %>"><%= c.mark %></span>
+            <% if (o.channel === 'manual') { %>
+              <span class="src-tag <%= o.source_id ? `src-c${o.source_id % 6}` : 'none' %>"><%= o.source_name || '출처 미지정' %></span>
+            <% } %>
             <% if (g.claim && claimLevel(g.claim.claim_status)) { %>
               <span class="claim-badge <%= claimLevel(g.claim.claim_status) %>"><%= claimLabel(g.claim.claim_status) %></span>
             <% } %>
-            <span class="muted"><strong class="buyer"><%= o.buyer_name || o.receiver_name || '-' %></strong><% if (o.receiver_name && o.buyer_name && o.receiver_name !== o.buyer_name) { %> (받는 분 <%= o.receiver_name %>)<% } %> · <%= kst(o.paid_at) %> <%= o.channel === 'manual' ? '등록' : '결제' %><% if (g.items.length > 1) { %> · 상품 <%= g.items.length %>개<% } %></span>
+            <span class="muted"><strong class="buyer"><%= o.buyer_name || o.receiver_name || '-' %></strong><% if (o.receiver_name && o.buyer_name && o.receiver_name !== o.buyer_name) { %> (받는 분 <%= o.receiver_name %>)<% } %> · <%= kst(o.paid_at) %> <%= o.channel === 'manual' ? '등록' : '결제' %><% if (o.source_order_no) { %> · 주문번호 <%= o.source_order_no %><% } %><% if (g.items.length > 1) { %> · 상품 <%= g.items.length %>개<% } %></span>
           </div>
           <ul class="oi-items">
             <% g.items.forEach(i => { %>

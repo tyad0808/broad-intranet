@@ -3,6 +3,7 @@
 const express = require('express');
 const { collectFlash } = require('./orders');
 const { transaction } = require('../db');
+const { CHANNELS } = require('../channels/labels');
 
 const STATUS_LABELS = {
   pending: '승인 대기',
@@ -251,6 +252,34 @@ function adminRoutes(db, sessionStore, collector, notifier) {
   // 디자인 단계: 편집 뒤에는 같은 '작업 단계' 화면으로 돌아간다
   router.get('/design-stages', (req, res) => res.redirect('/admin/stages'));
   listEditor({ table: 'design_stages', path: 'design-stages', label: '디자인 단계' });
+
+  // ───────── 수기 주문 출처 + 수기 주문 채널 이름 ─────────
+  const setting = key => (db.prepare('SELECT value FROM settings WHERE key = ?').get(key) || {}).value || '';
+  router.get('/sources', (req, res) => {
+    const sources = db.prepare(`
+      SELECT s.*, (SELECT COUNT(DISTINCT o.channel_order_id) FROM orders o WHERE o.channel = 'manual' AND o.source_id = s.id) AS order_count
+      FROM order_sources s ORDER BY s.sort_order
+    `).all();
+    res.render('admin/sources', {
+      title: '주문 출처', tab: 'sources', sources,
+      manualName: setting('manual_channel_name') || CHANNELS.manual.name,
+      manualMark: setting('manual_channel_mark') || CHANNELS.manual.mark,
+      defaultName: CHANNELS.manual.name,
+      defaultMark: CHANNELS.manual.mark,
+    });
+  });
+  listEditor({ table: 'order_sources', path: 'sources', label: '주문 출처' });
+
+  // 주문 목록의 '수기 주문' 칩·카드에 보이는 이름과 한 글자 표시. 비우면 처음 이름으로 돌아간다
+  router.post('/manual-channel', (req, res) => {
+    const name = String(req.body.name || '').trim().slice(0, 20);
+    const mark = Array.from(String(req.body.mark || '').trim())[0] || '';
+    const save = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    save.run('manual_channel_name', name);
+    save.run('manual_channel_mark', mark);
+    flash(req, 'ok', `수기 주문 채널을 '${name || CHANNELS.manual.name}' (${mark || CHANNELS.manual.mark}) 로 저장했습니다.`);
+    res.redirect('/admin/sources');
+  });
 
   router.get('/jobs', (req, res) => {
     const jobs = db.prepare(`

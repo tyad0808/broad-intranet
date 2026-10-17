@@ -182,3 +182,52 @@ test('상태 칸(판매자센터 비교용)은 전체 채널에서 수기 주문
   assert.strictEqual(ready((await ctx.kim.request('/')).text), '0');
   assert.strictEqual(ready((await ctx.kim.request('/?ch=manual')).text), '2');
 });
+
+test('주문 출처·판매처 주문번호를 함께 등록하고, 수기 주문 칩 아래 출처 칩으로 거르고, 번호로 검색한다', async t => {
+  const ctx = await setup(t);
+  const { db } = ctx;
+  const idOf = name => db.prepare('SELECT id FROM order_sources WHERE name = ?').get(name).id;
+  const page = (await ctx.kim.request('/orders/new')).text;
+  assert.match(page, /name="source_id"/);
+  assert.match(page, new RegExp(`value="${idOf('계좌·전화 주문')}" selected`), '처음엔 맨 위 출처');
+
+  await create(ctx, { source_id: String(idOf('G마켓')), source_order_no: '4123456789', buyer_name: '김지마' });
+  await create(ctx, { source_id: String(idOf('옥션')), buyer_name: '이옥션' });
+  await create(ctx, { source_id: '', buyer_name: '박미정' });
+  const rows = ctx.rows();
+  assert.deepStrictEqual([rows[0].source_id, rows[0].source_order_no], [idOf('G마켓'), '4123456789']);
+  assert.strictEqual(rows[1].source_id, idOf('G마켓'), '같은 주문의 상품 모두');
+
+  const all = (await ctx.kim.request('/?ch=manual')).text;
+  assert.match(all, /aria-label="주문 출처"/);
+  assert.match(all, /G마켓 <span class="count">1<\/span>/);
+  assert.match(all, /출처 미지정 <span class="count">1<\/span>/);
+  assert.match(all, /class="src-tag src-c\d">G마켓</);
+  assert.match(all, /주문번호 4123456789/);
+
+  const gm = (await ctx.kim.request(`/?ch=manual&src=${idOf('G마켓')}`)).text;
+  assert.match(gm, /김지마/);
+  assert.ok(!gm.includes('이옥션') && !gm.includes('박미정'));
+  const none = (await ctx.kim.request('/?ch=manual&src=none')).text;
+  assert.ok(none.includes('박미정') && !none.includes('김지마'));
+  // 다른 채널을 보면 출처 칩·필터는 쓰지 않는다
+  assert.ok(!(await ctx.kim.request('/')).text.includes('aria-label="주문 출처"'));
+
+  const found = (await ctx.kim.request('/?q=4123456789')).text;
+  assert.ok(found.includes('김지마') && !found.includes('이옥션'));
+  assert.ok((await ctx.kim.request('/?q=' + encodeURIComponent('옥션'))).text.includes('이옥션'), '출처 이름으로도 찾는다');
+
+  // 상세·수정: 출처를 바꾸고, 숨긴 출처는 새로 고를 수 없다
+  const detail = (await ctx.kim.request(`/orders/${rows[0].id}`)).text;
+  assert.match(detail, /주문 출처<\/dt><dd>G마켓/);
+  db.prepare("UPDATE order_sources SET active = 0 WHERE name = '기타'").run();
+  const bad = await create(ctx, { source_id: String(idOf('기타')) });
+  assert.match(bad.text, /고를 수 없는 주문 출처/);
+  const edit = await ctx.kim.submit(`/orders/${rows[0].id}/manual-edit`, `/orders/${rows[0].id}/manual-edit`, {
+    ...FORM, item_id: [String(rows[0].id), String(rows[1].id), ''], version: '0',
+    source_id: String(idOf('옥션')), source_order_no: '', buyer_name: '김지마',
+  });
+  assert.strictEqual(edit.status, 302);
+  assert.deepStrictEqual(ctx.rows().filter(r => r.channel_order_id === rows[0].channel_order_id).map(r => [r.source_id, r.source_order_no]),
+    [[idOf('옥션'), null], [idOf('옥션'), null]]);
+});

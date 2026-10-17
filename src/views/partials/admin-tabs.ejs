@@ -1,6 +1,7 @@
 <nav class="tabs">
   <a href="/admin/users" class="<%= tab === 'users' ? 'on' : '' %>">직원 관리<% if (pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
   <a href="/admin/stages" class="<%= tab === 'stages' ? 'on' : '' %>">작업 단계</a>
+  <a href="/admin/sources" class="<%= tab === 'sources' ? 'on' : '' %>">주문 출처</a>
   <a href="/admin/jobs" class="<%= tab === 'jobs' ? 'on' : '' %>">직무</a>
   <a href="/admin/notify" class="<%= tab === 'notify' ? 'on' : '' %>">알림 설정</a>
   <a href="/admin/collect" class="<%= tab === 'collect' ? 'on' : '' %>">주문 수집</a>

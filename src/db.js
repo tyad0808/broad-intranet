@@ -55,6 +55,9 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'channel_order', 'TEXT');
   // 채널이 쓰는 상태 이름 그대로 (예: 자사몰 '고객취소요청'). 공통 상태와 함께 보여줘서 헷갈리지 않게
   addColumn(db, 'orders', 'channel_status_label', 'TEXT');
+  // 수기 주문 출처 (계좌·전화 주문, G마켓, 옥션 …)와 그 판매처의 주문번호
+  addColumn(db, 'orders', 'source_id', 'INTEGER REFERENCES order_sources(id)');
+  addColumn(db, 'orders', 'source_order_no', 'TEXT');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.
@@ -185,6 +188,14 @@ function migrate(db) {
       active     INTEGER NOT NULL DEFAULT 1
     );
 
+    -- 수기 주문 출처 (계좌·전화 주문, G마켓, 옥션 …). 관리자가 이름·순서를 바꾸고 추가한다
+    CREATE TABLE IF NOT EXISTS order_sources (
+      id         INTEGER PRIMARY KEY,
+      name       TEXT    NOT NULL UNIQUE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      active     INTEGER NOT NULL DEFAULT 1
+    );
+
     -- 회사 일정 (주문 목록 옆 달력). 승인된 직원 누구나 넣고, 넣은 사람과 관리자만 고치거나 지운다
     CREATE TABLE IF NOT EXISTS events (
       id          INTEGER PRIMARY KEY,
@@ -210,6 +221,9 @@ function migrate(db) {
     );
   `);
 }
+
+// 수기 주문 출처 처음 목록 (한 번만 넣는다. 관리자가 지우거나 바꾼 뒤에 다시 생기지 않게 표시를 남김)
+const ORDER_SOURCE_NAMES = ['계좌·전화 주문', 'G마켓', '옥션', '기타'];
 
 // 주문 단계: 채널 처리(발주확인·발송처리)에 따라 자동으로 움직인다
 const ORDER_STAGE_NAMES = ['발주', '발주확인', '발송'];
@@ -319,6 +333,15 @@ function seed(db) {
 
     splitDesignStages(db, insertSetting);
     moveShippedToLastStage(db, insertSetting);
+
+    if (!db.prepare("SELECT value FROM settings WHERE key = 'order_sources_v1'").get()) {
+      const hasSources = db.prepare('SELECT COUNT(*) AS n FROM order_sources').get().n > 0;
+      if (!hasSources) {
+        ORDER_SOURCE_NAMES.forEach((name, i) =>
+          db.prepare('INSERT OR IGNORE INTO order_sources (name, sort_order) VALUES (?, ?)').run(name, (i + 1) * 10));
+      }
+      insertSetting.run('order_sources_v1', '1');
+    }
 
     insertSetting.run('unassigned_threshold', '5');      // 미지정 알림 기준 건수
     insertSetting.run('unassigned_repeat_minutes', '30'); // 해소될 때까지 다시 알리는 간격

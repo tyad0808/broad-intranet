@@ -38,6 +38,12 @@ const GROUP_SHIP_STATE = `CASE
 //   claim: 고객이 취소·반품·교환을 요청해 진행 중 (거부됨·완료 등은 제외)
 //   late : 납기가 지났는데 아직 안 나간 주문
 const ALERTS = { claim: '취소·반품·교환 요청', late: '납기 지남' };
+// 검색: 상품·고객·주문번호·메모 + 수기 주문의 판매처 주문번호와 출처 이름
+const SEARCH_SQL = `(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ?
+  OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ? OR o.source_order_no LIKE ?
+  OR o.source_id IN (SELECT id FROM order_sources WHERE name LIKE ?))`;
+const SEARCH_PARAMS = 9;
+
 const OPEN_CLAIM_SQL = `(o.claim_status IS NOT NULL AND o.claim_status NOT LIKE '%_REJECT' AND o.claim_status NOT LIKE '%_DONE'
   AND o.claim_status NOT IN ('PURCHASE_DECISION_HOLDBACK_RELEASE', 'PURCHASE_DECISION_REQUEST'))`;
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
@@ -91,6 +97,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const q = String(req.query.q || '').trim().slice(0, 50);
     // 달력의 '출고 N건' 을 누르면 그날 납기인 주문만
     const due = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.due || '')) ? req.query.due : '';
+    // 수기 주문 출처 거르기 (src: 출처 번호, 'none' 은 출처 미지정). 수기 주문 채널을 볼 때만
+    const src = channel === 'manual' && (req.query.src === 'none' || Number(req.query.src) > 0) ? String(req.query.src) : '';
     const last = lastStageId();
 
     // 상품 단위 조건 (단계 필터는 단계별 건수를 셀 때 빼야 해서 따로 둔다)
@@ -114,8 +122,16 @@ function orderRoutes(db, notifier, actions, collector = null) {
       params.push(due);
     }
     if (q) {
-      where.push('(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ? OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ?)');
-      params.push(...Array(7).fill(`%${q}%`));
+      where.push(SEARCH_SQL);
+      params.push(...Array(SEARCH_PARAMS).fill(`%${q}%`));
+    }
+    // 출처 칩 건수는 출처 필터만 빼고 센다
+    const whereNoSrc = [...where];
+    const paramsNoSrc = [...params];
+    if (src === 'none') where.push('o.source_id IS NULL');
+    else if (src) {
+      where.push('o.source_id = ?');
+      params.push(Number(src));
     }
     const sqlWhere = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
     // 단계 건수를 셀 때는 그 단계 필터만 빼고 센다
@@ -148,10 +164,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
       ), r AS (
         SELECT g.*, ROW_NUMBER() OVER (ORDER BY ${groupOrder}) AS rnk FROM g
       )
-      SELECT o.*, s.name AS stage_name, u.name AS assignee_name, r.rnk
+      SELECT o.*, s.name AS stage_name, u.name AS assignee_name, src.name AS source_name, r.rnk
       FROM r
       JOIN orders o ON o.channel = r.ch AND o.channel_order_id = r.oid
       LEFT JOIN work_stages s ON s.id = o.stage_id
+      LEFT JOIN order_sources src ON src.id = o.source_id
       LEFT JOIN users u ON u.id = o.assignee_id
       ORDER BY r.rnk, ${ITEM_ORDER}
     `).all(...listParams);
@@ -187,6 +204,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
     };
     const stageCount = countBy('o.stage_id', withDesign(where, params));
     const designCount = countBy(DESIGN_OF, withStage(where, params));
+    // 수기 주문 출처 칩 (0 = 출처 미지정)
+    const sourceCount = channel === 'manual'
+      ? countBy('COALESCE(o.source_id, 0)', withDesign(...withStage(whereNoSrc, paramsNoSrc)))
+      : { counts: {}, total: 0 };
     // '진행 중'·'내 담당'·'미지정' 탭은 끝난 주문(발송)을 빼고 보여주므로, 발송 버튼에는 탭과 상관없이
     // 발송 단계에 있는 주문 수를 보여주고 누르면 '전체' 탭에서 본다
     let shippedCount = null;
@@ -195,9 +216,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
       const baseParams = [];
       if (channel) { base.push('o.channel = ?'); baseParams.push(channel); }
       if (due) { base.push('o.due_date = ?'); baseParams.push(due); }
+      if (src === 'none') base.push('o.source_id IS NULL');
+      else if (src) { base.push('o.source_id = ?'); baseParams.push(Number(src)); }
       if (q) {
-        base.push('(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ? OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ?)');
-        baseParams.push(...Array(7).fill(`%${q}%`));
+        base.push(SEARCH_SQL);
+        baseParams.push(...Array(SEARCH_PARAMS).fill(`%${q}%`));
       }
       const [list, p] = withDesign([...base, 'o.stage_id = ?'], [...baseParams, last]);
       shippedCount = db.prepare(`
@@ -275,6 +298,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
       designTotal: designCount.total,
       designFilter,
       firstDesign,
+      src,
+      sources: channel === 'manual' ? db.prepare('SELECT id, name, active FROM order_sources ORDER BY sort_order').all() : [],
+      sourceCounts: sourceCount.counts,
+      sourceTotal: sourceCount.total,
       stageFilter,
       due,
       channel,
@@ -501,6 +528,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
     res.render('orders/detail', {
       title: items[0].product_name,
       order,
+      sourceName: order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null,
       items,
       canConfirm: items.some(canConfirm),
       canDispatch: items.some(canDispatch),

@@ -262,6 +262,10 @@
     <dl class="info">
       <dt>채널</dt><dd><%= channelInfo(order.channel).name %></dd>
       <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
+      <% if (order.channel === 'manual') { %>
+        <dt>주문 출처</dt><dd><%= sourceName || '출처 미지정' %></dd>
+        <% if (order.source_order_no) { %><dt>판매처 주문번호</dt><dd><%= order.source_order_no %></dd><% } %>
+      <% } %>
       <dt><%= order.channel === 'manual' ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
     </dl>
     <h2>상품별 상태</h2>

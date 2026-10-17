@@ -20,6 +20,10 @@ function manualRoutes(db, notifier) {
     SELECT u.id, u.name FROM users u JOIN jobs j ON j.id = u.job_id
     WHERE u.status = 'active' AND j.is_designer = 1 ORDER BY u.name
   `).all();
+  // 수기 주문 출처: 새로 고를 수 있는 것은 숨기지 않은 출처만 (수정할 때는 원래 출처도 그대로 둘 수 있다)
+  const sources = keepId => db.prepare(
+    'SELECT id, name, active FROM order_sources WHERE active = 1 OR id = ? ORDER BY sort_order'
+  ).all(Number(keepId) || 0);
   const findOrder = id => db.prepare('SELECT * FROM orders WHERE id = ?').get(Number(id));
   const groupItems = order => db.prepare(
     "SELECT * FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY CASE WHEN item_type = 'addon' THEN 1 ELSE 0 END, id"
@@ -37,6 +41,7 @@ function manualRoutes(db, notifier) {
       title: mode === 'new' ? '수기 주문 등록' : '수기 주문 수정',
       mode, order, values, items, error, back,
       designers: designers(), PAY_METHODS,
+      sources: sources(order && order.source_id),
     });
   }
 
@@ -44,7 +49,7 @@ function manualRoutes(db, notifier) {
   router.get('/orders/new', (req, res) => {
     renderForm(res, {
       mode: 'new',
-      values: { pay_method: 'BANK', pay_status: 'waiting' },
+      values: { pay_method: 'BANK', pay_status: 'waiting', source_id: (sources()[0] || {}).id },
       items: [{}, {}, {}],
       back: safeBack(req.query.back),
     });
@@ -52,7 +57,9 @@ function manualRoutes(db, notifier) {
 
   router.post('/orders/new', (req, res) => {
     const back = safeBack(req.body.back);
-    const input = parseInput(req.body, { designerIds: new Set(designers().map(d => d.id)), isNew: true });
+    const input = parseInput(req.body, {
+      designerIds: new Set(designers().map(d => d.id)), sourceIds: new Set(sources().map(s => s.id)), isNew: true,
+    });
     if (input.error) {
       return renderForm(res, { status: 400, mode: 'new', values: req.body, items: input.rawItems, error: input.error, back });
     }
@@ -62,15 +69,16 @@ function manualRoutes(db, notifier) {
     const insert = db.prepare(`
       INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
         buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-        stage_id, assignee_id, due_date, memo, pay_method, amount, depositor)
-      VALUES (?, ?, ?, 'main', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?)
+        stage_id, assignee_id, due_date, memo, pay_method, amount, depositor, source_id, source_order_no)
+      VALUES (?, ?, ?, 'main', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const ids = transaction(db, () => {
       const created = input.items.map((it, n) => Number(insert.run(
         CHANNEL, orderId, `${orderId}-${n + 1}`, it.name, it.option, it.qty,
         input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address,
         nowIso, input.pay_status === 'paid' ? 'PAYED' : 'PAYMENT_WAITING',
-        stageNew, input.assignee_id, input.due_date, input.memo, input.pay_method, input.amount, input.depositor
+        stageNew, input.assignee_id, input.due_date, input.memo, input.pay_method, input.amount, input.depositor,
+        input.source_id, input.source_order_no
       ).lastInsertRowid));
       const order = { channel_order_id: orderId };
       const items = created.map(id => findOrder(id));
@@ -116,7 +124,8 @@ function manualRoutes(db, notifier) {
     }
     const designerIds = new Set(designers().map(d => d.id));
     if (order.assignee_id) designerIds.add(order.assignee_id); // 원래 담당자는 그대로 둘 수 있다
-    const input = parseInput(req.body, { designerIds, isNew: false, itemIds: new Set(items.map(i => i.id)) });
+    const sourceIds = new Set(sources(order.source_id).map(s => s.id));
+    const input = parseInput(req.body, { designerIds, sourceIds, isNew: false, itemIds: new Set(items.map(i => i.id)) });
     if (input.error) {
       return renderForm(res, { status: 400, mode: 'edit', order, values: { ...order, ...req.body }, items: input.rawItems, error: input.error, back });
     }
@@ -124,10 +133,12 @@ function manualRoutes(db, notifier) {
       db.prepare(`
         UPDATE orders SET buyer_name = ?, buyer_phone = ?, receiver_name = ?, receiver_phone = ?, receiver_address = ?,
           pay_method = ?, amount = ?, depositor = ?, assignee_id = ?, due_date = ?, memo = ?,
+          source_id = ?, source_order_no = ?,
           version = version + 1, updated_at = datetime('now')
         WHERE channel = ? AND channel_order_id = ?
       `).run(input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address,
         input.pay_method, input.amount, input.depositor, input.assignee_id, input.due_date, input.memo,
+        input.source_id, input.source_order_no,
         CHANNEL, order.channel_order_id);
       const updateItem = db.prepare(
         'UPDATE orders SET product_name = ?, option_text = ?, quantity = ? WHERE id = ? AND channel = ? AND channel_order_id = ?'
@@ -135,9 +146,11 @@ function manualRoutes(db, notifier) {
       const insertItem = db.prepare(`
         INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
           buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-          stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id)
+          stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id,
+          source_id, source_order_no)
         SELECT channel, channel_order_id, ?, 'main', ?, ?, ?, buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address,
-          paid_at, channel_status, 1, stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id
+          paid_at, channel_status, 1, stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id,
+          source_id, source_order_no
         FROM orders WHERE id = ?
       `);
       let seq = Math.max(0, ...items.map(i => Number(String(i.channel_item_id).split('-').pop()) || 0));
@@ -234,7 +247,7 @@ function manualRoutes(db, notifier) {
 }
 
 // 입력 검사. 오류가 있으면 { error, rawItems } (화면에 입력값을 그대로 다시 보여주기 위해)
-function parseInput(body, { designerIds, isNew, itemIds = new Set() }) {
+function parseInput(body, { designerIds, sourceIds = new Set(), isNew, itemIds = new Set() }) {
   const list = v => (Array.isArray(v) ? v : v === undefined ? [] : [v]);
   const text = (v, max) => String(v || '').trim().slice(0, max) || null;
   const names = list(body.item_name);
@@ -272,8 +285,13 @@ function parseInput(body, { designerIds, isNew, itemIds = new Set() }) {
   const assignee = body.assignee_id ? Number(body.assignee_id) : null;
   if (assignee && !designerIds.has(assignee)) return fail('담당 디자이너로 지정할 수 없는 직원입니다.');
 
+  const source = body.source_id ? Number(body.source_id) : null;
+  if (source && !sourceIds.has(source)) return fail('고를 수 없는 주문 출처입니다. 화면을 새로고침해 주세요.');
+
   return {
     items,
+    source_id: source,
+    source_order_no: text(body.source_order_no, 50),
     buyer_name: buyerName,
     buyer_phone: text(body.buyer_phone, 30),
     receiver_name: text(body.receiver_name, 50) || buyerName,

@@ -15,7 +15,7 @@ const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
-const { channelStatusLabel, channelInfo, claimLabel, claimLevel } = require('./channels/labels');
+const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
 
 function sessionSecret() {
@@ -105,10 +105,13 @@ function createApp({
   app.use(loadUser(db));
   // 화면 공통 값: 처리 결과 안내 문구(한 번만 표시), 관리자에게 보이는 가입 신청 건수
   const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
+  const currentChannelInfo = channelInfoWith(db);
   app.use((req, res, next) => {
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;
     res.locals.tab = null;
+    // 관리자가 바꾼 수기 주문 채널 이름을 반영 (화면은 이 channelInfo 를 쓴다)
+    res.locals.channelInfo = currentChannelInfo();
     // 주문 목록 위 팝업(iframe) 안에서 열린 화면이면 위쪽 메뉴 없이 내용만 보여준다
     res.locals.embed = req.get('sec-fetch-dest') === 'iframe' || req.query.embed === '1';
     res.locals.pendingCount =

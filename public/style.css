@@ -809,3 +809,29 @@ body.embed .container { padding-top: 56px; }
 .tabs a.alert-tab.on { box-shadow: 0 0 0 2px currentColor inset; }
 .tabs a.alert-tab.zero { opacity: 0.45; font-weight: 500; }
 @media (max-width: 760px) { .alert-tabs { margin-left: 0; padding-left: 0; } }
+
+/* ───────── 수기 주문 출처 표시 (주문 카드의 '수' 옆) ───────── */
+.source-chips { margin-top: 4px; }
+.src-tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid #b7e0d8;
+  background: #e6f4f1;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.src-tag.src-c1 { background: #eaf7ea; border-color: #b9e3c0; color: #1a7f37; }
+.src-tag.src-c2 { background: #fdecec; border-color: #f5c2c2; color: #c62828; }
+.src-tag.src-c3 { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }
+.src-tag.src-c4 { background: #fff4e0; border-color: #f5d9a8; color: #9a6700; }
+.src-tag.src-c5 { background: #f3efff; border-color: #d9ccff; color: #5b21b6; }
+.src-tag.none { background: #f3f4f6; border-color: #e5e7eb; color: #6b7280; font-weight: 500; }
+
+/* 관리자: 수기 주문 채널 이름 */
+.manual-channel-form label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.manual-channel-form label.grow { flex: 1 1 240px; }
+.manual-channel-form label.grow input { flex: 1 1 140px; min-width: 0; }
+.manual-channel-form .mark-input input { width: 4em; text-align: center; }
