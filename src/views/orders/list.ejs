@@ -148,7 +148,7 @@
   <% if (anyAction) { %>
     <label class="check-all"><input type="checkbox" data-check-all> 처리할 수 있는 주문 모두 선택</label>
   <% } %>
-  <a href="/orders/new?back=<%= encodeURIComponent(currentUrl) %>" class="btn-sm primary new-order">＋ 수기 주문 등록</a>
+  <a href="/orders/new?back=<%= encodeURIComponent(currentUrl) %>" class="btn-sm primary new-order" data-modal-link>＋ 수기 주문 등록</a>
 </div>
 <% if (groups.length === 0) { %>
   <section class="card"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>

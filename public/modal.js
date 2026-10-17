@@ -1,4 +1,4 @@
-// 주문 목록: 주문을 누르면 목록 위에 팝업으로 연다 (바깥을 누르거나 ✕·Esc 로 닫기)
+// 주문 목록: 주문(또는 수기 주문 등록)을 누르면 목록 위에 팝업으로 연다 (바깥을 누르거나 ✕·Esc 로 닫기)
 // 팝업 안은 주문 카드 화면 그대로(iframe)라서 저장·발주확인·발송처리 모두 그 안에서 된다.
 (() => {
   // 휴대폰(좁은 화면)에서는 팝업 대신 화면 전체로 연다 (휴대폰 브라우저는 팝업 안 스크롤·확인창이 불안정)
@@ -36,7 +36,8 @@
   }
 
   document.addEventListener('click', event => {
-    const link = event.target.closest('a.oi-main');
+    // 주문 카드, 그리고 data-modal-link 가 붙은 링크(수기 주문 등록 등)
+    const link = event.target.closest('a.oi-main, a[data-modal-link]');
     // Ctrl·Shift·가운데 버튼 클릭은 원래대로 (새 탭 등)
     if (!link || narrow() || event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();

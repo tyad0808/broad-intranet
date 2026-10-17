@@ -1,6 +1,7 @@
 <%- include('../partials/header') %>
 <% const isNew = mode === 'new'; const v = values || {}; %>
-<p class="back-row"><a href="<%= isNew ? back : `/orders/${order.id}${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}` %>" class="btn-back">← <%= isNew ? '목록으로' : '주문으로' %></a></p>
+<%# 목록 위 팝업에서 새로 등록할 때는 '목록으로' 대신 아래 '취소' 버튼으로 닫는다 %>
+<% if (!(locals.embed && isNew)) { %><p class="back-row"><a href="<%= isNew ? back : `/orders/${order.id}${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}` %>" class="btn-back">← <%= isNew ? '목록으로' : '주문으로' %></a></p><% } %>
 
 <section class="card manual-form-card">
   <h1><%= isNew ? '수기 주문 등록' : `수기 주문 수정 (${order.channel_order_id})` %></h1>
@@ -88,6 +89,7 @@
 
     <div class="form-actions">
       <button type="submit"><%= isNew ? '주문 등록' : '수정 저장' %></button>
+      <% if (locals.embed && isNew) { %><button type="button" class="btn-sm" data-close-modal>취소</button><% } %>
     </div>
   </form>
 </section>

@@ -231,3 +231,14 @@ test('주문 출처·판매처 주문번호를 함께 등록하고, 수기 주�
   assert.deepStrictEqual(ctx.rows().filter(r => r.channel_order_id === rows[0].channel_order_id).map(r => [r.source_id, r.source_order_no]),
     [[idOf('옥션'), null], [idOf('옥션'), null]]);
 });
+
+test('수기 주문 등록은 목록 위 팝업으로 열린다: 버튼에 팝업 표시, 팝업 안 화면엔 목록으로 대신 취소(닫기)', async t => {
+  const { kim } = await setup(t);
+  assert.match((await kim.request('/')).text, /class="btn-sm primary new-order" data-modal-link>/);
+  const popup = (await kim.request('/orders/new?embed=1')).text;
+  assert.match(popup, /data-close-modal>취소</);
+  assert.ok(!popup.includes('← 목록으로'));
+  const full = (await kim.request('/orders/new')).text;
+  assert.match(full, /← 목록으로/);
+  assert.ok(!full.includes('data-close-modal'));
+});
