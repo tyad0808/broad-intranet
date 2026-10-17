@@ -186,6 +186,17 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
           orders = orders.concat(fresh.map(o => ({ ...o, refreshOnly: true })));
         }
       }
+      // 인트라넷에선 진행 중인데 이번에 안 나온 주문 다시 확인 (자사몰: 관리자에서 삭제된 주문 찾기)
+      if (source.verifyOpen) {
+        const seen = new Set(orders.map(o => o.channel_order_id));
+        const rows = db.prepare(
+          `SELECT * FROM orders WHERE channel = ? AND (channel_status IS NULL OR channel_status NOT IN (${ENDED_SQL}))`
+        ).all(source.channel).filter(r => !seen.has(r.channel_order_id));
+        if (rows.length) {
+          const checked = await source.verifyOpen(rows);
+          orders = orders.concat(checked.map(o => ({ ...o, refreshOnly: true })));
+        }
+      }
       const result = applyOrders(db, orders);
       setSetting(db, lastKey, to.toISOString());
       db.prepare(

@@ -127,3 +127,37 @@ test('고객취소요청: 최근 14일 안이면 취소 요청 표시, 오래된
   assert.deepStrictEqual([req('2026-10-15 10:00:00').channel_status, req('2026-10-15 10:00:00').claim_status], ['PAYED', 'CANCEL_REQUEST']);
   assert.deepStrictEqual([req('2026-09-14 13:43:00').channel_status, req('2026-09-14 13:43:00').claim_status], ['CANCELED', null]);
 });
+
+test('자사몰 관리자에서 삭제된 주문은 다음 수집 때 "자사몰에서 삭제됨" 으로 끝난 주문이 된다', async () => {
+  const db = openDb(':memory:');
+  let list = [mallOrder(1), mallOrder(2)];
+  const single = new Set(['2510171234562']); // 2번은 한 건 조회로는 있음 (목록 기간 밖으로 밀려난 경우)
+  const asked = [];
+  const fetchFn = async url => {
+    const u = new URL(url);
+    const m = u.pathname.match(/\/orders\/(\d+)$/);
+    if (m) {
+      asked.push(m[1]);
+      const found = mallOrder(2, 'g1');
+      return single.has(m[1])
+        ? new Response(JSON.stringify(found), { status: 200 })
+        : new Response(JSON.stringify({ code: 'NOT_FOUND', message: '없는 주문' }), { status: 404 });
+    }
+    return new Response(JSON.stringify({ total: list.length, page: 1, size: 100, items: list }), { status: 200 });
+  };
+  const collector = createCollector({ db, source: createGodoSource({ apiKey: 'k', fetchFn }) });
+  await collector.run();
+  assert.strictEqual(db.prepare("SELECT COUNT(DISTINCT channel_order_id) AS n FROM orders WHERE channel = 'godo'").get().n, 2);
+
+  list = []; // 1번은 삭제됨, 2번은 목록에서만 빠짐
+  const r = await collector.run();
+  assert.strictEqual(r.ok, true);
+  assert.deepStrictEqual(asked.sort(), ['2510171234561', '2510171234562']);
+  const row = no => db.prepare("SELECT channel_status, channel_status_label, channel_confirmed FROM orders WHERE channel_order_id = ? AND item_type = 'main'").get(no);
+  assert.deepStrictEqual({ ...row('2510171234561') }, { channel_status: 'CANCELED', channel_status_label: '자사몰에서 삭제됨', channel_confirmed: 0 });
+  assert.deepStrictEqual([row('2510171234562').channel_status, row('2510171234562').channel_confirmed], ['PAYED', 1], '있는 주문은 최신 상태로');
+
+  asked.length = 0;
+  await collector.run();
+  assert.deepStrictEqual(asked, ['2510171234562'], '끝난 주문(삭제됨)은 다시 묻지 않는다');
+});

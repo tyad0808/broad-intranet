@@ -10,8 +10,11 @@ const CHANNEL = 'godo';
 const DEFAULT_URL = 'http://127.0.0.1:3100/mall-api/v1';
 const PAGE_SIZE = 100;
 
-// 허용 주소: 주문 목록 조회 하나뿐 (상품·가격 API 와 상태 변경은 부르지 않는다)
-const ALLOWED = [{ method: 'GET', pattern: /^\/orders$/ }];
+// 허용 주소: 주문 목록 조회 + 주문 한 건 조회 (상품·가격 API 와 상태 변경은 부르지 않는다)
+const ALLOWED = [
+  { method: 'GET', pattern: /^\/orders$/ },
+  { method: 'GET', pattern: /^\/orders\/[0-9A-Za-z_-]+$/ },
+];
 const isAllowed = (method, path) => ALLOWED.some(a => a.method === method && a.pattern.test(path));
 
 class GodoApiError extends Error {
@@ -182,6 +185,34 @@ function createGodoSource(options = {}) {
       return orders.flatMap(o => normalize(o, end))
         .filter(o => o.channel_order_id && o.channel_item_id)
         .map(o => ({ ...o, refreshOnly: true }));
+    },
+    // 인트라넷에선 아직 진행 중인데 이번 목록에 안 나온 주문을 한 건씩 확인한다.
+    // 자사몰 관리자에서 삭제된 주문은 '없는 주문(404)' 이 되므로 → '자사몰에서 삭제됨' 으로 끝난 주문 처리
+    async verifyOpen(rows) {
+      const byOrder = new Map();
+      for (const r of rows) {
+        if (!byOrder.has(r.channel_order_id)) byOrder.set(r.channel_order_id, []);
+        byOrder.get(r.channel_order_id).push(r);
+      }
+      const out = [];
+      for (const [orderNo, items] of byOrder) {
+        try {
+          const body = await client.request('GET', `/orders/${encodeURIComponent(orderNo)}`);
+          const order = body && (body.item || body.order || body);
+          if (order && order.items) out.push(...normalize(order, now()));
+        } catch (e) {
+          if (e.status !== 404) continue; // 잠깐 연결이 안 되는 등: 다음 수집 때 다시 확인
+          out.push(...items.map(r => ({
+            channel: CHANNEL, channel_order_id: r.channel_order_id, channel_item_id: r.channel_item_id,
+            product_name: r.product_name, item_type: r.item_type, option_text: r.option_text, quantity: r.quantity,
+            buyer_name: r.buyer_name, receiver_name: r.receiver_name, receiver_phone: r.receiver_phone,
+            receiver_address: r.receiver_address, paid_at: r.paid_at,
+            channel_status: 'CANCELED', channel_confirmed: r.channel_confirmed,
+            claim_type: null, claim_status: null, channel_status_label: '자사몰에서 삭제됨',
+          })));
+        }
+      }
+      return out;
     },
   };
 }
