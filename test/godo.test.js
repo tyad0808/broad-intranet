@@ -57,6 +57,8 @@ test('자사몰 주문상태 코드를 공통 상태로 맞춘다', () => {
   assert.deepStrictEqual(s('d2'), ['DELIVERED', 1, null]);
   assert.deepStrictEqual(s('c3'), ['CANCELED', 1, null]);
   assert.deepStrictEqual(s('c4'), ['PAYED', 1, 'CANCEL_REQUEST']);
+  assert.deepStrictEqual(s('r1'), ['CANCELED', 1, null], '환불접수 = 취소 받아준 뒤 → 끝난 주문');
+  assert.deepStrictEqual(mapStatus('c4', false, { stale: true }).status, 'CANCELED', '오래 묵은 고객취소요청은 취소로');
   assert.deepStrictEqual(s('b1'), ['PAYED', 1, 'RETURN_REQUEST']);
   assert.deepStrictEqual(mapStatus('b1', true).status, 'DELIVERED');
   assert.deepStrictEqual(s('e5'), ['EXCHANGED', 1, 'EXCHANGE_DONE']);
@@ -117,4 +119,11 @@ test('옵션 표시가 바뀌면 다시 읽을 때 기존 주문의 옵션도 �
   db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, option_text, channel_status, channel_confirmed) VALUES ('godo', '2510171234561', '2510171234561-1', '포맥스 안내판', '[[옛날 형식]]', 'PAYED', 0)").run();
   await collector.run();
   assert.match(db.prepare("SELECT option_text FROM orders WHERE channel_item_id = '2510171234561-1'").get().option_text, /^포맥스 선택: 백색 3T/);
+});
+
+test('고객취소요청: 최근 14일 안이면 취소 요청 표시, 오래된 건 취소로 본다', () => {
+  const now = new Date('2026-10-17T03:00:00Z');
+  const req = (modifiedAt) => normalize(mallOrder(1, 'c4', { modifiedAt, items: [{ itemNo: 1, type: 'goods', status: 'c4', name: 'x', quantity: 1 }] }), now)[0];
+  assert.deepStrictEqual([req('2026-10-15 10:00:00').channel_status, req('2026-10-15 10:00:00').claim_status], ['PAYED', 'CANCEL_REQUEST']);
+  assert.deepStrictEqual([req('2026-09-14 13:43:00').channel_status, req('2026-09-14 13:43:00').claim_status], ['CANCELED', null]);
 });

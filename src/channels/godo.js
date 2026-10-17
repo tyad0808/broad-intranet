@@ -65,7 +65,8 @@ function createGodoClient({
 // 자사몰 주문상태 코드 → 인트라넷 공통 상태
 //   p1 결제완료 → 신규주문, g1~g3 상품준비중·구매발주·상품입고 → 배송준비(발주확인), g4 상품출고·d1 배송중 → 배송중 …
 // 취소·반품·교환·환불 '요청/진행' 은 빨간 표시(claim)로, '완료' 는 끝난 주문으로
-function mapStatus(code, shipped) {
+// stale: 상태가 마지막으로 바뀐 지 오래됐는지 (고객취소요청이 처리 안 된 채 남아 있는 경우)
+function mapStatus(code, shipped, { stale = false } = {}) {
   const base = shipped ? 'DELIVERED' : 'PAYED';
   const c = String(code || '').toLowerCase();
   const plain = (status, confirmed) => ({ status, confirmed, claimType: null, claimStatus: null });
@@ -76,8 +77,10 @@ function mapStatus(code, shipped) {
   if (c === 'g4' || c === 'd1') return plain('DELIVERING', 1);
   if (c === 'd2') return plain('DELIVERED', 1);
   if (c === 's1') return plain('PURCHASE_DECIDED', 1);
-  if (/^c[1-3]$/.test(c) || c === 'r3') return plain('CANCELED', 1);
-  if (c === 'c4' || c === 'r1' || c === 'r2') return claim('CANCEL', 'CANCEL_REQUEST');
+  // 환불접수·환불보류는 취소를 받아준 뒤 환불만 남은 상태 → 끝난 주문(취소)으로 본다
+  if (/^c[1-3]$/.test(c) || /^r[1-3]$/.test(c)) return plain('CANCELED', 1);
+  // 고객취소요청: 최근 요청만 '취소 요청' 으로 알리고, 오래 묵은 것은 이미 처리된 것으로 보고 취소로
+  if (c === 'c4') return stale ? plain('CANCELED', 1) : claim('CANCEL', 'CANCEL_REQUEST');
   if (c === 'b1' || c === 'b3') return claim('RETURN', 'RETURN_REQUEST');
   if (c === 'b2') return claim('RETURN', 'COLLECTING');
   if (c === 'b4') return claim('RETURN', 'RETURN_DONE', 'RETURNED');
@@ -116,16 +119,21 @@ function kstIso(value) {
   return /[zZ]|[+-]\d\d:?\d\d$/.test(text) ? text : `${text}+09:00`;
 }
 
+// 고객취소요청을 '처리 안 된 요청' 으로 볼 기간
+const CANCEL_REQUEST_FRESH_DAYS = 14;
+
 const kstDate = date => new Date(date.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 // 자사몰 주문 1건 → 인트라넷 주문(상품) 여러 건
-function normalize(order) {
+function normalize(order, now = new Date()) {
+  const changed = Date.parse(kstIso(order.modifiedAt || order.paidAt || order.orderedAt) || '');
+  const stale = Number.isFinite(changed) && now.getTime() - changed > CANCEL_REQUEST_FRESH_DAYS * 24 * 3600 * 1000;
   const orderer = order.orderer || {};
   const receiver = order.receiver || {};
   const address = [receiver.zipcode ? `(${receiver.zipcode})` : null, receiver.address, receiver.addressDetail]
     .filter(Boolean).join(' ') || null;
   return (order.items || []).map(item => {
-    const map = mapStatus(item.status || order.status, Boolean(item.shippedAt));
+    const map = mapStatus(item.status || order.status, Boolean(item.shippedAt), { stale });
     const size = item.sizeW && item.sizeH ? `${item.sizeW}x${item.sizeH}mm` : null;
     const option = [formatOption(item.option), formatOption(item.textOption), size].filter(Boolean).join(' / ') || null;
     return {
@@ -171,7 +179,7 @@ function createGodoSource(options = {}) {
         orders.push(...items);
         if (items.length < PAGE_SIZE || page * PAGE_SIZE >= Number(body.total || 0)) break;
       }
-      return orders.flatMap(normalize)
+      return orders.flatMap(o => normalize(o, end))
         .filter(o => o.channel_order_id && o.channel_item_id)
         .map(o => ({ ...o, refreshOnly: true }));
     },
