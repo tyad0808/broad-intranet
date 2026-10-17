@@ -163,6 +163,12 @@
       </ul>
     <% } %>
   </section>
+  <% } else if (order.channel === 'godo') { %>
+  <section class="card process-card">
+    <h2>자사몰 처리</h2>
+    <p class="muted">자사몰 주문은 지금은 <strong>가져오기만</strong> 합니다. 입금 확인·상품준비중·송장 등록은 자사몰 관리자에서 해 주세요.
+      처리하면 5분 안에 여기 상태도 바뀝니다.</p>
+  </section>
   <% } else if (order.channel === 'manual') { %>
   <% const st = order.channel_status; const editUrl = `/orders/${order.id}/manual-edit${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}`; %>
   <section class="card process-card">

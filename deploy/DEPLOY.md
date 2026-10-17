@@ -171,6 +171,20 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 
 ---
 
+## 10. 자사몰 연결 (조회만)
+
+자사몰 API(broad-quote 의 mall-api)가 같은 서버에서 돌고 있으므로 서버 안쪽 주소로 부른다.
+
+1. 주문 권한 인증키 만들기 (키는 이때 한 번만 화면에 나옴 — 캡처하지 말 것)
+   ```bash
+   cd /opt/broad-quote && sudo -u broadquote node apiKeys.js add 인트라넷주문수집 --scopes orders --ip 127.0.0.1
+   ```
+2. `nano /opt/broad-intranet/app/.env` → 맨 아래에 `GODO_API_KEY=` 를 치고 그 뒤에 키 붙여넣기 → 저장
+3. `systemctl restart broad-intranet` → 인트라넷 **↻ 지금 수집**
+4. 잠시 끄려면 `.env` 에 `GODO=off`
+
+---
+
 ## 평소에 쓰는 명령어 (서버에서)
 
 | 하고 싶은 일 | 명령어 |

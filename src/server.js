@@ -6,6 +6,7 @@ const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
 const { createCollector, createMultiCollector } = require('./collector');
 const { createCoupangSource, createCoupangWriter } = require('./channels/coupang');
+const { createGodoSource } = require('./channels/godo');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { createSmartstoreWriter } = require('./channels/smartstore');
@@ -24,6 +25,10 @@ if (source) collectors.push(createCollector({ db, source, onResult: notifier.aft
 const coupangReady = ['COUPANG_VENDOR_ID', 'COUPANG_ACCESS_KEY', 'COUPANG_SECRET_KEY'].every(k => process.env[k]);
 if (coupangReady && process.env.COUPANG !== 'off') {
   collectors.push(createCollector({ db, source: createCoupangSource(), onResult: notifier.afterCollect }));
+}
+// 자사몰: .env 에 GODO_API_KEY 가 있으면 (조회만). 잠시 끄려면 GODO=off
+if (process.env.GODO_API_KEY && process.env.GODO !== 'off') {
+  collectors.push(createCollector({ db, source: createGodoSource(), onResult: notifier.afterCollect }));
 }
 const collector = collectors.length ? createMultiCollector(collectors) : null; // 아무 채널도 없으면 수집 꺼짐
 if (collector) collector.intervalMinutes = COLLECT_INTERVAL_MINUTES;
