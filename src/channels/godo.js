@@ -88,6 +88,27 @@ function mapStatus(code, shipped) {
   return plain(code || null, 0);
 }
 
+// 고도몰은 옵션을 [["옵션명","선택값","코드","",옵션가,null], …] 같은 내부 형식으로 준다
+// → "옵션명: 선택값 / …" 로 풀어서 보여준다. 모양이 다르면 따옴표·괄호만 걷어낸다
+function formatOption(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return null;
+  if (!raw.startsWith('[')) return raw;
+  try {
+    const parsed = JSON.parse(raw.replace(/\\"/g, '"'));
+    const rows = Array.isArray(parsed[0]) ? parsed : [parsed];
+    const parts = rows.map(r => {
+      const name = String(r[0] ?? '').trim();
+      const value = String(r[1] ?? '').trim();
+      if (name && value) return `${name}: ${value}`;
+      return name || value;
+    }).filter(Boolean);
+    return parts.join(' / ') || null;
+  } catch {
+    return raw.replace(/\\?"/g, '').replace(/[[\]]/g, '').replace(/,(null|\d+)/g, '').replace(/,+/g, ', ').trim() || null;
+  }
+}
+
 // 'YYYY-MM-DD HH:mm:ss'(한국 시간) → 2026-10-17T10:00:00+09:00
 function kstIso(value) {
   if (!value) return null;
@@ -106,7 +127,7 @@ function normalize(order) {
   return (order.items || []).map(item => {
     const map = mapStatus(item.status || order.status, Boolean(item.shippedAt));
     const size = item.sizeW && item.sizeH ? `${item.sizeW}x${item.sizeH}mm` : null;
-    const option = [item.option, item.textOption, size].filter(Boolean).join(' / ') || null;
+    const option = [formatOption(item.option), formatOption(item.textOption), size].filter(Boolean).join(' / ') || null;
     return {
       channel: CHANNEL,
       channel_order_id: String(order.orderNo || ''),
@@ -124,6 +145,8 @@ function normalize(order) {
       channel_confirmed: map.confirmed,
       claim_type: map.claimType,
       claim_status: map.claimStatus,
+      // 자사몰이 쓰는 상태 이름 그대로 (예: '고객취소요청', '상품준비중')
+      channel_status_label: item.statusName || order.statusName || null,
     };
   });
 }
@@ -155,4 +178,4 @@ function createGodoSource(options = {}) {
   };
 }
 
-module.exports = { createGodoSource, createGodoClient, normalize, mapStatus, isAllowed, parseJson, GodoApiError };
+module.exports = { formatOption, createGodoSource, createGodoClient, normalize, mapStatus, isAllowed, parseJson, GodoApiError };

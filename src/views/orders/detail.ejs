@@ -270,7 +270,7 @@
         <dt><%= i.item_type === 'addon' ? '추가상품' : '상품' %></dt>
         <dd>
           <%= i.product_name %>
-          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= channelStatusLabel(i.channel_status, i.channel) %><%= i.channel === 'manual' ? '' : i.channel_confirmed ? ' · 발주확인됨' : ' · 발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %></div>
+          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= i.channel_status_label ? `${channelInfo(i.channel).name} 상태: ${i.channel_status_label}` : channelStatusLabel(i.channel_status, i.channel) %><%= i.channel === 'manual' ? '' : i.channel_confirmed ? ' · 발주확인됨' : ' · 발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %></div>
         </dd>
       <% }) %>
     </dl>

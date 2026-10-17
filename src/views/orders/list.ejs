@@ -208,7 +208,7 @@
           <% if (g.shipped) { %>
             <span class="pill shipped" title="<%= kst(g.shipped.shipped_at) %>">발송 · <%= g.shipped.ship_company ? `${courierLabel(g.shipped.ship_company)} ${g.shipped.tracking_no}` : shipMethodLabel(g.shipped.ship_method) %></span>
           <% } else { %>
-            <span class="pill <%= o.channel === 'manual' && o.channel_status === 'PAYMENT_WAITING' ? 'wait' : 'light' %>"><%= channelStatusLabel(o.channel_status, o.channel) %><%= o.channel !== "manual" && confirmed ? ' · 발주확인됨' : '' %></span>
+            <span class="pill <%= o.channel === 'manual' && o.channel_status === 'PAYMENT_WAITING' ? 'wait' : 'light' %>"><% if (o.channel_status_label) { %><%= channelInfo(o.channel).name %>: <%= o.channel_status_label %><% } else { %><%= channelStatusLabel(o.channel_status, o.channel) %><%= o.channel !== "manual" && confirmed ? ' · 발주확인됨' : '' %><% } %></span>
           <% } %>
         </div>
       </li>

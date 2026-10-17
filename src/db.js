@@ -53,6 +53,8 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'design_stage_id', 'INTEGER REFERENCES design_stages(id)');
   // 직원마다 주문 목록의 채널 버튼 순서 (예: ["coupang","smartstore"]). 비어 있으면 기본 순서
   addColumn(db, 'users', 'channel_order', 'TEXT');
+  // 채널이 쓰는 상태 이름 그대로 (예: 자사몰 '고객취소요청'). 공통 상태와 함께 보여줘서 헷갈리지 않게
+  addColumn(db, 'orders', 'channel_status_label', 'TEXT');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.

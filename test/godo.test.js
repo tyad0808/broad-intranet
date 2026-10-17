@@ -42,7 +42,7 @@ test('자사몰 주문 → 인트라넷 주문: 추가상품은 묶음 안 추�
     product_name: '포맥스 안내판', item_type: 'main', option_text: '3T / 문구: 화장실 / 300x150mm', quantity: 2,
     buyer_name: '홍길동', receiver_name: '김수령', receiver_phone: '010-3333-4444',
     receiver_address: '(06236) 서울 강남구 테헤란로 1 2층', paid_at: '2026-10-17T10:01:00+09:00',
-    channel_status: 'PAYED', channel_confirmed: 0, claim_type: null, claim_status: null,
+    channel_status: 'PAYED', channel_confirmed: 0, claim_type: null, claim_status: null, channel_status_label: '결제완료',
   });
   assert.strictEqual(addon.item_type, 'addon');
   assert.strictEqual(addon.channel_order_id, main.channel_order_id);
@@ -93,4 +93,28 @@ test('자사몰 수집: 바뀐 날짜 기준으로 페이지를 넘겨 읽고, �
 
   const again = await collector.run();
   assert.deepStrictEqual([again.created, again.updated], [0, 0], '그대로인 주문은 바뀐 주문으로 세지 않는다');
+});
+
+test('고도몰 내부 형식 옵션을 "옵션명: 선택값" 으로 풀어서 보여준다', () => {
+  const { formatOption } = require('../src/channels/godo');
+  assert.strictEqual(formatOption('[[\\"포맥스 선택\\",\\"백색 포맥스 3T\\",\\"\\",\\"\\",400,null]]'), '포맥스 선택: 백색 포맥스 3T');
+  assert.strictEqual(formatOption('[["재단 선택","모양재단","",2000,"미사용"]]'), '재단 선택: 모양재단');
+  assert.strictEqual(formatOption('[["포맥스","5T","","",0,null],["코팅","무광","","",0,null]]'), '포맥스: 5T / 코팅: 무광');
+  assert.strictEqual(formatOption('일반 옵션'), '일반 옵션');
+  assert.strictEqual(formatOption(''), null);
+  const [o] = normalize(mallOrder(1, 'p1', { items: [{ itemNo: 1, type: 'goods', status: 'c4', statusName: '고객취소요청', name: 'x', option: '[["포맥스 선택","백색 3T","","",0,null]]', sizeW: 420, sizeH: 594, quantity: 8 }] }));
+  assert.strictEqual(o.option_text, '포맥스 선택: 백색 3T / 420x594mm');
+  assert.strictEqual(o.channel_status_label, '고객취소요청', '자사몰 상태 이름을 그대로 남긴다');
+});
+
+test('옵션 표시가 바뀌면 다시 읽을 때 기존 주문의 옵션도 고쳐진다', async () => {
+  const db = openDb(':memory:');
+  const raw = mallOrder(1);
+  raw.items[0].option = '[["포맥스 선택","백색 3T","","",0,null]]';
+  const { fetchFn } = fakeMall([raw]);
+  const source = createGodoSource({ apiKey: 'k', fetchFn });
+  const collector = createCollector({ db, source });
+  db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, option_text, channel_status, channel_confirmed) VALUES ('godo', '2510171234561', '2510171234561-1', '포맥스 안내판', '[[옛날 형식]]', 'PAYED', 0)").run();
+  await collector.run();
+  assert.match(db.prepare("SELECT option_text FROM orders WHERE channel_item_id = '2510171234561-1'").get().option_text, /^포맥스 선택: 백색 3T/);
 });

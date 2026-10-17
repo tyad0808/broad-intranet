@@ -43,12 +43,12 @@ function applyOrders(db, orders) {
   const stageConfirmed = Number(getSetting(db, 'stage_confirmed')) || null;
   const lastStage = lastStageId(db);
 
-  const find = db.prepare('SELECT id, stage_id, channel_status, channel_confirmed, claim_status FROM orders WHERE channel = ? AND channel_item_id = ?');
+  const find = db.prepare('SELECT id, stage_id, channel_status, channel_confirmed, claim_status, option_text, channel_status_label FROM orders WHERE channel = ? AND channel_item_id = ?');
   const insertRow = db.prepare(`
     INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
       buyer_name, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-      claim_type, claim_status, stage_id, assignee_id, due_date, memo, nas_path)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      claim_type, claim_status, channel_status_label, stage_id, assignee_id, due_date, memo, nas_path)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   // 같은 주문번호의 다른 상품이 이미 카드로 있으면 그 카드의 사내 칸(단계·담당자·납기·메모)을 이어받는다
   const groupSibling = db.prepare(
@@ -59,7 +59,7 @@ function applyOrders(db, orders) {
     const result = insertRow.run(
       o.channel, o.channel_order_id, o.channel_item_id, o.item_type || 'main', o.product_name, o.option_text, o.quantity,
       o.buyer_name, o.receiver_name, o.receiver_phone, o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed,
-      o.claim_type || null, o.claim_status || null,
+      o.claim_type || null, o.claim_status || null, o.channel_status_label || null,
       sib && sib.stage_id ? sib.stage_id : stage, sib ? sib.assignee_id : null,
       sib ? sib.due_date : null, sib ? sib.memo : null, sib ? sib.nas_path : null
     );
@@ -73,7 +73,7 @@ function applyOrders(db, orders) {
   const update = db.prepare(`
     UPDATE orders SET product_name = ?, option_text = ?, quantity = ?, buyer_name = ?, receiver_name = ?,
       receiver_phone = ?, receiver_address = ?, paid_at = ?, channel_status = ?, channel_confirmed = ?,
-      item_type = ?, claim_type = ?, claim_status = ?, updated_at = datetime('now')
+      item_type = ?, claim_type = ?, claim_status = ?, channel_status_label = ?, updated_at = datetime('now')
     WHERE id = ?
   `);
   // 발주확인은 주문 단위로 본다: 같은 주문번호에서 아직 '발주' 단계인 상품을 모두 '발주확인'으로
@@ -119,13 +119,14 @@ function applyOrders(db, orders) {
 
       // 다시 읽기만 한 주문은 상태가 그대로면 건드리지 않는다
       if (o.refreshOnly && existing.channel_status === o.channel_status
-        && Number(existing.channel_confirmed) === Number(o.channel_confirmed) && existing.claim_status === (o.claim_status || null)) {
+        && Number(existing.channel_confirmed) === Number(o.channel_confirmed) && existing.claim_status === (o.claim_status || null)
+        && existing.option_text === (o.option_text || null) && existing.channel_status_label === (o.channel_status_label || null)) {
         continue;
       }
       update.run(
         o.product_name, o.option_text, o.quantity, o.buyer_name, o.receiver_name, o.receiver_phone,
         o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed, o.item_type || 'main',
-        o.claim_type || null, o.claim_status || null, existing.id
+        o.claim_type || null, o.claim_status || null, o.channel_status_label || null, existing.id
       );
       if (isClaimRequest(o.claim_status) && o.claim_status !== existing.claim_status) {
         result.claims.push({ id: existing.id, claim_status: o.claim_status });
