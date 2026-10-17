@@ -425,3 +425,23 @@ test('채널 버튼 순서를 끌어다 바꾸면 내 계정에만 저장되고,
   });
   assert.strictEqual(noToken.status, 403);
 });
+
+test('확인 필요: 취소·반품·교환 요청 중인 주문과 납기 지난 주문만 따로 모아 본다', async t => {
+  const { db, kim } = await setup(t);
+  applyOrders(db, [order(1, { claim_type: 'CANCEL', claim_status: 'CANCEL_REQUEST' })]);
+  applyOrders(db, [order(2, { claim_type: 'CANCEL', claim_status: 'CANCEL_REJECT' })]); // 거부된 요청은 제외
+  db.prepare("UPDATE orders SET due_date = '2020-01-01' WHERE channel_item_id = 'P3'").run();
+  const text = (await kim.request('/')).text;
+  assert.match(text, /취소·반품·교환 요청 <span class="count">1</);
+  assert.match(text, /납기 지남 <span class="count">1</);
+
+  const claims = (await kim.request('/?alert=claim')).text;
+  assert.match(claims, />상품1</);
+  assert.doesNotMatch(claims, />상품2</);
+  assert.doesNotMatch(claims, />상품3</);
+  assert.match(claims, /주문만 모아 보는 중/);
+
+  const late = (await kim.request('/?alert=late')).text;
+  assert.match(late, />상품3</);
+  assert.doesNotMatch(late, />상품1</);
+});

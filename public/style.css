@@ -792,3 +792,20 @@ body.embed .container { padding-top: 56px; }
 }
 .channel-chips [data-channel] { cursor: grab; }
 .channel-chips [data-channel].dragging { opacity: 0.4; cursor: grabbing; }
+.alert-tabs { display: inline-flex; gap: 6px; margin-left: auto; align-items: center; padding-left: 12px; }
+.tabs a.alert-tab {
+  padding: 4px 10px;
+  border: 1px solid #f3c4c0;
+  border-bottom: 1px solid #f3c4c0;
+  border-radius: 14px;
+  background: var(--error-bg);
+  color: var(--error);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.tabs a.alert-tab .count { color: inherit; font-weight: 700; }
+.tabs a.alert-tab.alert-late { border-color: #f5d9a8; background: #fff4e0; color: #9a6700; }
+.tabs a.alert-tab.on { box-shadow: 0 0 0 2px currentColor inset; }
+.tabs a.alert-tab.zero { opacity: 0.45; font-weight: 500; }
+@media (max-width: 760px) { .alert-tabs { margin-left: 0; padding-left: 0; } }

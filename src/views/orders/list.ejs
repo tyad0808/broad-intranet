@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view: st || view === 'active' ? '' : view, st, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, ...changes };
+    const merged = { view: st || alert || view === 'active' ? '' : view, st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -51,11 +51,23 @@
 
   <nav class="tabs">
     <% Object.entries(VIEWS).forEach(([key, label]) => { %>
-      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', stage: '' }) %>" class="<%= !st && view === key ? 'on' : '' %>">
+      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', alert: '', stage: '' }) %>" class="<%= !st && !alert && view === key ? 'on' : '' %>">
         <%= label %> <span class="count"><%= counts[key] || 0 %></span>
       </a>
     <% }) %>
+    <%# 확인 필요: 취소·반품·교환 요청, 납기 지남 (0건이면 흐리게) %>
+    <span class="alert-tabs">
+      <% Object.entries(ALERTS).forEach(([key, label]) => { const n = alertCounts[key] || 0; %>
+        <a href="<%= alert === key ? link({ alert: '', stage: '' }) : link({ alert: key, st: '', view: '', stage: '' }) %>"
+           class="alert-tab alert-<%= key %> <%= alert === key ? 'on' : '' %> <%= n ? '' : 'zero' %>">
+          <%= key === 'claim' ? '⚠' : '⏰' %> <%= label %> <span class="count"><%= n %></span>
+        </a>
+      <% }) %>
+    </span>
   </nav>
+  <% if (alert) { %>
+    <p class="muted small st-note"><strong><%= ALERTS[alert] %></strong> 주문만 모아 보는 중입니다 (탭과 상관없이). <a href="<%= link({ alert: '' }) %>">해제</a></p>
+  <% } %>
   <% if (due) { %>
     <p class="muted small st-note"><strong>납기 <%= due %></strong> 주문만 보는 중입니다. <a href="<%= link({ due: '' }) %>">해제</a></p>
   <% } %>
@@ -89,6 +101,7 @@
 </div>
 
 <form method="get" action="/" class="filters" data-autosubmit>
+  <% if (alert) { %><input type="hidden" name="alert" value="<%= alert %>"><% } %>
   <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active') { %><input type="hidden" name="view" value="<%= view %>"><% } %>
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
   <% if (stageFilter) { %><input type="hidden" name="stage" value="<%= stageFilter %>"><% } %>

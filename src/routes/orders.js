@@ -34,6 +34,12 @@ const GROUP_SHIP_STATE = `CASE
   WHEN MAX(o.channel_status = 'DELIVERING') THEN 'shipping'
   WHEN MAX(o.channel_status = 'DELIVERED' AND o.channel != 'manual') THEN 'delivered'
   ELSE '' END`;
+// '확인 필요' 모아보기
+//   claim: 고객이 취소·반품·교환을 요청해 진행 중 (거부됨·완료 등은 제외)
+//   late : 납기가 지났는데 아직 안 나간 주문
+const ALERTS = { claim: '취소·반품·교환 요청', late: '납기 지남' };
+const OPEN_CLAIM_SQL = `(o.claim_status IS NOT NULL AND o.claim_status NOT LIKE '%_REJECT' AND o.claim_status NOT LIKE '%_DONE'
+  AND o.claim_status NOT IN ('PURCHASE_DECISION_HOLDBACK_RELEASE', 'PURCHASE_DECISION_REQUEST'))`;
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
 const ITEM_ORDER = "CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id";
 
@@ -72,7 +78,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
   router.get('/', (req, res) => {
     // st(채널 상태 칸: 신규주문·배송준비·배송중·배송완료)을 누르면 탭과 상관없이 그 상태의 주문을 모두 보여준다
     const st = SHIP_STATES[req.query.st] ? req.query.st : '';
-    const view = st ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
+    // 확인 필요(alert)를 누르면 탭과 상관없이 해당 주문을 모두 보여준다
+    const alert = ALERTS[req.query.alert] ? req.query.alert : '';
+    const view = st || alert ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
     const stageFilter = Number(req.query.stage) || null;
     // 디자인 단계 거르기 (ds). 비어 있는 주문은 첫 번째 디자인 단계로 본다
     const designFilter = Number(req.query.ds) || null;
@@ -119,6 +127,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const having = [];
     if (view !== 'all') having.push(`${GROUP_ENDED} = 0`);
     if (st) having.push(`${GROUP_SHIP_STATE} = '${st}'`);
+    const lateHaving = `MIN(o.due_date) < '${kstToday()}' AND ${GROUP_ENDED} = 0 AND MAX(o.stage_id IS NULL OR o.stage_id != ${Number(last)}) = 1`;
+    if (alert === 'claim') having.push(`MAX(${OPEN_CLAIM_SQL}) = 1`);
+    if (alert === 'late') having.push(lateHaving);
     const havingSql = having.length ? 'HAVING ' + having.join(' AND ') : '';
 
     const groupOrder = sort === 'due'
@@ -230,6 +241,18 @@ function orderRoutes(db, notifier, actions, collector = null) {
       FROM orders o ${channel ? countWhere : "WHERE o.channel != 'manual'"}
     `).get(...(channel ? [channel] : []));
 
+    // 확인 필요 건수 (채널을 골랐으면 그 채널만)
+    const alertCounts = db.prepare(`
+      SELECT
+        COALESCE(SUM(claim), 0) AS claim,
+        COALESCE(SUM(late), 0) AS late
+      FROM (
+        SELECT MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late
+        FROM orders o ${countWhere}
+        GROUP BY o.channel, o.channel_order_id
+      )
+    `).get(...(channel ? [channel] : []));
+
     const lastRun = db.prepare('SELECT started_at, ok FROM collect_runs ORDER BY id DESC LIMIT 1').get() || null;
 
     res.render('orders/list', {
@@ -239,6 +262,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
       VIEWS,
       view,
       st,
+      alert,
+      ALERTS,
+      alertCounts,
       SHIP_STATES,
       itemCounts,
       stageCounts: stageCount.counts,
