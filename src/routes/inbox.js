@@ -40,7 +40,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const src = String(req.query.src || '');
     const q = String(req.query.q || '').trim().slice(0, 50);
     // 출처를 골랐으면 그 출처의 탭, 아니면 고른 탭 (처음엔 쇼핑몰 문의)
-    const box = src ? boxOf(src) : BOXES[req.query.box] ? req.query.box : 'shop';
+    // 큰 탭 순서는 직원마다 (끌어다 놓아 바꿈). 맨 앞 탭이 처음 열린다
+    const boxOrder = userBoxOrder(req.user);
+    const box = src ? boxOf(src) : BOXES[req.query.box] ? req.query.box : boxOrder[0];
     const mailMarks = MAIL_SOURCES.map(() => '?').join(',');
     const boxSql = b => `q.source ${b === 'mail' ? '' : 'NOT '}IN (${mailMarks})`;
 
@@ -91,7 +93,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       title: '문의함',
       navSection: 'inbox',
       rows, tab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
-      box, BOXES, boxCounts,
+      box, BOXES, boxCounts, boxOrder, defaultBox: boxOrder[0],
       staff: staff(),
       canCollect: Boolean(collector),
       noSources: !Object.keys(sourceLabels).some(s => boxOf(s) === box),
@@ -99,6 +101,13 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       currentUrl: req.originalUrl,
       modes: Object.fromEntries(Object.keys(sourceLabels).filter(s => boxOf(s) === box).map(s => [s, modeOf(s)])),
     });
+  });
+
+  // 문의함 큰 탭 순서 저장 (끌어다 놓기). 내 계정에만 적용된다
+  router.post('/me/inbox-order', (req, res) => {
+    const order = [...new Set(String(req.body.order || '').split(',').map(x => x.trim()).filter(b => BOXES[b]))];
+    db.prepare('UPDATE users SET inbox_order = ? WHERE id = ?').run(JSON.stringify(order), req.user.id);
+    res.json({ ok: true, order });
   });
 
   // 지금 받기
@@ -264,6 +273,13 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
   }
 
   return router;
+}
+
+// 직원이 정한 큰 탭 순서 (저장된 게 없거나 빠진 탭은 기본 순서로 뒤에)
+function userBoxOrder(user) {
+  let saved = [];
+  try { saved = JSON.parse((user && user.inbox_order) || '[]'); } catch { saved = []; }
+  return [...new Set([...saved.filter(b => BOXES[b]), ...Object.keys(BOXES)])];
 }
 
 // 돌아갈 주소는 문의함 목록만 허용

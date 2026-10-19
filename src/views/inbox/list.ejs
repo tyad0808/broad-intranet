@@ -3,7 +3,7 @@
   // 지금 걸린 조건을 유지한 채 하나만 바꾼 주소
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { box: box === 'shop' ? '' : box, tab: tab === 'open' ? '' : tab, src, q, ...changes };
+    const merged = { box: box === defaultBox ? '' : box, tab: tab === 'open' ? '' : tab, src, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/inbox?${s}` : '/inbox';
@@ -24,10 +24,11 @@
 </div>
 
 <%# 큰 탭: 쇼핑몰 문의 / 메일 (숫자는 미답변) %>
-<nav class="box-tabs" aria-label="문의 종류">
-  <% Object.entries(BOXES).forEach(([key, label]) => { %>
-    <a href="<%= link({ box: key === 'shop' ? '' : key, src: '', tab: '', q: '' }) %>" class="<%= box === key ? 'on' : '' %>">
-      <%= key === 'shop' ? '🛒' : '✉️' %> <%= label %><% if (boxCounts[key]) { %> <span class="badge"><%= boxCounts[key] %></span><% } %>
+<nav class="box-tabs" aria-label="문의 종류" data-sortable data-url="/me/inbox-order" data-csrf="<%= csrfToken %>">
+  <% boxOrder.forEach(key => { %>
+    <a href="<%= link({ box: key === defaultBox ? '' : key, src: '', tab: '', q: '' }) %>" class="<%= box === key ? 'on' : '' %>"
+       draggable="true" data-key="<%= key %>" title="끌어서 순서를 바꿀 수 있습니다 (맨 앞 탭이 처음 열립니다)">
+      <%= key === 'shop' ? '🛒' : '✉️' %> <%= BOXES[key] %><% if (boxCounts[key]) { %> <span class="badge"><%= boxCounts[key] %></span><% } %>
     </a>
   <% }) %>
 </nav>
@@ -60,7 +61,7 @@
 </div>
 
 <form method="get" action="/inbox" class="filters">
-  <% if (box !== 'shop') { %><input type="hidden" name="box" value="<%= box %>"><% } %>
+  <% if (box !== defaultBox) { %><input type="hidden" name="box" value="<%= box %>"><% } %>
   <% if (tab !== 'open') { %><input type="hidden" name="tab" value="<%= tab %>"><% } %>
   <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
   <input type="search" name="q" value="<%= q %>" placeholder="<%= box === 'mail' ? '제목, 내용, 보낸 사람 검색' : '상품명, 문의 내용, 작성자 검색' %>" aria-label="검색">
@@ -125,4 +126,5 @@
 <script src="/confirm.js"></script>
 <script src="/orders.js"></script>
 <script src="/modal.js"></script>
+<script src="/chip-order.js"></script>
 <%- include('../partials/footer') %>

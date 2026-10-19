@@ -53,6 +53,8 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'design_stage_id', 'INTEGER REFERENCES design_stages(id)');
   // 직원마다 주문 목록의 채널 버튼 순서 (예: ["coupang","smartstore"]). 비어 있으면 기본 순서
   addColumn(db, 'users', 'channel_order', 'TEXT');
+  // 직원마다 문의함 큰 탭 순서 (예: ["mail","shop"]). 맨 앞 탭이 처음 열린다
+  addColumn(db, 'users', 'inbox_order', 'TEXT');
   // 채널이 쓰는 상태 이름 그대로 (예: 자사몰 '고객취소요청'). 공통 상태와 함께 보여줘서 헷갈리지 않게
   addColumn(db, 'orders', 'channel_status_label', 'TEXT');
   // 수기 주문 출처 (계좌·전화 주문, G마켓, 옥션 …)와 그 판매처의 주문번호

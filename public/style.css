@@ -941,3 +941,5 @@ body.embed .container { padding-top: 56px; }
 }
 .box-tabs a.on { border-color: var(--primary); background: var(--notice-bg); color: var(--text); }
 .box-tabs .badge { font-size: 12px; }
+.box-tabs a.dragging { opacity: 0.4; cursor: grabbing; }
+.box-tabs a[draggable="true"] { cursor: grab; }
