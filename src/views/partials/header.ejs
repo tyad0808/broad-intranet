@@ -11,7 +11,7 @@
     <a class="brand" href="/">브로애드 인트라넷</a>
     <% if (locals.user) { %>
       <nav class="me">
-        <% if (user.status === 'active') { %>
+        <% if (user.status === 'active' && locals.proofsEnabled) { %>
           <a href="/proofs">시안<% if (locals.proofReviseCount > 0) { %> <span class="badge" title="고객 수정 요청"><%= proofReviseCount %></span><% } %></a>
         <% } %>
         <% if (user.role === 'admin' && user.status === 'active') { %>

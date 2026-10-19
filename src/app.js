@@ -28,9 +28,15 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ db, collector = null, secret = sessionSecret(), sms = createSms({ db }), proofDir = PROOF_DIR }) {
+function createApp({
+  db, collector = null, secret = sessionSecret(),
+  // 시안 컨펌은 인트라넷이 완성될 때까지 꺼 둔다. 켜려면 .env 에 PROOFS_ENABLED=1
+  proofsEnabled = process.env.PROOFS_ENABLED === '1',
+  sms, proofDir = PROOF_DIR,
+}) {
   const app = express();
-  const proofs = createProofService({ db, sms, dir: proofDir });
+  const proofs = proofsEnabled ? createProofService({ db, sms: sms || createSms({ db }), dir: proofDir }) : null;
+  app.locals.proofsEnabled = proofsEnabled;
   const isProd = process.env.NODE_ENV === 'production';
   const store = new SqliteSessionStore(db);
 
@@ -79,12 +85,12 @@ function createApp({ db, collector = null, secret = sessionSecret(), sms = creat
     res.locals.pendingCount =
       req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
     // 고객이 수정 요청한 시안 수 (상단 '시안' 메뉴 옆에 표시)
-    res.locals.proofReviseCount = req.user && req.user.status === 'active' ? reviseCountStmt.get().n : 0;
+    res.locals.proofReviseCount = proofs && req.user && req.user.status === 'active' ? reviseCountStmt.get().n : 0;
     next();
   });
 
   // 시안 이미지 업로드 폼은 CSRF 검사 전에 읽어야 한다 (자세한 이유는 routes/proofs.js)
-  app.use('/proofs', proofUploadParser());
+  if (proofs) app.use('/proofs', proofUploadParser());
 
   app.use(csrf);
 
@@ -93,14 +99,14 @@ function createApp({ db, collector = null, secret = sessionSecret(), sms = creat
   app.use(authRoutes(db));
 
   // 고객용 시안 확인 페이지 (로그인 없이 링크로 연다)
-  app.use('/p', proofPublicRoutes(proofs));
+  if (proofs) app.use('/p', proofPublicRoutes(proofs));
 
   // 여기부터는 로그인 + 승인된 계정만 접근
   app.get('/', requireActive, (req, res) => {
     res.render('home', { title: '홈' });
   });
 
-  app.use('/proofs', requireActive, proofRoutes(db, proofs, sms));
+  if (proofs) app.use('/proofs', requireActive, proofRoutes(db, proofs, proofs.sms));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector));
 
   app.use((req, res) => {

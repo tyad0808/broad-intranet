@@ -20,7 +20,7 @@ const JPG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(6
 async function setup(t) {
   const db = openDb(':memory:');
   const sms = createSms({ db, env: { SMS_DRIVER: 'mock', PROOF_NOTIFY_PHONES: '010-1111-2222, 잘못된번호' } });
-  const ctx = await startServer({ db, sms });
+  const ctx = await startServer({ db, sms, proofsEnabled: true });
   t.after(() => ctx.server.close());
   ctx.staffId = addUser(db, { email: 'design@broad.test', name: '김디자인' });
   ctx.staff = await loginAs(ctx.baseUrl, 'design@broad.test');
@@ -288,6 +288,16 @@ test('고객 링크: 없는 주소, 종료, 기간 지남 / 직원 화면은 로
 
   // 문자 다시 보내기는 종료 전까지만 버튼이 보인다
   assert.doesNotMatch((await staff.request(`/proofs/${proof.id}`)).text, /문자 다시 보내기/);
+});
+
+test('기본은 꺼져 있다: 메뉴가 안 보이고 주소도 열리지 않는다', async t => {
+  const ctx = await startServer();
+  t.after(() => ctx.server.close());
+  addUser(ctx.db, { email: 'staff@broad.test' });
+  const staff = await loginAs(ctx.baseUrl, 'staff@broad.test');
+  assert.doesNotMatch((await staff.request('/')).text, /href="\/proofs"/);
+  assert.strictEqual((await staff.request('/proofs')).status, 404);
+  assert.strictEqual((await staff.request('/p/anything')).status, 404);
 });
 
 test('시안 이름·고객 메모의 HTML 은 글자로만 보인다', async t => {

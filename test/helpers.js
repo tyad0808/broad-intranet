@@ -43,10 +43,10 @@ function browser(baseUrl) {
   return { request, submit, upload };
 }
 
-async function startServer({ db = openDb(':memory:'), collector = null, sms, proofDir } = {}) {
+async function startServer({ db = openDb(':memory:'), collector = null, sms, proofDir, proofsEnabled = false } = {}) {
   // 시안 이미지는 테스트마다 새 임시 폴더에 (실제 data 폴더를 건드리지 않게)
   proofDir = proofDir || fs.mkdtempSync(path.join(os.tmpdir(), 'broad-proofs-'));
-  const app = createApp({ db, collector, secret: 'test-secret', proofDir, ...(sms ? { sms } : {}) });
+  const app = createApp({ db, collector, secret: 'test-secret', proofDir, proofsEnabled, sms });
   const server = await new Promise(resolve => {
     const s = app.listen(0, () => resolve(s));
   });

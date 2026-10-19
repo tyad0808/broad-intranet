@@ -243,7 +243,7 @@ function createProofService({ db, sms, dir, env = process.env, now = () => new D
   );
 
   return {
-    create, addVersion, respond, close, list, counts, sendLink, linkFor, closedReason, isExpired,
+    sms, create, addVersion, respond, close, list, counts, sendLink, linkFor, closedReason, isExpired,
     getProof, getByToken, versions, latestVersion, getVersion, responses, filePath,
   };
 }
