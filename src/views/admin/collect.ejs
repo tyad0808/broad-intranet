@@ -11,7 +11,7 @@
     <p>
       출처: <strong><%= source.label %></strong>
       <% if (source.isMock) { %><span class="status status-pending">개발용</span><% } %>
-      · <%= intervalMinutes %>분마다 자동 수집 · 저장된 주문 <strong><%= total %>건</strong>
+      · <%= orderInterval %>분마다 자동 수집 · 저장된 주문 <strong><%= total %>건</strong>
     </p>
     <% if (source.isMock) { %>
       <p class="muted">지금은 가짜 주문으로 동작합니다. 서버에 올린 뒤 .env 의 ORDER_SOURCE 를 naver 로 바꾸면 실제 스마트스토어 주문을 가져옵니다.
@@ -22,6 +22,18 @@
       <button type="submit" class="btn-sm primary">지금 수집</button>
     </form>
   <% } %>
+</section>
+
+<section class="card">
+  <h2>자동 수집 간격</h2>
+  <p class="muted">몇 분마다 새 주문과 메일을 가져올지 정합니다 (<%= MIN_MINUTES %>~<%= MAX_MINUTES %>분). 저장하면 다음 회차부터 바로 적용됩니다.
+    너무 짧게 하면 쇼핑몰·메일 서버가 요청을 잠시 막을 수 있어 3~10분을 권합니다.</p>
+  <form method="post" action="/admin/collect-interval" class="row-edit interval-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>주문 수집 <input type="number" name="order_interval_minutes" value="<%= orderInterval %>" min="<%= MIN_MINUTES %>" max="<%= MAX_MINUTES %>" required> 분마다</label>
+    <label>메일 받기 <input type="number" name="inbox_interval_minutes" value="<%= inboxInterval %>" min="<%= MIN_MINUTES %>" max="<%= MAX_MINUTES %>" required> 분마다</label>
+    <button type="submit" class="btn-sm primary">저장</button>
+  </form>
 </section>
 
 <section class="card">

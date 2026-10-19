@@ -5,6 +5,7 @@ const { collectFlash } = require('./orders');
 const { transaction } = require('../db');
 const { CHANNELS } = require('../channels/labels');
 const { storageInfo, humanSize } = require('../storage');
+const { intervalMinutes, MIN_MINUTES, MAX_MINUTES } = require('../schedule');
 
 const STATUS_LABELS = {
   pending: '승인 대기',
@@ -371,7 +372,9 @@ function adminRoutes(db, sessionStore, collector, notifier) {
       title: '주문 수집',
       tab: 'collect',
       source: collector ? collector.source : null,
-      intervalMinutes: collector ? collector.intervalMinutes : null,
+      orderInterval: intervalMinutes(db, 'order_interval_minutes'),
+      inboxInterval: intervalMinutes(db, 'inbox_interval_minutes'),
+      MIN_MINUTES, MAX_MINUTES,
       runs,
       recent,
       total,
@@ -400,6 +403,23 @@ function adminRoutes(db, sessionStore, collector, notifier) {
       try { a.detailObj = a.detail ? JSON.parse(a.detail) : null; } catch { a.detailObj = null; }
     }
     res.render('admin/actions', { title: '처리 기록', tab: 'actions', actions, filter });
+  });
+
+  // 자동 수집 간격 (분). 다음 회차부터 바로 적용
+  router.post('/collect-interval', (req, res) => {
+    const read = v => Number(String(v || '').trim());
+    const order = read(req.body.order_interval_minutes);
+    const inbox = read(req.body.inbox_interval_minutes);
+    const ok = n => Number.isInteger(n) && n >= MIN_MINUTES && n <= MAX_MINUTES;
+    if (!ok(order) || !ok(inbox)) {
+      flash(req, 'error', `간격은 ${MIN_MINUTES}~${MAX_MINUTES}분 사이의 숫자로 적어 주세요.`);
+      return res.redirect('/admin/collect');
+    }
+    const save = db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value');
+    save.run('order_interval_minutes', String(order));
+    save.run('inbox_interval_minutes', String(inbox));
+    flash(req, 'ok', `자동 수집 간격을 저장했습니다: 주문 ${order}분, 메일 ${inbox}분마다 (다음 회차부터 적용).`);
+    res.redirect('/admin/collect');
   });
 
   router.post('/collect', async (req, res) => {

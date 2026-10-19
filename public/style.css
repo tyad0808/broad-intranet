@@ -925,3 +925,7 @@ body.embed .container { padding-top: 56px; }
 .inquiry-actions .btn-sm { height: auto; margin: 0; }
 .inquiry-actions form.inline .btn-sm { flex: 1; }
 .inquiry-actions form.inline { margin: 0; }
+
+/* 관리자 → 주문 수집: 자동 수집 간격 */
+.interval-form label { display: inline-flex; align-items: center; gap: 6px; margin: 0 12px 0 0; }
+.interval-form input[type=number] { width: 5em; }

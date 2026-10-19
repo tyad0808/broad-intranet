@@ -16,7 +16,8 @@ const { createInboxCollector } = require('./inbox/collector');
 const PORT = process.env.PORT || 3000;
 // 운영 서버에서는 같은 서버의 Caddy(HTTPS)만 접속할 수 있게 내부 주소에서만 연다
 const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : undefined);
-const COLLECT_INTERVAL_MINUTES = Math.max(1, Number(process.env.COLLECT_INTERVAL_MINUTES) || 5);
+// 자동 수집 간격은 관리자 화면에서 바꾼다 (처음 값은 .env 의 COLLECT_INTERVAL_MINUTES, 없으면 5분)
+const { intervalMinutes, startLoop } = require('./schedule');
 
 const db = openDb();
 const notifier = createNotifier({ db });
@@ -34,7 +35,6 @@ if (godoReady) {
   collectors.push(createCollector({ db, source: createGodoSource(), onResult: notifier.afterCollect }));
 }
 const collector = collectors.length ? createMultiCollector(collectors) : null; // 아무 채널도 없으면 수집 꺼짐
-if (collector) collector.intervalMinutes = COLLECT_INTERVAL_MINUTES;
 // 발주확인·발송처리를 실제로 네이버에 보내는지: NAVER_WRITE=on 이고 실제 스마트스토어(ORDER_SOURCE=naver)일 때만.
 // 그 밖에는 연습 모드 (버튼은 보이지만 네이버로 보내지 않고 기록만 남김)
 const liveWrite = process.env.NAVER_WRITE === 'on' && process.env.ORDER_SOURCE === 'naver';
@@ -94,9 +94,9 @@ async function collect() {
     console.error(`[${time}] 주문 수집 실패: ${result.error}${counts}`);
   }
 }
-if (collector) setInterval(collect, COLLECT_INTERVAL_MINUTES * 60 * 1000);
+if (collector) startLoop(collect, () => intervalMinutes(db, 'order_interval_minutes'));
 
-// 문의함 자동 받기: 주문 수집과 같은 간격
+// 문의함 자동 받기: 간격은 따로 정한다
 async function collectInbox() {
   let result;
   try {
@@ -109,7 +109,7 @@ async function collectInbox() {
   if (result.ok) console.log(`[${time}] 문의함: 새 문의 ${result.created}건${result.answered ? `, 메일 사이트에서 답장 ${result.answered}건` : ''}`);
   else console.error(`[${time}] 문의함 받기 실패: ${result.errors.join(' / ')}`);
 }
-if (inboxCollector) setInterval(collectInbox, COLLECT_INTERVAL_MINUTES * 60 * 1000);
+if (inboxCollector) startLoop(collectInbox, () => intervalMinutes(db, 'inbox_interval_minutes'));
 
 app.listen(PORT, HOST, () => {
   console.log(`브로애드 인트라넷 실행 중: http://${HOST || 'localhost'}:${PORT}`);
@@ -117,11 +117,11 @@ app.listen(PORT, HOST, () => {
   if (coupangReady) console.log(`쿠팡 상품준비중·송장: ${coupangLive ? '실제로 쿠팡에 보냄 (COUPANG_WRITE=on)' : '연습 모드 (쿠팡으로 보내지 않음)'}`);
   if (godoReady) console.log(`자사몰 발주확인·송장: ${godoLive ? '실제로 자사몰에 보냄 (GODO_WRITE=on)' : '연습 모드 (자사몰로 보내지 않음)'}`);
   if (inboxCollector) {
-    console.log(`문의함: ${mailAccounts.map(a => a.label).join(' + ')}, 답장 ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
+    console.log(`문의함: ${mailAccounts.map(a => a.label).join(' + ')}, ${intervalMinutes(db, 'inbox_interval_minutes')}분마다, 답장 ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
     collectInbox();
   }
   if (collector) {
-    console.log(`주문 출처: ${collector.source.label}, ${COLLECT_INTERVAL_MINUTES}분마다 자동 수집`);
+    console.log(`주문 출처: ${collector.source.label}, ${intervalMinutes(db, 'order_interval_minutes')}분마다 자동 수집`);
     collect();
   } else {
     console.log('주문 수집: 꺼짐 (ORDER_SOURCE=off)');

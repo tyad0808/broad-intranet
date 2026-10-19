@@ -209,3 +209,25 @@ test('저장 공간: 디스크·DB·백업 크기를 보여주고, 80% 를 넘�
   assert.strictEqual(notifier.checkStorage({ ...info, alert: false }, '2026-10-21'), false);
   assert.match(sent[0].body, /85%/);
 });
+
+test('자동 수집 간격: 관리자가 주문·메일 따로 정하고, 범위를 벗어나면 막는다. 수집은 끝날 때마다 그때의 간격으로 다음을 예약', async t => {
+  const { db, admin } = await setup(t);
+  const { intervalMinutes, startLoop } = require('../src/schedule');
+  assert.strictEqual(intervalMinutes(db, 'order_interval_minutes', 5), 5, '처음엔 기본값');
+  const page = (await admin.request('/admin/collect')).text;
+  assert.match(page, /자동 수집 간격/);
+  await press(admin, '/admin/collect-interval', { order_interval_minutes: '3', inbox_interval_minutes: '10' }, '/admin/collect');
+  assert.deepStrictEqual([intervalMinutes(db, 'order_interval_minutes'), intervalMinutes(db, 'inbox_interval_minutes')], [3, 10]);
+  await press(admin, '/admin/collect-interval', { order_interval_minutes: '0', inbox_interval_minutes: '10' }, '/admin/collect');
+  await press(admin, '/admin/collect-interval', { order_interval_minutes: '61', inbox_interval_minutes: '10' }, '/admin/collect');
+  assert.strictEqual(intervalMinutes(db, 'order_interval_minutes'), 3, '0분·61분은 저장 안 됨');
+  assert.match((await admin.request('/admin/collect')).text, /value="3"/);
+
+  // 예약: 매번 그때의 간격을 다시 읽는다
+  let runs = 0;
+  let minutes = 0.0005; // 30ms
+  const stop = startLoop(async () => { runs++; if (runs === 2) minutes = 10; }, () => minutes);
+  await new Promise(r => setTimeout(r, 150));
+  stop();
+  assert.strictEqual(runs, 2, '두 번째 뒤에는 10분으로 바뀌어 더 돌지 않음');
+});
