@@ -218,6 +218,11 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
    GMAIL_USER=아이디@gmail.com
    GMAIL_PASS=구글_앱_비밀번호
    ```
+   같은 종류를 하나 더 연결하려면 번호를 붙여서 (최대 5개씩):
+   ```
+   NAVER_MAIL2_USER=두번째아이디@naver.com
+   NAVER_MAIL2_PASS=그_계정의_앱_비밀번호
+   ```
 4. `systemctl restart broad-intranet` → 인트라넷 위쪽 **문의함** → **↻ 지금 받기** (처음엔 최근 30일치)
 5. 답장을 실제로 보내려면 `.env` 에 `MAIL_SEND=on` → 재시작. 그 전에는 연습 모드
 

@@ -3,13 +3,14 @@
 // 답변 보내기는 출처마다 따로 켠다 (메일: .env 의 MAIL_SEND=on). 꺼져 있으면 연습 모드 — 보내지 않고 기록만 남긴다.
 const express = require('express');
 const { transaction } = require('../db');
-const { previewType, PROVIDERS } = require('../inbox/mail');
+const { previewType, isMailSource } = require('../inbox/mail');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
 // 위쪽 큰 탭: 쇼핑몰 문의 / 메일 (섞여 있으면 헷갈려서 나눈다)
 const BOXES = { shop: '쇼핑몰 문의', mail: '메일' };
-const MAIL_SOURCES = Object.keys(PROVIDERS);
-const boxOf = source => (MAIL_SOURCES.includes(source) ? 'mail' : 'shop');
+const boxOf = source => (isMailSource(source) ? 'mail' : 'shop');
+// 메일 출처: naver_mail, naver_mail2, gmail … (계정을 늘려도 그대로)
+const MAIL_SQL = "(q.source GLOB 'naver_mail*' OR q.source GLOB 'gmail*')";
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
 const MAX_REPLY = 10_000;
 
@@ -43,15 +44,14 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     // 큰 탭 순서는 직원마다 (끌어다 놓아 바꿈). 맨 앞 탭이 처음 열린다
     const boxOrder = userBoxOrder(req.user);
     const box = src ? boxOf(src) : BOXES[req.query.box] ? req.query.box : boxOrder[0];
-    const mailMarks = MAIL_SOURCES.map(() => '?').join(',');
-    const boxSql = b => `q.source ${b === 'mail' ? '' : 'NOT '}IN (${mailMarks})`;
+    const boxSql = b => (b === 'mail' ? MAIL_SQL : `NOT ${MAIL_SQL}`);
 
     // 큰 탭에 붙일 미답변 건수
     const boxCounts = Object.fromEntries(Object.keys(BOXES).map(b => [b,
-      db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE q.status = 'open' AND ${boxSql(b)}`).get(...MAIL_SOURCES).n]));
+      db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE q.status = 'open' AND ${boxSql(b)}`).get().n]));
 
     const base = [boxSql(box)];
-    const params = [...MAIL_SOURCES];
+    const params = [];
     if (q) {
       base.push('(q.subject LIKE ? OR q.body LIKE ? OR q.from_name LIKE ? OR q.from_addr LIKE ?)');
       params.push(...Array(4).fill(`%${q}%`));
@@ -161,7 +161,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       navSection: 'inbox',
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),
-      isMail: Boolean(PROVIDERS[inquiry.source]),
+      isMail: isMailSource(inquiry.source),
       previewType,
       label: labelOf(inquiry.source),
       mode: modeOf(inquiry.source),

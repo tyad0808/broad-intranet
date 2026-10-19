@@ -58,11 +58,25 @@ function withTimeout(promise, ms, message) {
 }
 
 // .env 에 계정이 있는 메일만: NAVER_MAIL_USER / NAVER_MAIL_PASS, GMAIL_USER / GMAIL_PASS
+// 같은 종류를 여러 개: 두 번째부터 NAVER_MAIL2_USER / NAVER_MAIL2_PASS … (최대 5개씩)
+//   출처 이름: naver_mail, naver_mail2 … / 화면에는 메일 주소로 보여준다
+const MAX_PER_PROVIDER = 5;
 function mailAccountsFromEnv(env = process.env) {
-  return Object.entries(PROVIDERS)
-    .filter(([, p]) => env[`${p.env}_USER`] && env[`${p.env}_PASS`])
-    .map(([source, p]) => ({ source, ...p, user: env[`${p.env}_USER`], pass: env[`${p.env}_PASS`] }));
+  const out = [];
+  for (const [kind, p] of Object.entries(PROVIDERS)) {
+    for (let n = 1; n <= MAX_PER_PROVIDER; n++) {
+      const suffix = n === 1 ? '' : String(n);
+      const user = env[`${p.env}${suffix}_USER`];
+      const pass = env[`${p.env}${suffix}_PASS`];
+      if (!user || !pass) continue;
+      out.push({ ...p, source: `${kind}${suffix}`, kind, kindLabel: p.label, label: user.trim(), user: user.trim(), pass });
+    }
+  }
+  return out;
 }
+
+// 메일 출처인지 (naver_mail, naver_mail2, gmail …)
+const isMailSource = source => /^(naver_mail|gmail)\d*$/.test(String(source || ''));
 
 // HTML 메일을 글자로 (mailparser 가 글자 본문을 못 만든 경우의 예비)
 function htmlToText(html) {
@@ -308,4 +322,4 @@ function createMailFiles(account, { connect = acc => defaultConnect(acc) } = {})
   };
 }
 
-module.exports = { PROVIDERS, attachmentParts, previewType, PREVIEW_TYPES, createMailFiles, withTimeout, defaultConnect, mailAccountsFromEnv, createMailSource, createMailSender, parseMail, htmlToText };
+module.exports = { PROVIDERS, isMailSource, attachmentParts, previewType, PREVIEW_TYPES, createMailFiles, withTimeout, defaultConnect, mailAccountsFromEnv, createMailSource, createMailSender, parseMail, htmlToText };

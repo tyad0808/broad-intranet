@@ -943,3 +943,10 @@ body.embed .container { padding-top: 56px; }
 .box-tabs .badge { font-size: 12px; }
 .box-tabs a.dragging { opacity: 0.4; cursor: grabbing; }
 .box-tabs a[draggable="true"] { cursor: grab; }
+/* 같은 종류 메일을 여러 개 연결했을 때 (naver_mail2 …): 기본색은 같게, 두 번째부터는 조금 다른 색으로 구분 */
+.src-tag[class*="src-naver_mail"] { background: #eaf7ea; border-color: #b9e3c0; color: #1a7f37; }
+.src-tag[class*="src-gmail"] { background: #fdecec; border-color: #f5c2c2; color: #c62828; }
+.src-tag.src-naver_mail2, .src-tag.src-naver_mail4 { background: #e6f4f1; border-color: #a7d8cf; color: #0f766e; }
+.src-tag.src-naver_mail3, .src-tag.src-naver_mail5 { background: #eef2ff; border-color: #c7d2fe; color: #3730a3; }
+.src-tag.src-gmail2, .src-tag.src-gmail4 { background: #fff4e0; border-color: #f5d9a8; color: #9a6700; }
+.src-tag.src-gmail3, .src-tag.src-gmail5 { background: #f3efff; border-color: #d9ccff; color: #5b21b6; }

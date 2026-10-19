@@ -35,9 +35,34 @@ test('메일 한 통 → 문의: 제목·보낸 사람·본문(글자)·답장 �
   assert.strictEqual(h.answered, true, '메일 사이트에서 답장한 메일');
 });
 
-test('.env 에 아이디·앱 비밀번호가 둘 다 있는 메일만 연결한다', () => {
-  const list = mailAccountsFromEnv({ NAVER_MAIL_USER: 'a@naver.com', NAVER_MAIL_PASS: 'x', GMAIL_USER: 'b@gmail.com' });
-  assert.deepStrictEqual(list.map(a => [a.source, a.imap, a.smtp]), [['naver_mail', 'imap.naver.com', 'smtp.naver.com']]);
+test('.env 에 아이디·앱 비밀번호가 둘 다 있는 메일만 연결하고, 같은 종류 여러 개(…2)도 되며 화면 이름은 메일 주소', () => {
+  const list = mailAccountsFromEnv({
+    NAVER_MAIL_USER: 'a@naver.com', NAVER_MAIL_PASS: 'x', GMAIL_USER: 'b@gmail.com',
+    NAVER_MAIL2_USER: ' bro_ad@naver.com ', NAVER_MAIL2_PASS: 'y', NAVER_MAIL3_USER: 'c@naver.com',
+  });
+  assert.deepStrictEqual(list.map(a => [a.source, a.label, a.imap, a.smtp]), [
+    ['naver_mail', 'a@naver.com', 'imap.naver.com', 'smtp.naver.com'],
+    ['naver_mail2', 'bro_ad@naver.com', 'imap.naver.com', 'smtp.naver.com'],
+  ]);
+  const { isMailSource } = require('../src/inbox/mail');
+  assert.ok(isMailSource('naver_mail2') && isMailSource('gmail') && !isMailSource('smartstore_qna'));
+});
+
+test('메일 계정이 여러 개면 메일 탭에 주소별로 칩이 나오고 각각 거를 수 있다', async t => {
+  const ctx = await startServer({ inbox: { sourceLabels: { naver_mail: 'a@naver.com', naver_mail2: 'bro_ad@naver.com' } } });
+  t.after(() => ctx.server.close());
+  addUser(ctx.db, { email: 'kim@broad.test' });
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  const add = ctx.db.prepare(`INSERT INTO inquiries (source, external_id, subject, body, attachments, received_at) VALUES (?, ?, ?, '', '[]', '2026-10-19T01:00:00Z')`);
+  add.run('naver_mail', '1:1', '첫 번째 계정 메일');
+  add.run('naver_mail2', '1:1', '두 번째 계정 메일');
+  const mail = (await kim.request('/inbox?box=mail')).text;
+  assert.match(mail, /a@naver\.com <span class="count">1<\/span>/);
+  assert.match(mail, /bro_ad@naver\.com <span class="count">1<\/span>/);
+  assert.match(mail, /class="src-tag src-naver_mail2">bro_ad@naver\.com</);
+  const second = (await kim.request('/inbox?src=naver_mail2')).text;
+  assert.ok(second.includes('두 번째 계정 메일') && !second.includes('첫 번째 계정 메일'));
+  assert.ok(!(await kim.request('/inbox')).text.includes('계정 메일'), '쇼핑몰 탭엔 안 나옴');
 });
 
 // IMAP 흉내: uid → { raw, flags, size }

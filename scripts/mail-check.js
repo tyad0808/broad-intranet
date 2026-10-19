@@ -8,7 +8,7 @@ const { mailAccountsFromEnv, defaultConnect, withTimeout } = require('../src/inb
   const accounts = mailAccountsFromEnv();
   if (!accounts.length) return console.log('.env 에 메일 계정이 없습니다 (NAVER_MAIL_USER/PASS, GMAIL_USER/PASS).');
   for (const acc of accounts) {
-    console.log(`\n▶ ${acc.label} (${acc.user.replace(/^(.{2}).*(@.*)$/, '$1***$2')})`);
+    console.log(`\n▶ ${acc.kindLabel} (${acc.user.replace(/^(.{2}).*(@.*)$/, '$1***$2')})`);
     const t0 = Date.now();
     const step = async (name, fn, ms = 30_000) => {
       const t = Date.now();
