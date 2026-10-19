@@ -98,6 +98,56 @@
   });
   $('count').addEventListener('click', function () { call('domboPanelCount'); });
 
+  // ---- 접힌 '설정' 줄에 지금 값을 한 줄로 ----
+  var SUMS = {
+    dombo: function (o) {
+      return (o.target === 'artboard' ? '대지 · ' : '') + 'Ø' + o.diameterMm + ' · 거리 ' + o.offsetMm +
+        ' · 간격 ' + o.spacingMm + (o.orientMark ? ' · 방향점 ' + o.orientMm : '');
+    },
+    barbox: function (o) {
+      return (o.useBar ? '막대 ' + o.barHeightMm + ' (간격 ' + o.barGapMm + ')' : '막대 없음') +
+        ' · 박스 여백 ' + o.boxMarginMm + (o.boxAsCut ? ' · 칼선' : '');
+    },
+    grommet: function (o) {
+      return '위' + o.gTop + ' 아래' + o.gBottom + ' 왼' + o.gLeft + ' 오' + o.gRight + ' · 여백 ' + o.gMarginMm + ' · Ø' + o.gDiameterMm;
+    },
+    split: function (o) {
+      return (o.splitDir === 'v' ? '세로 ' : '가로 ') + o.splitCount + '등분 · 겹침 ' + o.splitOverlapMm;
+    },
+    dim: function (o) {
+      var sides = (o.dimShowW ? '가로' : '') + (o.dimShowW && o.dimShowH ? '·' : '') + (o.dimShowH ? '세로' : '');
+      return (o.dimTarget === 'all' ? '전체' : '각각') + ' · ' + (sides || '없음') + ' · 거리 ' + o.dimOffsetMm +
+        ' · 글자 ' + (o.dimTextAuto ? '자동' : o.dimTextMm);
+    }
+  };
+  function updateSums() {
+    var o = readOptions();
+    Array.prototype.forEach.call(document.querySelectorAll('details.opts'), function (d) {
+      var f = SUMS[d.getAttribute('data-sum')];
+      if (f) d.querySelector('summary').textContent = f(o);
+    });
+  }
+  // 값을 바꾸면 바로 기억하고 한 줄 요약도 고친다
+  document.addEventListener('change', function (e) {
+    if (e.target.closest && e.target.closest('#editor')) return;
+    save(readOptions());
+    updateSums();
+  });
+  document.addEventListener('input', function (e) {
+    if (e.target.closest && e.target.closest('#editor')) return;
+    updateSums();
+  });
+
+  // ---- 도움말 (설명 글) 보이기 ----
+  var HELP_KEY = 'broad-dombo-help';
+  function setHelp(on) {
+    document.body.classList.toggle('help', on);
+    $('helpToggle').classList.toggle('main', on);
+    try { localStorage.setItem(HELP_KEY, on ? '1' : ''); } catch (e) {}
+  }
+  $('helpToggle').addEventListener('click', function () { setHelp(!document.body.classList.contains('help')); });
+  try { if (localStorage.getItem(HELP_KEY)) setHelp(true); } catch (e) {}
+
   // ---- 칸 순서·이름 바꾸기 (이 컴퓨터에 기억) ----
   var LAYOUT_KEY = 'broad-dombo-layout';
   // 예전 기본 이름: 저장돼 있어도 직접 바꾼 이름이 아니므로 새 기본 이름으로 보여 준다
@@ -199,4 +249,5 @@
 
   applyLayout();
   load();
+  updateSums();
 })();

@@ -4,38 +4,49 @@
 <meta charset="utf-8">
 <title>브로애드 도구</title>
 <style>
-  body { margin: 0; padding: 10px; background: #323232; color: #ddd; font: 12px sans-serif; }
-  fieldset { border: 1px solid #555; border-radius: 4px; margin: 0 0 10px; padding: 6px 8px 8px; }
-  legend { color: #aaa; padding: 0 4px; }
-  label { display: block; margin: 4px 0; }
-  .num { display: flex; align-items: center; justify-content: space-between; margin: 5px 0; }
-  .num select { background: #222; color: #eee; border: 1px solid #555; padding: 2px; }
-  .num label { margin: 0; }
-  .num input[type=checkbox] { width: auto; }
-  .num input { width: 60px; background: #222; color: #eee; border: 1px solid #555; padding: 2px 4px; }
-  button { width: 100%; margin: 4px 0; padding: 7px; border: 1px solid #666; border-radius: 4px;
-           background: #444; color: #eee; cursor: pointer; font-size: 12px; }
+  body { margin: 0; padding: 6px 8px; background: #323232; color: #ddd; font: 11px sans-serif; }
+  details[data-id] { border-bottom: 1px solid #444; padding: 2px 0 6px; }
+  details[data-id] > summary { cursor: pointer; font-weight: bold; color: #eee; padding: 5px 0; font-size: 12px; }
+  .row { display: flex; gap: 4px; }
+  .row > button { flex: 1; }
+  button { width: 100%; margin: 2px 0; padding: 5px 4px; border: 1px solid #666; border-radius: 3px;
+           background: #444; color: #eee; cursor: pointer; font-size: 11px; }
   button.main { background: #2d6fd1; border-color: #2d6fd1; color: #fff; font-weight: bold; }
   button:hover { filter: brightness(1.15); }
-  .hint { margin: 6px 0 0; color: #999; font-size: 11px; line-height: 1.4; }
-  details { border-bottom: 1px solid #444; padding: 4px 0 8px; margin-bottom: 6px; }
-  summary { cursor: pointer; font-weight: bold; color: #eee; padding: 4px 0 6px; }
-  .top { text-align: right; margin-bottom: 4px; }
-  button.small { width: auto; padding: 3px 8px; margin: 2px 0; font-size: 11px; }
+  button.small { width: auto; padding: 2px 7px; margin: 0; font-size: 10px; }
+  /* 설정: 평소에는 접혀 있고, 지금 값만 한 줄로 */
+  details.opts { margin: 2px 0 3px; }
+  details.opts > summary { cursor: pointer; color: #9ab; padding: 2px 0; list-style: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  details.opts > summary::-webkit-details-marker { display: none; }
+  details.opts > summary::before { content: '설정 ▸ '; color: #7aa7e8; }
+  details.opts[open] > summary::before { content: '설정 ▾ '; }
+  details.opts > .box { background: #2a2a2a; border-radius: 3px; padding: 4px 6px; margin-top: 2px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 8px; }
+  .grid .full { grid-column: 1 / -1; }
+  .f { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 20px; }
+  .f input[type=number] { width: 46px; background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 1px 3px; font-size: 11px; }
+  .f select { background: #1e1e1e; color: #eee; border: 1px solid #555; padding: 0 2px; font-size: 11px; max-width: 92px; }
+  label { display: flex; align-items: center; gap: 3px; margin: 1px 0; }
+  .radios { display: flex; gap: 10px; flex-wrap: wrap; }
+  .hint { display: none; margin: 4px 0 0; color: #999; font-size: 10px; line-height: 1.35; }
+  body.help .hint { display: block; }
+  .top { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 2px; }
   #editor { border: 1px solid #2d6fd1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; }
   .editRow { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
   .editRow input { flex: 1; min-width: 0; background: #222; color: #eee; border: 1px solid #555; padding: 3px 4px; }
   .editRow button { width: 26px; margin: 0; padding: 3px 0; }
   .editRow button:disabled { opacity: 0.3; cursor: default; }
-  #msg { position: sticky; bottom: 0; background: #323232; padding: 6px 0; min-height: 2.6em;
-         line-height: 1.4; white-space: pre-line; }
+  #editor .hint { display: block; }
+  #msg { position: sticky; bottom: 0; background: #323232; padding: 5px 0; min-height: 1.4em; line-height: 1.4; white-space: pre-line; }
+  #msg:empty { padding: 0; min-height: 0; }
   #msg.err { color: #ff8a80; }
   #msg.ok { color: #9ccc65; }
 </style>
 </head>
 <body>
   <div class="top">
-    <button id="editToggle" class="small">순서·이름 바꾸기</button>
+    <button id="helpToggle" class="small">도움말</button>
+    <button id="editToggle" class="small">순서·이름</button>
   </div>
   <div id="editor" hidden>
     <p class="hint">▲▼ 로 순서를 옮기고, 칸에 이름을 고치면 바로 바뀝니다.</p>
@@ -47,116 +58,107 @@
   <div id="sections">
   <details open data-id="dombo">
     <summary>돔보마크</summary>
-    <fieldset>
-      <legend>기준</legend>
-      <label><input type="radio" name="target" value="selection" checked> 작업물 (선택 안 하면 문서 전체)</label>
-      <label><input type="radio" name="target" value="artboard"> 현재 대지</label>
-    </fieldset>
-    <fieldset>
-      <legend>원형 마크 (mm)</legend>
-      <div class="num">마크 지름 <input id="diameterMm" type="number" step="0.5" min="1" value="6"></div>
-      <div class="num">작업물과의 거리 <input id="offsetMm" type="number" step="0.5" min="0" value="5"></div>
-      <div class="num">마크 간격 (최대) <input id="spacingMm" type="number" step="10" min="0" value="300"></div>
-      <p class="hint">거리: 작업물 테두리 ~ 마크 가장자리<br>간격: 위·아래 변의 마크 중심 사이. 이 값 이하로 똑같이 나눕니다. 0 이면 네 모서리만.</p>
-    </fieldset>
-    <fieldset>
-      <legend>방향 표시점</legend>
-      <label><input id="orientMark" type="checkbox" checked> 좌우를 알 수 있게 점 하나 더</label>
-      <div class="num">모서리
-        <select id="orientCorner">
+    <div class="row"><button class="main" id="place">돔보 찍기</button><button id="remove">지우기</button></div>
+    <details class="opts" data-sum="dombo"><summary></summary><div class="box">
+      <div class="radios"><label><input type="radio" name="target" value="selection" checked>작업물</label>
+        <label><input type="radio" name="target" value="artboard">현재 대지</label></div>
+      <div class="grid">
+        <div class="f">지름 <input id="diameterMm" type="number" step="0.5" min="1" value="6"></div>
+        <div class="f">거리 <input id="offsetMm" type="number" step="0.5" min="0" value="5"></div>
+        <div class="f">간격 <input id="spacingMm" type="number" step="10" min="0" value="300"></div>
+        <div class="f">대지여백 <input id="marginMm" type="number" step="0.5" min="0" value="5"></div>
+        <label class="full"><input id="fitArtboard" type="checkbox" checked>마크가 대지 밖이면 대지 넓히기</label>
+        <label><input id="orientMark" type="checkbox" checked>방향점</label>
+        <div class="f"><select id="orientCorner">
           <option value="rb">오른쪽 아래</option><option value="lb">왼쪽 아래</option>
-          <option value="rt">오른쪽 위</option><option value="lt">왼쪽 위</option>
-        </select>
+          <option value="rt">오른쪽 위</option><option value="lt">왼쪽 위</option></select></div>
+        <div class="f">방향점 거리 <input id="orientMm" type="number" step="5" min="1" value="50"></div>
       </div>
-      <div class="num">모서리 마크에서 거리 (mm) <input id="orientMm" type="number" step="5" min="1" value="50"></div>
-      <p class="hint">고른 모서리 마크에서 가로 변을 따라 안쪽으로 (중심 사이 거리).</p>
-    </fieldset>
-    <fieldset>
-      <legend>대지</legend>
-      <label><input id="fitArtboard" type="checkbox" checked> 마크가 대지 밖이면 대지 넓히기</label>
-      <div class="num">마크 바깥 여백 <input id="marginMm" type="number" step="0.5" min="0" value="5"></div>
-    </fieldset>
-    <button class="main" id="place">돔보 찍기</button>
-    <button id="remove">돔보 지우기</button>
+      <p class="hint">작업물: 선택한 것 (선택 안 하면 문서 전체). 단위 mm. 거리: 작업물 테두리 ~ 마크 가장자리. 간격: 위·아래 변 마크 중심 사이 최대값 (0 이면 네 모서리만). 방향점: 고른 모서리 마크에서 가로 변을 따라 안쪽으로 그 거리에 점 하나 더.</p>
+    </div></details>
   </details>
 
   <details open data-id="cut">
     <summary>칼선</summary>
-    <button id="cut">선택 → 칼선(CutContour) 만들기</button>
+    <button id="cut">선택 → 칼선(CutContour)</button>
     <p class="hint">선택한 것을 복제해 '칼선' 레이어에 만듭니다. 클리핑 마스크는 마스크 모양만, 글자는 아웃라인해서.</p>
   </details>
 
   <details open data-id="grid">
     <summary>격자 칼선</summary>
-    <label><input id="removeRects" type="checkbox" checked> 기준 사각형 지우기</label>
     <button id="grid">선택한 사각형 → 격자 칼선</button>
+    <label><input id="removeRects" type="checkbox" checked>기준 사각형 지우기</label>
     <p class="hint">사각형 변마다 전체를 가로지르는 선을 긋고, 칼 이동이 짧은 순서로 쌓습니다 (맨 아래가 첫 번째).</p>
   </details>
 
   <details open data-id="barbox">
     <summary>막대 + 박스 · 개수 세기</summary>
-    <label><input id="useBar" type="checkbox" checked> 막대 만들기</label>
-    <div class="num">막대 높이(두께) <input id="barHeightMm" type="number" step="0.5" min="0.1" value="2"></div>
-    <div class="num">막대 간격 <input id="barGapMm" type="number" step="0.5" min="0" value="5"></div>
-    <div class="num">박스 여백 <input id="boxMarginMm" type="number" step="0.5" min="0" value="10"></div>
-    <label><input id="boxAsCut" type="checkbox"> 박스를 칼선(CutContour)으로</label>
-    <button id="barbox">막대 + 박스 만들기</button>
-    <button id="count">글자·도형 개수 세기</button>
-    <p class="hint">단위 mm. 여러 개 선택하면 각각, 그룹 하나를 선택하면 안의 하위 그룹마다 만듭니다.<br>
-    개수 세기: 선택한 것만(없으면 문서 전체) 글자 수와 아웃라인 도형 수를 그룹 안까지 셉니다.</p>
+    <div class="row"><button id="barbox">막대 + 박스</button><button id="count">개수 세기</button></div>
+    <details class="opts" data-sum="barbox"><summary></summary><div class="box">
+      <div class="grid">
+        <label><input id="useBar" type="checkbox" checked>막대</label>
+        <div class="f">높이 <input id="barHeightMm" type="number" step="0.5" min="0.1" value="2"></div>
+        <div class="f">막대 간격 <input id="barGapMm" type="number" step="0.5" min="0" value="5"></div>
+        <div class="f">박스 여백 <input id="boxMarginMm" type="number" step="0.5" min="0" value="10"></div>
+        <label class="full"><input id="boxAsCut" type="checkbox">박스를 칼선(CutContour)으로</label>
+      </div>
+      <p class="hint">단위 mm. 여러 개 선택하면 각각, 그룹 하나를 선택하면 안의 하위 그룹마다. 개수 세기: 선택한 것(없으면 문서 전체)의 글자 수와 아웃라인 도형 수.</p>
+    </div></details>
   </details>
 
   <details open data-id="grommet">
     <summary>아일렛 (타공)</summary>
-    <div class="num">위 개수 <input id="gTop" type="number" step="1" min="0" value="2"></div>
-    <div class="num">아래 개수 <input id="gBottom" type="number" step="1" min="0" value="2"></div>
-    <div class="num">왼쪽 개수 <input id="gLeft" type="number" step="1" min="0" value="0"></div>
-    <div class="num">오른쪽 개수 <input id="gRight" type="number" step="1" min="0" value="0"></div>
-    <div class="num">외곽 여백 (mm) <input id="gMarginMm" type="number" step="1" min="0" value="10"></div>
-    <div class="num">타공 크기 (mm) <input id="gDiameterMm" type="number" step="0.5" min="0.5" value="5"></div>
-    <div class="num">선 두께 (pt) <input id="gStrokePt" type="number" step="0.25" min="0.1" value="1"></div>
-    <button id="grommet">아일렛 표시</button>
-    <button id="grommetRemove">아일렛 지우기</button>
-    <p class="hint">개수는 모서리 포함 (1개면 가운데). 여백은 테두리에서 원 바깥선까지. 겹치는 자리는 하나만 찍습니다. 클리핑 마스크는 마스크 모양 기준. '아일렛' 레이어에 먹 100% 선으로.</p>
+    <div class="row"><button id="grommet">아일렛 표시</button><button id="grommetRemove">지우기</button></div>
+    <details class="opts" data-sum="grommet"><summary></summary><div class="box">
+      <div class="grid">
+        <div class="f">위 <input id="gTop" type="number" step="1" min="0" value="2"></div>
+        <div class="f">아래 <input id="gBottom" type="number" step="1" min="0" value="2"></div>
+        <div class="f">왼쪽 <input id="gLeft" type="number" step="1" min="0" value="0"></div>
+        <div class="f">오른쪽 <input id="gRight" type="number" step="1" min="0" value="0"></div>
+        <div class="f">여백 <input id="gMarginMm" type="number" step="1" min="0" value="10"></div>
+        <div class="f">크기 <input id="gDiameterMm" type="number" step="0.5" min="0.5" value="5"></div>
+        <div class="f">선(pt) <input id="gStrokePt" type="number" step="0.25" min="0.1" value="1"></div>
+      </div>
+      <p class="hint">개수는 모서리 포함 (1개면 가운데). 여백(mm)은 테두리에서 원 바깥선까지, 크기는 지름(mm). 겹치는 자리는 하나만. '아일렛' 레이어에 먹 100% 선으로.</p>
+    </div></details>
   </details>
 
   <details open data-id="split">
     <summary>분할 (N등분)</summary>
-    <label><input type="radio" name="splitDir" value="h" checked> 가로 분할 (|||, 좌우로 나눔)</label>
-    <label><input type="radio" name="splitDir" value="v"> 세로 분할 (≡, 위아래로 나눔)</label>
-    <div class="num">분할 개수 <input id="splitCount" type="number" step="1" min="2" value="3"></div>
-    <div class="num">겹침 (mm) <input id="splitOverlapMm" type="number" step="1" min="0" value="20"></div>
-    <div class="num">늘어놓는 간격 (mm) <input id="splitGapMm" type="number" step="1" min="0" value="20"></div>
     <button id="split">분할하기</button>
-    <p class="hint">클리핑 마스크는 보이는 영역(마스크) 기준으로 똑같이 나눕니다. 겹침은 이음매마다 양쪽 합계. 원본은 그대로 두고 조각을 원본 아래 '분할' 레이어에 늘어놓습니다.</p>
+    <details class="opts" data-sum="split"><summary></summary><div class="box">
+      <div class="radios"><label><input type="radio" name="splitDir" value="h" checked>가로 (|||)</label>
+        <label><input type="radio" name="splitDir" value="v">세로 (≡)</label></div>
+      <div class="grid">
+        <div class="f">개수 <input id="splitCount" type="number" step="1" min="2" value="3"></div>
+        <div class="f">겹침 <input id="splitOverlapMm" type="number" step="1" min="0" value="20"></div>
+        <div class="f">늘어놓기 <input id="splitGapMm" type="number" step="1" min="0" value="20"></div>
+      </div>
+      <p class="hint">가로: 좌우로 나눔, 세로: 위아래로 나눔. 겹침(mm)은 이음매마다 양쪽 합계. 클리핑 마스크는 보이는 영역 기준. 원본은 그대로, 조각은 원본 아래 '분할' 레이어에.</p>
+    </div></details>
   </details>
 
   <details open data-id="dim">
     <summary>치수 표시</summary>
-    <label><input type="radio" name="dimTarget" value="each" checked> 선택한 것마다</label>
-    <label><input type="radio" name="dimTarget" value="all"> 전체를 하나로</label>
-    <div class="num">
-      <label><input id="dimShowW" type="checkbox" checked> 가로</label>
-      <select id="dimHSide"><option value="top">위</option><option value="bottom">아래</option></select>
-    </div>
-    <div class="num">
-      <label><input id="dimShowH" type="checkbox" checked> 세로</label>
-      <select id="dimVSide"><option value="right">오른쪽</option><option value="left">왼쪽</option></select>
-    </div>
-    <div class="num">치수선 거리 (mm) <input id="dimOffsetMm" type="number" step="1" min="0" value="10"></div>
-    <label><input id="dimTextAuto" type="checkbox" checked> 글자 크기 자동</label>
-    <div class="num">글자 크기 (mm) <input id="dimTextMm" type="number" step="1" min="1" value="5"></div>
-    <div class="num">소수점
-      <select id="dimDecimals"><option value="0">없음 (300)</option><option value="1">1자리 (300.5)</option><option value="2">2자리</option></select>
-    </div>
-    <label><input id="dimUnit" type="checkbox" checked> 'mm' 붙이기</label>
-    <label><input id="dimStroke" type="checkbox"> 선 두께 포함해서 재기</label>
-    <button id="dim">치수 표시</button>
-    <button id="dimRemove">치수 지우기</button>
-    <p class="hint">'치수' 레이어에 파랑으로 그립니다. 클리핑 마스크는 마스크 모양 기준. 출력할 땐 레이어를 숨기세요.</p>
+    <div class="row"><button id="dim">치수 표시</button><button id="dimRemove">지우기</button></div>
+    <details class="opts" data-sum="dim"><summary></summary><div class="box">
+      <div class="radios"><label><input type="radio" name="dimTarget" value="each" checked>선택한 것마다</label>
+        <label><input type="radio" name="dimTarget" value="all">전체 하나로</label></div>
+      <div class="grid">
+        <div class="f"><label><input id="dimShowW" type="checkbox" checked>가로</label>
+          <select id="dimHSide"><option value="top">위</option><option value="bottom">아래</option></select></div>
+        <div class="f"><label><input id="dimShowH" type="checkbox" checked>세로</label>
+          <select id="dimVSide"><option value="right">오른쪽</option><option value="left">왼쪽</option></select></div>
+        <div class="f">거리 <input id="dimOffsetMm" type="number" step="1" min="0" value="10"></div>
+        <div class="f">소수점 <select id="dimDecimals"><option value="0">없음</option><option value="1">1자리</option><option value="2">2자리</option></select></div>
+        <label><input id="dimTextAuto" type="checkbox" checked>글자 자동</label>
+        <div class="f">글자 <input id="dimTextMm" type="number" step="1" min="1" value="5"></div>
+        <label><input id="dimUnit" type="checkbox" checked>'mm' 표시</label>
+        <label><input id="dimStroke" type="checkbox">선 두께 포함</label>
+      </div>
+      <p class="hint">단위 mm. 글자 자동: 큰 변의 3%. '치수' 레이어에 파랑으로. 클리핑 마스크는 마스크 모양 기준. 출력할 땐 레이어를 숨기세요.</p>
+    </div></details>
   </details>
-
-
   </div>
 
   <div id="msg"></div>
