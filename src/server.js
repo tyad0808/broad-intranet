@@ -14,6 +14,7 @@ const { mailAccountsFromEnv, createMailSource, createMailSender, createMailFiles
 const { createInboxCollector } = require('./inbox/collector');
 const { createNaverQnaSource, createNaverQnaSender, SOURCE: QNA_SOURCE, LABEL: QNA_LABEL } = require('./inbox/naverQna');
 const { createCoupangInquirySource, createCoupangInquirySender, SOURCE: CQ_SOURCE, LABEL: CQ_LABEL } = require('./inbox/coupangInquiry');
+const { createGodoInquirySource, createGodoInquirySender, SOURCE: GQ_SOURCE, LABEL: GQ_LABEL } = require('./inbox/godoInquiry');
 
 const PORT = process.env.PORT || 3000;
 // 운영 서버에서는 같은 서버의 Caddy(HTTPS)만 접속할 수 있게 내부 주소에서만 연다
@@ -69,10 +70,18 @@ const qnaLive = qnaReady && process.env.NAVER_ANSWER === 'on';
 // 4-3 쿠팡 문의: 쿠팡 키가 있으면. 끄려면 COUPANG_QNA=off, 답변은 COUPANG_ANSWER=on 일 때만 (WING 아이디 COUPANG_WING_ID 필요)
 const cqReady = coupangReady && process.env.COUPANG !== 'off' && process.env.COUPANG_QNA !== 'off';
 const cqLive = cqReady && process.env.COUPANG_ANSWER === 'on';
+// 4-4 자사몰 문의: 자사몰 수집이 켜져 있으면 (GODO_API_KEY 에 inquiries 권한 필요). 끄려면 GODO_QNA=off
+// 답변은 GODO_ANSWER=on 이고 처리용 키(GODO_WRITE_KEY, inquiries:write 권한)가 있을 때만
+const gqReady = godoReady && process.env.GODO_QNA !== 'off';
+const gqLive = gqReady && process.env.GODO_ANSWER === 'on' && Boolean(process.env.GODO_WRITE_KEY);
+if (gqReady && process.env.GODO_ANSWER === 'on' && !gqLive) {
+  console.warn('[주의] GODO_ANSWER=on 이지만 GODO_WRITE_KEY 가 없어서 자사몰 문의 답변은 연습 모드로 실행합니다.');
+}
 const inboxSources = [
   ...mailAccounts.map(a => createMailSource(a)),
   ...(qnaReady ? [createNaverQnaSource()] : []),
   ...(cqReady ? [createCoupangInquirySource()] : []),
+  ...(gqReady ? [createGodoInquirySource()] : []),
 ];
 const inboxCollector = inboxSources.length ? createInboxCollector({ db, sources: inboxSources, notifier }) : null;
 const inbox = {
@@ -81,11 +90,13 @@ const inbox = {
     ...mailAccounts.map(a => [a.source, a.label]),
     ...(qnaReady ? [[QNA_SOURCE, QNA_LABEL]] : []),
     ...(cqReady ? [[CQ_SOURCE, CQ_LABEL]] : []),
+    ...(gqReady ? [[GQ_SOURCE, GQ_LABEL]] : []),
   ]),
   senders: {
     ...(mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {}),
     ...(qnaLive ? { [QNA_SOURCE]: createNaverQnaSender() } : {}),
     ...(cqLive ? { [CQ_SOURCE]: createCoupangInquirySender() } : {}),
+    ...(gqLive ? { [GQ_SOURCE]: createGodoInquirySender() } : {}),
   },
   // 첨부파일 열기는 연습 모드여도 된다 (읽기만)
   files: Object.fromEntries(mailAccounts.map(a => [a.source, createMailFiles(a)])),
@@ -141,6 +152,7 @@ app.listen(PORT, HOST, () => {
     if (mailAccounts.length) console.log(`  메일 답장: ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
     if (qnaReady) console.log(`  스마트스토어 상품문의 답변: ${qnaLive ? '실제로 등록 (NAVER_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
     if (cqReady) console.log(`  쿠팡 문의 답변: ${cqLive ? '실제로 등록 (COUPANG_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
+    if (gqReady) console.log(`  자사몰 문의 답변: ${gqLive ? '실제로 등록 (GODO_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
     collectInbox();
   }
   if (collector) {

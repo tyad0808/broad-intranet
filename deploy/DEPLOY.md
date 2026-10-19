@@ -245,6 +245,15 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 3. `systemctl restart broad-intranet` → 문의함 🛒 쇼핑몰 문의 탭에 '쿠팡' 출처 (처음엔 최근 30일, 7일씩 나눠 읽음)
 4. 답변을 실제로 등록하려면 `.env` 에 `COUPANG_ANSWER=on` → 재시작 (그 전에는 연습 모드)
 
+## 14. 문의함 — 자사몰 문의 (1:1 문의 · 상품 문의 · 견적 문의)
+
+1. 견적 프로젝트 쪽에서 기존 키에 권한 더하기 (키는 그대로라 인트라넷 `.env` 는 안 바뀜):
+   `cd /opt/broad-quote && sudo -u broadquote node apiKeys.js grant 주문수집 inquiries` /
+   `sudo -u broadquote node apiKeys.js grant 주문처리 inquiries:write` (이름은 `node apiKeys.js list` 로 확인)
+2. 점검 (읽기만): `cd /opt/broad-intranet/app && sudo -u intranet npm run godo-inquiry-check`
+3. `systemctl restart broad-intranet` → 문의함 🛒 쇼핑몰 문의 탭에 '자사몰' 출처 (처음엔 최근 30일)
+4. 답변을 실제로 등록하려면 `.env` 에 `GODO_ANSWER=on` → 재시작 (그 전에는 연습 모드)
+
 ---
 
 ## 평소에 쓰는 명령어 (서버에서)

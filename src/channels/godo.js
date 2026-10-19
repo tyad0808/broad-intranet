@@ -5,6 +5,7 @@
 // 그래서 기본 주소는 서버 안쪽 http://127.0.0.1:3100/mall-api/v1 (바깥 인터넷을 거치지 않음)
 // 인증: Authorization: Bearer <키> — 키는 .env 에만 둔다
 //   조회: GODO_API_KEY (orders 권한), 처리: GODO_WRITE_KEY (orders:write 권한, 따로 발급한 키)
+//   4-4 문의: 조회는 GODO_API_KEY 에 inquiries 권한, 답변은 GODO_WRITE_KEY 에 inquiries:write 권한을 더한다
 // 처리(발주확인·송장 등록)는 자사몰 관리자와 같은 처리 코드로 실행된다 → 고객에게 알림톡·SMS 가 실제로 나간다.
 //
 // 수집: '상태가 바뀐 날짜(dateType=modified)' 기준으로 최근 주문을 읽는다 (날짜 단위라 매번 오늘 것을 다시 읽음 →
@@ -15,14 +16,16 @@ const CHANNEL = 'godo';
 const DEFAULT_URL = 'http://127.0.0.1:3100/mall-api/v1';
 const PAGE_SIZE = 100;
 
-// 허용 주소: 주문 조회 2개 + 처리 2개(write) + 택배사 목록 (상품·가격 API 는 부르지 않는다)
-// write: true 는 allowWrite 를 켠 클라이언트만 (.env 의 GODO_WRITE=on 일 때만, 기본은 연습 모드)
+// 허용 주소: 주문 조회 2개 + 처리 2개(write) + 택배사 목록 + 문의 조회·답변 (상품·가격 API 는 부르지 않는다)
+// write: true 는 allowWrite 를 켠 클라이언트만 (flag 에 적힌 .env 스위치가 on 일 때만, 기본은 연습 모드)
 const ALLOWED = [
   { method: 'GET', pattern: /^\/orders$/ },
   { method: 'GET', pattern: /^\/orders\/[0-9A-Za-z_-]+$/ },
   { method: 'GET', pattern: /^\/couriers$/, writeKey: true },
   { method: 'POST', pattern: /^\/orders\/\d+\/confirm$/, write: true, writeKey: true },
   { method: 'POST', pattern: /^\/orders\/\d+\/invoice$/, write: true, writeKey: true },
+  { method: 'GET', pattern: /^\/inquiries$/ },
+  { method: 'POST', pattern: /^\/inquiries\/(inquiry|goodsqa|qa)\/\d+\/answer$/, write: true, writeKey: true, flag: 'GODO_ANSWER' },
 ];
 const findAllowed = (method, path) => ALLOWED.find(a => a.method === method && a.pattern.test(path));
 const isAllowed = (method, path) => Boolean(findAllowed(method, path));
@@ -38,7 +41,7 @@ class GodoApiError extends Error {
 
 // 긴 번호(주문번호 등)가 숫자로 오면 끝자리가 틀어질 수 있어 글자로 읽는다
 function parseJson(text) {
-  return JSON.parse(text.replace(/"(orderNo|itemNo|goodsNo|parentGoodsNo)"\s*:\s*(\d+)/g, '"$1":"$2"'));
+  return JSON.parse(text.replace(/"(orderNo|itemNo|goodsNo|parentGoodsNo|inquiryNo)"\s*:\s*(\d+)/g, '"$1":"$2"'));
 }
 
 function createGodoClient({
@@ -53,7 +56,11 @@ function createGodoClient({
   async function request(method, path, { query = {}, json } = {}) {
     const rule = findAllowed(method, path);
     if (!rule) throw notSent(`허용되지 않은 자사몰 API 호출입니다: ${method} ${path}`);
-    if (rule.write && !allowWrite) throw notSent(`자사몰 주문 처리가 꺼져 있습니다 (GODO_WRITE=on 이 아님): ${method} ${path}`);
+    if (rule.write && !allowWrite) {
+      throw notSent(rule.flag
+        ? `자사몰 문의 답변이 꺼져 있습니다 (${rule.flag}=on 이 아님): ${method} ${path}`
+        : `자사몰 주문 처리가 꺼져 있습니다 (GODO_WRITE=on 이 아님): ${method} ${path}`);
+    }
     const key = rule.writeKey ? writeKey : apiKey;
     if (!key) throw notSent(`${rule.writeKey ? 'GODO_WRITE_KEY' : 'GODO_API_KEY'} 가 .env 에 없습니다.`);
     const qs = new URLSearchParams(Object.entries(query).filter(([, v]) => v !== undefined && v !== null && v !== '')).toString();
