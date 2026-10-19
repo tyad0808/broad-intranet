@@ -10,6 +10,8 @@ const { createGodoSource, createGodoWriter } = require('./channels/godo');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { createSmartstoreWriter } = require('./channels/smartstore');
+const { mailAccountsFromEnv, createMailSource, createMailSender } = require('./inbox/mail');
+const { createInboxCollector } = require('./inbox/collector');
 
 const PORT = process.env.PORT || 3000;
 // 운영 서버에서는 같은 서버의 Caddy(HTTPS)만 접속할 수 있게 내부 주소에서만 연다
@@ -55,7 +57,18 @@ const actions = createOrderActions({
     godo: godoLive ? createGodoWriter() : null,
   },
 });
-const app = createApp({ db, collector, notifier, actions });
+// 4차 문의함: .env 에 메일 계정(앱 비밀번호)이 있는 것만 받는다. 답장은 MAIL_SEND=on 일 때만 실제로 보냄 (그 밖에는 연습 모드)
+const mailAccounts = mailAccountsFromEnv();
+const inboxCollector = mailAccounts.length
+  ? createInboxCollector({ db, sources: mailAccounts.map(a => createMailSource(a)), notifier })
+  : null;
+const mailLive = process.env.MAIL_SEND === 'on';
+const inbox = {
+  collector: inboxCollector,
+  sourceLabels: Object.fromEntries(mailAccounts.map(a => [a.source, a.label])),
+  senders: mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {},
+};
+const app = createApp({ db, collector, notifier, actions, inbox });
 
 // 미지정 초과 알림: 1분마다 확인 (해소될 때까지 정해진 간격으로 다시 알림)
 setInterval(() => notifier.checkUnassigned(), 60 * 1000).unref();
@@ -76,11 +89,24 @@ async function collect() {
 }
 if (collector) setInterval(collect, COLLECT_INTERVAL_MINUTES * 60 * 1000);
 
+// 문의함 자동 받기: 주문 수집과 같은 간격
+async function collectInbox() {
+  const result = await inboxCollector.run();
+  const time = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' });
+  if (result.ok) console.log(`[${time}] 문의함: 새 문의 ${result.created}건${result.answered ? `, 메일 사이트에서 답장 ${result.answered}건` : ''}`);
+  else console.error(`[${time}] 문의함 받기 실패: ${result.errors.join(' / ')}`);
+}
+if (inboxCollector) setInterval(collectInbox, COLLECT_INTERVAL_MINUTES * 60 * 1000);
+
 app.listen(PORT, HOST, () => {
   console.log(`브로애드 인트라넷 실행 중: http://${HOST || 'localhost'}:${PORT}`);
   console.log(`발주확인·발송처리: ${actions.mode === 'live' ? '실제로 네이버에 보냄 (NAVER_WRITE=on)' : '연습 모드 (네이버로 보내지 않음)'}`);
   if (coupangReady) console.log(`쿠팡 상품준비중·송장: ${coupangLive ? '실제로 쿠팡에 보냄 (COUPANG_WRITE=on)' : '연습 모드 (쿠팡으로 보내지 않음)'}`);
   if (godoReady) console.log(`자사몰 발주확인·송장: ${godoLive ? '실제로 자사몰에 보냄 (GODO_WRITE=on)' : '연습 모드 (자사몰로 보내지 않음)'}`);
+  if (inboxCollector) {
+    console.log(`문의함: ${mailAccounts.map(a => a.label).join(' + ')}, 답장 ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
+    collectInbox();
+  }
   if (collector) {
     console.log(`주문 출처: ${collector.source.label}, ${COLLECT_INTERVAL_MINUTES}분마다 자동 수집`);
     collect();

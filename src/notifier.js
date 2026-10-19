@@ -137,6 +137,11 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
   }
 
   // 달력 일정이 바뀌면 다른 직원 화면의 달력도 새로 그린다
+  // 문의함이 바뀌었을 때 (새 문의, 답변, 담당자 지정 등) 문의함 화면들에게 다시 불러오라고 알린다
+  function inboxChanged(ids = [], actorId = null) {
+    hub.send('inbox-changed', { ids, actorId }, everyone);
+  }
+
   function calendarChanged(actorId = null) {
     hub.send('calendar-changed', { actorId }, everyone);
   }
@@ -147,7 +152,7 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
     notify('signup', { title: '가입 신청', body: message, url: '/admin/users' }, admins);
   }
 
-  return { hub, notify, ordersChanged, calendarChanged, checkUnassigned, afterCollect, signup, unassignedCount, unassignedBanner };
+  return { hub, notify, ordersChanged, inboxChanged, calendarChanged, checkUnassigned, afterCollect, signup, unassignedCount, unassignedBanner };
 }
 
 module.exports = { createNotifier };

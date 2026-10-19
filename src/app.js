@@ -13,6 +13,7 @@ const { adminRoutes } = require('./routes/admin');
 const { orderRoutes } = require('./routes/orders');
 const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
+const { inboxRoutes } = require('./routes/inbox');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
@@ -31,6 +32,8 @@ function sessionSecret() {
 function createApp({
   db,
   collector = null,
+  // 문의함: { collector, senders: { naver_mail: … }, sourceLabels: { naver_mail: '네이버메일' } }
+  inbox = {},
   notifier = createNotifier({ db }),
   actions = createOrderActions({ db }), // 기본은 연습 모드 (네이버로 보내지 않음)
   secret = sessionSecret(),
@@ -106,6 +109,7 @@ function createApp({
   // 화면 공통 값: 처리 결과 안내 문구(한 번만 표시), 관리자에게 보이는 가입 신청 건수
   const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
   const currentChannelInfo = channelInfoWith(db);
+  const openInquiriesStmt = db.prepare("SELECT COUNT(*) AS n FROM inquiries WHERE status = 'open'");
   app.use((req, res, next) => {
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;
@@ -117,6 +121,8 @@ function createApp({
     res.locals.pendingCount =
       req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
     res.locals.unassignedAlert = notifier.unassignedBanner(req.user);
+    // 위쪽 메뉴의 문의함 미답변 건수
+    res.locals.openInquiries = req.user && req.user.status === 'active' ? openInquiriesStmt.get().n : 0;
     next();
   });
 
@@ -135,6 +141,7 @@ function createApp({
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
   app.use(requireActive, calendarRoutes(db, notifier));
+  app.use(requireActive, inboxRoutes(db, { ...inbox, notifier }));
   app.use(requireActive, manualRoutes(db, notifier));
   app.use(requireActive, orderRoutes(db, notifier, actions, collector));
 

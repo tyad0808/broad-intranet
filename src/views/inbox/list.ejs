@@ -1,0 +1,116 @@
+<%- include('../partials/header') %>
+<%
+  // 지금 걸린 조건을 유지한 채 하나만 바꾼 주소
+  const link = changes => {
+    const p = new URLSearchParams();
+    const merged = { tab: tab === 'open' ? '' : tab, src, q, ...changes };
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
+    const s = p.toString();
+    return s ? `/inbox?${s}` : '/inbox';
+  };
+%>
+<div class="list-head">
+  <div class="title-row">
+    <h1 class="page-title">문의함</h1>
+    <% if (canCollect) { %>
+      <form method="post" action="/inbox/collect" class="collect-form" data-once>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= currentUrl %>">
+        <button type="submit" class="btn-sm">↻ 지금 받기</button>
+        <% if (lastRun) { %><span class="muted small">마지막 <%= kst(lastRun.at).slice(11) %><%= lastRun.ok ? '' : ' (일부 실패)' %></span><% } %>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<% if (noSources) { %>
+  <section class="card"><p class="muted">아직 연결된 메일이 없습니다. 서버의 <code>.env</code> 에 네이버메일·지메일 계정(앱 비밀번호)을 넣으면 여기로 모입니다.</p></section>
+<% } %>
+<% const practice = Object.entries(modes).filter(([, m]) => m !== 'live').map(([s]) => labelOf(s)); %>
+<% if (practice.length) { %>
+  <p class="practice-note"><strong>연습 모드</strong> <%= practice.join(' · ') %> 답변을 보내도 실제로 나가지 않고 기록만 남깁니다.</p>
+<% } %>
+
+<div id="live-tabs">
+  <nav class="tabs">
+    <% Object.entries(TABS).forEach(([key, label]) => { %>
+      <a href="<%= link({ tab: key === 'open' ? '' : key }) %>" class="<%= tab === key ? 'on' : '' %>"><%= label %> <span class="count"><%= tabCounts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <% if (sources.length > 1) { %>
+    <nav class="stage-chips" aria-label="출처">
+      <span class="chips-label">출처</span>
+      <a href="<%= link({ src: '' }) %>" class="chip <%= src ? '' : 'on' %>">전체</a>
+      <% sources.forEach(s => { const n = sourceCounts[s] || 0; %>
+        <a href="<%= link({ src: s }) %>" class="chip <%= src === s ? 'on' : '' %> <%= n ? '' : 'zero' %>"><span class="src-mark src-<%= s %>"></span><%= labelOf(s) %> <span class="count"><%= n %></span></a>
+      <% }) %>
+    </nav>
+  <% } %>
+</div>
+
+<form method="get" action="/inbox" class="filters">
+  <% if (tab !== 'open') { %><input type="hidden" name="tab" value="<%= tab %>"><% } %>
+  <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
+  <input type="search" name="q" value="<%= q %>" placeholder="제목, 내용, 보낸 사람 검색" aria-label="검색">
+  <button type="submit" class="btn-sm">검색</button>
+</form>
+
+<form id="bulk-form" method="post" action="/inbox/bulk/close" data-once>
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <input type="hidden" name="back" value="<%= currentUrl %>">
+</form>
+
+<div id="live-list" data-feed="inbox">
+<% const anyOpen = rows.some(r => r.status === 'open'); %>
+<% if (anyOpen) { %>
+  <div class="list-toolbar"><label class="check-all"><input type="checkbox" data-check-all> 미답변 모두 선택</label></div>
+<% } %>
+<% if (rows.length === 0) { %>
+  <section class="card"><p class="muted">조건에 맞는 문의가 없습니다.</p></section>
+<% } else { %>
+  <ul class="order-list inbox-list">
+    <% rows.forEach(r => { let files = []; try { files = JSON.parse(r.attachments || '[]'); } catch { files = []; } %>
+      <li class="order-item inbox-item <%= r.status === 'open' ? 'unread' : '' %>">
+        <% if (anyOpen) { %>
+          <span class="oi-check">
+            <% if (r.status === 'open') { %><input type="checkbox" name="ids" value="<%= r.id %>" form="bulk-form" data-can="close" aria-label="선택: <%= r.subject %>"><% } %>
+          </span>
+        <% } %>
+        <a class="oi-main" href="/inbox/<%= r.id %>?back=<%= encodeURIComponent(currentUrl) %>">
+          <div class="oi-head">
+            <span class="src-tag src-<%= r.source %>"><%= labelOf(r.source) %></span>
+            <span class="muted"><strong class="buyer"><%= r.from_name || r.from_addr || '-' %></strong><% if (r.from_name && r.from_addr) { %> &lt;<%= r.from_addr %>&gt;<% } %> · <%= kst(r.received_at) %></span>
+          </div>
+          <div class="oi-name"><%= r.subject %><% if (files.length) { %> <span class="muted small" title="첨부 <%= files.length %>개">📎<%= files.length %></span><% } %></div>
+          <div class="muted inbox-preview"><%= (r.preview || '').replace(/\s+/g, ' ') %></div>
+        </a>
+        <div class="oi-meta">
+          <form method="post" action="/inbox/<%= r.id %>/assign" class="inline" data-autosubmit>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="back" value="<%= currentUrl %>">
+            <select name="assignee_id" class="assign-select <%= r.assignee_id ? '' : 'unassigned' %>" aria-label="담당자">
+              <option value="">담당 미지정</option>
+              <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === r.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
+            </select>
+            <noscript><button type="submit" class="btn-sm">지정</button></noscript>
+          </form>
+          <span class="pill <%= r.status === 'open' ? 'wait' : 'light' %>"><%= STATUS_LABELS[r.status] %></span>
+        </div>
+      </li>
+    <% }) %>
+  </ul>
+  <% if (rows.length >= 300) { %><p class="muted">최근 300건까지만 보입니다. 검색이나 출처로 좁혀 보세요.</p><% } %>
+<% } %>
+</div>
+
+<div id="bulk-bar" class="bulk-bar" hidden>
+  <span><strong data-bulk-count>0</strong>건 선택</span>
+  <button type="submit" form="bulk-form" data-bulk-kind="close"
+          data-confirm="체크한 문의를 '처리 완료'(답변 필요 없음)로 바꿀까요?&#10;메일로는 아무것도 보내지 않습니다.">처리 완료 <span data-n>0</span>건</button>
+  <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>
+</div>
+
+<script src="/confirm.js"></script>
+<script src="/orders.js"></script>
+<script src="/modal.js"></script>
+<%- include('../partials/footer') %>

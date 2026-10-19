@@ -120,6 +120,25 @@
     }, 400);
   }
 
+  // 위쪽 메뉴의 문의함 미답변 건수를 새로 고친다 (어느 화면에서든)
+  let navTimer = null;
+  function refreshNavBadge() {
+    const nav = document.getElementById('main-nav');
+    if (!nav) return;
+    clearTimeout(navTimer);
+    navTimer = setTimeout(async () => {
+      try {
+        const res = await fetch('/inbox?tab=open&src=_none_', { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
+        if (!res.ok || res.redirected) return;
+        const fresh = new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('#main-nav a[href="/inbox"]');
+        const link = nav.querySelector('a[href="/inbox"]');
+        if (fresh && link) link.innerHTML = fresh.innerHTML;
+      } catch {
+        // 다음 소식 때 다시
+      }
+    }, 600);
+  }
+
   // 주문 팝업을 닫을 때 modal.js 가 부른다
   if (liveList) window.refreshOrderList = refreshList;
 
@@ -147,9 +166,17 @@
     if (actorId !== me && typeof window.reloadCalendar === 'function') window.reloadCalendar();
   });
 
+  // 문의함 화면이면 문의함 소식에, 주문 목록이면 주문 소식에 새로 그린다
+  const feed = liveList ? liveList.dataset.feed || 'orders' : null;
+
+  source.addEventListener('inbox-changed', () => {
+    if (feed === 'inbox') refreshList();
+    refreshNavBadge();
+  });
+
   source.addEventListener('orders-changed', e => {
     const { ids, actorId } = JSON.parse(e.data);
-    if (liveList) refreshList();
+    if (feed === 'orders') refreshList();
     if (orderCard && actorId !== me && (ids.length === 0 || ids.includes(Number(orderCard.dataset.orderId)))) {
       showStaleBanner();
     }

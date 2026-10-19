@@ -835,3 +835,40 @@ body.embed .container { padding-top: 56px; }
 .manual-channel-form label.grow { flex: 1 1 240px; }
 .manual-channel-form label.grow input { flex: 1 1 140px; min-width: 0; }
 .manual-channel-form .mark-input input { width: 4em; text-align: center; }
+
+/* ───────── 4차 문의함 ───────── */
+/* 위쪽 주요 메뉴: 주문 / 문의함 */
+.main-nav { display: flex; gap: 4px; margin-right: auto; margin-left: 16px; }
+.main-nav a { padding: 6px 12px; border-radius: 8px; color: var(--muted); text-decoration: none; font-weight: 600; font-size: 15px; white-space: nowrap; }
+.main-nav a.on { color: var(--text); background: var(--bg); }
+.main-nav a:hover { color: var(--text); }
+@media (max-width: 760px) { .main-nav { order: 3; width: 100%; margin: 0; } }
+
+/* 출처 표시 (메일 종류) */
+.src-tag.src-naver_mail { background: #eaf7ea; border-color: #b9e3c0; color: #1a7f37; }
+.src-tag.src-gmail { background: #fdecec; border-color: #f5c2c2; color: #c62828; }
+.src-mark { display: none; }
+
+.inbox-item.unread .oi-name { font-weight: 700; }
+.inbox-item .oi-name { font-weight: 500; }
+.inbox-preview { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; font-size: 13px; }
+.inbox-item .oi-main { min-width: 0; }
+
+/* 문의 본문·답변: 받은 글자 그대로 (줄바꿈 유지) */
+.inquiry-body, .reply-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  max-height: 70vh;
+  overflow-y: auto;
+}
+.reply-body { margin-top: 6px; padding: 8px 10px; font-size: 13px; max-height: 200px; }
+.reply-form { margin-top: 12px; }
+.reply-form textarea { min-height: 160px; }
+.assign-row label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.inquiry-actions { flex-wrap: wrap; align-items: center; margin-top: 12px; }

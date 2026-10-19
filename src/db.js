@@ -196,6 +196,44 @@ function migrate(db) {
       active     INTEGER NOT NULL DEFAULT 1
     );
 
+    -- 4차 문의함: 메일(네이버·지메일)과 쇼핑몰 문의를 한곳에 모은다
+    CREATE TABLE IF NOT EXISTS inquiries (
+      id             INTEGER PRIMARY KEY,
+      source         TEXT    NOT NULL,              -- naver_mail, gmail (4-2부터 smartstore 등)
+      external_id    TEXT    NOT NULL,              -- 출처 안에서 유일한 번호 (메일: 받은편지함 번호)
+      from_name      TEXT,
+      from_addr      TEXT,
+      reply_to       TEXT,                          -- 답장 받을 주소 (메일에 따로 적혀 있으면)
+      subject        TEXT,
+      body           TEXT,                          -- 글자만 (HTML 은 글자로 바꿔 저장)
+      attachments    TEXT,                          -- 첨부파일 이름·크기 JSON
+      message_id     TEXT,                          -- 메일 답장을 같은 대화로 묶기 위한 값
+      references_hdr TEXT,
+      received_at    TEXT    NOT NULL,
+      status         TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'answered', 'closed')),
+      assignee_id    INTEGER REFERENCES users(id),
+      handled_by     INTEGER REFERENCES users(id),  -- 답변하거나 '처리 완료' 한 직원
+      handled_at     TEXT,
+      version        INTEGER NOT NULL DEFAULT 0,
+      created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (source, external_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_inquiries_received ON inquiries(received_at);
+
+    -- 문의 답변 기록 (연습 모드로 보낸 것도 남긴다)
+    CREATE TABLE IF NOT EXISTS inquiry_replies (
+      id          INTEGER PRIMARY KEY,
+      inquiry_id  INTEGER NOT NULL REFERENCES inquiries(id),
+      user_id     INTEGER REFERENCES users(id),
+      body        TEXT    NOT NULL,
+      mode        TEXT    NOT NULL CHECK (mode IN ('live', 'practice')),
+      result      TEXT    NOT NULL CHECK (result IN ('ok', 'fail', 'unknown', 'practice')),
+      message     TEXT,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_inquiry_replies ON inquiry_replies(inquiry_id);
+
     -- 회사 일정 (주문 목록 옆 달력). 승인된 직원 누구나 넣고, 넣은 사람과 관리자만 고치거나 지운다
     CREATE TABLE IF NOT EXISTS events (
       id          INTEGER PRIMARY KEY,

@@ -203,6 +203,26 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 
 ---
 
+## 11. 문의함 — 네이버메일·지메일 연결
+
+메일 비밀번호가 아니라 각 메일에서 발급하는 **앱 비밀번호**를 쓴다 (화면 캡처 금지, `.env` 에만).
+
+1. 네이버메일: 네이버 메일 → 환경설정 → **POP3/IMAP 설정** → IMAP/SMTP **사용함** 저장
+   → 네이버 내정보 → 보안설정 → **2단계 인증** 켠 뒤 **애플리케이션 비밀번호** 발급
+2. 지메일: 구글 계정 → 보안 → **2단계 인증** 켜기 → **앱 비밀번호** 발급
+   (지메일 설정 → 전달 및 POP/IMAP → IMAP 사용 확인)
+3. `nano /opt/broad-intranet/app/.env` 맨 아래에
+   ```
+   NAVER_MAIL_USER=아이디@naver.com
+   NAVER_MAIL_PASS=네이버_앱_비밀번호
+   GMAIL_USER=아이디@gmail.com
+   GMAIL_PASS=구글_앱_비밀번호
+   ```
+4. `systemctl restart broad-intranet` → 인트라넷 위쪽 **문의함** → **↻ 지금 받기** (처음엔 최근 30일치)
+5. 답장을 실제로 보내려면 `.env` 에 `MAIL_SEND=on` → 재시작. 그 전에는 연습 모드
+
+---
+
 ## 평소에 쓰는 명령어 (서버에서)
 
 | 하고 싶은 일 | 명령어 |

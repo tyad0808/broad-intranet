@@ -11,6 +11,13 @@
   <% if (!locals.embed) { %>
   <header class="topbar">
     <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">B</span>통합 어드민(브로애드)</a>
+    <% if (locals.user && user.status === 'active') { %>
+      <%# 주요 메뉴: 주문 / 문의함 (미답변 건수) %>
+      <nav class="main-nav" id="main-nav">
+        <a href="/" class="<%= locals.navSection === 'inbox' || locals.tab ? '' : 'on' %>">주문</a>
+        <a href="/inbox" class="<%= locals.navSection === 'inbox' ? 'on' : '' %>">문의함<% if (locals.openInquiries > 0) { %> <span class="badge"><%= openInquiries %></span><% } %></a>
+      </nav>
+    <% } %>
     <% if (locals.user) { %>
       <nav class="me">
         <% if (user.role === 'admin' && user.status === 'active') { %>

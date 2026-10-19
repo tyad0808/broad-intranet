@@ -1,0 +1,91 @@
+<%- include('../partials/header') %>
+<% if (!locals.embed) { %>
+  <p class="back-row"><a href="<%= back %>" class="btn-back">← 문의함으로</a></p>
+<% } %>
+<% const backQs = back !== '/inbox' ? `?back=${encodeURIComponent(back)}` : ''; %>
+
+<div class="detail" data-inquiry-id="<%= inquiry.id %>">
+  <section class="card">
+    <p class="detail-channel"><span class="src-tag src-<%= inquiry.source %>"><%= label %></span> <span class="pill <%= inquiry.status === 'open' ? 'wait' : 'light' %>"><%= STATUS_LABELS[inquiry.status] %></span></p>
+    <h1 class="detail-title"><%= inquiry.subject %></h1>
+    <dl class="info">
+      <dt>보낸 사람</dt><dd><%= inquiry.from_name || '' %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
+      <% if (inquiry.reply_to) { %><dt>답장 주소</dt><dd><%= inquiry.reply_to %></dd><% } %>
+      <dt>받은 시각</dt><dd><%= kst(inquiry.received_at) %></dd>
+      <% if (attachments.length) { %>
+        <dt>첨부</dt>
+        <dd><% attachments.forEach(a => { %><div><%= a.name %> <span class="muted small">(<%= Math.max(1, Math.round(a.size / 1024)) %>KB)</span></div><% }) %>
+          <div class="muted small">첨부파일은 <%= label %>에서 받아 주세요.</div></dd>
+      <% } %>
+    </dl>
+    <%# 본문은 글자로만 보여준다 (메일 속 스크립트·추적 이미지가 실행되지 않게) %>
+    <div class="inquiry-body"><%= inquiry.body || '(내용 없음)' %></div>
+  </section>
+
+  <div class="detail-side">
+    <section class="card process-card">
+      <h2>답변</h2>
+      <% if (mode !== 'live') { %>
+        <p class="practice-note"><strong>연습 모드</strong> 보내기를 눌러도 <%= label %>로 나가지 않고 기록만 남깁니다.</p>
+      <% } %>
+      <form method="post" action="/inbox/<%= inquiry.id %>/assign" class="inline assign-row" data-autosubmit>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <input type="hidden" name="from" value="detail">
+        <label>담당
+          <select name="assignee_id" class="assign-select <%= inquiry.assignee_id ? '' : 'unassigned' %>">
+            <option value="">담당 미지정</option>
+            <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === inquiry.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
+          </select>
+        </label>
+        <noscript><button type="submit" class="btn-sm">지정</button></noscript>
+      </form>
+
+      <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form" data-once
+            data-confirm="<%= inquiry.reply_to || inquiry.from_addr %> 에게 답변을 보낼까요?&#10;보낸 메일은 되돌릴 수 없습니다.">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <input type="hidden" name="version" value="<%= inquiry.version %>">
+        <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
+          <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
+        </label>
+        <button type="submit" class="wide">답변 보내기</button>
+      </form>
+
+      <div class="form-actions inquiry-actions">
+        <% if (inquiry.status === 'open') { %>
+          <form method="post" action="/inbox/<%= inquiry.id %>/close" class="inline" data-once>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="back" value="<%= back %>">
+            <button type="submit" class="btn-sm" title="광고·알림처럼 답변이 필요 없는 문의">처리 완료 (답변 안 함)</button>
+          </form>
+        <% } else { %>
+          <form method="post" action="/inbox/<%= inquiry.id %>/reopen" class="inline" data-once>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="back" value="<%= back %>">
+            <button type="submit" class="btn-sm">다시 미답변으로</button>
+          </form>
+          <span class="muted small"><%= STATUS_LABELS[inquiry.status] %><%= inquiry.handled_name ? ` · ${inquiry.handled_name}` : '' %><%= inquiry.handled_at ? ` · ${kst(inquiry.handled_at)}` : '' %></span>
+        <% } %>
+        <% if (inquiry.from_name) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.from_name) %>" target="_top">이 이름으로 주문 찾기</a><% } %>
+      </div>
+
+      <% if (replies.length) { %>
+        <h3>답변 기록</h3>
+        <ul class="history">
+          <% replies.forEach(r => { %>
+            <li>
+              <span class="result r-<%= r.result %>"><%= RESULT_LABELS[r.result] %></span>
+              <span class="muted">· <%= r.user_name || '-' %> · <%= kst(r.created_at) %></span>
+              <% if (r.result !== 'ok') { %><div class="muted small"><%= r.message %></div><% } %>
+              <div class="reply-body"><%= r.body %></div>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+  </div>
+</div>
+<script src="/confirm.js"></script>
+<script src="/orders.js"></script>
+<%- include('../partials/footer') %>
