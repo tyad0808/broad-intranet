@@ -28,6 +28,7 @@ const DEFAULTS = {
   autoStart: true,                                         // 윈도우 켤 때 자동 실행
   skipExisting: true,                                      // 처음 켤 때 이미 있던 파일은 받지 않기
   remindMin: 30,                                           // 출력 전인 채 이만큼(분) 지나면 다시 알림 (0 이면 끔)
+  moveDoneOnNas: false,                                    // 출력 완료하면 NAS 원본을 '_출력완료' 폴더로 (디자이너가 NAS 에서 보게)
 };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
@@ -145,8 +146,11 @@ function remind() {
 }
 
 function notify(list) {
-  const title = list.length === 1 ? '새 출력 파일이 왔습니다' : `새 출력 파일 ${list.length}개가 왔습니다`;
-  const lines = list.slice(0, 3).map(e => (e.kind === 'updated' ? '[수정] ' : '') + (e.folder ? e.folder + ' / ' : '') + e.name);
+  const urgent = list.filter(e => e.urgent).length;
+  list = list.slice().sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0)); // 급한 것을 먼저
+  const title = (urgent ? `[급] ` : '') + (list.length === 1 ? '새 출력 파일이 왔습니다' : `새 출력 파일 ${list.length}개가 왔습니다`) +
+    (urgent && list.length > 1 ? ` (급 ${urgent}개)` : '');
+  const lines = list.slice(0, 3).map(e => (e.urgent ? '[급] ' : '') + (e.kind === 'updated' ? '[수정] ' : '') + (e.folder ? e.folder + ' / ' : '') + e.name);
   if (list.length > 3) lines.push(`외 ${list.length - 3}개`);
   if (Notification.isSupported()) {
     // 소리는 창에서 따로 낸다 (반복 기능 때문에). 소리를 껐을 때도 알림은 조용히
@@ -154,7 +158,8 @@ function notify(list) {
     n.on('click', showWindow);
     n.show();
   }
-  if (config.sound && win && !win.isDestroyed()) win.webContents.send('chime', { repeat: config.repeatSound });
+  // 급한 파일은 '확인할 때까지 반복' 을 꺼 두었어도 반복한다
+  if (config.sound && win && !win.isDestroyed()) win.webContents.send('chime', { repeat: config.repeatSound || urgent > 0, urgent: urgent > 0 });
 }
 
 // ---- 창 ----
@@ -241,10 +246,15 @@ ipcMain.handle('show-in-folder', async (_e, id) => {
 ipcMain.handle('open-dest', () => shell.openPath(config.dest));
 ipcMain.handle('mark-seen', (_e, id) => markSeen(id));
 ipcMain.handle('mark-done', async (_e, id, done) => {
-  if (!syncer) return;
-  if (id === 'all') { for (const h of syncer.history) if (!h.done && !h.replaced) await syncer.markDone(h.id, true); }
-  else await syncer.markDone(id, done);
+  if (!syncer) return '';
+  const opt = { moveOnNas: !!config.moveDoneOnNas }, warnings = [];
+  const ids = id === 'all' ? syncer.history.filter(h => !h.done && !h.replaced).map(h => h.id) : [id];
+  for (const x of ids) {
+    const r = await syncer.markDone(x, id === 'all' ? true : done, opt);
+    if (r.warning) warnings.push(r.warning);
+  }
   send();
+  return warnings.length ? warnings[0] + (warnings.length > 1 ? ` 외 ${warnings.length - 1}건` : '') : '';
 });
 ipcMain.handle('check-now', () => checkNow());
 ipcMain.handle('toggle-pause', () => togglePause());

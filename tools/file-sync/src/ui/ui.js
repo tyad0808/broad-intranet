@@ -18,6 +18,15 @@
     if (d.toDateString() === y.toDateString()) return '어제 ' + hm;
     return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
   }
+  // 크기 정보 한 줄 (core/fileinfo.js 의 formatInfo 와 같게)
+  function fmtInfo(info) {
+    if (!info) return '';
+    const mm = (w, h) => `${Math.round(w)}×${Math.round(h)}mm`;
+    if (info.kind === 'vector') {
+      return mm(info.widthMm, info.heightMm) + (info.pages > 1 ? ` · ${info.pages}쪽` + (info.mixed ? ' (크기 다름)' : '') : '');
+    }
+    return `${info.px[0]}×${info.px[1]}px` + (info.dpi ? ` · ${info.dpi}dpi · ${mm(info.widthMm, info.heightMm)}` : '');
+  }
   function el(tag, cls, text) {
     const e = document.createElement(tag);
     if (cls) e.className = cls;
@@ -57,27 +66,35 @@
     const q = $('search').value.trim().toLowerCase();
     const inTab = h => tab === 'all' || (tab === 'pending' ? isPending(h) : h.done);
     const list = state.history.filter(h => inTab(h) && (!q || (h.folder + '/' + h.name).toLowerCase().includes(q)));
+    // 출력 전인 급한 파일을 맨 위로 (나머지는 받은 순서 그대로)
+    list.sort((a, b) => (isPending(b) && b.urgent ? 1 : 0) - (isPending(a) && a.urgent ? 1 : 0));
     const tbody = $('rows');
     tbody.textContent = '';
     for (const h of list) {
-      const tr = el('tr', [h.seen ? '' : 'unseen', h.done ? 'done' : '', h.replaced && !h.done ? 'replaced' : ''].join(' ').trim());
+      const tr = el('tr', [h.seen ? '' : 'unseen', h.done ? 'done' : '', h.replaced && !h.done ? 'replaced' : '', h.urgent && isPending(h) ? 'urgent' : ''].join(' ').trim());
       // 출력 완료 체크
       const doneTd = el('td', 'c-done');
       const box = document.createElement('input');
       box.type = 'checkbox';
       box.checked = !!h.done;
       box.title = h.done ? '출력 완료 (누르면 풀기)' : '출력 프로그램에서 열었으면 체크';
-      box.onclick = e => { e.stopPropagation(); window.api.markDone(h.id, box.checked); };
+      box.onclick = async e => {
+        e.stopPropagation();
+        const warning = await window.api.markDone(h.id, box.checked);
+        if (warning) toast(warning);
+      };
       doneTd.appendChild(box);
       // 이름 + 표시
       const name = el('td');
       name.appendChild(el('div', 'name', h.name));
       const tags = el('div', 'tags');
+      if (h.urgent) tags.appendChild(el('span', 'tag urgent', '급'));
       if (!h.seen) tags.appendChild(el('span', 'tag', '새'));
       if (h.kind === 'updated') tags.appendChild(el('span', 'tag updated', '수정본'));
       if (h.done) tags.appendChild(el('span', 'tag done', '출력 완료 ' + fmtTime(h.doneAt)));
       else if (h.replaced) tags.appendChild(el('span', 'tag replaced', '새 버전으로 바뀜'));
       if (h.openedAt) tags.appendChild(el('span', '', '열어봄 ' + fmtTime(h.openedAt)));
+      if (h.nasDone) tags.appendChild(el('span', '', 'NAS: _출력완료'));
       if (h.folder) tags.appendChild(el('span', 'folder', h.folder));
       name.appendChild(tags);
       const act = el('td', 'c-act');
@@ -86,7 +103,10 @@
       const folder = el('button', '', '폴더');
       folder.onclick = e => { e.stopPropagation(); window.api.showInFolder(h.id); };
       act.append(open, folder);
-      tr.append(doneTd, name, el('td', 'c-size', fmtSize(h.size)), el('td', 'c-time', fmtTime(h.receivedAt)), act);
+      const sizeTd = el('td', 'c-size');
+      if (h.info) sizeTd.appendChild(el('div', 'spec', fmtInfo(h.info)));
+      sizeTd.appendChild(el('div', 'bytes', fmtSize(h.size)));
+      tr.append(doneTd, name, sizeTd, el('td', 'c-time', fmtTime(h.receivedAt)), act);
       tr.title = h.localPath;
       tr.onclick = () => { if (!h.seen) window.api.markSeen(h.id); };
       tr.ondblclick = () => open.onclick(new Event('click'));
@@ -138,7 +158,7 @@
   });
 
   // ---- 설정 ----
-  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin'], CHECKS = ['sound', 'repeatSound', 'autoStart', 'skipExisting'];
+  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin'], CHECKS = ['sound', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas'];
   function openSettings() {
     const c = state.config;
     FIELDS.forEach(k => { $(k).value = c[k]; });
@@ -185,7 +205,9 @@
   $('pause').onclick = () => window.api.togglePause();
   $('openDest').onclick = () => window.api.openDest();
   $('doneAll').onclick = () => {
-    if (confirm(`출력 전인 ${state.pending}개를 모두 출력 완료로 체크할까요?`)) window.api.markDone('all', true);
+    if (confirm(`출력 전인 ${state.pending}개를 모두 출력 완료로 체크할까요?`)) {
+      window.api.markDone('all', true).then(w => { if (w) toast(w); });
+    }
   };
   document.querySelectorAll('[data-tab]').forEach(b => {
     b.onclick = () => {

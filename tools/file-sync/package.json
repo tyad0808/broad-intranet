@@ -1,14 +1,14 @@
 {
   "name": "broad-file-sync",
   "productName": "BroadFileSync",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "브로애드 파일 받기: NAS 에 올린 파일을 출력 컴퓨터로 자동으로 받아 목록과 알림으로 보여 준다",
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
     "icons": "node scripts/make-icons.js",
-    "package:win": "electron-packager . BroadFileSync --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=^/dist --ignore=^/scripts"
+    "package:win": "electron-packager . BroadFileSync --platform=win32 --arch=x64 --out=dist --overwrite --asar --ignore=^/dist --ignore=^/scripts --ignore=^/README.md"
   },
   "devDependencies": {
     "@electron/packager": "20.3.0",

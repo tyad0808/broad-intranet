@@ -203,3 +203,62 @@ test('같은 파일의 새 버전이 오면 출력 전이던 옛 버전은 바�
   assert.strictEqual(v1.replaced, true);
   assert.strictEqual(sync.pending, 1, '새 버전만 출력 전');
 });
+
+const { isUrgent } = require('../tools/file-sync/src/core/sync.js');
+
+test('급한 파일 알아보기: [급] (급) 긴급, 앞뒤가 띄어진 급. 고급명함은 아님', () => {
+  for (const rel of ['[급] 현수막.pdf', '현수막(급).ai', '급_명함.pdf', '명함_급.pdf', '급 배너.pdf', '긴급현수막.pdf', '급/현수막.pdf', '홍길동 [급]/a.pdf', 'URGENT-sign.pdf']) {
+    assert.ok(isUrgent(rel), rel);
+  }
+  for (const rel of ['고급명함.pdf', '급식실 안내.pdf', '등급표.pdf', '현수막.pdf', '고급/명함.pdf']) {
+    assert.ok(!isUrgent(rel), rel);
+  }
+});
+
+test('받을 때 크기 정보와 급 표시를 기록에 남긴다', async t => {
+  const s = setup(t);
+  const sync = s.make();
+  await sync.tick();
+  fs.copyFileSync(path.join(__dirname, 'fixtures', 'file-sync', 'banner-3000x900.pdf'), path.join(s.nas, '[급] 현수막.pdf'));
+  await sync.tick();
+  const [e] = (await sync.tick()).received;
+  assert.strictEqual(e.urgent, true);
+  assert.strictEqual(Math.round(e.info.widthMm), 3000);
+  assert.strictEqual(Math.round(e.info.heightMm), 900);
+});
+
+test('출력 완료하면 NAS 원본을 _출력완료 로 옮기고, 풀면 제자리로 (다시 받지 않음)', async t => {
+  const s = setup(t);
+  const sync = s.make();
+  await sync.tick();
+  s.put('홍길동/현수막.pdf', 'v1');
+  await sync.tick(); await sync.tick();
+  const h = sync.history[0];
+
+  const r = await sync.markDone(h.id, true, { moveOnNas: true });
+  assert.strictEqual(r.warning, undefined);
+  assert.ok(!fs.existsSync(path.join(s.nas, '홍길동', '현수막.pdf')));
+  assert.ok(fs.existsSync(path.join(s.nas, '_출력완료', '홍길동', '현수막.pdf')), '하위 폴더 그대로 _출력완료 안에');
+  assert.strictEqual(h.nasDone, '_출력완료/홍길동/현수막.pdf');
+  await sync.tick(); await sync.tick();
+  assert.strictEqual(sync.history.length, 1, '_출력완료 폴더는 받지 않는다');
+
+  await sync.markDone(h.id, false);
+  assert.ok(fs.existsSync(path.join(s.nas, '홍길동', '현수막.pdf')), '풀면 제자리로');
+  assert.strictEqual(h.nasDone, null);
+  await sync.tick(); await sync.tick();
+  assert.strictEqual(sync.history.length, 1, '제자리로 돌린 것을 또 받지 않는다');
+});
+
+test('NAS 파일이 받은 뒤에 바뀌었으면 옮기지 않고 알려 준다 (출력 완료 체크는 된다)', async t => {
+  const s = setup(t);
+  const sync = s.make();
+  await sync.tick();
+  s.put('시안.pdf', 'v1', new Date('2026-10-01'));
+  await sync.tick(); await sync.tick();
+  s.put('시안.pdf', 'version 2', new Date('2026-10-02')); // 새 버전이 막 올라옴
+  const r = await sync.markDone(sync.history[0].id, true, { moveOnNas: true });
+  assert.match(r.warning, /바뀌었습니다/);
+  assert.strictEqual(sync.history[0].done, true);
+  assert.ok(fs.existsSync(path.join(s.nas, '시안.pdf')), '새 버전은 그대로');
+});

@@ -34,7 +34,7 @@ tr:last-child td { border-bottom: 0; }
 tr.unseen td { background: var(--row-new); }
 tr.unseen .name { font-weight: bold; }
 tr { cursor: default; }
-.c-done { width: 46px; text-align: center; } .c-size { width: 70px; text-align: right; } .c-time { width: 96px; } .c-act { width: 120px; text-align: right; }
+.c-done { width: 46px; text-align: center; } .c-size { width: 150px; text-align: right; } .c-time { width: 96px; } .c-act { width: 120px; text-align: right; }
 td.c-size { text-align: right; color: var(--muted); } td.c-time { color: var(--muted); }
 .kind { font-size: 11px; padding: 1px 6px; border-radius: 4px; color: #fff; background: var(--new); }
 .kind.updated { background: var(--upd); }
@@ -71,3 +71,9 @@ tr.replaced td { opacity: .45; }
 .tag.updated { background: var(--upd); }
 .tag.done { background: var(--ok); }
 .tag.replaced { background: var(--off); }
+
+.grid .full { grid-column: 1 / -1; }
+td.c-size .spec { color: var(--text); font-weight: bold; white-space: nowrap; }
+td.c-size .bytes { font-size: 11px; }
+tr.urgent td:first-child { box-shadow: inset 4px 0 0 var(--new); }
+.tag.urgent { background: #b91c1c; font-weight: bold; }

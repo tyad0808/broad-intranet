@@ -8,9 +8,22 @@
 const fs = require('node:fs');
 const fsp = fs.promises;
 const path = require('node:path');
+const { readInfo } = require('./fileinfo');
+
+// 출력 완료한 NAS 원본을 옮겨 두는 폴더 (NAS 폴더 바로 아래). 받기에서는 건너뛴다
+const DONE_DIR = '_출력완료';
+
+// 급한 파일: 이름이나 폴더에 [급] (급) 긴급, 또는 앞·뒤가 띄어진 '급' (급_현수막, 현수막_급.pdf)
+// '고급명함' 처럼 낱말 속의 '급' 은 아니다
+function isUrgent(rel) {
+  return rel.split('/').some(seg => {
+    const base = seg.replace(/\.[^.]+$/, '');
+    return /\[급\]|\(급\)|긴급|urgent/i.test(seg) || /(^|[\s_\-.])급($|[\s_\-.])/.test(base);
+  });
+}
 
 // NAS·윈도우·맥이 만드는 시스템 파일, 올리는 중인 임시 파일은 건너뛴다
-const IGNORE_EXACT = new Set(['thumbs.db', 'desktop.ini', '.ds_store', '@eadir', '#recycle', '#snapshot', '.recycle', '$recycle.bin']);
+const IGNORE_EXACT = new Set(['thumbs.db', 'desktop.ini', '.ds_store', '@eadir', '#recycle', '#snapshot', '.recycle', '$recycle.bin', DONE_DIR]);
 function isIgnored(name) {
   const n = name.toLowerCase();
   return IGNORE_EXACT.has(n) || n.startsWith('~$') || n.startsWith('._') || n.startsWith('.~') ||
@@ -154,6 +167,8 @@ class Syncer {
           id: this.state.nextId++, rel, name: path.posix.basename(rel), folder: path.posix.dirname(rel) === '.' ? '' : path.posix.dirname(rel),
           size: info.size, mtimeMs: info.mtimeMs, receivedAt: this.now(), kind: k ? 'updated' : 'new', seen: false, localPath,
           done: false, doneAt: null, openedAt: null,
+          urgent: isUrgent(rel),
+          info: await readInfo(localPath), // 3000×900mm / 4724×1417px · 150dpi 같은 크기 정보
         };
         // 같은 파일의 옛 버전이 출력 전이면 '새 버전으로 바뀜' (옛 버전을 잘못 출력하지 않게)
         for (const old of this.state.history) if (old.rel === rel && isPending(old)) old.replaced = true;
@@ -213,15 +228,49 @@ class Syncer {
     return changed;
   }
 
-  // 출력 완료 체크 (done=false 면 풀기). 체크하면 알림도 본 것으로
-  async markDone(id, done = true) {
+  // 출력 완료 체크 (done=false 면 풀기). 체크하면 알림도 본 것으로.
+  // moveOnNas 면 NAS 원본을 '_출력완료' 폴더로 옮긴다 (풀면 제자리로). 결과: { ok, warning? }
+  async markDone(id, done = true, { moveOnNas = false } = {}) {
     const h = this.state.history.find(x => x.id === id);
-    if (!h) return false;
+    if (!h) return { ok: false };
     h.done = !!done;
     h.doneAt = done ? this.now() : null;
     if (done) h.seen = true;
+    let warning;
+    try {
+      if (done && moveOnNas && !h.nasDone) await this.moveToDone(h);
+      if (!done && h.nasDone) await this.moveBack(h);
+    } catch (e) {
+      warning = 'NAS 원본을 옮기지 못했습니다: ' + (e.code || e.message);
+    }
     await this.save();
-    return true;
+    return { ok: true, warning };
+  }
+
+  async moveToDone(h) {
+    const src = toPath(this.source, h.rel);
+    const st = await fsp.stat(src).catch(() => null);
+    if (!st) throw new Error('NAS 에 원본이 없습니다');
+    // 받은 뒤에 NAS 파일이 바뀌었으면 (새 버전) 옮기지 않는다
+    if (st.size !== h.size || Math.floor(st.mtimeMs) !== h.mtimeMs) throw new Error('NAS 파일이 받은 뒤에 바뀌었습니다');
+    let dst = toPath(this.source, DONE_DIR + '/' + h.rel);
+    await fsp.mkdir(path.dirname(dst), { recursive: true });
+    if (await fsp.access(dst).then(() => true, () => false)) dst = await freeName(dst);
+    await fsp.rename(src, dst);
+    h.nasDone = path.relative(this.source, dst).split(path.sep).join('/');
+    // 이 파일은 이제 받을 목록에서 빠진다 (다시 올리면 새로 받는다)
+    delete this.state.known[h.rel];
+  }
+
+  async moveBack(h) {
+    const from = toPath(this.source, h.nasDone), to = toPath(this.source, h.rel);
+    if (await fsp.access(to).then(() => true, () => false)) throw new Error('제자리에 같은 이름 파일이 다시 올라와 있습니다');
+    await fsp.mkdir(path.dirname(to), { recursive: true });
+    await fsp.rename(from, to);
+    const st = await fsp.stat(to);
+    // 제자리로 돌린 것을 새 파일로 또 받지 않게
+    this.state.known[h.rel] = { size: st.size, mtimeMs: Math.floor(st.mtimeMs) };
+    h.nasDone = null;
   }
 
   // 이 앱의 [열기] 로 연 시각
@@ -240,4 +289,4 @@ class Syncer {
   }
 }
 
-module.exports = { Syncer, scan, isIgnored };
+module.exports = { Syncer, scan, isIgnored, isUrgent, DONE_DIR };

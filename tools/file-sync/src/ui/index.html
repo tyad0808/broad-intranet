@@ -30,7 +30,7 @@
 
   <main>
     <table>
-      <thead><tr><th class="c-done">출력</th><th>파일</th><th class="c-size">크기</th><th class="c-time">받은 시각</th><th class="c-act"></th></tr></thead>
+      <thead><tr><th class="c-done">출력</th><th>파일</th><th class="c-size">규격 · 용량</th><th class="c-time">받은 시각</th><th class="c-act"></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
     <div id="empty" class="empty"></div>
@@ -54,6 +54,7 @@
         <label class="check"><input id="repeatSound" type="checkbox"> 확인할 때까지 소리 반복</label>
         <label class="check"><input id="autoStart" type="checkbox"> 윈도우 켤 때 자동 실행</label>
         <label class="check"><input id="skipExisting" type="checkbox"> 처음 켤 때 NAS 에 있던 파일은 받지 않기</label>
+        <label class="check full"><input id="moveDoneOnNas" type="checkbox"> 출력 완료하면 NAS 원본을 '_출력완료' 폴더로 옮기기 (디자이너가 NAS 에서 출력됐는지 볼 수 있게, 체크를 풀면 제자리로)</label>
       </div>
       <div class="row">
         <button id="testSound">소리 들어보기</button>
