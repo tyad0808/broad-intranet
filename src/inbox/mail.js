@@ -270,7 +270,11 @@ function createMailFiles(account, { connect = acc => defaultConnect(acc) } = {})
         if (String(client.mailbox.uidValidity) !== validity) throw Object.assign(new Error('메일함이 바뀌어 이 메일을 찾을 수 없습니다.'), { status: 404 });
         const meta = await client.fetchOne(uid, { uid: true, bodyStructure: true }, { uid: true });
         if (!meta) throw Object.assign(new Error('메일함에서 지워진 메일입니다.'), { status: 404 });
-        const file = attachmentParts(meta.bodyStructure)[Number(index)];
+        // 예전 방식으로 저장된 목록은 순서가 다를 수 있어 이름으로 먼저 찾는다
+        const parts = attachmentParts(meta.bodyStructure);
+        let expected = null;
+        try { expected = (JSON.parse(inquiry.attachments || '[]')[Number(index)] || {}).name || null; } catch { expected = null; }
+        const file = (expected && parts.find(p => p.name === expected)) || parts[Number(index)];
         if (!file) throw Object.assign(new Error('첨부파일을 찾을 수 없습니다.'), { status: 404 });
         const dl = await client.download(uid, file.part, { uid: true });
         if (!dl || !dl.content) throw Object.assign(new Error('첨부파일을 가져오지 못했습니다.'), { status: 404 });
