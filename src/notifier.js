@@ -152,7 +152,21 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
     notify('signup', { title: '가입 신청', body: message, url: '/admin/users' }, admins);
   }
 
-  return { hub, notify, ordersChanged, inboxChanged, calendarChanged, checkUnassigned, afterCollect, signup, unassignedCount, unassignedBanner };
+  // 저장 공간: 디스크가 기준(80%)을 넘으면 관리자에게 하루 한 번 알린다
+  function checkStorage(info, today) {
+    if (!info.alert) return false;
+    if (setting('storage_alert_day') === today) return false;
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .run('storage_alert_day', today);
+    notify('storage', {
+      title: '서버 저장 공간 부족',
+      body: `디스크를 ${info.disk.percent}% 쓰고 있습니다. 관리자 → 저장 공간에서 확인하세요.`,
+      url: '/admin/storage',
+    }, admins);
+    return true;
+  }
+
+  return { hub, notify, ordersChanged, inboxChanged, calendarChanged, checkUnassigned, checkStorage, afterCollect, signup, unassignedCount, unassignedBanner };
 }
 
 module.exports = { createNotifier };

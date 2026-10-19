@@ -73,6 +73,11 @@ const app = createApp({ db, collector, notifier, actions, inbox });
 // 미지정 초과 알림: 1분마다 확인 (해소될 때까지 정해진 간격으로 다시 알림)
 setInterval(() => notifier.checkUnassigned(), 60 * 1000).unref();
 
+// 저장 공간: 1시간마다 확인해 80% 를 넘으면 관리자에게 하루 한 번 알림
+const { storageInfo } = require('./storage');
+const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+setInterval(() => notifier.checkStorage(storageInfo(), kstDay()), 60 * 60 * 1000).unref();
+
 // 만료된 로그인 정보를 1시간마다 정리
 setInterval(() => app.locals.sessionStore.cleanup(), 60 * 60 * 1000).unref();
 

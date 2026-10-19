@@ -4,6 +4,7 @@ const express = require('express');
 const { collectFlash } = require('./orders');
 const { transaction } = require('../db');
 const { CHANNELS } = require('../channels/labels');
+const { storageInfo, humanSize } = require('../storage');
 
 const STATUS_LABELS = {
   pending: '승인 대기',
@@ -348,6 +349,15 @@ function adminRoutes(db, sessionStore, collector, notifier) {
   });
 
   // ───────── 주문 수집 상태 ─────────
+  // ───────── 저장 공간 ─────────
+  router.get('/storage', (req, res) => {
+    const counts = db.prepare(`
+      SELECT (SELECT COUNT(*) FROM orders) AS orders, (SELECT COUNT(*) FROM inquiries) AS inquiries,
+        (SELECT COALESCE(SUM(LENGTH(body)), 0) FROM inquiries) AS inquiry_bytes
+    `).get();
+    res.render('admin/storage', { title: '저장 공간', tab: 'storage', info: storageInfo(), counts, humanSize });
+  });
+
   router.get('/collect', (req, res) => {
     const runs = db.prepare('SELECT * FROM collect_runs ORDER BY id DESC LIMIT 10').all();
     const recent = db.prepare(`

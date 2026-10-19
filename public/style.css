@@ -872,3 +872,8 @@ body.embed .container { padding-top: 56px; }
 .reply-form textarea { min-height: 160px; }
 .assign-row label { display: flex; align-items: center; gap: 8px; margin: 0; }
 .inquiry-actions { flex-wrap: wrap; align-items: center; margin-top: 12px; }
+
+/* 관리자 → 저장 공간: 사용량 막대 */
+.meter { height: 14px; border-radius: 7px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; margin: 8px 0 10px; }
+.meter span { display: block; height: 100%; background: var(--primary); }
+.meter.alert span { background: var(--error); }

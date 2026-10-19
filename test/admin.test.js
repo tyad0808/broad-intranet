@@ -187,3 +187,25 @@ test('수기 주문 출처를 추가·이름변경·순서변경·숨기기 하�
   await press(admin, '/admin/manual-channel', { name: '', mark: '' }, page);
   assert.match((await admin.request('/')).text, /<span class="ch ch-manual">수<\/span>수기 주문/);
 });
+
+test('저장 공간: 디스크·DB·백업 크기를 보여주고, 80% 를 넘으면 관리자에게 하루 한 번만 알린다', async t => {
+  const { db, admin } = await setup(t);
+  const page = (await admin.request('/admin/storage')).text;
+  assert.match(page, /서버 디스크/);
+  assert.match(page, /인트라넷 데이터/);
+
+  const { storageInfo, humanSize } = require('../src/storage');
+  const statfs = () => ({ bsize: 1024, blocks: 100, bfree: 15, bavail: 10 });
+  const info = storageInfo({ dbPath: '/nonexistent/x.db', backupDir: '/nonexistent', statfs });
+  assert.deepStrictEqual([info.disk.percent, info.alert, info.disk.free], [85, true, 10240]);
+  assert.strictEqual(humanSize(1536 * 1024 * 1024), '1.5GB');
+
+  const { createNotifier } = require('../src/notifier');
+  const sent = [];
+  const notifier = createNotifier({ db, hub: { send: (event, data) => sent.push(data) } });
+  assert.strictEqual(notifier.checkStorage(info, '2026-10-19'), true);
+  assert.strictEqual(notifier.checkStorage(info, '2026-10-19'), false, '같은 날은 한 번만');
+  assert.strictEqual(notifier.checkStorage(info, '2026-10-20'), true);
+  assert.strictEqual(notifier.checkStorage({ ...info, alert: false }, '2026-10-21'), false);
+  assert.match(sent[0].body, /85%/);
+});

@@ -1,0 +1,30 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<section class="card">
+  <h2>서버 디스크</h2>
+  <% if (info.disk) { %>
+    <div class="meter <%= info.alert ? 'alert' : '' %>" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<%= info.disk.percent %>" aria-label="디스크 사용량">
+      <span style="width: <%= Math.min(100, info.disk.percent) %>%"></span>
+    </div>
+    <p><strong><%= info.disk.percent %>%</strong> 사용 중 · 남은 공간 <strong><%= humanSize(info.disk.free) %></strong> / 전체 <%= humanSize(info.disk.total) %></p>
+    <% if (info.alert) { %>
+      <p class="error">디스크를 <%= info.ALERT_PERCENT %>% 넘게 쓰고 있습니다. 오래된 백업이나 서버의 다른 파일을 정리해야 합니다.</p>
+    <% } else { %>
+      <p class="muted"><%= info.ALERT_PERCENT %>% 를 넘으면 관리자에게 하루 한 번 알림이 갑니다.</p>
+    <% } %>
+  <% } else { %>
+    <p class="muted">디스크 정보를 읽지 못했습니다.</p>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>인트라넷 데이터</h2>
+  <dl class="info">
+    <dt>DB</dt><dd><%= humanSize(info.db) %> <span class="muted small">(주문 <%= counts.orders.toLocaleString() %>줄 · 문의 <%= counts.inquiries.toLocaleString() %>건, 문의 본문 <%= humanSize(counts.inquiry_bytes) %>)</span></dd>
+    <dt>백업</dt><dd><%= humanSize(info.backups.size) %> <span class="muted small">(<%= info.backups.count %>개<%= info.backups.latest ? ` · 최근 ${info.backups.latest}` : '' %>)</span></dd>
+  </dl>
+  <p class="muted small">백업은 매일 새벽 3시에 압축해서 저장하고 14일치를 보관합니다. 메일은 본문 글자만 저장하고 첨부파일은 저장하지 않습니다.</p>
+</section>
+<%- include('../partials/footer') %>

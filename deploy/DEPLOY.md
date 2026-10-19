@@ -234,7 +234,7 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 | 지금 바로 백업 | `systemctl start broad-intranet-backup` |
 | 백업 목록 | `ls -lh /var/lib/broad-intranet/backups` |
 
-- 백업은 매일 새벽 3시 자동, 14일치 보관 (`/var/lib/broad-intranet/backups`)
+- 백업은 매일 새벽 3시 자동, 14일치 보관, 압축(.db.gz) 저장 (`/var/lib/broad-intranet/backups`)
 - 서버가 재부팅돼도 인트라넷은 자동으로 다시 켜집니다
 - 보안 업데이트는 매일 자동 설치됩니다
 
@@ -243,7 +243,8 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 ```bash
 systemctl stop broad-intranet
 cp /var/lib/broad-intranet/intranet.db /var/lib/broad-intranet/intranet.db.before-restore
-cp /var/lib/broad-intranet/backups/intranet-날짜-시각.db /var/lib/broad-intranet/intranet.db
+# 백업은 압축(.db.gz)되어 있으므로 풀어서 넣는다 (예전 .db 백업이면 cp 로 복사)
+gunzip -c /var/lib/broad-intranet/backups/intranet-날짜-시각.db.gz > /var/lib/broad-intranet/intranet.db
 rm -f /var/lib/broad-intranet/intranet.db-wal /var/lib/broad-intranet/intranet.db-shm
 chown intranet:intranet /var/lib/broad-intranet/intranet.db
 systemctl start broad-intranet
