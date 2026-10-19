@@ -146,3 +146,60 @@ test('기존 파일 건너뛰기를 끄거나 지금 있는 것 모두 받기를
   await sync2.tick();
   assert.strictEqual((await sync2.tick()).received.length, 1);
 });
+
+test('출력 완료 체크: 출력 전 개수, 시각, 풀기, 껐다 켜도 유지', async t => {
+  let clock = 1000;
+  const s = setup(t, { now: () => clock });
+  let sync = s.make();
+  await sync.tick();
+  s.put('a.pdf', '1'); s.put('b.pdf', '2');
+  await sync.tick(); await sync.tick();
+  assert.strictEqual(sync.pending, 2);
+  const a = sync.history.find(h => h.name === 'a.pdf');
+  clock = 5000;
+  await sync.markDone(a.id);
+  assert.strictEqual(sync.pending, 1);
+  assert.strictEqual(a.doneAt, 5000);
+  assert.strictEqual(a.seen, true, '출력 완료면 알림도 본 것');
+  await sync.markDone(a.id, false);
+  assert.strictEqual(sync.pending, 2, '잘못 눌렀으면 풀 수 있다');
+  await sync.markDone(a.id);
+
+  sync = await s.make({ now: () => clock }).load();
+  assert.strictEqual(sync.pending, 1);
+  assert.strictEqual(sync.history.find(h => h.name === 'a.pdf').done, true);
+});
+
+test('열어봄 표시와, 출력 전인 채 오래된 파일 찾기 (다시 알림용)', async t => {
+  let clock = 0;
+  const s = setup(t, { now: () => clock });
+  const sync = s.make();
+  await sync.tick();
+  s.put('오래된.pdf', '1');
+  await sync.tick(); await sync.tick();
+  clock = 20 * 60e3;
+  s.put('방금.pdf', '2');
+  await sync.tick(); await sync.tick();
+  clock = 31 * 60e3;
+  assert.deepStrictEqual(sync.stale(30 * 60e3).map(h => h.name), ['오래된.pdf']);
+  const old = sync.history.find(h => h.name === '오래된.pdf');
+  await sync.markOpened(old.id);
+  assert.strictEqual(old.openedAt, clock);
+  assert.strictEqual(old.done, false, '열어 본 것은 출력 완료가 아니다');
+  await sync.markDone(old.id);
+  assert.deepStrictEqual(sync.stale(30 * 60e3), []);
+});
+
+test('같은 파일의 새 버전이 오면 출력 전이던 옛 버전은 바뀜 표시, 출력 전 개수에서 뺀다', async t => {
+  const s = setup(t);
+  const sync = s.make();
+  await sync.tick();
+  s.put('시안.pdf', 'v1', new Date('2026-10-01'));
+  await sync.tick(); await sync.tick();
+  s.put('시안.pdf', 'version 2', new Date('2026-10-02'));
+  await sync.tick(); await sync.tick();
+  const [v2, v1] = sync.history;
+  assert.strictEqual(v2.kind, 'updated');
+  assert.strictEqual(v1.replaced, true);
+  assert.strictEqual(sync.pending, 1, '새 버전만 출력 전');
+});

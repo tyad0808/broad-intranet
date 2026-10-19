@@ -47,6 +47,7 @@ async function scan(root, maxDepth = 12) {
 }
 
 const toPath = (root, rel) => path.join(root, ...rel.split('/'));
+const isPending = h => !h.done && !h.replaced;
 
 // 같은 이름 파일을 바꿀 수 없을 때(출력 프로그램이 열고 있는 등) 쓸 다른 이름: '이름 (2).확장자'
 async function freeName(file) {
@@ -77,7 +78,7 @@ class Syncer {
     this.skipExisting = o.skipExisting !== false;
     this.historyLimit = o.historyLimit || 1000;
     this.now = o.now || Date.now;
-    this.pending = new Map();
+    this.waiting = new Map(); // 올라가는 중인지 지켜보는 파일
     this.state = null;
   }
 
@@ -103,7 +104,15 @@ class Syncer {
   }
 
   get history() { return this.state.history; }
+  // 알림을 아직 안 본 것 (새로 온 것)
   get unseen() { return this.state.history.filter(h => !h.seen).length; }
+  // 출력 전: 출력 완료 체크를 안 했고, 새 버전으로 바뀌지도 않은 것
+  get pending() { return this.state.history.filter(isPending).length; }
+  // 출력 전인 채로 ms 넘게 지난 것 (다시 알림용)
+  stale(ms) {
+    const limit = this.now() - ms;
+    return this.state.history.filter(h => isPending(h) && h.receivedAt <= limit);
+  }
 
   // 한 번 살펴보기. 결과: { status: 'ok' | 'offline', received: [기록], errors: [{ rel, message }], baseline? }
   async tick() {
@@ -131,9 +140,9 @@ class Syncer {
     for (const [rel, info] of files) {
       const k = known[rel];
       if (k && k.size === info.size && k.mtimeMs === info.mtimeMs) continue;
-      const p = this.pending.get(rel);
+      const p = this.waiting.get(rel);
       if (!p || p.size !== info.size || p.mtimeMs !== info.mtimeMs) {
-        this.pending.set(rel, { size: info.size, mtimeMs: info.mtimeMs, ticks: 1 });
+        this.waiting.set(rel, { size: info.size, mtimeMs: info.mtimeMs, ticks: 1 });
         if (this.stableTicks > 1) continue;
       } else if (++p.ticks < this.stableTicks) {
         continue;
@@ -144,16 +153,19 @@ class Syncer {
         const entry = {
           id: this.state.nextId++, rel, name: path.posix.basename(rel), folder: path.posix.dirname(rel) === '.' ? '' : path.posix.dirname(rel),
           size: info.size, mtimeMs: info.mtimeMs, receivedAt: this.now(), kind: k ? 'updated' : 'new', seen: false, localPath,
+          done: false, doneAt: null, openedAt: null,
         };
+        // 같은 파일의 옛 버전이 출력 전이면 '새 버전으로 바뀜' (옛 버전을 잘못 출력하지 않게)
+        for (const old of this.state.history) if (old.rel === rel && isPending(old)) old.replaced = true;
         this.state.history.unshift(entry);
         received.push(entry);
       } catch (e) {
         errors.push({ rel, message: e.code || e.message });
       }
-      this.pending.delete(rel);
+      this.waiting.delete(rel);
     }
     // 그사이 NAS 에서 사라진 것은 기다리지 않는다 (받은 파일은 지우지 않음)
-    for (const rel of this.pending.keys()) if (!files.has(rel)) this.pending.delete(rel);
+    for (const rel of this.waiting.keys()) if (!files.has(rel)) this.waiting.delete(rel);
     for (const rel of Object.keys(known)) if (!files.has(rel)) delete known[rel];
 
     if (this.state.history.length > this.historyLimit) this.state.history.length = this.historyLimit;
@@ -188,7 +200,7 @@ class Syncer {
   async importAll() {
     if (!this.state) await this.load();
     this.state.known = {};
-    this.pending.clear();
+    this.waiting.clear();
     await this.save();
   }
 
@@ -199,6 +211,27 @@ class Syncer {
     }
     if (changed) await this.save();
     return changed;
+  }
+
+  // 출력 완료 체크 (done=false 면 풀기). 체크하면 알림도 본 것으로
+  async markDone(id, done = true) {
+    const h = this.state.history.find(x => x.id === id);
+    if (!h) return false;
+    h.done = !!done;
+    h.doneAt = done ? this.now() : null;
+    if (done) h.seen = true;
+    await this.save();
+    return true;
+  }
+
+  // 이 앱의 [열기] 로 연 시각
+  async markOpened(id) {
+    const h = this.state.history.find(x => x.id === id);
+    if (!h) return false;
+    h.openedAt = this.now();
+    h.seen = true;
+    await this.save();
+    return true;
   }
 
   async clearHistory() {

@@ -27,6 +27,7 @@ const DEFAULTS = {
   repeatSound: false,                                      // 확인할 때까지 소리 반복
   autoStart: true,                                         // 윈도우 켤 때 자동 실행
   skipExisting: true,                                      // 처음 켤 때 이미 있던 파일은 받지 않기
+  remindMin: 30,                                           // 출력 전인 채 이만큼(분) 지나면 다시 알림 (0 이면 끔)
 };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
@@ -46,22 +47,23 @@ function snapshot() {
     config, status, paused,
     history: syncer ? syncer.history.slice(0, 500) : [],
     unseen: syncer ? syncer.unseen : 0,
+    pending: syncer ? syncer.pending : 0,
   };
 }
 function icon(name) { return nativeImage.createFromPath(path.join(ASSETS, name + '.png')); }
 function updateTray() {
   if (!tray) return;
-  const unseen = syncer ? syncer.unseen : 0;
+  const unseen = syncer ? syncer.unseen : 0, pending = syncer ? syncer.pending : 0;
   const off = paused || status.state !== 'ok';
   tray.setImage(icon(off ? 'tray-off' : unseen ? 'tray-new' : 'tray'));
-  const line = paused ? '잠시 멈춤' : status.state === 'ok' ? (unseen ? `새 파일 ${unseen}개` : '받는 중 (새 파일 없음)')
+  const line = paused ? '잠시 멈춤' : status.state === 'ok' ? (pending ? `출력 전 ${pending}개` : '받는 중 (출력 전 파일 없음)')
     : status.state === 'offline' ? 'NAS 연결 끊김' : status.message;
   tray.setToolTip('브로애드 파일 받기 - ' + line);
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: '목록 열기', click: showWindow },
     { label: '받은 폴더 열기', click: () => shell.openPath(config.dest) },
     { label: '지금 확인', click: checkNow, enabled: !paused },
-    { label: '모두 확인함으로', click: () => markSeen('all'), enabled: unseen > 0 },
+    { label: '알림 끄기 (새 파일 표시 지우기)', click: () => markSeen('all'), enabled: unseen > 0 },
     { type: 'separator' },
     { label: paused ? '다시 받기' : '잠시 멈춤', click: togglePause },
     { label: '끝내기', click: () => { app.isQuitting = true; app.quit(); } },
@@ -118,6 +120,28 @@ function togglePause() {
 }
 async function markSeen(id) {
   if (syncer && await syncer.markSeen(id)) send();
+}
+
+// 출력 전인 채 오래된 파일이 있으면 다시 알린다 (remindMin 마다 한 번)
+let lastRemind = 0;
+// 시험용: BROAD_FILESYNC_REMIND_MS 로 '분' 대신 짧은 시간을 쓴다
+const REMIND_TEST_MS = Number(process.env.BROAD_FILESYNC_REMIND_MS) || 0;
+function remind() {
+  const min = Number(config && config.remindMin) || 0;
+  if (!syncer || paused || min <= 0) return;
+  const now = Date.now(), wait = REMIND_TEST_MS || min * 60e3;
+  if (now - lastRemind < wait) return;
+  const stale = syncer.stale(wait);
+  if (!stale.length) return;
+  lastRemind = now;
+  const lines = stale.slice(0, 3).map(e => (e.folder ? e.folder + ' / ' : '') + e.name);
+  if (stale.length > 3) lines.push(`외 ${stale.length - 3}개`);
+  if (Notification.isSupported()) {
+    const n = new Notification({ title: `출력 안 한 파일 ${stale.length}개 (${min}분 넘음)`, body: lines.join('\n'), icon: path.join(ASSETS, 'app.png'), silent: true });
+    n.on('click', showWindow);
+    n.show();
+  }
+  if (config.sound && win && !win.isDestroyed()) win.webContents.send('chime', { repeat: false });
 }
 
 function notify(list) {
@@ -178,6 +202,7 @@ ipcMain.handle('save-config', async (_e, patch) => {
   const before = config;
   config = { ...config, ...patch };
   config.intervalSec = Math.min(600, Math.max(2, Number(config.intervalSec) || 5));
+  config.remindMin = Math.min(1440, Math.max(0, Math.round(Number(config.remindMin) || 0)));
   saveConfig(config);
   applyAutoStart();
   if (before.source !== config.source || before.dest !== config.dest || before.skipExisting !== config.skipExisting) await startSync();
@@ -201,7 +226,8 @@ ipcMain.handle('test-source', async (_e, dir) => {
 ipcMain.handle('open-file', async (_e, id) => {
   const h = entry(id);
   if (!h) return '목록에 없는 파일입니다.';
-  await markSeen(id);
+  await syncer.markOpened(id);
+  send();
   const err = await shell.openPath(h.localPath);
   return err || '';
 });
@@ -214,6 +240,12 @@ ipcMain.handle('show-in-folder', async (_e, id) => {
 });
 ipcMain.handle('open-dest', () => shell.openPath(config.dest));
 ipcMain.handle('mark-seen', (_e, id) => markSeen(id));
+ipcMain.handle('mark-done', async (_e, id, done) => {
+  if (!syncer) return;
+  if (id === 'all') { for (const h of syncer.history) if (!h.done && !h.replaced) await syncer.markDone(h.id, true); }
+  else await syncer.markDone(id, done);
+  send();
+});
 ipcMain.handle('check-now', () => checkNow());
 ipcMain.handle('toggle-pause', () => togglePause());
 ipcMain.handle('import-all', async () => {
@@ -239,4 +271,5 @@ app.whenReady().then(async () => {
   const hidden = process.argv.includes('--hidden') && !!config.source;
   createWindow(!hidden);
   await startSync();
+  setInterval(remind, REMIND_TEST_MS ? 500 : 60e3);
 });

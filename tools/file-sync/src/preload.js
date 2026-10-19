@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('api', {
   showInFolder: id => ipcRenderer.invoke('show-in-folder', id),
   openDest: () => ipcRenderer.invoke('open-dest'),
   markSeen: id => ipcRenderer.invoke('mark-seen', id),
+  markDone: (id, done) => ipcRenderer.invoke('mark-done', id, done),
   checkNow: () => ipcRenderer.invoke('check-now'),
   togglePause: () => ipcRenderer.invoke('toggle-pause'),
   importAll: () => ipcRenderer.invoke('import-all'),

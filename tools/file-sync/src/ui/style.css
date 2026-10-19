@@ -34,7 +34,7 @@ tr:last-child td { border-bottom: 0; }
 tr.unseen td { background: var(--row-new); }
 tr.unseen .name { font-weight: bold; }
 tr { cursor: default; }
-.c-kind { width: 54px; white-space: nowrap; } .c-size { width: 70px; text-align: right; } .c-time { width: 96px; } .c-act { width: 120px; text-align: right; }
+.c-done { width: 46px; text-align: center; } .c-size { width: 70px; text-align: right; } .c-time { width: 96px; } .c-act { width: 120px; text-align: right; }
 td.c-size { text-align: right; color: var(--muted); } td.c-time { color: var(--muted); }
 .kind { font-size: 11px; padding: 1px 6px; border-radius: 4px; color: #fff; background: var(--new); }
 .kind.updated { background: var(--upd); }
@@ -60,3 +60,14 @@ td.c-act button { padding: 3px 8px; font-size: 12px; margin-left: 3px; }
 .row.end { justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 12px; }
 .toast { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: #111827; color: #fff; padding: 8px 14px; border-radius: 6px; }
 .toast[hidden] { display: none; }
+
+td.c-done { text-align: center; }
+td.c-done input { width: 18px; height: 18px; cursor: pointer; accent-color: var(--ok); }
+tr.done td { opacity: .62; }
+tr.done .name { text-decoration: line-through; text-decoration-color: var(--muted); }
+tr.replaced td { opacity: .45; }
+.tags { margin-top: 2px; display: flex; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--muted); }
+.tag { padding: 0 5px; border-radius: 4px; color: #fff; background: var(--new); }
+.tag.updated { background: var(--upd); }
+.tag.done { background: var(--ok); }
+.tag.replaced { background: var(--off); }

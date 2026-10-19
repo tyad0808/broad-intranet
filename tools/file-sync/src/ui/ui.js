@@ -1,7 +1,7 @@
 // 목록 화면: 받은 파일 목록, 상태, 설정, 알림 소리
 (function () {
   const $ = id => document.getElementById(id);
-  let state = null, tab = 'new', repeatTimer = null;
+  let state = null, tab = 'pending', repeatTimer = null;
 
   // ---- 표시용 ----
   function fmtSize(n) {
@@ -51,37 +51,56 @@
     if (s.errors && s.errors.length) $('paths').textContent += `  · 받지 못한 파일 ${s.errors.length}개 (다음 확인 때 다시 시도)`;
   }
 
+  const isPending = h => !h.done && !h.replaced;
+
   function renderList() {
     const q = $('search').value.trim().toLowerCase();
-    const list = state.history.filter(h => (tab === 'all' || !h.seen) && (!q || (h.folder + '/' + h.name).toLowerCase().includes(q)));
+    const inTab = h => tab === 'all' || (tab === 'pending' ? isPending(h) : h.done);
+    const list = state.history.filter(h => inTab(h) && (!q || (h.folder + '/' + h.name).toLowerCase().includes(q)));
     const tbody = $('rows');
     tbody.textContent = '';
     for (const h of list) {
-      const tr = el('tr', h.seen ? '' : 'unseen');
-      const kind = el('td', 'c-kind');
-      kind.appendChild(el('span', 'kind ' + (h.seen ? 'seen' : h.kind), h.kind === 'updated' ? '수정' : h.seen ? '확인' : '새'));
+      const tr = el('tr', [h.seen ? '' : 'unseen', h.done ? 'done' : '', h.replaced && !h.done ? 'replaced' : ''].join(' ').trim());
+      // 출력 완료 체크
+      const doneTd = el('td', 'c-done');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !!h.done;
+      box.title = h.done ? '출력 완료 (누르면 풀기)' : '출력 프로그램에서 열었으면 체크';
+      box.onclick = e => { e.stopPropagation(); window.api.markDone(h.id, box.checked); };
+      doneTd.appendChild(box);
+      // 이름 + 표시
       const name = el('td');
       name.appendChild(el('div', 'name', h.name));
-      if (h.folder) name.appendChild(el('div', 'folder', h.folder));
+      const tags = el('div', 'tags');
+      if (!h.seen) tags.appendChild(el('span', 'tag', '새'));
+      if (h.kind === 'updated') tags.appendChild(el('span', 'tag updated', '수정본'));
+      if (h.done) tags.appendChild(el('span', 'tag done', '출력 완료 ' + fmtTime(h.doneAt)));
+      else if (h.replaced) tags.appendChild(el('span', 'tag replaced', '새 버전으로 바뀜'));
+      if (h.openedAt) tags.appendChild(el('span', '', '열어봄 ' + fmtTime(h.openedAt)));
+      if (h.folder) tags.appendChild(el('span', 'folder', h.folder));
+      name.appendChild(tags);
       const act = el('td', 'c-act');
       const open = el('button', '', '열기');
       open.onclick = async e => { e.stopPropagation(); const err = await window.api.openFile(h.id); if (err) toast('열 수 없습니다: ' + err); };
       const folder = el('button', '', '폴더');
       folder.onclick = e => { e.stopPropagation(); window.api.showInFolder(h.id); };
       act.append(open, folder);
-      tr.append(kind, name, el('td', 'c-size', fmtSize(h.size)), el('td', 'c-time', fmtTime(h.receivedAt)), act);
+      tr.append(doneTd, name, el('td', 'c-size', fmtSize(h.size)), el('td', 'c-time', fmtTime(h.receivedAt)), act);
       tr.title = h.localPath;
       tr.onclick = () => { if (!h.seen) window.api.markSeen(h.id); };
       tr.ondblclick = () => open.onclick(new Event('click'));
       tbody.appendChild(tr);
     }
-    $('newCount').textContent = state.unseen;
-    $('newCount').classList.toggle('zero', state.unseen === 0);
-    $('seenAll').disabled = state.unseen === 0;
+    $('pendingCount').textContent = state.pending;
+    $('pendingCount').classList.toggle('zero', state.pending === 0);
+    $('doneAll').disabled = state.pending === 0;
     const empty = $('empty');
     empty.hidden = list.length > 0;
-    empty.textContent = q ? '찾는 파일이 없습니다.' : tab === 'new' ? '새 파일이 없습니다. NAS 에 올리면 여기에 나옵니다.' : '받은 파일이 없습니다.';
-    document.title = (state.unseen ? `(${state.unseen}) ` : '') + '브로애드 파일 받기';
+    empty.textContent = q ? '찾는 파일이 없습니다.'
+      : tab === 'pending' ? '출력할 파일이 없습니다. NAS 에 올리면 여기에 나옵니다.'
+      : tab === 'done' ? '출력 완료로 체크한 파일이 없습니다.' : '받은 파일이 없습니다.';
+    document.title = (state.pending ? `(${state.pending}) ` : '') + '브로애드 파일 받기';
     if (state.unseen === 0) stopRepeat();
   }
 
@@ -113,12 +132,13 @@
   }
   function stopRepeat() { clearInterval(repeatTimer); repeatTimer = null; }
   window.api.onChime(o => {
+    document.body.dataset.chimes = Number(document.body.dataset.chimes || 0) + 1; // 몇 번 울렸는지 (점검용)
     chime();
     if (o.repeat && !repeatTimer) repeatTimer = setInterval(() => { if (state && state.unseen > 0) chime(); else stopRepeat(); }, 6000);
   });
 
   // ---- 설정 ----
-  const FIELDS = ['source', 'dest', 'intervalSec'], CHECKS = ['sound', 'repeatSound', 'autoStart', 'skipExisting'];
+  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin'], CHECKS = ['sound', 'repeatSound', 'autoStart', 'skipExisting'];
   function openSettings() {
     const c = state.config;
     FIELDS.forEach(k => { $(k).value = c[k]; });
@@ -164,9 +184,16 @@
   $('checkNow').onclick = () => { window.api.checkNow(); toast('확인 중…'); };
   $('pause').onclick = () => window.api.togglePause();
   $('openDest').onclick = () => window.api.openDest();
-  $('seenAll').onclick = () => window.api.markSeen('all');
-  $('tabNew').onclick = () => { tab = 'new'; $('tabNew').classList.add('on'); $('tabAll').classList.remove('on'); renderList(); };
-  $('tabAll').onclick = () => { tab = 'all'; $('tabAll').classList.add('on'); $('tabNew').classList.remove('on'); renderList(); };
+  $('doneAll').onclick = () => {
+    if (confirm(`출력 전인 ${state.pending}개를 모두 출력 완료로 체크할까요?`)) window.api.markDone('all', true);
+  };
+  document.querySelectorAll('[data-tab]').forEach(b => {
+    b.onclick = () => {
+      tab = b.getAttribute('data-tab');
+      document.querySelectorAll('[data-tab]').forEach(x => x.classList.toggle('on', x === b));
+      renderList();
+    };
+  });
   $('search').oninput = renderList;
   setInterval(() => { if (state) renderList(); }, 60000); // '오늘/어제' 표시 새로
 
