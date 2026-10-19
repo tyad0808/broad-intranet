@@ -20,7 +20,8 @@
     "mail-check": "node --disable-warning=ExperimentalWarning scripts/mail-check.js",
     "naver-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/naver-inquiry-check.js",
     "coupang-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/coupang-inquiry-check.js",
-    "godo-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/godo-inquiry-check.js"
+    "godo-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/godo-inquiry-check.js",
+    "logen-check": "node --disable-warning=ExperimentalWarning scripts/logen-check.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
