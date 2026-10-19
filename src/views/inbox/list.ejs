@@ -3,7 +3,7 @@
   // 지금 걸린 조건을 유지한 채 하나만 바꾼 주소
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { tab: tab === 'open' ? '' : tab, src, q, ...changes };
+    const merged = { box: box === 'shop' ? '' : box, tab: tab === 'open' ? '' : tab, src, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/inbox?${s}` : '/inbox';
@@ -23,8 +23,19 @@
   </div>
 </div>
 
+<%# 큰 탭: 쇼핑몰 문의 / 메일 (숫자는 미답변) %>
+<nav class="box-tabs" aria-label="문의 종류">
+  <% Object.entries(BOXES).forEach(([key, label]) => { %>
+    <a href="<%= link({ box: key === 'shop' ? '' : key, src: '', tab: '', q: '' }) %>" class="<%= box === key ? 'on' : '' %>">
+      <%= key === 'shop' ? '🛒' : '✉️' %> <%= label %><% if (boxCounts[key]) { %> <span class="badge"><%= boxCounts[key] %></span><% } %>
+    </a>
+  <% }) %>
+</nav>
+
 <% if (noSources) { %>
-  <section class="card"><p class="muted">아직 연결된 메일이 없습니다. 서버의 <code>.env</code> 에 네이버메일·지메일 계정(앱 비밀번호)을 넣으면 여기로 모입니다.</p></section>
+  <section class="card"><p class="muted"><%= box === 'mail'
+    ? '아직 연결된 메일이 없습니다. 서버의 .env 에 네이버메일·지메일 계정(앱 비밀번호)을 넣으면 여기로 모입니다.'
+    : '아직 연결된 쇼핑몰 문의가 없습니다. 스마트스토어(ORDER_SOURCE=naver)를 쓰면 상품문의가 여기로 모입니다.' %></p></section>
 <% } %>
 <% const practice = Object.entries(modes).filter(([, m]) => m !== 'live').map(([s]) => labelOf(s)); %>
 <% if (practice.length) { %>
@@ -49,9 +60,10 @@
 </div>
 
 <form method="get" action="/inbox" class="filters">
+  <% if (box !== 'shop') { %><input type="hidden" name="box" value="<%= box %>"><% } %>
   <% if (tab !== 'open') { %><input type="hidden" name="tab" value="<%= tab %>"><% } %>
   <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
-  <input type="search" name="q" value="<%= q %>" placeholder="제목, 내용, 보낸 사람 검색" aria-label="검색">
+  <input type="search" name="q" value="<%= q %>" placeholder="<%= box === 'mail' ? '제목, 내용, 보낸 사람 검색' : '상품명, 문의 내용, 작성자 검색' %>" aria-label="검색">
   <button type="submit" class="btn-sm">검색</button>
 </form>
 

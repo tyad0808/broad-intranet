@@ -6,6 +6,10 @@ const { transaction } = require('../db');
 const { previewType, PROVIDERS } = require('../inbox/mail');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
+// 위쪽 큰 탭: 쇼핑몰 문의 / 메일 (섞여 있으면 헷갈려서 나눈다)
+const BOXES = { shop: '쇼핑몰 문의', mail: '메일' };
+const MAIL_SOURCES = Object.keys(PROVIDERS);
+const boxOf = source => (MAIL_SOURCES.includes(source) ? 'mail' : 'shop');
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
 const MAX_REPLY = 10_000;
 
@@ -35,9 +39,17 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const tab = TABS[req.query.tab] ? req.query.tab : 'open';
     const src = String(req.query.src || '');
     const q = String(req.query.q || '').trim().slice(0, 50);
+    // 출처를 골랐으면 그 출처의 탭, 아니면 고른 탭 (처음엔 쇼핑몰 문의)
+    const box = src ? boxOf(src) : BOXES[req.query.box] ? req.query.box : 'shop';
+    const mailMarks = MAIL_SOURCES.map(() => '?').join(',');
+    const boxSql = b => `q.source ${b === 'mail' ? '' : 'NOT '}IN (${mailMarks})`;
 
-    const base = [];
-    const params = [];
+    // 큰 탭에 붙일 미답변 건수
+    const boxCounts = Object.fromEntries(Object.keys(BOXES).map(b => [b,
+      db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE q.status = 'open' AND ${boxSql(b)}`).get(...MAIL_SOURCES).n]));
+
+    const base = [boxSql(box)];
+    const params = [...MAIL_SOURCES];
     if (q) {
       base.push('(q.subject LIKE ? OR q.body LIKE ? OR q.from_name LIKE ? OR q.from_addr LIKE ?)');
       params.push(...Array(4).fill(`%${q}%`));
@@ -62,7 +74,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const sourceCounts = Object.fromEntries(db.prepare(`
       SELECT q.source, COUNT(*) AS n FROM inquiries q ${whereSql([...base, ...tabWhere[tab]])} GROUP BY q.source
     `).all(...params, ...(tabParams[tab] || [])).map(r => [r.source, r.n]));
-    const sources = [...new Set([...Object.keys(sourceLabels), ...Object.keys(sourceCounts)])];
+    const sources = [...new Set([...Object.keys(sourceLabels), ...Object.keys(sourceCounts)])].filter(s => boxOf(s) === box);
 
     const rows = db.prepare(`
       SELECT q.id, q.source, q.from_name, q.from_addr, q.subject, substr(q.body, 1, 160) AS preview, q.received_at,
@@ -79,12 +91,13 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       title: '문의함',
       navSection: 'inbox',
       rows, tab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
+      box, BOXES, boxCounts,
       staff: staff(),
       canCollect: Boolean(collector),
-      noSources: Object.keys(sourceLabels).length === 0,
+      noSources: !Object.keys(sourceLabels).some(s => boxOf(s) === box),
       lastRun,
       currentUrl: req.originalUrl,
-      modes: Object.fromEntries(Object.keys(sourceLabels).map(s => [s, modeOf(s)])),
+      modes: Object.fromEntries(Object.keys(sourceLabels).filter(s => boxOf(s) === box).map(s => [s, modeOf(s)])),
     });
   });
 

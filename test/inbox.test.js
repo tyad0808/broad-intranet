@@ -182,14 +182,14 @@ test('문의함 목록: 위쪽 메뉴에 미답변 건수, 출처 칩·탭, 본�
   const { kim, id1 } = await setupInbox(t);
   const home = (await kim.request('/')).text;
   assert.match(home, /문의함 <span class="badge">2<\/span>/);
-  const list = (await kim.request('/inbox')).text;
+  const list = (await kim.request('/inbox?box=mail')).text;
   assert.match(list, /미답변 <span class="count">2<\/span>/);
   assert.match(list, /네이버메일 <span class="count">1<\/span>/);
   assert.match(list, /견적 문의/);
   assert.match(list, /연습 모드/);
   const gmailOnly = (await kim.request('/inbox?src=gmail')).text;
   assert.ok(gmailOnly.includes('특가 안내') && !gmailOnly.includes('견적 문의'));
-  const found = (await kim.request('/inbox?q=' + encodeURIComponent('현수막'))).text;
+  const found = (await kim.request('/inbox?box=mail&q=' + encodeURIComponent('현수막'))).text;
   assert.ok(found.includes('견적 문의') && !found.includes('특가 안내'));
 
   const detail = (await kim.request(`/inbox/${id1}`)).text;
@@ -227,7 +227,7 @@ test('실제 답변: 보낸 메일이 성공하면 답변완료, 실패면 미�
   await kim.submit(`/inbox/${id1}`, `/inbox/${id1}/reply`, { body: '견적 보내드립니다', version: String(row(id1).version) });
   assert.deepStrictEqual(replies[1], ['hong@example.com', '견적 보내드립니다']);
   assert.deepStrictEqual([row(id1).status, row(id1).handled_by], ['answered', kimId]);
-  assert.match((await kim.request('/inbox?tab=done')).text, /견적 문의/);
+  assert.match((await kim.request('/inbox?box=mail&tab=done')).text, /견적 문의/);
 });
 
 test('담당자 지정·처리 완료·다시 열기·여러 건 처리 완료', async t => {
@@ -388,4 +388,17 @@ test('메일 계정 두 개는 동시에 받는다 (하나씩 기다리지 않�
   const r = await col.run();
   assert.strictEqual(r.ok, true);
   assert.ok(Date.now() - t0 < 550, `걸린 시간 ${Date.now() - t0}ms — 동시에 받으면 300ms 남짓`);
+});
+
+test('문의함은 쇼핑몰 문의 / 메일 탭으로 나뉜다 (섞이지 않음, 탭마다 미답변 숫자)', async t => {
+  const { kim, db } = await setupInbox(t);
+  db.prepare(`INSERT INTO inquiries (source, external_id, from_name, subject, body, attachments, received_at)
+    VALUES ('smartstore_qna', '99', 'abc***', '[상품문의] 명함', '사이즈?', '[]', '2026-10-19T02:00:00Z')`).run();
+  const shop = (await kim.request('/inbox')).text;
+  assert.match(shop, /class="on">\s*🛒 쇼핑몰 문의 <span class="badge">1<\/span>/);
+  assert.match(shop, /✉️ 메일 <span class="badge">2<\/span>/);
+  assert.ok(shop.includes('[상품문의] 명함') && !shop.includes('견적 문의'), '쇼핑몰 탭엔 메일 없음');
+  const mail = (await kim.request('/inbox?box=mail')).text;
+  assert.ok(mail.includes('견적 문의') && !mail.includes('[상품문의] 명함'), '메일 탭엔 쇼핑몰 문의 없음');
+  assert.ok((await kim.request('/inbox?src=gmail')).text.includes('class="on">\n      ✉️ 메일'), '출처를 고르면 그 탭으로');
 });
