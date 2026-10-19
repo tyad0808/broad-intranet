@@ -238,6 +238,15 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 
 ---
 
+## 13. 문의함 — 쿠팡 문의 (상품별 고객문의 · 고객센터 문의)
+
+1. `.env` 에 `COUPANG_WING_ID=WING로그인아이디` (비밀번호 아님, 답변할 때 '누가 답했는지' 로 필요)
+2. 점검 (읽기만): `cd /opt/broad-intranet/app && sudo -u intranet npm run coupang-inquiry-check`
+3. `systemctl restart broad-intranet` → 문의함 🛒 쇼핑몰 문의 탭에 '쿠팡' 출처 (처음엔 최근 30일, 7일씩 나눠 읽음)
+4. 답변을 실제로 등록하려면 `.env` 에 `COUPANG_ANSWER=on` → 재시작 (그 전에는 연습 모드)
+
+---
+
 ## 평소에 쓰는 명령어 (서버에서)
 
 | 하고 싶은 일 | 명령어 |

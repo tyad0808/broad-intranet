@@ -44,7 +44,7 @@
     <section class="card process-card">
       <h2>답변</h2>
       <% if (mode !== 'live') { %>
-        <p class="practice-note"><strong>연습 모드</strong> 보내기를 눌러도 <%= label %>로 나가지 않고 기록만 남깁니다.</p>
+        <p class="practice-note"><strong>연습 모드</strong> 보내기를 눌러도 <%= withRo(label) %> 나가지 않고 기록만 남깁니다.</p>
       <% } %>
       <form method="post" action="/inbox/<%= inquiry.id %>/assign" class="inline assign-row" data-autosubmit>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -60,8 +60,8 @@
       </form>
 
       <% const confirmText = isMail
-           ? `${inquiry.reply_to || inquiry.from_addr} 에게 답변을 보낼까요?&#10;보낸 메일은 되돌릴 수 없습니다.`
-           : `${label} 상품문의에 이 답변을 등록할까요?&#10;고객에게 바로 보입니다.`; %>
+           ? `${inquiry.reply_to || inquiry.from_addr} 에게 답변을 보낼까요?\n보낸 메일은 되돌릴 수 없습니다.`
+           : `${label}에 이 답변을 등록할까요?\n고객에게 바로 보입니다.`; %>
       <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form" enctype="multipart/form-data" data-once
             data-confirm="<%= confirmText %>">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -72,7 +72,7 @@
             <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
           </label>
         <% } else { %>
-          <label><%= label %> 상품문의 답변 <span class="muted small">(상품 페이지에 공개됩니다)</span>
+          <label><%= label %> 문의 답변 <span class="muted small">(고객에게 그대로 보입니다)</span>
             <textarea name="body" rows="8" maxlength="10000" required placeholder="고객에게 보일 답변을 적어 주세요."></textarea>
           </label>
         <% } %>
@@ -103,6 +103,7 @@
           </form>
           <span class="muted small"><%= STATUS_LABELS[inquiry.status] %><%= inquiry.handled_name ? ` · ${inquiry.handled_name}` : '' %><%= inquiry.handled_at ? ` · ${kst(inquiry.handled_at)}` : '' %></span>
         <% } %>
+        <% if (inquiry.order_no) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.order_no) %>" target="_top">관련 주문 보기</a><% } %>
         <% if (isMail && inquiry.from_name) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.from_name) %>" target="_top">이 이름으로 주문 찾기</a><% } %>
       </div>
 

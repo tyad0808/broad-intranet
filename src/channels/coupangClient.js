@@ -17,6 +17,13 @@ const ALLOWED = [
   { method: 'PUT', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/ordersheets\/acknowledgement$/, write: true },
   // 송장 업로드 (= 발송처리)
   { method: 'POST', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/orders\/invoices$/, write: true },
+  // ── 4-3 문의 ── 조회 2개 + 답변 2개 (답변은 .env 의 COUPANG_ANSWER=on 일 때만)
+  // 상품별 고객문의 조회 (문서에 v4·v5 둘 다 나와서 둘 다 허용)
+  { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v[45]\/vendors\/[A-Za-z0-9]+\/onlineInquiries$/ },
+  // 쿠팡 고객센터 문의 조회
+  { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/callCenterInquiries$/ },
+  { method: 'POST', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/onlineInquiries\/\d+\/replies$/, write: true, flag: 'COUPANG_ANSWER' },
+  { method: 'POST', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/callCenterInquiries\/\d+\/replies$/, write: true, flag: 'COUPANG_ANSWER' },
 ];
 
 function findAllowed(method, path) {
@@ -29,7 +36,7 @@ function isAllowed(method, path) {
 
 // 보낼 JSON: 긴 번호(배송번호 등)는 글자로 갖고 있다가 숫자 모양 그대로 보낸다
 function stringifyBody(body) {
-  return JSON.stringify(body).replace(/"(shipmentBoxId|orderId|vendorItemId)":"(\d+)"/g, '"$1":$2')
+  return JSON.stringify(body).replace(/"(shipmentBoxId|orderId|vendorItemId|inquiryId|parentAnswerId)":"(\d+)"/g, '"$1":$2')
     .replace(/"shipmentBoxIds":\[([^\]]*)\]/g, (m, inner) => `"shipmentBoxIds":[${inner.replace(/"(\d+)"/g, '$1')}]`);
 }
 
@@ -56,7 +63,7 @@ function buildAuthorization({ accessKey, secretKey, method, path, query, now }) 
 // 쿠팡 번호(shipmentBoxId 등)는 자바스크립트 숫자로 읽으면 끝자리가 틀어질 만큼 길다 → 글자로 바꿔 읽는다
 function parseJson(text) {
   return JSON.parse(text.replace(
-    /"(shipmentBoxId|orderId|vendorItemId|vendorItemPackageId|productId|sellerProductId|sellerProductItemId)"\s*:\s*(\d+)/g,
+    /"(shipmentBoxId|orderId|vendorItemId|vendorItemPackageId|productId|sellerProductId|sellerProductItemId|inquiryId|answerId|parentAnswerId)"\s*:\s*(\d+)/g,
     '"$1":"$2"'
   ));
 }
@@ -85,7 +92,7 @@ function createCoupangClient({
       throw err;
     }
     if (rule.write && !allowWrite) {
-      const err = new Error(`쿠팡 주문 상태 변경이 꺼져 있습니다 (COUPANG_WRITE=on 이 아님): ${method} ${path}`);
+      const err = new Error(`쿠팡으로 보내기가 꺼져 있습니다 (${rule.flag || 'COUPANG_WRITE'}=on 이 아님): ${method} ${path}`);
       err.notSent = true;
       throw err;
     }

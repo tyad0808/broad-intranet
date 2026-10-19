@@ -13,6 +13,7 @@ const { createSmartstoreWriter } = require('./channels/smartstore');
 const { mailAccountsFromEnv, createMailSource, createMailSender, createMailFiles } = require('./inbox/mail');
 const { createInboxCollector } = require('./inbox/collector');
 const { createNaverQnaSource, createNaverQnaSender, SOURCE: QNA_SOURCE, LABEL: QNA_LABEL } = require('./inbox/naverQna');
+const { createCoupangInquirySource, createCoupangInquirySender, SOURCE: CQ_SOURCE, LABEL: CQ_LABEL } = require('./inbox/coupangInquiry');
 
 const PORT = process.env.PORT || 3000;
 // 운영 서버에서는 같은 서버의 Caddy(HTTPS)만 접속할 수 있게 내부 주소에서만 연다
@@ -65,14 +66,26 @@ const mailLive = process.env.MAIL_SEND === 'on';
 // 답변 등록은 NAVER_ANSWER=on 일 때만 실제로 (그 밖에는 연습 모드)
 const qnaReady = process.env.ORDER_SOURCE === 'naver' && process.env.NAVER_QNA !== 'off';
 const qnaLive = qnaReady && process.env.NAVER_ANSWER === 'on';
-const inboxSources = [...mailAccounts.map(a => createMailSource(a)), ...(qnaReady ? [createNaverQnaSource()] : [])];
+// 4-3 쿠팡 문의: 쿠팡 키가 있으면. 끄려면 COUPANG_QNA=off, 답변은 COUPANG_ANSWER=on 일 때만 (WING 아이디 COUPANG_WING_ID 필요)
+const cqReady = coupangReady && process.env.COUPANG !== 'off' && process.env.COUPANG_QNA !== 'off';
+const cqLive = cqReady && process.env.COUPANG_ANSWER === 'on';
+const inboxSources = [
+  ...mailAccounts.map(a => createMailSource(a)),
+  ...(qnaReady ? [createNaverQnaSource()] : []),
+  ...(cqReady ? [createCoupangInquirySource()] : []),
+];
 const inboxCollector = inboxSources.length ? createInboxCollector({ db, sources: inboxSources, notifier }) : null;
 const inbox = {
   collector: inboxCollector,
-  sourceLabels: Object.fromEntries([...mailAccounts.map(a => [a.source, a.label]), ...(qnaReady ? [[QNA_SOURCE, QNA_LABEL]] : [])]),
+  sourceLabels: Object.fromEntries([
+    ...mailAccounts.map(a => [a.source, a.label]),
+    ...(qnaReady ? [[QNA_SOURCE, QNA_LABEL]] : []),
+    ...(cqReady ? [[CQ_SOURCE, CQ_LABEL]] : []),
+  ]),
   senders: {
     ...(mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {}),
     ...(qnaLive ? { [QNA_SOURCE]: createNaverQnaSender() } : {}),
+    ...(cqLive ? { [CQ_SOURCE]: createCoupangInquirySender() } : {}),
   },
   // 첨부파일 열기는 연습 모드여도 된다 (읽기만)
   files: Object.fromEntries(mailAccounts.map(a => [a.source, createMailFiles(a)])),
@@ -127,6 +140,7 @@ app.listen(PORT, HOST, () => {
     console.log(`문의함: ${inboxSources.map(s => s.label).join(' + ')}, ${intervalMinutes(db, 'inbox_interval_minutes')}분마다`);
     if (mailAccounts.length) console.log(`  메일 답장: ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
     if (qnaReady) console.log(`  스마트스토어 상품문의 답변: ${qnaLive ? '실제로 등록 (NAVER_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
+    if (cqReady) console.log(`  쿠팡 문의 답변: ${cqLive ? '실제로 등록 (COUPANG_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
     collectInbox();
   }
   if (collector) {

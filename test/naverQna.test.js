@@ -75,7 +75,7 @@ test('화면: 스마트스토어 문의는 출처 칩에 나오고, 답변 칸�
   const list = (await kim.request('/inbox')).text;
   assert.match(list, /class="src-tag src-smartstore_qna">스마트스토어</);
   const detail = (await kim.request(`/inbox/${id}`)).text;
-  assert.match(detail, /스마트스토어 상품문의에 이 답변을 등록할까요/);
+  assert.match(detail, /스마트스토어에 이 답변을 등록할까요/);
   assert.ok(!detail.includes('data-drop-zone'), '파일 첨부 없음');
   assert.ok(!detail.includes('이 이름으로 주문 찾기'));
   await kim.submit(`/inbox/${id}`, `/inbox/${id}/reply`, { body: '네 가능합니다', version: '0' });

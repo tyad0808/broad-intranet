@@ -14,6 +14,15 @@ const MAIL_SQL = "(q.source GLOB 'naver_mail*' OR q.source GLOB 'gmail*')";
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
 const MAX_REPLY = 10_000;
 
+// '쿠팡으로 / 스마트스토어로 / 메일주소로' — 받침에 따라 '으로'/'로' (ㄹ 받침은 '로')
+function withRo(word) {
+  const last = String(word || '').trim().slice(-1);
+  const code = last.charCodeAt(0) - 0xac00;
+  if (code < 0 || code > 11171) return `${word}로`;
+  const jong = code % 28;
+  return `${word}${jong === 0 || jong === 8 ? '로' : '으로'}`;
+}
+
 // files: { naver_mail: 첨부파일 열기 } (메일함에서 그때그때 가져온다)
 function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLabels = {}, notifier }) {
   const router = express.Router();
@@ -170,6 +179,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),
       isMail: isMailSource(inquiry.source),
+      withRo,
       previewType,
       label: labelOf(inquiry.source),
       mode: modeOf(inquiry.source),
@@ -198,7 +208,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       const sender = senders[inquiry.source];
       const out = sender
         ? await sender.reply(inquiry, body, attached)
-        : { result: 'practice', message: `연습 모드라 ${labelOf(inquiry.source)}로 보내지 않았습니다.` };
+        : { result: 'practice', message: `연습 모드라 ${withRo(labelOf(inquiry.source))} 보내지 않았습니다.` };
       // 기록에는 파일 이름·크기만 (파일 자체는 저장하지 않음)
       const fileList = attached.length ? JSON.stringify(attached.map(f => ({ name: f.name, size: f.content.length }))) : null;
       transaction(db, () => {
@@ -296,4 +306,4 @@ function safeBack(value) {
   return /^\/inbox(\?[^\s]*)?$/.test(v) ? v : '/inbox';
 }
 
-module.exports = { inboxRoutes, TABS };
+module.exports = { inboxRoutes, TABS, withRo };

@@ -62,6 +62,9 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'source_order_no', 'TEXT');
   // 문의 답장에 붙여 보낸 파일 이름·크기 (파일 자체는 저장하지 않음)
   addColumn(db, 'inquiry_replies', 'attachments', 'TEXT');
+  // 쇼핑몰 문의: 관련 주문번호(있으면 주문 카드로 바로가기), 답변할 때 필요한 채널별 값(JSON)
+  addColumn(db, 'inquiries', 'order_no', 'TEXT');
+  addColumn(db, 'inquiries', 'meta', 'TEXT');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.

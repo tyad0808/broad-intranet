@@ -12,13 +12,14 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
   ).run(`inbox_state_${source}`, JSON.stringify(state));
   const insert = db.prepare(`
     INSERT OR IGNORE INTO inquiries (source, external_id, from_name, from_addr, reply_to, subject, body, attachments,
-      message_id, references_hdr, received_at, status, handled_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      message_id, references_hdr, received_at, status, handled_at, order_no, meta)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const markAnswered = db.prepare(`
     UPDATE inquiries SET status = 'answered', handled_at = datetime('now'), version = version + 1, updated_at = datetime('now')
     WHERE source = ? AND external_id = ? AND status = 'open'
   `);
+  const updateMeta = db.prepare("UPDATE inquiries SET meta = ? WHERE source = ? AND external_id = ? AND status = 'open'");
   let running = null;
 
   async function runOnce() {
@@ -39,7 +40,10 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
             // 받기 전에 이미 메일 사이트에서 답장한 메일은 처음부터 '답변완료'
             const r = insert.run(it.source, it.external_id, it.from_name, it.from_addr, it.reply_to, it.subject, it.body,
               it.attachments, it.message_id, it.references_hdr, it.received_at,
-              it.answered ? 'answered' : 'open', it.answered ? new Date().toISOString() : null);
+              it.answered ? 'answered' : 'open', it.answered ? new Date().toISOString() : null,
+              it.order_no || null, it.meta || null);
+            // 이미 있는 문의: 답변에 필요한 값(meta)만 최신으로 (쿠팡 고객센터 문의의 상담 답변 번호 등)
+            if (!r.changes && it.meta) updateMeta.run(it.meta, it.source, it.external_id);
             if (r.changes) {
               result.created++;
               if (!it.answered) createdRows.push({ id: Number(r.lastInsertRowid), label: src.label, ...it });

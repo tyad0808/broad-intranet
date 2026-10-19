@@ -18,7 +18,8 @@
     "coupang-check": "node --disable-warning=ExperimentalWarning scripts/coupang-check.js",
     "godo-check": "node --disable-warning=ExperimentalWarning scripts/godo-check.js",
     "mail-check": "node --disable-warning=ExperimentalWarning scripts/mail-check.js",
-    "naver-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/naver-inquiry-check.js"
+    "naver-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/naver-inquiry-check.js",
+    "coupang-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/coupang-inquiry-check.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
