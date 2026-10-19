@@ -77,6 +77,14 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       SELECT q.source, COUNT(*) AS n FROM inquiries q ${whereSql([...base, ...tabWhere[tab]])} GROUP BY q.source
     `).all(...params, ...(tabParams[tab] || [])).map(r => [r.source, r.n]));
     const sources = [...new Set([...Object.keys(sourceLabels), ...Object.keys(sourceCounts)])].filter(s => boxOf(s) === box);
+    // 출처 칩 이름: 메일은 '네이버메일 / 지메일' 로 짧게. 같은 종류가 여러 개면 아이디를 붙여 구분 (네이버메일 · bro_ad)
+    const kindOf = s => (/^naver_mail/.test(s) ? '네이버메일' : /^gmail/.test(s) ? '지메일' : null);
+    const chipLabel = s => {
+      const kind = kindOf(s);
+      if (!kind) return labelOf(s);
+      const same = sources.filter(x => kindOf(x) === kind).length;
+      return same > 1 ? `${kind} · ${String(labelOf(s)).split('@')[0]}` : kind;
+    };
 
     const rows = db.prepare(`
       SELECT q.id, q.source, q.from_name, q.from_addr, q.subject, substr(q.body, 1, 160) AS preview, q.received_at,
@@ -93,7 +101,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       title: '문의함',
       navSection: 'inbox',
       rows, tab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
-      box, BOXES, boxCounts, boxOrder, defaultBox: boxOrder[0],
+      box, BOXES, boxCounts, chipLabel, boxOrder, defaultBox: boxOrder[0],
       staff: staff(),
       canCollect: Boolean(collector),
       noSources: !Object.keys(sourceLabels).some(s => boxOf(s) === box),

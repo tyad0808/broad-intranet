@@ -57,8 +57,8 @@ test('메일 계정이 여러 개면 메일 탭에 주소별로 칩이 나오고
   add.run('naver_mail', '1:1', '첫 번째 계정 메일');
   add.run('naver_mail2', '1:1', '두 번째 계정 메일');
   const mail = (await kim.request('/inbox?box=mail')).text;
-  assert.match(mail, /a@naver\.com <span class="count">1<\/span>/);
-  assert.match(mail, /bro_ad@naver\.com <span class="count">1<\/span>/);
+  assert.match(mail, /네이버메일 · a <span class="count">1<\/span>/, '같은 종류가 둘이면 칩에 아이디를 붙여 구분');
+  assert.match(mail, /네이버메일 · bro_ad <span class="count">1<\/span>/);
   assert.match(mail, /class="src-tag src-naver_mail2">bro_ad@naver\.com</);
   const second = (await kim.request('/inbox?src=naver_mail2')).text;
   assert.ok(second.includes('두 번째 계정 메일') && !second.includes('첫 번째 계정 메일'));

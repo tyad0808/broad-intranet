@@ -54,7 +54,7 @@
       <span class="chips-label">출처</span>
       <a href="<%= link({ src: '' }) %>" class="chip <%= src ? '' : 'on' %>">전체</a>
       <% sources.forEach(s => { const n = sourceCounts[s] || 0; %>
-        <a href="<%= link({ src: s }) %>" class="chip <%= src === s ? 'on' : '' %> <%= n ? '' : 'zero' %>"><span class="src-mark src-<%= s %>"></span><%= labelOf(s) %> <span class="count"><%= n %></span></a>
+        <a href="<%= link({ src: s }) %>" class="chip <%= src === s ? 'on' : '' %> <%= n ? '' : 'zero' %>"><span class="src-mark src-<%= s %>"></span><%= chipLabel(s) %> <span class="count"><%= n %></span></a>
       <% }) %>
     </nav>
   <% } %>
