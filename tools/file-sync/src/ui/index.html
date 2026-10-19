@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; media-src 'self'">
 <title>브로애드 파일 받기</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -57,7 +57,8 @@
         <label class="check full"><input id="moveDoneOnNas" type="checkbox"> 출력 완료하면 NAS 원본을 '_출력완료' 폴더로 옮기기 (디자이너가 NAS 에서 출력됐는지 볼 수 있게, 체크를 풀면 제자리로)</label>
       </div>
       <div class="row">
-        <button id="testSound">소리 들어보기</button>
+        <button id="testSound">기본 소리 듣기</button>
+        <button id="testUrgent">급한 소리 듣기</button>
         <button id="importAll" title="처음에 건너뛴 파일까지 지금 NAS 에 있는 파일을 모두 받습니다">지금 있는 파일 모두 받기</button>
         <button id="clearHistory" title="목록만 지웁니다. 받은 파일은 그대로 있습니다">목록 비우기</button>
       </div>

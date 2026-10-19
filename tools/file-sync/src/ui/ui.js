@@ -131,7 +131,14 @@
     if (s.status.state === 'setup' && $('settings').hidden && !render.askedOnce) { render.askedOnce = true; openSettings(); }
   }
 
-  // ---- 알림 소리 (딩동) ----
+  // ---- 알림 소리: 기본(sounds/notify.wav), 급한 파일(sounds/urgent.wav) ----
+  const SOUNDS = { normal: new Audio('sounds/notify.wav'), urgent: new Audio('sounds/urgent.wav') };
+  Object.values(SOUNDS).forEach(a => { a.preload = 'auto'; });
+  function play(kind) {
+    const a = SOUNDS[kind] || SOUNDS.normal;
+    a.currentTime = 0;
+    a.play().catch(e => { document.body.dataset.soundError = e.name; chime(); }); // 파일을 못 틀면 기본 딩동
+  }
   let audio = null;
   function chime() {
     try {
@@ -150,11 +157,23 @@
       });
     } catch (e) { /* 소리 장치 없음 */ }
   }
-  function stopRepeat() { clearInterval(repeatTimer); repeatTimer = null; }
+  function stopRepeat() { clearInterval(repeatTimer); repeatTimer = null; repeatKind = 'normal'; }
+  let repeatKind = 'normal';
   window.api.onChime(o => {
+    const kind = o.urgent ? 'urgent' : 'normal';
     document.body.dataset.chimes = Number(document.body.dataset.chimes || 0) + 1; // 몇 번 울렸는지 (점검용)
-    chime();
-    if (o.repeat && !repeatTimer) repeatTimer = setInterval(() => { if (state && state.unseen > 0) chime(); else stopRepeat(); }, 6000);
+    document.body.dataset.lastSound = kind;
+    play(kind);
+    if (o.repeat) {
+      if (o.urgent) repeatKind = 'urgent'; // 급한 것이 섞이면 반복도 급한 소리로
+      if (!repeatTimer) {
+        repeatTimer = setInterval(() => {
+          if (!state || state.unseen === 0) return stopRepeat();
+          // 아직 안 본 급한 파일이 있을 때만 급한 소리
+          play(repeatKind === 'urgent' && state.history.some(h => !h.seen && h.urgent) ? 'urgent' : 'normal');
+        }, 6000);
+      }
+    }
   });
 
   // ---- 설정 ----
@@ -177,7 +196,8 @@
   $('pickSource').onclick = async () => { const p = await window.api.chooseFolder($('source').value); if (p) { $('source').value = p; testSource(); } };
   $('pickDest').onclick = async () => { const p = await window.api.chooseFolder($('dest').value); if (p) $('dest').value = p; };
   $('testSource').onclick = testSource;
-  $('testSound').onclick = chime;
+  $('testSound').onclick = () => play('normal');
+  $('testUrgent').onclick = () => play('urgent');
   $('saveSettings').onclick = async () => {
     const patch = {};
     FIELDS.forEach(k => { patch[k] = $(k).value.trim(); });

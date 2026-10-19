@@ -142,7 +142,7 @@ function remind() {
     n.on('click', showWindow);
     n.show();
   }
-  if (config.sound && win && !win.isDestroyed()) win.webContents.send('chime', { repeat: false });
+  if (config.sound && win && !win.isDestroyed()) win.webContents.send('chime', { repeat: false, urgent: stale.some(e => e.urgent) });
 }
 
 function notify(list) {
