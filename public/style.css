@@ -877,3 +877,6 @@ body.embed .container { padding-top: 56px; }
 .meter { height: 14px; border-radius: 7px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; margin: 8px 0 10px; }
 .meter span { display: block; height: 100%; background: var(--primary); }
 .meter.alert span { background: var(--error); }
+/* 미리보기가 긴 메일이 있어도 목록이 화면 폭을 넘지 않게 (그리드 칸을 내용 길이에 맞춰 늘리지 않음) */
+.inbox-list { grid-template-columns: minmax(0, 1fr); }
+.inbox-item .oi-head { min-width: 0; flex-wrap: wrap; }
