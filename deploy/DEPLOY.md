@@ -171,7 +171,7 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 
 ---
 
-## 10. 자사몰 연결 (조회만)
+## 10. 자사몰 연결 (조회 + 발주확인·송장 등록)
 
 자사몰 API(broad-quote 의 mall-api)가 같은 서버에서 돌고 있으므로 서버 안쪽 주소로 부른다.
 
@@ -182,6 +182,24 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 2. `nano /opt/broad-intranet/app/.env` → 맨 아래에 `GODO_API_KEY=` 를 치고 그 뒤에 키 붙여넣기 → 저장
 3. `systemctl restart broad-intranet` → 인트라넷 **↻ 지금 수집**
 4. 잠시 끄려면 `.env` 에 `GODO=off`
+
+### 자사몰 발주확인·송장 등록 켜기
+
+자사몰 API 의 처리 기능(자사몰 관리자와 같은 처리 코드로 실행 → **고객에게 알림톡·SMS 가 실제로 나감**)을 쓴다.
+
+1. 처리용 인증키 만들기 (조회 키와 따로, 한 번만 화면에 나옴 — 캡처하지 말 것)
+   ```bash
+   cd /opt/broad-quote && sudo -u broadquote node apiKeys.js add 인트라넷주문처리 --scopes orders:write --ip 127.0.0.1
+   ```
+2. `nano /opt/broad-intranet/app/.env` → 맨 아래에 `GODO_WRITE_KEY=` 를 치고 그 뒤에 키 붙여넣기 → 저장
+3. 연결 확인 (택배사 목록만 읽음, 주문은 바꾸지 않음)
+   ```bash
+   cd /opt/broad-intranet/app && sudo -u intranet npm run godo-check
+   ```
+   `연결 정상` 과 로젠택배·경동택배에 ✓ 가 나오면 OK
+4. `systemctl restart broad-intranet` → 자사몰 주문에서 버튼을 눌러 **연습 모드**로 먼저 확인 (처리 기록에 '연습' 으로 남음)
+5. 실제로 보내려면 `.env` 에 `GODO_WRITE=on` 추가 → `systemctl restart broad-intranet`
+   처음에는 본인 테스트 주문으로 발주확인 → 송장 등록까지 해 보고, 자사몰 관리자에서 상태·송장이 맞게 들어갔는지 확인
 
 ---
 

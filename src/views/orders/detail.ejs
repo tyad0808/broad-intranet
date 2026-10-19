@@ -10,7 +10,7 @@
     <% claimItems.forEach(i => { const level = claimLevel(i.claim_status); if (!level) return; %>
       <p class="claim-box <%= level === 'done' ? 'done' : '' %>">
         <strong><%= claimLabel(i.claim_status) %></strong>
-        <%= i.product_name %><%= level === 'open' ? ' — 판매자센터에서 먼저 처리하세요. 처리 전에는 발주확인·발송처리를 막아 둡니다.' : '' %>
+        <%= i.product_name %><%= level === 'open' ? ` — ${order.channel === 'godo' ? '자사몰 관리자' : order.channel === 'coupang' ? '쿠팡 WING' : '판매자센터'}에서 먼저 처리하세요. 처리 전에는 발주확인·발송처리를 막아 둡니다.` : '' %>
       </p>
     <% }) %>
     <ul class="oi-items detail-items">
@@ -88,9 +88,15 @@
   </section>
 
   <div class="detail-side">
-  <% if (order.channel === 'smartstore' || order.channel === 'coupang') { const isCoupang = order.channel === 'coupang'; %>
+  <% if (['smartstore', 'coupang', 'godo'].includes(order.channel)) {
+       const isCoupang = order.channel === 'coupang';
+       // 쿠팡·자사몰의 발주확인 = 상품준비중 처리
+       const isPrep = isCoupang || order.channel === 'godo'; %>
   <section class="card process-card">
     <h2><%= channelInfo(order.channel).name %> 처리</h2>
+    <% if (order.channel === 'godo') { %>
+      <p class="muted small">자사몰 관리자에서 처리한 것과 똑같이 고객에게 알림톡·SMS 가 나갑니다. 자사몰 관리자에서 직접 처리해도 5분 안에 여기 상태가 바뀝니다.</p>
+    <% } %>
     <% if (actionModes[order.channel] !== 'live') { %>
       <p class="practice-note"><strong>연습 모드</strong> 버튼을 눌러도 <%= WRITE_CHANNEL_NAMES[order.channel] %> 보내지 않고 기록만 남깁니다.</p>
     <% } %>
@@ -102,10 +108,10 @@
 
     <% if (canConfirm) { %>
       <form method="post" action="/orders/<%= order.id %>/confirm" data-once
-            data-confirm="'<%= items[0].product_name %>' 주문을 <%= channelInfo(order.channel).name %>에 <%= isCoupang ? '상품준비중(발주확인)으로' : '발주확인' %> 처리할까요?&#10;고객에게 알림이 가고, 되돌릴 수 없습니다.">
+            data-confirm="'<%= items[0].product_name %>' 주문을 <%= channelInfo(order.channel).name %>에 <%= isPrep ? '상품준비중(발주확인)으로' : '발주확인' %> 처리할까요?&#10;고객에게 알림이 가고, 되돌릴 수 없습니다.">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
-        <button type="submit" class="wide"><%= isCoupang ? '발주확인 (상품준비중) 보내기' : '발주확인 보내기' %></button>
+        <button type="submit" class="wide"><%= isPrep ? '발주확인 (상품준비중) 보내기' : '발주확인 보내기' %></button>
       </form>
     <% } %>
 
@@ -162,12 +168,6 @@
         <% }) %>
       </ul>
     <% } %>
-  </section>
-  <% } else if (order.channel === 'godo') { %>
-  <section class="card process-card">
-    <h2>자사몰 처리</h2>
-    <p class="muted">자사몰 주문은 지금은 <strong>가져오기만</strong> 합니다. 입금 확인·상품준비중·송장 등록은 자사몰 관리자에서 해 주세요.
-      처리하면 5분 안에 여기 상태도 바뀝니다.</p>
   </section>
   <% } else if (order.channel === 'manual') { %>
   <% const st = order.channel_status; const editUrl = `/orders/${order.id}/manual-edit${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}`; %>

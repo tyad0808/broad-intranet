@@ -17,12 +17,18 @@
     return [...new Set(boxes.map(el => el.dataset.channelName).filter(Boolean))];
   }
 
+  // 쿠팡·자사몰은 발주확인이 '상품준비중' 처리라서 한 줄 덧붙인다
+  function prepNote(names) {
+    const prep = names.filter(n => n === '쿠팡' || n === '자사몰');
+    return prep.length ? `\n(${prep.join('·')}은 상품준비중으로 처리됩니다)` : '';
+  }
+
   function fill(raw, form) {
     const names = checkedChannels(form);
     return raw
       .replace('{ship}', shipSummary(form))
       .replace('{channels}', names.join(' · ') || '각 채널')
-      .replace('{coupangNote}', names.includes('쿠팡') ? '\n(쿠팡은 상품준비중으로 처리됩니다)' : '');
+      .replace('{coupangNote}', prepNote(names));
   }
 
   // 두 번 눌러 같은 요청이 두 번 가지 않도록, 확인 후에는 버튼을 잠근다

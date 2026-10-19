@@ -15,7 +15,8 @@
     "create-admin": "node --disable-warning=ExperimentalWarning scripts/create-admin.js",
     "backup": "node --disable-warning=ExperimentalWarning scripts/backup.js",
     "tidy-orders": "node --disable-warning=ExperimentalWarning scripts/tidy-orders.js",
-    "coupang-check": "node --disable-warning=ExperimentalWarning scripts/coupang-check.js"
+    "coupang-check": "node --disable-warning=ExperimentalWarning scripts/coupang-check.js",
+    "godo-check": "node --disable-warning=ExperimentalWarning scripts/godo-check.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
