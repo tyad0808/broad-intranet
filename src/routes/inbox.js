@@ -97,7 +97,10 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       if (collector.isRunning && collector.isRunning()) {
         return flashTo(req, res, b, 'warn', '지금 메일을 받는 중입니다. 1~2분 뒤 새로고침해 보세요. (처음에는 30일치라 오래 걸릴 수 있어요)');
       }
-      const r = await collector.run();
+      // 10초 안에 끝나면 결과를 바로 보여주고, 더 걸리면 먼저 돌려준다 (새 메일은 받는 대로 목록에 자동으로 나타남)
+      const running = collector.run();
+      const r = await Promise.race([running, new Promise(resolve => setTimeout(() => resolve(null), 10_000).unref())]);
+      if (!r) return flashTo(req, res, b, 'warn', '메일이 많아 계속 받는 중입니다. 새 메일은 받는 대로 목록에 자동으로 나타나요.');
       const parts = [`새 문의 ${r.created}건`];
       if (r.answered) parts.push(`메일 사이트에서 답장한 ${r.answered}건은 답변완료로`);
       if (r.ok) return flashTo(req, res, b, 'ok', `받기 완료: ${parts.join(', ')}.`);

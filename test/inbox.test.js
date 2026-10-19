@@ -60,8 +60,14 @@ function fakeImap(box, { uidValidity = 7 } = {}) {
       if (query.source) return { uid: Number(uid), source: m.raw };
       return { uid: Number(uid), flags: new Set(m.flags || []), size: m.size || m.raw.length, internalDate: new Date('2026-10-19T01:00:00Z'), envelope: { subject: '큰 메일', from: [{ name: '큰', address: 'big@x.com' }] } };
     },
-    async *fetch(range) {
-      for (const uid of String(range).split(',')) yield { uid: Number(uid), flags: new Set(box[uid].flags || []) };
+    // 여러 통을 한 번에 묻기 (제목·구조 / 본문 / 표시)
+    async *fetch(range, query) {
+      calls.fetches = (calls.fetches || 0) + 1;
+      for (const uid of String(range).split(',')) {
+        const m = box[uid];
+        if (query.source) yield { uid: Number(uid), source: m.raw };
+        else yield { uid: Number(uid), flags: new Set(m.flags || []), size: m.size || m.raw.length, internalDate: new Date('2026-10-19T01:00:00Z'), envelope: { subject: '큰 메일', from: [{ name: '큰', address: 'big@x.com' }] } };
+      }
     },
     async messageFlagsAdd(uid, flags) { calls.flagsAdded.push([String(uid), flags]); },
     async list() { return [{ path: 'INBOX' }, { path: '보낸메일함', specialUse: '\\Sent' }]; },
@@ -79,6 +85,7 @@ test('받은편지함: 처음엔 최근 30일, 다음부터는 지난번 다음 
   assert.ok(calls.search[0].since, '처음엔 날짜로');
   assert.deepStrictEqual(first.items.map(i => [i.external_id, i.subject, i.answered]), [['7:41', '견적 문의드립니다', false], ['7:42', '두 번째', true], ['7:43', '큰 메일', false]]);
   assert.match(first.items[2].body, /메일이 커서/);
+  assert.strictEqual(calls.fetches, 2, '메일마다 따로 묻지 않고 한 번에 (제목·구조 1번 + 본문 1번)');
   assert.deepStrictEqual(first.state, { uidValidity: '7', lastUid: 43 });
   assert.strictEqual(calls.logout, 1);
 
@@ -137,6 +144,7 @@ test('답장: 같은 대화로 묶이게 보내고, 원래 메일에 답장 표�
   const inquiry = { external_id: '7:41', from_addr: 'hong@example.com', reply_to: null, subject: '견적 문의', message_id: '<abc@x>', references_hdr: '<prev@x>' };
   const r = await sender.reply(inquiry, '안녕하세요, 견적 보내드립니다.');
   assert.strictEqual(r.result, 'ok');
+  await r.followUp; // '답장함' 표시·보낸메일함 복사는 화면을 돌려준 뒤에
   assert.deepStrictEqual(sent[0].envelope, { from: 'shop@naver.com', to: ['hong@example.com'] });
   const text = sent[0].raw.toString();
   assert.match(text, /In-Reply-To: <abc@x>/);
@@ -367,4 +375,17 @@ test('답장에 파일 첨부: 메일로 함께 보내고 기록엔 이름만, 2
   form.append('body', 'x');
   const noToken = await fetch(`${baseUrl}/inbox/${id1}/reply`, { method: 'POST', body: form, headers: { cookie: kim.cookie() }, redirect: 'manual' });
   assert.strictEqual(noToken.status, 403);
+});
+
+test('메일 계정 두 개는 동시에 받는다 (하나씩 기다리지 않음)', async () => {
+  const db = openDb(':memory:');
+  const slow = (source, label) => ({
+    source, label,
+    fetch: () => new Promise(resolve => setTimeout(() => resolve({ items: [], answeredIds: [], state: { lastUid: 1 } }), 300)),
+  });
+  const col = createInboxCollector({ db, sources: [slow('naver_mail', '네이버메일'), slow('gmail', '지메일')] });
+  const t0 = Date.now();
+  const r = await col.run();
+  assert.strictEqual(r.ok, true);
+  assert.ok(Date.now() - t0 < 550, `걸린 시간 ${Date.now() - t0}ms — 동시에 받으면 300ms 남짓`);
 });

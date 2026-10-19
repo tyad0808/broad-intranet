@@ -24,11 +24,16 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
   async function runOnce() {
     const result = { ok: true, created: 0, answered: 0, errors: [] };
     const createdRows = [];
-    for (const src of sources) {
+    // 메일 계정들을 동시에 받는다 (걸리는 시간 = 가장 느린 계정 하나만큼)
+    const fetched = await Promise.allSettled(sources.map(src => {
+      const openIds = db.prepare("SELECT external_id FROM inquiries WHERE source = ? AND status = 'open'")
+        .all(src.source).map(r => r.external_id);
+      return src.fetch({ state: getState(src.source), openIds });
+    }));
+    for (const [n, src] of sources.entries()) {
       try {
-        const openIds = db.prepare("SELECT external_id FROM inquiries WHERE source = ? AND status = 'open'")
-          .all(src.source).map(r => r.external_id);
-        const out = await src.fetch({ state: getState(src.source), openIds });
+        if (fetched[n].status === 'rejected') throw fetched[n].reason;
+        const out = fetched[n].value;
         transaction(db, () => {
           for (const it of out.items) {
             // 받기 전에 이미 메일 사이트에서 답장한 메일은 처음부터 '답변완료'

@@ -20,6 +20,7 @@ const FIRST_DAYS = 30;          // 처음 연결할 때 가져올 기간
 const MAX_PER_RUN = 200;        // 한 번에 가져올 최대 메일 수 (처음에 메일이 아주 많을 때)
 const MAX_SIZE = 8 * 1024 * 1024; // 이보다 큰 메일(큰 첨부)은 본문을 받지 않고 제목만
 const MAX_BODY = 20_000;        // 저장할 본문 글자 수
+const SOURCE_BATCH = 20;        // 본문을 한 번에 몇 통씩 받을지 (메모리를 너무 많이 쓰지 않게)
 const FETCH_LIMIT_MS = 4 * 60 * 1000; // 한 계정 받기가 이보다 오래 걸리면 끊는다 (멈춘 연결이 다음 받기를 막지 않게)
 
 // 메일의 첨부파일 목록 (IMAP 의 메일 구조에서 찾는다: 파일은 받지 않고 이름·크기·위치만)
@@ -134,10 +135,25 @@ function createMailSource(account, {
           }
           uids = uids.sort((a, b) => a - b).slice(-MAX_PER_RUN);
 
+          // 빠르게: 메일마다 따로 묻지 않고 한 번에 묻는다 (① 제목·크기·구조 전부, ② 본문은 20통씩 묶어서)
+          const metas = [];
+          if (uids.length) {
+            for await (const m of client.fetch(uids.join(','), { uid: true, flags: true, size: true, envelope: true, internalDate: true, bodyStructure: true }, { uid: true })) {
+              metas.push(m);
+            }
+          }
+          metas.sort((a, b) => a.uid - b.uid);
+          const small = metas.filter(m => !(m.size > MAX_SIZE)).map(m => m.uid);
+          const sources = new Map();
+          for (let i = 0; i < small.length; i += SOURCE_BATCH) {
+            for await (const m of client.fetch(small.slice(i, i + SOURCE_BATCH).join(','), { uid: true, source: true }, { uid: true })) {
+              sources.set(m.uid, m.source);
+            }
+          }
+
           const items = [];
-          for (const uid of uids) {
-            const meta = await client.fetchOne(String(uid), { uid: true, flags: true, size: true, envelope: true, internalDate: true, bodyStructure: true }, { uid: true });
-            if (!meta) continue;
+          for (const meta of metas) {
+            const uid = meta.uid;
             const uidKey = `${uidValidity}:${uid}`;
             const flags = new Set(meta.flags || []);
             if (meta.size > MAX_SIZE) {
@@ -152,9 +168,9 @@ function createMailSource(account, {
               });
               continue;
             }
-            const full = await client.fetchOne(String(uid), { uid: true, source: true }, { uid: true });
-            if (!full || !full.source) continue;
-            const item = await parseMail(account.source, full.source, { uidKey, flags, date: meta.internalDate, parse });
+            const raw = sources.get(uid);
+            if (!raw) continue;
+            const item = await parseMail(account.source, raw, { uidKey, flags, date: meta.internalDate, parse });
             // 첨부 목록은 메일 구조에서 (나중에 그 부분만 내려받을 수 있게 위치 번호까지)
             if (meta.bodyStructure) item.attachments = JSON.stringify(attachmentParts(meta.bodyStructure));
             items.push(item);
@@ -199,7 +215,11 @@ function defaultConnect(account) {
 const NOT_SENT_CODES = new Set(['EAUTH', 'ECONNECTION', 'EDNS', 'ESOCKET', 'EENVELOPE', 'ETLS']);
 
 function createMailSender(account, {
-  transport = nodemailer.createTransport({ host: account.smtp, port: 465, secure: true, auth: { user: account.user, pass: account.pass } }),
+  // pool: 한 번 연결한 메일 서버 연결을 잠시 다시 쓴다 (답장마다 새로 로그인하지 않아 빠름)
+  transport = nodemailer.createTransport({
+    host: account.smtp, port: 465, secure: true, auth: { user: account.user, pass: account.pass },
+    pool: true, maxConnections: 1, socketTimeout: 60_000,
+  }),
   connect = acc => defaultConnect(acc),
   fromName = process.env.MAIL_FROM_NAME || '브로애드',
 } = {}) {
@@ -226,9 +246,10 @@ function createMailSender(account, {
         if (NOT_SENT_CODES.has(e.code)) return { result: 'fail', message: `보내지 못했습니다 — ${e.message}` };
         return { result: 'unknown', message: `보내는 도중 연결이 끊겼습니다. ${account.label} 보낸메일함에서 나갔는지 확인하세요. (${e.message})` };
       }
-      // 여기부터는 이미 보낸 뒤 — 실패해도 답장 자체는 성공으로 둔다
-      await markOriginal(account, inquiry, raw, connect).catch(() => {});
-      return { result: 'ok', message: `${to} 로 답장을 보냈습니다.` };
+      // 여기부터는 이미 보낸 뒤 — 화면은 바로 돌려주고, '답장함' 표시·보낸메일함 복사는 뒤에서 한다
+      // (실패해도 답장 자체는 성공)
+      const followUp = markOriginal(account, inquiry, raw, connect).catch(() => {});
+      return { result: 'ok', message: `${to} 로 답장을 보냈습니다.`, followUp };
     },
   };
 }
