@@ -51,7 +51,7 @@ function normalizeInquiry(q, kind) {
   const id = pick(q, 'inquiryId', 'id');
   if (id === null) return null;
   const replies = Array.isArray(repliesOf(q)) ? repliesOf(q) : [];
-  const product = pick(q, 'sellerProductName', 'productName', 'vendorItemName', 'itemName');
+  const product = pick(q, 'sellerProductName', 'productName', 'vendorItemName', 'itemName', '_productName');
   const question = String(pick(q, 'content', 'inquiryContent', 'question', 'title') || '').trim();
   const status = String(pick(q, 'partnerCounselingStatus', 'csPartnerCounselingStatus', 'answeredType', 'status') || '').toUpperCase();
   const answered = kind === 'p'
@@ -75,13 +75,32 @@ function normalizeInquiry(q, kind) {
     references_hdr: null,
     received_at: toIso(pick(q, 'inquiryAt', 'receiptAt', 'createdAt', 'createAt', 'inquiryDate')) || new Date().toISOString(),
     order_no: orderNo !== null ? String(orderNo) : null,
-    meta: JSON.stringify({ kind, inquiryId: String(id), parentAnswerId: lastReply ? pick(lastReply, 'answerId', 'inquiryCommentId', 'id') : null }),
+    meta: JSON.stringify({
+      kind, inquiryId: String(id), sellerProductId: pick(q, 'sellerProductId'),
+      parentAnswerId: lastReply ? pick(lastReply, 'answerId', 'inquiryCommentId', 'id') : null,
+    }),
     answered,
   };
 }
 
 function createCoupangInquirySource({ client = createCoupangClient(), now = () => new Date(), firstDays = FIRST_DAYS } = {}) {
   const base = () => `/v2/providers/openapi/apis/api/v4/vendors/${client.vendorId}`;
+  // 상품번호 → 상품명 (쿠팡 문의 응답에는 상품명이 없다). 한 번 찾은 이름은 기억해 둔다
+  const names = new Map();
+  async function productName(sellerProductId) {
+    if (!sellerProductId) return null;
+    const key = String(sellerProductId);
+    if (!names.has(key)) {
+      try {
+        const body = await client.request('GET', `/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/${key}`);
+        const d = (body && body.data) || {};
+        names.set(key, d.sellerProductName || d.displayProductName || (Array.isArray(d.items) && d.items[0] && d.items[0].itemName) || null);
+      } catch {
+        names.set(key, null); // 못 찾아도 문의는 그대로 받는다
+      }
+    }
+    return names.get(key);
+  }
   return {
     source: SOURCE,
     label: LABEL,
@@ -102,7 +121,11 @@ function createCoupangInquirySource({ client = createCoupangClient(), now = () =
             });
             const list = listFrom(body);
             if (!list) throw new Error(`쿠팡 ${k.name} 응답 모양을 알 수 없습니다 (항목: ${Object.keys((body && body.data) || body || {}).join(', ') || '없음'})`);
-            items.push(...list.map(q => normalizeInquiry(q, kind)).filter(Boolean));
+            for (const q of list) {
+              const name = pick(q, 'sellerProductName', 'productName', 'vendorItemName') ? null : await productName(pick(q, 'sellerProductId'));
+              const item = normalizeInquiry(name ? { ...q, _productName: name } : q, kind);
+              if (item) items.push(item);
+            }
             if (list.length < k.pageSize) break;
           }
         }

@@ -105,3 +105,29 @@ test('화면: 쿠팡 문의는 쇼핑몰 문의 탭에, 관련 주문 보기 버
   await kim.submit(`/inbox/${id}`, `/inbox/${id}/reply`, { body: '내일 출고됩니다', version: '0' });
   assert.strictEqual(ctx.db.prepare('SELECT result FROM inquiry_replies').get().result, 'practice');
 });
+
+test('쿠팡 문의에 상품명이 없으면 상품번호로 상품명을 찾아 제목에 넣는다 (한 번 찾으면 기억, 못 찾아도 받기는 계속)', async () => {
+  const calls = [];
+  const client = {
+    vendorId: 'A00012345',
+    request: async (method, path) => {
+      calls.push(path);
+      if (path.includes('/seller-products/')) {
+        if (path.endsWith('/999')) throw Object.assign(new Error('없음'), { status: 404 });
+        return { code: 'SUCCESS', data: { sellerProductName: '포맥스 안내판 맞춤' } };
+      }
+      if (path.endsWith('onlineInquiries')) return { code: 200, data: { content: [
+        { inquiryId: '1', sellerProductId: '12345', content: '디자인 변경 가능한가요', inquiryAt: '2026-10-19 22:31:00', commentDtoList: [] },
+        { inquiryId: '2', sellerProductId: '12345', content: '배송은요', inquiryAt: '2026-10-19 22:32:00', commentDtoList: [] },
+        { inquiryId: '3', sellerProductId: '999', content: '?', inquiryAt: '2026-10-19 22:33:00', commentDtoList: [] },
+      ] } };
+      return { code: 200, data: { content: [] } };
+    },
+  };
+  const src = createCoupangInquirySource({ client, now: () => new Date('2026-10-19T14:00:00Z') });
+  const out = await src.fetch({ state: { lastRun: '2026-10-19T13:00:00.000Z' } });
+  assert.deepStrictEqual(out.items.map(i => i.subject), ['[쿠팡 상품문의] 포맥스 안내판 맞춤', '[쿠팡 상품문의] 포맥스 안내판 맞춤', '[쿠팡 상품문의] 문의']);
+  assert.strictEqual(calls.filter(p => p.endsWith('/seller-products/12345')).length, 1, '같은 상품은 한 번만 찾음');
+  assert.ok(isAllowed('GET', '/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/12345'));
+  assert.ok(!isAllowed('PUT', '/v2/providers/seller_api/apis/api/v1/marketplace/seller-products/12345'), '상품 수정은 안 됨');
+});

@@ -85,7 +85,8 @@ test('소스 코드 어디에도 허용 목록 밖의 네이버 API 주소가 �
       const coupangPath = p.replace(/\$\{[^}]+\}/g, 'A00012345');
       let n = 0;
       const coupangPathNum = p.replace(/\$\{[^}]+\}/g, () => (n++ === 0 ? 'A00012345' : '123'));
-      const coupangOk = require('../src/channels/coupangClient').ALLOWED.some(a => a.pattern.test(coupangPath) || a.pattern.test(coupangPathNum))
+      const coupangPathAllNum = p.replace(/\$\{[^}]+\}/g, '123'); // 업체코드 없이 번호만 들어가는 주소 (상품 조회)
+      const coupangOk = require('../src/channels/coupangClient').ALLOWED.some(a => a.pattern.test(coupangPath) || a.pattern.test(coupangPathNum) || a.pattern.test(coupangPathAllNum))
         || coupangPath === '/v2/providers/openapi/apis/api/v4/vendors/A00012345'; // 쿠팡 주소 앞부분 (뒤에 허용된 주소가 붙는다)
       assert.ok(allowed.has(p) || coupangOk, `${path.basename(file)} 에 허용되지 않은 주소: ${p}`);
     }

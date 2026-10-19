@@ -20,6 +20,8 @@ const ALLOWED = [
   // ── 4-3 문의 ── 조회 2개 + 답변 2개 (답변은 .env 의 COUPANG_ANSWER=on 일 때만)
   // 상품별 고객문의 조회 (문서에 v4·v5 둘 다 나와서 둘 다 허용)
   { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v[45]\/vendors\/[A-Za-z0-9]+\/onlineInquiries$/ },
+  // 상품 조회 (문의에 상품명이 없어서 상품번호로 이름을 찾는다, 조회만)
+  { method: 'GET', pattern: /^\/v2\/providers\/seller_api\/apis\/api\/v1\/marketplace\/seller-products\/\d+$/ },
   // 쿠팡 고객센터 문의 조회
   { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/callCenterInquiries$/ },
   { method: 'POST', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/onlineInquiries\/\d+\/replies$/, write: true, flag: 'COUPANG_ANSWER' },

@@ -19,7 +19,7 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
     UPDATE inquiries SET status = 'answered', handled_at = datetime('now'), version = version + 1, updated_at = datetime('now')
     WHERE source = ? AND external_id = ? AND status = 'open'
   `);
-  const updateMeta = db.prepare("UPDATE inquiries SET meta = ? WHERE source = ? AND external_id = ? AND status = 'open'");
+  const updateMeta = db.prepare("UPDATE inquiries SET meta = ?, subject = ? WHERE source = ? AND external_id = ? AND status = 'open'");
   let running = null;
 
   async function runOnce() {
@@ -43,7 +43,7 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
               it.answered ? 'answered' : 'open', it.answered ? new Date().toISOString() : null,
               it.order_no || null, it.meta || null);
             // 이미 있는 문의: 답변에 필요한 값(meta)만 최신으로 (쿠팡 고객센터 문의의 상담 답변 번호 등)
-            if (!r.changes && it.meta) updateMeta.run(it.meta, it.source, it.external_id);
+            if (!r.changes && it.meta) updateMeta.run(it.meta, it.subject, it.source, it.external_id);
             if (r.changes) {
               result.created++;
               if (!it.answered) createdRows.push({ id: Number(r.lastInsertRowid), label: src.label, ...it });
