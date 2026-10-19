@@ -14,6 +14,7 @@ const { orderRoutes } = require('./routes/orders');
 const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
 const { inboxRoutes } = require('./routes/inbox');
+const { replyUpload } = require('./inbox/upload');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
@@ -126,6 +127,8 @@ function createApp({
     next();
   });
 
+  // 문의 답장에 붙인 파일: 보안 검사가 폼 값을 읽을 수 있도록 그 전에 읽는다 (로그인한 직원만)
+  app.use('/inbox/:id/reply', replyUpload);
   app.use(csrf);
 
   app.get('/health', (req, res) => res.json({ ok: true }));

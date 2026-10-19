@@ -10,7 +10,7 @@ const { createGodoSource, createGodoWriter } = require('./channels/godo');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { createSmartstoreWriter } = require('./channels/smartstore');
-const { mailAccountsFromEnv, createMailSource, createMailSender } = require('./inbox/mail');
+const { mailAccountsFromEnv, createMailSource, createMailSender, createMailFiles } = require('./inbox/mail');
 const { createInboxCollector } = require('./inbox/collector');
 
 const PORT = process.env.PORT || 3000;
@@ -67,6 +67,8 @@ const inbox = {
   collector: inboxCollector,
   sourceLabels: Object.fromEntries(mailAccounts.map(a => [a.source, a.label])),
   senders: mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {},
+  // 첨부파일 열기는 연습 모드여도 된다 (읽기만)
+  files: Object.fromEntries(mailAccounts.map(a => [a.source, createMailFiles(a)])),
 };
 const app = createApp({ db, collector, notifier, actions, inbox });
 

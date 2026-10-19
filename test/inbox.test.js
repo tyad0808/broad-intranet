@@ -254,3 +254,117 @@ test('메일 받기가 멈추면 시간 제한으로 끊고 실패로 남긴다 
   assert.deepStrictEqual([r.ok, r.errors[0]], [false, '지메일: 시간 초과 (0분 안에 끝나지 않음)']);
   assert.strictEqual(col.isRunning(), false);
 });
+
+// ───────── 첨부파일 ─────────
+const { attachmentParts, createMailFiles, previewType } = require('../src/inbox/mail');
+const { Readable } = require('stream');
+
+const STRUCTURE = {
+  type: 'multipart/mixed', childNodes: [
+    { part: '1', type: 'multipart/alternative', childNodes: [{ part: '1.1', type: 'text/plain' }, { part: '1.2', type: 'text/html' }] },
+    { part: '2', type: 'image/jpeg', disposition: 'attachment', dispositionParameters: { filename: '시안.jpg' }, size: 2048 },
+    { part: '3', type: 'application/postscript', parameters: { name: 'logo.ai' }, size: 5000 },
+  ],
+};
+
+test('첨부 목록은 메일 구조에서: 이름·크기·종류·위치 (본문은 제외), 미리보기는 안전한 그림만', () => {
+  assert.deepStrictEqual(attachmentParts(STRUCTURE), [
+    { part: '2', name: '시안.jpg', size: 2048, type: 'image/jpeg' },
+    { part: '3', name: 'logo.ai', size: 5000, type: 'application/postscript' },
+  ]);
+  assert.strictEqual(previewType({ name: 'a.PNG' }), 'image/png', '예전 기록은 확장자로');
+  assert.strictEqual(previewType({ name: 'x.svg', type: 'image/svg+xml' }), null, 'SVG 는 미리보기 안 함');
+});
+
+test('첨부 열기: 그 부분만 메일함에서 가져와 넘겨주고 연결을 정리한다', async () => {
+  const log = [];
+  const client = {
+    mailbox: { uidValidity: 7n },
+    async getMailboxLock() { return { release: () => log.push('release') }; },
+    async fetchOne(uid) { log.push(`structure ${uid}`); return { bodyStructure: STRUCTURE }; },
+    async download(uid, part) { log.push(`download ${uid} ${part}`); return { content: Readable.from([Buffer.from('JPEG')]) }; },
+    async logout() { log.push('logout'); },
+  };
+  const files = createMailFiles({ source: 'gmail' }, { connect: async () => client });
+  const f = await files.open({ external_id: '7:41' }, 0);
+  assert.deepStrictEqual([f.name, f.type], ['시안.jpg', 'image/jpeg']);
+  let data = '';
+  for await (const chunk of f.stream) data += chunk;
+  await f.done();
+  assert.strictEqual(data, 'JPEG');
+  assert.deepStrictEqual(log, ['structure 41', 'download 41 2', 'release', 'logout']);
+  await assert.rejects(files.open({ external_id: '8:41' }, 0), /메일함이 바뀌어/);
+  await assert.rejects(files.open({ external_id: '7:41' }, 5), /찾을 수 없습니다/);
+});
+
+test('화면: 첨부를 누르면 내려받기(그림은 미리보기), 다른 직원 아닌 사람은 못 받음', async t => {
+  const opened = [];
+  const files = {
+    naver_mail: {
+      async open(inq, n) {
+        opened.push(n);
+        const list = [{ name: '시안 "최종".jpg', type: 'image/jpeg', size: 4 }, { name: 'logo.ai', type: 'application/postscript', size: 3 }];
+        if (!list[n]) throw Object.assign(new Error('첨부파일을 찾을 수 없습니다.'), { status: 404 });
+        return { ...list[n], stream: Readable.from([Buffer.from('DATA')]), done: async () => {} };
+      },
+    },
+  };
+  const sourceLabels = { naver_mail: '네이버메일' };
+  const ctx = await startServer({ inbox: { sourceLabels, files } });
+  t.after(() => ctx.server.close());
+  addUser(ctx.db, { email: 'kim@broad.test' });
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  const id = Number(ctx.db.prepare(`INSERT INTO inquiries (source, external_id, subject, body, attachments, received_at)
+    VALUES ('naver_mail', '7:1', '시안', '첨부합니다', ?, '2026-10-19T01:00:00Z')`)
+    .run(JSON.stringify([{ part: '2', name: '시안 "최종".jpg', size: 4, type: 'image/jpeg' }, { part: '3', name: 'logo.ai', size: 3, type: 'application/postscript' }])).lastInsertRowid);
+
+  const detail = (await kim.request(`/inbox/${id}`)).text;
+  assert.match(detail, new RegExp(`href="/inbox/${id}/files/1">📎 logo.ai`));
+  assert.match(detail, new RegExp(`<img src="/inbox/${id}/files/0\\?view=1"`), '그림은 미리보기');
+  assert.ok(!detail.includes(`files/1?view=1`), 'ai 파일은 미리보기 없음');
+
+  const res = await fetch(`${ctx.baseUrl}/inbox/${id}/files/1`, { headers: { cookie: kim.cookie() } });
+  assert.strictEqual(res.headers.get('content-type'), 'application/octet-stream');
+  assert.match(res.headers.get('content-disposition'), /^attachment; .*filename\*=UTF-8''logo\.ai/);
+  assert.strictEqual(await res.text(), 'DATA');
+  const img = await fetch(`${ctx.baseUrl}/inbox/${id}/files/0?view=1`, { headers: { cookie: kim.cookie() } });
+  assert.strictEqual(img.headers.get('content-type'), 'image/jpeg');
+  assert.match(img.headers.get('content-disposition'), /^inline; filename="__.*_\.jpg"|^inline; filename="/);
+  assert.ok(!img.headers.get('content-disposition').includes('"최종"'), '이름 속 따옴표는 바꿔서');
+  assert.strictEqual((await fetch(`${ctx.baseUrl}/inbox/${id}/files/9`, { headers: { cookie: kim.cookie() } })).status, 404);
+  const anon = await fetch(`${ctx.baseUrl}/inbox/${id}/files/1`, { redirect: 'manual' });
+  assert.notStrictEqual(anon.status, 200, '로그인 안 하면 못 받음');
+});
+
+test('답장에 파일 첨부: 메일로 함께 보내고 기록엔 이름만, 20MB 넘으면 막는다', async t => {
+  const got = [];
+  const sender = { reply: async (inq, body, files) => { got.push(files); return { result: 'ok', message: '보냄' }; } };
+  const { kim, id1, db, baseUrl } = await setupInbox(t, { senders: { naver_mail: sender } });
+  const page = (await kim.request(`/inbox/${id1}`)).text;
+  assert.match(page, /enctype="multipart\/form-data"/);
+  const token = /name="_csrf" value="([^"]+)"/.exec(page)[1];
+  const send = async (files, version) => {
+    const form = new FormData();
+    form.append('_csrf', token);
+    form.append('version', String(version));
+    form.append('body', '시안 보내드립니다');
+    for (const [name, content] of files) form.append('files', new Blob([content], { type: 'image/png' }), name);
+    return fetch(`${baseUrl}/inbox/${id1}/reply`, { method: 'POST', body: form, headers: { cookie: kim.cookie() }, redirect: 'manual' });
+  };
+  const r = await send([['시안1.png', 'AAAA'], ['시안2.png', 'BB']], 0);
+  assert.strictEqual(r.status, 302);
+  assert.deepStrictEqual(got[0].map(f => [f.name, f.type, f.content.toString()]), [['시안1.png', 'image/png', 'AAAA'], ['시안2.png', 'image/png', 'BB']]);
+  const rec = db.prepare('SELECT attachments FROM inquiry_replies').get();
+  assert.deepStrictEqual(JSON.parse(rec.attachments), [{ name: '시안1.png', size: 4 }, { name: '시안2.png', size: 2 }]);
+  assert.match((await kim.request(`/inbox/${id1}`)).text, /📎 시안1\.png, 시안2\.png/);
+
+  const big = await send([['큰파일.png', Buffer.alloc(21 * 1024 * 1024)]], 1);
+  assert.strictEqual(big.status, 302);
+  assert.strictEqual(got.length, 1, '한도를 넘으면 보내지 않음');
+
+  // CSRF 토큰 없이 파일을 보내면 막힌다
+  const form = new FormData();
+  form.append('body', 'x');
+  const noToken = await fetch(`${baseUrl}/inbox/${id1}/reply`, { method: 'POST', body: form, headers: { cookie: kim.cookie() }, redirect: 'manual' });
+  assert.strictEqual(noToken.status, 403);
+});

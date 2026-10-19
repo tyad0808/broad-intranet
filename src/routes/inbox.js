@@ -3,12 +3,14 @@
 // 답변 보내기는 출처마다 따로 켠다 (메일: .env 의 MAIL_SEND=on). 꺼져 있으면 연습 모드 — 보내지 않고 기록만 남긴다.
 const express = require('express');
 const { transaction } = require('../db');
+const { previewType } = require('../inbox/mail');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
 const MAX_REPLY = 10_000;
 
-function inboxRoutes(db, { collector = null, senders = {}, sourceLabels = {}, notifier }) {
+// files: { naver_mail: 첨부파일 열기 } (메일함에서 그때그때 가져온다)
+function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLabels = {}, notifier }) {
   const router = express.Router();
   const busy = new Set(); // 같은 문의에 답변을 두 번 연달아 보내는 것 방지
 
@@ -133,6 +135,8 @@ function inboxRoutes(db, { collector = null, senders = {}, sourceLabels = {}, no
       title: inquiry.subject || '문의',
       navSection: 'inbox',
       inquiry, attachments, replies, staff: staff(),
+      canOpenFiles: Boolean(files[inquiry.source]),
+      previewType,
       label: labelOf(inquiry.source),
       mode: modeOf(inquiry.source),
       STATUS_LABELS,
@@ -152,16 +156,20 @@ function inboxRoutes(db, { collector = null, senders = {}, sourceLabels = {}, no
     if (Number(req.body.version) !== inquiry.version) {
       return flashTo(req, res, url, 'error', '그사이 다른 직원이 이 문의를 바꿨습니다. 바뀐 내용을 확인하고 다시 보내 주세요.');
     }
+    if (req.uploadError) return flashTo(req, res, url, 'error', req.uploadError);
+    const attached = req.files || [];
     if (busy.has(inquiry.id)) return flashTo(req, res, url, 'error', '이미 보내는 중입니다. 잠시 후 새로고침해 보세요.');
     busy.add(inquiry.id);
     try {
       const sender = senders[inquiry.source];
       const out = sender
-        ? await sender.reply(inquiry, body)
+        ? await sender.reply(inquiry, body, attached)
         : { result: 'practice', message: `연습 모드라 ${labelOf(inquiry.source)}로 보내지 않았습니다.` };
+      // 기록에는 파일 이름·크기만 (파일 자체는 저장하지 않음)
+      const fileList = attached.length ? JSON.stringify(attached.map(f => ({ name: f.name, size: f.content.length }))) : null;
       transaction(db, () => {
-        db.prepare('INSERT INTO inquiry_replies (inquiry_id, user_id, body, mode, result, message) VALUES (?, ?, ?, ?, ?, ?)')
-          .run(inquiry.id, req.user.id, body, sender ? 'live' : 'practice', out.result, out.message);
+        db.prepare('INSERT INTO inquiry_replies (inquiry_id, user_id, body, mode, result, message, attachments) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run(inquiry.id, req.user.id, body, sender ? 'live' : 'practice', out.result, out.message, fileList);
         if (out.result === 'ok') {
           db.prepare("UPDATE inquiries SET status = 'answered', handled_by = ?, handled_at = datetime('now') WHERE id = ?")
             .run(req.user.id, inquiry.id);
@@ -176,6 +184,30 @@ function inboxRoutes(db, { collector = null, senders = {}, sourceLabels = {}, no
     } finally {
       busy.delete(inquiry.id);
     }
+  });
+
+  // 받은 첨부파일 열기·내려받기 (?view=1 이면 그림을 화면에 바로 보여줌)
+  router.get('/inbox/:id/files/:n', async (req, res) => {
+    const inquiry = findInquiry(req.params.id);
+    const opener = inquiry && files[inquiry.source];
+    if (!opener) return res.status(404).render('error', { title: '없는 파일', message: '첨부파일을 찾을 수 없습니다.' });
+    let file;
+    try {
+      file = await opener.open(inquiry, Number(req.params.n));
+    } catch (e) {
+      if (e.status === 404) return res.status(404).render('error', { title: '없는 파일', message: e.message });
+      return res.status(502).render('error', { title: '파일을 가져오지 못함', message: `${labelOf(inquiry.source)}에서 첨부파일을 가져오지 못했습니다. 잠시 후 다시 시도하세요. (${e.message})` });
+    }
+    const image = req.query.view === '1' && previewType(file);
+    const safeName = file.name.replace(/["\\\r\n]/g, '_');
+    res.set({
+      'Content-Type': image || 'application/octet-stream',
+      'Content-Disposition': `${image ? 'inline' : 'attachment'}; filename="${safeName.replace(/[^\x20-\x7e]/g, '_')}"; filename*=UTF-8''${encodeURIComponent(safeName)}`,
+      'Cache-Control': 'private, max-age=600',
+    });
+    file.stream.on('error', () => res.destroy());
+    res.on('close', () => { file.done().catch(() => {}); });
+    file.stream.pipe(res);
   });
 
   // 담당자 지정

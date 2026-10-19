@@ -14,12 +14,30 @@
       <dt>받은 시각</dt><dd><%= kst(inquiry.received_at) %></dd>
       <% if (attachments.length) { %>
         <dt>첨부</dt>
-        <dd><% attachments.forEach(a => { %><div><%= a.name %> <span class="muted small">(<%= Math.max(1, Math.round(a.size / 1024)) %>KB)</span></div><% }) %>
-          <div class="muted small">첨부파일은 <%= label %>에서 받아 주세요.</div></dd>
+        <dd>
+          <% attachments.forEach((a, n) => { %>
+            <div class="file-row">
+              <% if (canOpenFiles) { %><a href="/inbox/<%= inquiry.id %>/files/<%= n %>">📎 <%= a.name %></a><% } else { %>📎 <%= a.name %><% } %>
+              <span class="muted small">(<%= a.size >= 1024 * 1024 ? `${(a.size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(a.size / 1024))}KB` %>)</span>
+            </div>
+          <% }) %>
+          <div class="muted small">눌러서 내려받습니다. 파일은 서버에 저장하지 않고 <%= label %>에서 그때그때 가져옵니다.</div>
+        </dd>
       <% } %>
     </dl>
     <%# 본문은 글자로만 보여준다 (메일 속 스크립트·추적 이미지가 실행되지 않게) %>
     <div class="inquiry-body"><%= inquiry.body || '(내용 없음)' %></div>
+    <%# 그림 첨부 미리보기 (5MB 이하, 최대 6장) — 누르면 크게 %>
+    <% const images = canOpenFiles ? attachments.map((a, n) => ({ ...a, n })).filter(a => previewType(a) && a.size <= 5 * 1024 * 1024).slice(0, 6) : []; %>
+    <% if (images.length) { %>
+      <div class="image-previews">
+        <% images.forEach(a => { %>
+          <a href="/inbox/<%= inquiry.id %>/files/<%= a.n %>?view=1" target="_blank" rel="noopener" title="<%= a.name %>">
+            <img src="/inbox/<%= inquiry.id %>/files/<%= a.n %>?view=1" alt="<%= a.name %>" loading="lazy">
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
   </section>
 
   <div class="detail-side">
@@ -41,13 +59,16 @@
         <noscript><button type="submit" class="btn-sm">지정</button></noscript>
       </form>
 
-      <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form" data-once
+      <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form" enctype="multipart/form-data" data-once
             data-confirm="<%= inquiry.reply_to || inquiry.from_addr %> 에게 답변을 보낼까요?&#10;보낸 메일은 되돌릴 수 없습니다.">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="version" value="<%= inquiry.version %>">
         <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
           <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
+        </label>
+        <label class="file-input">파일 첨부 <span class="muted small">(합계 20MB까지, 큰 파일은 웹하드 링크로)</span>
+          <input type="file" name="files" multiple data-max-total="20971520">
         </label>
         <button type="submit" class="wide">답변 보내기</button>
       </form>
@@ -79,6 +100,8 @@
               <span class="muted">· <%= r.user_name || '-' %> · <%= kst(r.created_at) %></span>
               <% if (r.result !== 'ok') { %><div class="muted small"><%= r.message %></div><% } %>
               <div class="reply-body"><%= r.body %></div>
+              <% let sentFiles = []; try { sentFiles = JSON.parse(r.attachments || '[]'); } catch { sentFiles = []; } %>
+              <% if (sentFiles.length) { %><div class="muted small">📎 <%= sentFiles.map(f => f.name).join(', ') %></div><% } %>
             </li>
           <% }) %>
         </ul>
@@ -88,4 +111,5 @@
 </div>
 <script src="/confirm.js"></script>
 <script src="/orders.js"></script>
+<script src="/inbox.js"></script>
 <%- include('../partials/footer') %>

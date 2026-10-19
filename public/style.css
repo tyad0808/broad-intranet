@@ -880,3 +880,10 @@ body.embed .container { padding-top: 56px; }
 /* 미리보기가 긴 메일이 있어도 목록이 화면 폭을 넘지 않게 (그리드 칸을 내용 길이에 맞춰 늘리지 않음) */
 .inbox-list { grid-template-columns: minmax(0, 1fr); }
 .inbox-item .oi-head { min-width: 0; flex-wrap: wrap; }
+
+/* 문의 첨부파일 */
+.file-row { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.image-previews { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.image-previews img { display: block; max-width: 180px; max-height: 180px; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; background: var(--bg); }
+.file-input { margin-top: 8px; }
+.file-input input[type=file] { padding: 6px 0; border: 0; background: none; }

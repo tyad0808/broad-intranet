@@ -22,6 +22,31 @@ const MAX_SIZE = 8 * 1024 * 1024; // 이보다 큰 메일(큰 첨부)은 본문�
 const MAX_BODY = 20_000;        // 저장할 본문 글자 수
 const FETCH_LIMIT_MS = 4 * 60 * 1000; // 한 계정 받기가 이보다 오래 걸리면 끊는다 (멈춘 연결이 다음 받기를 막지 않게)
 
+// 메일의 첨부파일 목록 (IMAP 의 메일 구조에서 찾는다: 파일은 받지 않고 이름·크기·위치만)
+//   part: 메일 안의 위치 번호 → 나중에 그 부분만 내려받을 때 쓴다
+function attachmentParts(node, out = []) {
+  if (!node) return out;
+  if (Array.isArray(node.childNodes) && node.childNodes.length) {
+    for (const child of node.childNodes) attachmentParts(child, out);
+    return out;
+  }
+  const name = (node.dispositionParameters && node.dispositionParameters.filename) || (node.parameters && node.parameters.name);
+  if (node.disposition === 'attachment' || name) {
+    out.push({ part: node.part || '1', name: name || '(이름 없음)', size: node.size || 0, type: String(node.type || 'application/octet-stream').toLowerCase() });
+  }
+  return out;
+}
+
+// 미리보기로 화면에 바로 보여줘도 되는 그림 (SVG 는 스크립트가 들어갈 수 있어 제외)
+const PREVIEW_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+const EXT_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+function previewType(file) {
+  const type = String(file.type || '').toLowerCase();
+  if (PREVIEW_TYPES.has(type)) return type;
+  const ext = String(file.name || '').split('.').pop().toLowerCase();
+  return EXT_TYPES[ext] || null;
+}
+
 // 정해진 시간 안에 끝나지 않으면 오류
 function withTimeout(promise, ms, message) {
   let timer;
@@ -111,7 +136,7 @@ function createMailSource(account, {
 
           const items = [];
           for (const uid of uids) {
-            const meta = await client.fetchOne(String(uid), { uid: true, flags: true, size: true, envelope: true, internalDate: true }, { uid: true });
+            const meta = await client.fetchOne(String(uid), { uid: true, flags: true, size: true, envelope: true, internalDate: true, bodyStructure: true }, { uid: true });
             if (!meta) continue;
             const uidKey = `${uidValidity}:${uid}`;
             const flags = new Set(meta.flags || []);
@@ -122,14 +147,17 @@ function createMailSource(account, {
                 source: account.source, external_id: uidKey, from_name: from.name || null, from_addr: from.address || null,
                 reply_to: null, subject: env.subject || '(제목 없음)',
                 body: `(메일이 커서(${Math.round(meta.size / 1024 / 1024)}MB) 본문을 가져오지 않았습니다. ${account.label}에서 확인하세요.)`,
-                attachments: '[]', message_id: env.messageId || null, references_hdr: null,
+                attachments: JSON.stringify(attachmentParts(meta.bodyStructure)), message_id: env.messageId || null, references_hdr: null,
                 received_at: new Date(meta.internalDate || now()).toISOString(), answered: flags.has('\\Answered'),
               });
               continue;
             }
             const full = await client.fetchOne(String(uid), { uid: true, source: true }, { uid: true });
             if (!full || !full.source) continue;
-            items.push(await parseMail(account.source, full.source, { uidKey, flags, date: meta.internalDate, parse }));
+            const item = await parseMail(account.source, full.source, { uidKey, flags, date: meta.internalDate, parse });
+            // 첨부 목록은 메일 구조에서 (나중에 그 부분만 내려받을 수 있게 위치 번호까지)
+            if (meta.bodyStructure) item.attachments = JSON.stringify(attachmentParts(meta.bodyStructure));
+            items.push(item);
           }
 
           // 답변 전인 메일 중 메일 사이트에서 답장한 것 찾기 (\Answered 표시)
@@ -176,7 +204,8 @@ function createMailSender(account, {
   fromName = process.env.MAIL_FROM_NAME || '브로애드',
 } = {}) {
   return {
-    async reply(inquiry, body) {
+    // files: [{ name, type, content(Buffer) }] — 보내는 동안만 들고 있다가 버린다 (서버에 저장하지 않음)
+    async reply(inquiry, body, files = []) {
       const to = inquiry.reply_to || inquiry.from_addr;
       if (!to) return { result: 'fail', message: '받는 사람 주소가 없는 메일입니다.' };
       const subject = /^re:/i.test(inquiry.subject || '') ? inquiry.subject : `Re: ${inquiry.subject || ''}`;
@@ -186,6 +215,7 @@ function createMailSender(account, {
         to,
         subject,
         text: body,
+        attachments: files.map(f => ({ filename: f.name, content: f.content, contentType: f.type || 'application/octet-stream' })),
         inReplyTo: inquiry.message_id || undefined,
         references: refs,
       }).compile().build();
@@ -224,4 +254,33 @@ async function markOriginal(account, inquiry, raw, connect) {
   }
 }
 
-module.exports = { PROVIDERS, withTimeout, defaultConnect, mailAccountsFromEnv, createMailSource, createMailSender, parseMail, htmlToText };
+// 받은 첨부파일 열기: 누르는 순간 메일함에서 그 부분만 가져와 그대로 넘겨준다 (서버에 남기지 않음)
+function createMailFiles(account, { connect = acc => defaultConnect(acc) } = {}) {
+  return {
+    async open(inquiry, index) {
+      const [validity, uid] = String(inquiry.external_id).split(':');
+      const client = await withTimeout(connect(account), 60_000, '메일 서버 연결 시간 초과');
+      let lock = null;
+      const done = async () => {
+        if (lock) { lock.release(); lock = null; }
+        await client.logout().catch(() => {});
+      };
+      try {
+        lock = await client.getMailboxLock('INBOX');
+        if (String(client.mailbox.uidValidity) !== validity) throw Object.assign(new Error('메일함이 바뀌어 이 메일을 찾을 수 없습니다.'), { status: 404 });
+        const meta = await client.fetchOne(uid, { uid: true, bodyStructure: true }, { uid: true });
+        if (!meta) throw Object.assign(new Error('메일함에서 지워진 메일입니다.'), { status: 404 });
+        const file = attachmentParts(meta.bodyStructure)[Number(index)];
+        if (!file) throw Object.assign(new Error('첨부파일을 찾을 수 없습니다.'), { status: 404 });
+        const dl = await client.download(uid, file.part, { uid: true });
+        if (!dl || !dl.content) throw Object.assign(new Error('첨부파일을 가져오지 못했습니다.'), { status: 404 });
+        return { ...file, stream: dl.content, done };
+      } catch (e) {
+        await done();
+        throw e;
+      }
+    },
+  };
+}
+
+module.exports = { PROVIDERS, attachmentParts, previewType, PREVIEW_TYPES, createMailFiles, withTimeout, defaultConnect, mailAccountsFromEnv, createMailSource, createMailSender, parseMail, htmlToText };
