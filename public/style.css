@@ -871,7 +871,6 @@ body.embed .container { padding-top: 56px; }
 .reply-form { margin-top: 12px; }
 .reply-form textarea { min-height: 160px; }
 .assign-row label { display: flex; align-items: center; gap: 8px; margin: 0; }
-.inquiry-actions { flex-wrap: wrap; align-items: center; margin-top: 12px; }
 
 /* 관리자 → 저장 공간: 사용량 막대 */
 .meter { height: 14px; border-radius: 7px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; margin: 8px 0 10px; }
@@ -909,28 +908,11 @@ body.embed .container { padding-top: 56px; }
 .drop-remove:hover { background: none; color: var(--error); }
 
 /* 문의 아래 버튼 두 개: 같은 크기로 나란히 */
-.inquiry-actions { display: flex; gap: 8px; align-items: stretch; }
-.inquiry-actions form.inline { display: flex; flex: 1 1 0; }
-.inquiry-actions .btn-sm { flex: 1 1 0; display: inline-flex; align-items: center; justify-content: center; min-height: 38px; padding: 0 12px; box-sizing: border-box; line-height: 1.2; text-align: center; text-decoration: none; color: var(--text); font-size: 14px; }
-.inquiry-actions form.inline .btn-sm { width: 100%; }
-.inquiry-actions > .muted { flex-basis: 100%; order: 3; }
-.inquiry-actions form.inline { min-width: 0; }
-.inquiry-actions .btn-sm { white-space: normal; min-width: 0; word-break: keep-all; }
-/* 두 버튼을 같은 너비·높이로 (2칸 격자) */
-.inquiry-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.inquiry-actions form.inline { display: block; }
-.inquiry-actions .btn-sm { width: 100%; height: 100%; min-height: 40px; }
-.inquiry-actions > .muted { grid-column: 1 / -1; }
-.inquiry-actions form.inline { display: flex; }
-.inquiry-actions .btn-sm { height: auto; margin: 0; }
-.inquiry-actions form.inline .btn-sm { flex: 1; }
-.inquiry-actions form.inline { margin: 0; }
 
 /* 관리자 → 주문 수집: 자동 수집 간격 */
 .interval-form label { display: inline-flex; align-items: center; gap: 6px; margin: 0 12px 0 0; }
 .interval-form input[type=number] { width: 5em; }
 .src-tag.src-smartstore_qna { background: #e8f8ee; border-color: #a7e3bd; color: #03a94d; }
-.inquiry-actions { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
 
 /* 문의함 큰 탭: 쇼핑몰 문의 / 메일 */
 .box-tabs { display: flex; gap: 8px; margin: 4px 0 14px; }
@@ -951,3 +933,14 @@ body.embed .container { padding-top: 56px; }
 .src-tag.src-gmail2, .src-tag.src-gmail4 { background: #fff4e0; border-color: #f5d9a8; color: #9a6700; }
 .src-tag.src-gmail3, .src-tag.src-gmail5 { background: #f3efff; border-color: #d9ccff; color: #5b21b6; }
 .src-tag.src-coupang_qna { background: #fdecec; border-color: #f5c2c2; color: #e52528; }
+
+/* 문의 상세 아래 버튼: 버튼이 1개든 2개든 같은 높이로 칸을 나눠 채운다 (처리 기록 글은 아랫줄 전체) */
+.inquiry-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin-top: 12px; }
+.inquiry-actions form.inline { display: flex; flex: 1 1 140px; min-width: 0; margin: 0; }
+.inquiry-actions > a.btn-sm { flex: 1 1 140px; }
+.inquiry-actions .btn-sm {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; min-height: 40px; margin: 0; padding: 0 12px;
+  box-sizing: border-box; line-height: 1.2; text-align: center; text-decoration: none; color: var(--text); font-size: 14px;
+  white-space: normal; word-break: keep-all;
+}
+.inquiry-actions > .muted { flex-basis: 100%; order: 9; }
