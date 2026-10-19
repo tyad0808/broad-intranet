@@ -90,16 +90,6 @@ function migrate(db) {
     CREATE INDEX IF NOT EXISTS idx_orders_stage    ON orders(stage_id);
     CREATE INDEX IF NOT EXISTS idx_orders_due      ON orders(due_date);
 
-    -- 주문 카드에 무슨 일이 있었는지 (단계 이동, 담당자 변경 등). 누가 언제 했는지 남긴다
-    CREATE TABLE IF NOT EXISTS order_events (
-      id         INTEGER PRIMARY KEY,
-      order_id   INTEGER NOT NULL REFERENCES orders(id),
-      user_id    INTEGER REFERENCES users(id),
-      message    TEXT    NOT NULL,
-      created_at TEXT    NOT NULL DEFAULT (datetime('now'))
-    );
-    CREATE INDEX IF NOT EXISTS idx_order_events_order ON order_events(order_id);
-
     -- 설정값 (미지정 알림 기준 건수 등)
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
@@ -191,21 +181,6 @@ function migrate(db) {
     );
   `);
   upgradeNotificationTypes(db);
-  addOrderColumns(db);
-}
-
-// 현황판(5단계)에서 쓰는 주문 칸. 예전 DB 에는 없으므로 없을 때만 추가한다
-function addOrderColumns(db) {
-  const have = new Set(db.prepare('PRAGMA table_info(orders)').all().map(c => c.name));
-  const columns = {
-    urgent: 'INTEGER NOT NULL DEFAULT 0',          // 1이면 [급]
-    done_at: 'TEXT',                               // 완료 처리한 시각. 값이 있으면 현황판에서 빠진다
-    created_by: 'INTEGER REFERENCES users(id)',    // 직접 등록한 주문이면 등록한 직원
-  };
-  for (const [name, type] of Object.entries(columns)) {
-    if (!have.has(name)) db.exec(`ALTER TABLE orders ADD COLUMN ${name} ${type}`);
-  }
-  db.exec('CREATE INDEX IF NOT EXISTS idx_orders_done ON orders(done_at)');
 }
 
 // 예전 DB 의 알림 종류 제한(CHECK)에 시안 알림이 없으면 표를 새로 만들어 옮긴다 (SQLite 는 CHECK 를 바로 고칠 수 없음)

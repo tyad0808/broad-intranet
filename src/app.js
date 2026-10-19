@@ -14,8 +14,6 @@ const { channelStatusLabel } = require('./channels/labels');
 const { createSms } = require('./sms');
 const { createProofService } = require('./proofs');
 const { proofRoutes, proofPublicRoutes, proofUploadParser } = require('./routes/proofs');
-const { createOrderService } = require('./orders');
-const { orderRoutes } = require('./routes/orders');
 
 // 시안 이미지 저장 폴더 (DB 와 같은 data 폴더 안. 백업할 때 같이 복사)
 const PROOF_DIR = process.env.PROOF_DIR || path.join(__dirname, '..', 'data', 'proofs');
@@ -37,7 +35,6 @@ function createApp({
   sms, proofDir = PROOF_DIR,
 }) {
   const app = express();
-  const orders = createOrderService({ db });
   const proofs = proofsEnabled ? createProofService({ db, sms: sms || createSms({ db }), dir: proofDir }) : null;
   app.locals.proofsEnabled = proofsEnabled;
   const isProd = process.env.NODE_ENV === 'production';
@@ -104,10 +101,10 @@ function createApp({
   // 고객용 시안 확인 페이지 (로그인 없이 링크로 연다)
   if (proofs) app.use('/p', proofPublicRoutes(proofs));
 
-  // 여기부터는 로그인 + 승인된 계정만 접근. 첫 화면은 주문 현황판
-  app.get('/', requireActive);
-  app.use('/orders', requireActive);
-  app.use(orderRoutes(orders));
+  // 여기부터는 로그인 + 승인된 계정만 접근
+  app.get('/', requireActive, (req, res) => {
+    res.render('home', { title: '홈' });
+  });
 
   if (proofs) app.use('/proofs', requireActive, proofRoutes(db, proofs, proofs.sms));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector));
