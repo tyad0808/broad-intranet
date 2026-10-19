@@ -188,6 +188,7 @@ textarea {
   border-radius: 8px;
   font: inherit;
   font-size: 16px;
+  font-weight: 400;
   resize: vertical;
 }
 label.check { display: flex; gap: 8px; align-items: flex-start; font-weight: 500; }
@@ -244,3 +245,106 @@ button.secondary { background: #fff; color: var(--text); border: 1px solid var(-
 button.secondary:hover { background: var(--bg); }
 label .muted { display: block; margin-top: 4px; font-weight: 400; }
 .copy-row button { flex: none; white-space: nowrap; }
+
+/* ───────── 5단계: 주문 현황판 ───────── */
+body:has(.ob-board) .container { max-width: none; }
+.ob-summary { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.ob-summary a {
+  flex: 0 1 auto;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ob-summary b { margin-left: 4px; font-size: 18px; }
+.ob-summary a.warn { border-color: #fda29b; background: #fef3f2; color: var(--error); }
+.ob-summary a.on { border-color: var(--text); box-shadow: inset 0 0 0 1px var(--text); }
+
+.ob-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.ob-tabs { display: flex; gap: 6px; }
+.ob-tabs a {
+  padding: 7px 14px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ob-tabs a.on { background: var(--text); border-color: var(--text); color: #fff; }
+.ob-search { flex: 1 1 200px; margin: 0; }
+.ob-search input { margin: 0; padding: 8px 12px; }
+.ob-add { white-space: nowrap; padding: 9px 14px; font-weight: 600; }
+
+.ob-board {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), minmax(190px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  align-items: start;
+}
+.ob-col { background: #eceef2; border-radius: 10px; padding: 8px; min-height: 80px; }
+.ob-col h2 { display: flex; justify-content: space-between; margin: 2px 4px 8px; font-size: 15px; }
+.ob-col h2 span { color: var(--muted); font-weight: 400; }
+.ob-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+
+.ob-card {
+  display: block;
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  text-decoration: none;
+}
+.ob-results .ob-card { margin: 0; }
+.ob-card:hover { border-color: #c8ccd4; }
+.ob-card.late { border-left-color: var(--error); }
+.ob-card.soon { border-left-color: #f79009; }
+.ob-card.done { opacity: 0.7; }
+.ob-title { font-weight: 600; font-size: 14px; word-break: break-word; }
+.ob-sub { margin-top: 2px; color: var(--muted); font-size: 12px; word-break: break-word; }
+.ob-foot { display: flex; justify-content: space-between; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
+.ob-who { padding: 1px 8px; border-radius: 10px; background: #eef2ff; color: #3538cd; white-space: nowrap; }
+.ob-who.none { background: var(--error-bg); color: var(--error); }
+.ob-due { color: var(--muted); white-space: nowrap; }
+.late .ob-due { color: var(--error); font-weight: 700; }
+.soon .ob-due { color: #b54708; font-weight: 600; }
+.ob-urgent { display: inline-block; margin-right: 4px; padding: 0 5px; border-radius: 4px; background: var(--error); color: #fff; font-size: 0.75em; vertical-align: 0.1em; }
+.ob-ch { display: inline-block; margin-right: 4px; padding: 0 6px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; color: var(--muted); }
+.ob-ch-smartstore { border-color: #a6f4c5; color: #067647; }
+.ob-ch-phone { border-color: #b2ccff; color: var(--primary); }
+.ob-ch-walkin { border-color: #fedf89; color: #b54708; }
+.ob-ch-kakao { border-color: #fde272; color: #854a0e; background: #fefbe8; }
+
+.ob-stages { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.ob-stages .btn-sm.current { background: var(--text); border-color: var(--text); color: #fff; opacity: 1; }
+.ob-next form { margin: 0; }
+.ob-info { display: grid; grid-template-columns: 56px 1fr; gap: 6px 12px; margin: 0; font-size: 15px; }
+.ob-info dt { color: var(--muted); }
+.ob-info dd { margin: 0; word-break: break-word; }
+.ob-events { list-style: none; margin: 0; padding: 0; font-size: 14px; }
+.ob-events li { padding: 6px 0; border-top: 1px solid var(--line); }
+.ob-events li:first-child { border-top: 0; }
+.ob-channels { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 0 0 14px; padding: 0; border: 0; }
+.ob-channels legend { margin-bottom: 6px; font-size: 14px; font-weight: 600; }
+.ob-channels label { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 500; }
+.ob-channels input { width: auto; margin: 0; }
+
+/* 휴대폰: 칸을 세로로 쌓고, 빈 칸은 숨긴다 */
+@media (max-width: 760px) {
+  .ob-board { display: block; overflow: visible; }
+  .ob-col { background: none; padding: 0; margin-bottom: 14px; min-height: 0; }
+  .ob-col.empty { display: none; }
+  .ob-summary a { flex: 1 1 40%; text-align: center; }
+  .ob-tabs { width: 100%; }
+  .ob-tabs a { flex: 1; text-align: center; padding: 7px 8px; }
+}

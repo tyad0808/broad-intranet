@@ -1,0 +1,14 @@
+<a class="ob-card <%= o.due %><%= o.done_at ? ' done' : '' %>" href="/orders/<%= o.id %>">
+  <div class="ob-title"><% if (o.urgent) { %><span class="ob-urgent">급</span><% } %><%= o.product_name %></div>
+  <% if (o.option_text) { %><div class="ob-sub"><%= o.option_text %></div><% } %>
+  <div class="ob-sub"><span class="ob-ch ob-ch-<%= o.channel %>"><%= o.channelLabel %></span><%= o.customer %> · <%= o.quantity %>개<% if (o.canceled) { %> <span class="status status-suspended"><%= channelStatusLabel(o.channel_status) %></span><% } %></div>
+  <div class="ob-foot">
+    <span class="ob-who<%= o.assignee_name ? '' : ' none' %>"><%= o.assignee_name || '담당자 없음' %></span>
+    <% if (o.done_at) { %>
+      <span class="ob-due">완료 <%= kst(o.done_at).slice(5, 10).replace('-', '/') %></span>
+    <% } else if (o.dueLabel) { %>
+      <span class="ob-due"><%= o.due === 'late' ? '⚠ ' : '' %>납기 <%= o.dueLabel %></span>
+    <% } %>
+  </div>
+  <% if (locals.showStage) { %><div class="ob-sub"><%= o.done_at ? '완료' : (o.stage_name || '단계 없음') %></div><% } %>
+</a>

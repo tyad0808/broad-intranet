@@ -46,7 +46,7 @@ test('관리자가 승인하면 홈을 볼 수 있다', async t => {
 
   const home = await b.request('/');
   assert.strictEqual(home.status, 200);
-  assert.match(home.text, /로그인되었습니다/);
+  assert.match(home.text, /주문 등록/);
 });
 
 test('계정을 정지하면 이미 로그인한 창도 바로 쫓겨난다', async t => {

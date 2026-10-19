@@ -1,0 +1,18 @@
+<%# 담당자·납기·급·메모 (등록, 상세 공통). o: 주문(등록할 때는 빈 객체) %>
+<div class="grid2">
+  <label>담당자
+    <select name="assignee_id">
+      <option value="">담당자 없음</option>
+      <% assignees.forEach(a => { %>
+        <option value="<%= a.id %>" <%= o.assignee_id === a.id ? 'selected' : '' %>><%= a.name %><%= a.job_name ? ' (' + a.job_name + ')' : '' %></option>
+      <% }) %>
+    </select>
+  </label>
+  <label>납기
+    <input type="date" name="due_date" value="<%= o.due_date || '' %>">
+  </label>
+</div>
+<label class="check"><input type="checkbox" name="urgent" value="1" <%= o.urgent ? 'checked' : '' %>> 급한 주문 ([급] 표시, 칸 맨 위로)</label>
+<label>작업 메모
+  <textarea name="memo" rows="4" maxlength="2000" placeholder="예: 타폴린 / 아일렛 4구 / 퀵 배송 / 사이즈 고객 확인 필요"><%= o.memo || '' %></textarea>
+</label>

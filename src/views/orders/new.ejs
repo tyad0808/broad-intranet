@@ -1,0 +1,19 @@
+<%- include('../partials/header') %>
+<p class="muted"><a href="/">← 현황판</a></p>
+<h1 class="page-title">주문 등록</h1>
+<p class="muted">전화·매장·카톡으로 받은 주문을 넣습니다. 스마트스토어 주문은 자동으로 들어오니 넣지 않아도 됩니다.</p>
+<section class="card">
+  <form method="post" action="/orders">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <fieldset class="ob-channels">
+      <legend>접수 경로</legend>
+      <% channels.forEach((c, i) => { %>
+        <label><input type="radio" name="channel" value="<%= c.key %>" <%= i === 0 ? 'checked' : '' %>> <%= c.label %></label>
+      <% }) %>
+    </fieldset>
+    <%- include('_customer', { o: {} }) %>
+    <%- include('_fields', { o: {} }) %>
+    <button type="submit">등록</button>
+  </form>
+</section>
+<%- include('../partials/footer') %>

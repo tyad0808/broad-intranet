@@ -1,0 +1,53 @@
+<%- include('../partials/header') %>
+<% if (user.role === 'admin' && pendingCount > 0) { %>
+  <p class="notice">승인을 기다리는 가입 신청이 <a href="/admin/users"><strong><%= pendingCount %>건</strong></a> 있습니다.</p>
+<% } %>
+
+<% const link = f => { const p = []; if (view === 'mine') p.push('view=mine'); if (f) p.push('f=' + f); return '/' + (p.length ? '?' + p.join('&') : ''); }; %>
+<% if (locals.board) { %>
+  <div class="ob-summary">
+    <% board.summary.forEach(s => { %>
+      <a class="<%= s.key === 'late' && s.count ? 'warn' : '' %><%= filter === s.key ? ' on' : '' %>" href="<%= link(filter === s.key ? null : s.key) %>"><%= s.label %> <b><%= s.count %></b></a>
+    <% }) %>
+  </div>
+<% } %>
+
+<div class="ob-tools">
+  <nav class="ob-tabs">
+    <a href="/" class="<%= view === 'all' && !q ? 'on' : '' %>">전체 주문</a>
+    <a href="/?view=mine" class="<%= view === 'mine' && !q ? 'on' : '' %>">내 작업 (<%= myCount %>)</a>
+    <a href="/?view=done" class="<%= view === 'done' && !q ? 'on' : '' %>">완료</a>
+  </nav>
+  <form class="ob-search" method="get" action="/" role="search">
+    <input type="search" name="q" value="<%= q %>" placeholder="고객명·상품·전화번호" aria-label="주문 검색">
+  </form>
+  <a class="btn-sm primary ob-add" href="/orders/new">+ 주문 등록</a>
+</div>
+
+<% if (locals.filter && locals.board) { %>
+  <p class="muted"><strong><%= board.summary.find(s => s.key === filter).label %></strong>만 보는 중 · <a href="<%= link(null) %>">전체 보기</a></p>
+<% } %>
+
+<% if (locals.results) { %>
+  <% if (q) { %><p class="muted">'<%= q %>' 검색 결과 <%= results.length %>건 (완료한 주문 포함)<% if (results.length >= 100) { %> · 앞 100건만 보입니다<% } %></p><% } %>
+  <% if (!results.length) { %>
+    <p class="muted"><%= q ? '찾는 주문이 없습니다.' : '완료한 주문이 아직 없습니다.' %></p>
+  <% } else { %>
+    <div class="ob-results">
+      <% results.forEach(o => { %><%- include('_card', { o, showStage: true }) %><% }) %>
+    </div>
+  <% } %>
+<% } else { %>
+  <% if (!board.total) { %>
+    <p class="muted"><%= view === 'mine' ? '나에게 배정된 진행 중인 주문이 없습니다.' : '진행 중인 주문이 없습니다.' %></p>
+  <% } %>
+  <div class="ob-board" style="--cols: <%= board.columns.length %>">
+    <% board.columns.forEach(col => { %>
+      <section class="ob-col<%= col.orders.length ? '' : ' empty' %>">
+        <h2><%= col.name %> <span><%= col.orders.length %></span></h2>
+        <% col.orders.forEach(o => { %><%- include('_card', { o }) %><% }) %>
+      </section>
+    <% }) %>
+  </div>
+<% } %>
+<%- include('../partials/footer') %>
