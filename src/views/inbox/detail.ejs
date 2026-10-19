@@ -67,9 +67,13 @@
         <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
           <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
         </label>
-        <label class="file-input">파일 첨부 <span class="muted small">(합계 20MB까지, 큰 파일은 웹하드 링크로)</span>
-          <input type="file" name="files" multiple data-max-total="20971520">
-        </label>
+        <%# 파일 첨부: 끌어다 놓거나 눌러서 고르기 (답변 칸에 놓아도 됨) %>
+        <div class="drop-zone" data-drop-zone>
+          <input type="file" name="files" id="reply-files" multiple data-max-total="20971520" class="visually-hidden">
+          <label for="reply-files" class="drop-hint">📎 파일을 여기로 끌어다 놓거나 <span class="link-like">눌러서 고르세요</span></label>
+          <ul class="drop-list" data-drop-list></ul>
+          <span class="muted small">합계 20MB까지 · 큰 파일은 웹하드 링크로 보내 주세요</span>
+        </div>
         <button type="submit" class="wide">답변 보내기</button>
       </form>
 
@@ -78,7 +82,7 @@
           <form method="post" action="/inbox/<%= inquiry.id %>/close" class="inline" data-once>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= back %>">
-            <button type="submit" class="btn-sm" title="광고·알림처럼 답변이 필요 없는 문의">처리 완료 (답변 안 함)</button>
+            <button type="submit" class="btn-sm" title="광고·알림처럼 답변이 필요 없는 문의">답변 없이 완료</button>
           </form>
         <% } else { %>
           <form method="post" action="/inbox/<%= inquiry.id %>/reopen" class="inline" data-once>
