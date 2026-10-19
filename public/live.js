@@ -107,6 +107,8 @@
           if (fresh && current) current.innerHTML = fresh.innerHTML;
         }
         liveList.querySelectorAll('input[name="ids"]').forEach(box => { box.checked = checked.has(box.value); });
+        // 주문 목록 옆 달력도 같이: 납기를 바꾸면 '출고 N건' 이 바로 맞춰지게
+        if (feed === 'orders' && typeof window.reloadCalendar === 'function') window.reloadCalendar();
         if (typeof window.syncBulkBar === 'function') window.syncBulkBar();
         // 미지정 초과 배너: 새로 생기거나, 건수가 바뀌거나, 해소되어 사라지는 것을 반영
         const freshBar = doc.getElementById('unassigned-bar');
