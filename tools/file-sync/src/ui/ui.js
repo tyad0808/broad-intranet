@@ -89,7 +89,7 @@
       name.appendChild(el('div', 'name', h.name));
       const tags = el('div', 'tags');
       if (h.urgent) tags.appendChild(el('span', 'tag urgent', '급'));
-      if (!h.seen) tags.appendChild(el('span', 'tag', '새'));
+      if (!h.seen) tags.appendChild(el('span', 'tag new', 'NEW'));
       if (h.kind === 'updated') tags.appendChild(el('span', 'tag updated', '수정본'));
       if (h.done) tags.appendChild(el('span', 'tag done', '출력 완료 ' + fmtTime(h.doneAt)));
       else if (h.replaced) tags.appendChild(el('span', 'tag replaced', '새 버전으로 바뀜'));

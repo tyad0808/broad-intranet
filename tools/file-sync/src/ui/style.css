@@ -76,4 +76,5 @@ tr.replaced td { opacity: .45; }
 td.c-size .spec { color: var(--text); font-weight: bold; white-space: nowrap; }
 td.c-size .bytes { font-size: 11px; }
 tr.urgent td:first-child { box-shadow: inset 4px 0 0 var(--new); }
+.tag.new { background: #facc15; color: #422006; font-weight: bold; letter-spacing: .3px; }
 .tag.urgent { background: #b91c1c; font-weight: bold; }
