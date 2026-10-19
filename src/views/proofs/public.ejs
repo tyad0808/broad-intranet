@@ -1,0 +1,93 @@
+<%- include('_public-head') %>
+<% const lastResponse = responses[responses.length - 1]; %>
+<section class="card">
+  <h1><%= proof.title %></h1>
+  <p class="muted"><%= proof.customer_name ? proof.customer_name + '님, ' : '' %><%= latest.version_no %>차 시안입니다.</p>
+  <% if (proof.note) { %><p class="pre"><%= proof.note %></p><% } %>
+  <% if (latest.message) { %><p class="notice">💬 <%= latest.message %></p><% } %>
+</section>
+
+<% if (error) { %><p class="error"><%= error %></p><% } %>
+
+<% if (proof.status === 'approved') { %>
+  <p class="notice big">✔ 확정되었습니다. (<%= proof.decided_name %>님, <%= kst(proof.decided_at) %>)<br>감사합니다. 제작을 시작하겠습니다.</p>
+<% } else if (proof.status === 'revise') { %>
+  <p class="notice big">수정 요청을 받았습니다. 수정 시안이 준비되면 문자로 다시 알려드리겠습니다.</p>
+<% } %>
+
+<section class="card">
+  <% if (proof.status === 'waiting') { %>
+    <p class="muted">고칠 곳이 있으면 <strong>그림에서 그 위치를 눌러</strong> 번호를 찍고 내용을 적어 주세요.</p>
+  <% } %>
+  <div id="proof-image" class="<%= proof.status === 'waiting' ? 'pinnable' : '' %>">
+    <%- include('_pinned-image', {
+      src: '/p/' + proof.token + '/v/' + latest.version_no,
+      version: latest,
+      pins: proof.status === 'revise' && lastResponse ? lastResponse.pins : [],
+    }) %>
+  </div>
+  <p class="center"><a href="/p/<%= proof.token %>/v/<%= latest.version_no %>" target="_blank" rel="noopener">크게 보기 (확대)</a></p>
+</section>
+
+<% if (proof.status === 'waiting') { %>
+  <section class="card">
+    <h2>이대로 진행할게요</h2>
+    <form method="post" action="/p/<%= proof.token %>/approve">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="version_no" value="<%= latest.version_no %>">
+      <label>확정하시는 분 성함
+        <input type="text" name="name" maxlength="50" required value="<%= proof.customer_name || '' %>">
+      </label>
+      <label class="check">
+        <input type="checkbox" name="agree" value="1" required>
+        문구, 전화번호, 규격을 모두 확인했습니다. 확정 후에는 이 시안대로 제작됩니다.
+      </label>
+      <button type="submit" class="approve">시안 확정</button>
+    </form>
+  </section>
+
+  <section class="card" id="revise-card">
+    <h2>수정이 필요해요</h2>
+    <form method="post" action="/p/<%= proof.token %>/revise" id="revise-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="version_no" value="<%= latest.version_no %>">
+      <input type="hidden" name="pins" id="pins" value="[]">
+      <ol id="pin-list" class="pin-inputs"></ol>
+      <label>수정할 내용
+        <textarea name="comment" rows="4" maxlength="2000" placeholder="예: 전화번호 글씨를 더 크게, 바탕색은 진한 파랑으로 해 주세요"></textarea>
+      </label>
+      <label>성함 (선택)
+        <input type="text" name="name" maxlength="50" value="<%= proof.customer_name || '' %>">
+      </label>
+      <button type="submit" class="secondary">수정 요청 보내기</button>
+    </form>
+  </section>
+<% } %>
+
+<% if (proof.status === 'revise' && lastResponse) { %>
+  <section class="card">
+    <h2>보내주신 수정 요청</h2>
+    <% if (lastResponse.comment) { %><p class="pre"><%= lastResponse.comment %></p><% } %>
+    <% if (lastResponse.pins.length) { %>
+      <ol class="pin-notes"><% lastResponse.pins.forEach(pin => { %><li><%= pin.note || '(메모 없음)' %></li><% }) %></ol>
+    <% } %>
+  </section>
+<% } %>
+
+<% if (versions.length > 1) { %>
+  <details class="card">
+    <summary>이전 시안 보기 (<%= versions.length - 1 %>개)</summary>
+    <% versions.slice(0, -1).reverse().forEach(v => { %>
+      <div class="version">
+        <p><strong><%= v.version_no %>차</strong> · <%= kst(v.created_at) %></p>
+        <%- include('_pinned-image', {
+          src: '/p/' + proof.token + '/v/' + v.version_no,
+          version: v,
+          pins: responses.filter(r => r.version_no === v.version_no).flatMap(r => r.pins),
+        }) %>
+      </div>
+    <% }) %>
+  </details>
+<% } %>
+<script src="/proof-pins.js"></script>
+<%- include('_public-foot') %>

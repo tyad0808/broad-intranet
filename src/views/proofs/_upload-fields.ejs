@@ -1,0 +1,11 @@
+<label>시안 이미지 (JPG, PNG)
+  <input type="file" name="file" accept="image/jpeg,image/png,image/webp" required>
+  <span class="muted">일러스트에서 [파일 → 내보내기 → JPG] 로 저장한 파일. 긴 변 2000~3000px 정도면 휴대폰에서 충분히 선명합니다.</span>
+</label>
+<label>고객에게 한마디 (선택)
+  <input type="text" name="message" maxlength="500" placeholder="<%= locals.messageHint || '예: 전화번호 글씨 크게 수정했습니다' %>">
+</label>
+<label class="check">
+  <input type="checkbox" name="send_sms" value="1" checked>
+  고객에게 링크 문자 보내기<% if (smsDriver === 'mock') { %> <span class="status status-pending">가짜 발송 (개발용)</span><% } %>
+</label>

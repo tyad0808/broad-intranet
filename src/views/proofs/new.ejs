@@ -1,0 +1,36 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">새 시안</h1>
+<section class="card">
+  <form method="post" action="/proofs" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>연결할 주문 (선택)
+      <select name="order_id" id="order-select">
+        <option value="">주문 연결 안 함 (매장·전화 손님)</option>
+        <% orders.forEach(o => { %>
+          <option value="<%= o.id %>" <%= selected === o.id ? 'selected' : '' %>
+            data-name="<%= o.receiver_name || o.buyer_name || '' %>" data-phone="<%= o.receiver_phone || '' %>"
+            data-title="<%= o.product_name %>"><%= o.channel_order_id %> · <%= o.buyer_name || '-' %> · <%= o.product_name %><%= o.option_text ? ' (' + o.option_text + ')' : '' %></option>
+        <% }) %>
+      </select>
+      <span class="muted">주문을 고르면 고객 이름·전화번호가 채워지고, 시안을 보내면 카드가 '컨펌' 단계로, 확정되면 '제작' 단계로 자동으로 옮겨집니다.</span>
+    </label>
+    <label>시안 이름
+      <input type="text" name="title" id="title" maxlength="100" required placeholder="예: ○○식당 현수막 5000x900">
+    </label>
+    <div class="grid2">
+      <label>고객 이름
+        <input type="text" name="customer_name" id="customer-name" maxlength="50">
+      </label>
+      <label>고객 전화번호
+        <input type="tel" name="customer_phone" id="customer-phone" maxlength="30" placeholder="010-0000-0000">
+      </label>
+    </div>
+    <label>안내 (고객 화면에 표시, 선택)
+      <textarea name="note" rows="3" maxlength="1000" placeholder="예: 규격 5000x900mm / 현수막 / 1장 / 아일렛 4개"></textarea>
+    </label>
+    <%- include('_upload-fields', { messageHint: '예: 처음 시안입니다. 편하게 말씀해 주세요' }) %>
+    <button type="submit">시안 만들기</button>
+  </form>
+</section>
+<script src="/proof-new.js"></script>
+<%- include('../partials/footer') %>

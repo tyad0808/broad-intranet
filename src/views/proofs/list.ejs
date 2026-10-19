@@ -1,0 +1,37 @@
+<%- include('../partials/header') %>
+<div class="page-head">
+  <h1 class="page-title">시안</h1>
+  <a class="btn-sm primary" href="/proofs/new">+ 새 시안</a>
+</div>
+
+<nav class="tabs">
+  <% const total = Object.values(counts).reduce((a, b) => a + b, 0); %>
+  <a href="/proofs" class="<%= status === 'all' ? 'on' : '' %>">전체 <%= total %></a>
+  <% ['revise', 'waiting', 'approved', 'closed'].forEach(key => { %>
+    <a href="/proofs?status=<%= key %>" class="<%= status === key ? 'on' : '' %>"><%= labels[key] %> <%= counts[key] || 0 %></a>
+  <% }) %>
+</nav>
+
+<section class="card">
+  <% if (proofs.length === 0) { %>
+    <p class="muted">시안이 없습니다. [+ 새 시안] 으로 고객에게 시안을 보내 보세요.</p>
+  <% } else { %>
+    <ul class="rows">
+      <% proofs.forEach(p => { %>
+        <li class="row">
+          <div class="row-main">
+            <a href="/proofs/<%= p.id %>"><strong><%= p.title %></strong></a>
+            <span class="status proof-<%= p.status %>"><%= labels[p.status] %></span>
+            <div class="muted">
+              <%= p.customer_name || '고객 이름 없음' %>
+              · <%= p.version_count %>차
+              <% if (p.channel_order_id) { %> · 주문 <%= p.channel_order_id %><% } %>
+              · <%= p.created_by_name || '-' %> · <%= kst(p.updated_at) %>
+            </div>
+          </div>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+<%- include('../partials/footer') %>

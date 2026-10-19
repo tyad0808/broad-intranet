@@ -1,0 +1,116 @@
+<%- include('../partials/header') %>
+<p class="muted"><a href="/proofs">← 시안 목록</a></p>
+<div class="page-head">
+  <h1 class="page-title"><%= proof.title %> <span class="status proof-<%= proof.status %>"><%= labels[proof.status] %></span></h1>
+</div>
+
+<section class="card">
+  <p>
+    고객: <strong><%= proof.customer_name || '-' %></strong> <%= proof.customer_phone || '' %>
+    <% if (proof.order_id) { %> · 주문 <%= proof.channel_order_id %> (<%= proof.product_name %>)<% } %>
+  </p>
+  <% if (proof.status === 'approved') { %>
+    <p class="notice">✔ <strong><%= proof.decided_name %></strong>님이 <%= kst(proof.decided_at) %>에 확정했습니다. 출력 파일 변환을 진행하세요.</p>
+  <% } else if (proof.status === 'revise') { %>
+    <p class="error">고객이 수정을 요청했습니다. 아래 요청 내용을 보고 수정 시안을 올려 주세요.</p>
+  <% } %>
+  <% if (proof.note) { %><p class="muted pre"><%= proof.note %></p><% } %>
+
+  <div class="copy-row">
+    <input type="text" id="proof-link" value="<%= link %>" readonly>
+    <button type="button" class="btn-sm" id="copy-link">링크 복사</button>
+  </div>
+  <p class="muted">
+    링크 사용 기한: <%= kst(proof.expires_at) %><% if (expired) { %> <span class="status status-suspended">기한 지남</span><% } %>
+    · 만든 사람 <%= proof.created_by_name || '-' %>
+  </p>
+  <div class="row-actions">
+    <% if (proof.status !== 'closed') { %>
+      <form method="post" action="/proofs/<%= proof.id %>/resend" class="inline">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn-sm" <%= proof.customer_phone ? '' : 'disabled' %>>문자 다시 보내기</button>
+      </form>
+      <form method="post" action="/proofs/<%= proof.id %>/close" class="inline" data-confirm="시안을 종료할까요? 고객 링크가 더 이상 열리지 않습니다.">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button type="submit" class="btn-sm danger">시안 종료</button>
+      </form>
+    <% } %>
+  </div>
+</section>
+
+<% if (responses.length) { %>
+<section class="card">
+  <h2>고객 응답</h2>
+  <ul class="rows">
+    <% responses.slice().reverse().forEach(r => { %>
+      <li class="row">
+        <div class="row-main">
+          <% if (r.action === 'approve') { %>
+            <span class="status proof-approved">확정</span>
+          <% } else { %>
+            <span class="status proof-revise">수정 요청</span>
+          <% } %>
+          <strong><%= r.version_no %>차</strong> · <%= r.name || '고객' %> · <%= kst(r.created_at) %>
+          <% if (r.comment) { %><div class="pre"><%= r.comment %></div><% } %>
+          <% if (r.pins.length) { %>
+            <ol class="pin-notes">
+              <% r.pins.forEach(pin => { %><li><%= pin.note || '(메모 없음)' %></li><% }) %>
+            </ol>
+          <% } %>
+        </div>
+      </li>
+    <% }) %>
+  </ul>
+</section>
+<% } %>
+
+<% if (proof.status !== 'closed') { %>
+<section class="card">
+  <h2><%= versions.length + 1 %>차 시안 올리기</h2>
+  <form method="post" action="/proofs/<%= proof.id %>/versions" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <%- include('_upload-fields') %>
+    <button type="submit"><%= versions.length + 1 %>차 시안 올리기</button>
+  </form>
+</section>
+<% } %>
+
+<section class="card">
+  <h2>시안 이력</h2>
+  <% versions.slice().reverse().forEach(v => { %>
+    <div class="version">
+      <p><strong><%= v.version_no %>차</strong> · <%= v.uploaded_by_name || '-' %> · <%= kst(v.created_at) %>
+        <% if (v.message) { %><br><span class="muted"><%= v.message %></span><% } %></p>
+      <%- include('_pinned-image', {
+        src: '/proofs/' + proof.id + '/v/' + v.version_no,
+        version: v,
+        pins: responses.filter(r => r.version_no === v.version_no).flatMap(r => r.pins),
+      }) %>
+    </div>
+  <% }) %>
+</section>
+
+<% if (smsLog.length) { %>
+<section class="card">
+  <h2>보낸 문자</h2>
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>시각</th><th>받는 번호</th><th>결과</th><th>내용</th></tr></thead>
+      <tbody>
+        <% smsLog.forEach(s => { %>
+          <tr>
+            <td><%= kst(s.created_at) %></td>
+            <td><%= s.receiver %></td>
+            <td><% if (s.ok) { %><span class="status status-active"><%= s.driver === 'mock' ? '가짜 발송' : '성공' %></span><% } else { %><span class="status status-suspended">실패</span><% } %>
+              <div class="muted"><%= s.result %></div></td>
+            <td class="product pre"><%= s.message %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+<% } %>
+<script src="/confirm.js"></script>
+<script src="/proof-show.js"></script>
+<%- include('../partials/footer') %>

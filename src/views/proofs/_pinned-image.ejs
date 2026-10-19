@@ -1,0 +1,7 @@
+<%# 시안 이미지 + 고객이 찍은 수정 표시(번호). pins: [{x, y, note}] %>
+<div class="pin-wrap">
+  <img src="<%= src %>" alt="<%= version.version_no %>차 시안" loading="lazy">
+  <% (pins || []).forEach((pin, i) => { %>
+    <span class="pin" style="left:<%= (pin.x * 100).toFixed(2) %>%;top:<%= (pin.y * 100).toFixed(2) %>%"><%= i + 1 %></span>
+  <% }) %>
+</div>

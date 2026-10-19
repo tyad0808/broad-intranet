@@ -11,6 +11,12 @@ const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { channelStatusLabel } = require('./channels/labels');
+const { createSms } = require('./sms');
+const { createProofService } = require('./proofs');
+const { proofRoutes, proofPublicRoutes, proofUploadParser } = require('./routes/proofs');
+
+// 시안 이미지 저장 폴더 (DB 와 같은 data 폴더 안. 백업할 때 같이 복사)
+const PROOF_DIR = process.env.PROOF_DIR || path.join(__dirname, '..', 'data', 'proofs');
 
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
@@ -22,8 +28,9 @@ function sessionSecret() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function createApp({ db, collector = null, secret = sessionSecret() }) {
+function createApp({ db, collector = null, secret = sessionSecret(), sms = createSms({ db }), proofDir = PROOF_DIR }) {
   const app = express();
+  const proofs = createProofService({ db, sms, dir: proofDir });
   const isProd = process.env.NODE_ENV === 'production';
   const store = new SqliteSessionStore(db);
 
@@ -64,14 +71,20 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
   app.use(loadUser(db));
   // 화면 공통 값: 처리 결과 안내 문구(한 번만 표시), 관리자에게 보이는 가입 신청 건수
   const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
+  const reviseCountStmt = db.prepare("SELECT COUNT(*) AS n FROM proofs WHERE status = 'revise'");
   app.use((req, res, next) => {
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;
     res.locals.tab = null;
     res.locals.pendingCount =
       req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
+    // 고객이 수정 요청한 시안 수 (상단 '시안' 메뉴 옆에 표시)
+    res.locals.proofReviseCount = req.user && req.user.status === 'active' ? reviseCountStmt.get().n : 0;
     next();
   });
+
+  // 시안 이미지 업로드 폼은 CSRF 검사 전에 읽어야 한다 (자세한 이유는 routes/proofs.js)
+  app.use('/proofs', proofUploadParser());
 
   app.use(csrf);
 
@@ -79,11 +92,15 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
 
   app.use(authRoutes(db));
 
+  // 고객용 시안 확인 페이지 (로그인 없이 링크로 연다)
+  app.use('/p', proofPublicRoutes(proofs));
+
   // 여기부터는 로그인 + 승인된 계정만 접근
   app.get('/', requireActive, (req, res) => {
     res.render('home', { title: '홈' });
   });
 
+  app.use('/proofs', requireActive, proofRoutes(db, proofs, sms));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector));
 
   app.use((req, res) => {
@@ -96,6 +113,7 @@ function createApp({ db, collector = null, secret = sessionSecret() }) {
   });
 
   app.locals.sessionStore = store;
+  app.locals.proofs = proofs;
   return app;
 }
 
