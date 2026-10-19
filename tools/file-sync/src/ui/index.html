@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+<title>브로애드 파일 받기</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <div id="status" class="pill">시작 중…</div>
+    <div class="spacer"></div>
+    <button id="checkNow" title="지금 NAS 를 확인합니다">지금 확인</button>
+    <button id="pause">잠시 멈춤</button>
+    <button id="openDest" title="받은 파일이 있는 폴더를 엽니다">받은 폴더</button>
+    <button id="settingsBtn" class="ghost" title="설정">설정</button>
+  </header>
+
+  <div id="paths" class="paths"></div>
+
+  <nav class="toolbar">
+    <div class="tabs">
+      <button id="tabNew" class="tab on">새 파일 <span id="newCount" class="badge">0</span></button>
+      <button id="tabAll" class="tab">전체</button>
+    </div>
+    <input id="search" type="search" placeholder="파일 이름 찾기">
+    <button id="seenAll">모두 확인함</button>
+  </nav>
+
+  <main>
+    <table>
+      <thead><tr><th class="c-kind"></th><th>파일</th><th class="c-size">크기</th><th class="c-time">받은 시각</th><th class="c-act"></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div id="empty" class="empty"></div>
+  </main>
+
+  <div id="settings" class="overlay" hidden>
+    <div class="sheet">
+      <h2>설정</h2>
+      <label class="field">NAS 폴더 (이 컴퓨터가 받을 기계 폴더)
+        <div class="pick"><input id="source" type="text" placeholder="예: \\NAS\출력\실사출력  또는  Z:\실사출력">
+          <button id="pickSource">찾아보기</button><button id="testSource">연결 확인</button></div>
+        <span id="testResult" class="note"></span>
+      </label>
+      <label class="field">받을 폴더 (이 컴퓨터)
+        <div class="pick"><input id="dest" type="text"><button id="pickDest">찾아보기</button></div>
+      </label>
+      <div class="grid">
+        <label class="field">확인 간격 (초) <input id="intervalSec" type="number" min="2" max="600" step="1"></label>
+        <span></span>
+        <label class="check"><input id="sound" type="checkbox"> 받으면 소리</label>
+        <label class="check"><input id="repeatSound" type="checkbox"> 확인할 때까지 소리 반복</label>
+        <label class="check"><input id="autoStart" type="checkbox"> 윈도우 켤 때 자동 실행</label>
+        <label class="check"><input id="skipExisting" type="checkbox"> 처음 켤 때 NAS 에 있던 파일은 받지 않기</label>
+      </div>
+      <div class="row">
+        <button id="testSound">소리 들어보기</button>
+        <button id="importAll" title="처음에 건너뛴 파일까지 지금 NAS 에 있는 파일을 모두 받습니다">지금 있는 파일 모두 받기</button>
+        <button id="clearHistory" title="목록만 지웁니다. 받은 파일은 그대로 있습니다">목록 비우기</button>
+      </div>
+      <div class="row end">
+        <button id="cancelSettings" class="ghost">닫기</button>
+        <button id="saveSettings" class="main">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script src="ui.js"></script>
+</body>
+</html>
