@@ -89,14 +89,16 @@ test('소스 코드 어디에도 허용 목록 밖의 네이버 API 주소가 �
   }
 });
 
-test('허용 목록은 조회 2개 + 상태 변경 2개(발주확인·발송처리)뿐이다', () => {
+test('허용 목록: 주문 조회 2개 + 주문 변경 2개(발주확인·발송처리) + 상품문의 조회 2개·답변 1개뿐이다', () => {
   assert.ok(isAllowed('GET', '/v1/pay-order/seller/product-orders/last-changed-statuses'));
   assert.ok(isAllowed('POST', '/v1/pay-order/seller/product-orders/query'));
-  assert.deepStrictEqual(ALLOWED.filter(a => a.write).map(a => a.path).sort(), [
+  assert.deepStrictEqual(ALLOWED.filter(a => a.write).map(a => a.path || String(a.pattern)).sort(), [
+    '/^\\/v1\\/contents\\/qnas\\/\\d+$/',
     '/v1/pay-order/seller/product-orders/confirm',
     '/v1/pay-order/seller/product-orders/dispatch',
   ]);
-  assert.strictEqual(ALLOWED.length, 4);
+  assert.strictEqual(ALLOWED.find(a => a.pattern).flag, 'NAVER_ANSWER', '상품문의 답변은 따로 켠다');
+  assert.strictEqual(ALLOWED.length, 7);
 });
 
 // ───────── 스마트스토어 응답 처리 ─────────

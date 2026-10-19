@@ -12,6 +12,7 @@ const { createOrderActions } = require('./actions');
 const { createSmartstoreWriter } = require('./channels/smartstore');
 const { mailAccountsFromEnv, createMailSource, createMailSender, createMailFiles } = require('./inbox/mail');
 const { createInboxCollector } = require('./inbox/collector');
+const { createNaverQnaSource, createNaverQnaSender, SOURCE: QNA_SOURCE, LABEL: QNA_LABEL } = require('./inbox/naverQna');
 
 const PORT = process.env.PORT || 3000;
 // 운영 서버에서는 같은 서버의 Caddy(HTTPS)만 접속할 수 있게 내부 주소에서만 연다
@@ -59,14 +60,20 @@ const actions = createOrderActions({
 });
 // 4차 문의함: .env 에 메일 계정(앱 비밀번호)이 있는 것만 받는다. 답장은 MAIL_SEND=on 일 때만 실제로 보냄 (그 밖에는 연습 모드)
 const mailAccounts = mailAccountsFromEnv();
-const inboxCollector = mailAccounts.length
-  ? createInboxCollector({ db, sources: mailAccounts.map(a => createMailSource(a)), notifier })
-  : null;
 const mailLive = process.env.MAIL_SEND === 'on';
+// 4-2 스마트스토어 상품문의: 실제 스마트스토어(ORDER_SOURCE=naver)를 쓸 때. 끄려면 NAVER_QNA=off
+// 답변 등록은 NAVER_ANSWER=on 일 때만 실제로 (그 밖에는 연습 모드)
+const qnaReady = process.env.ORDER_SOURCE === 'naver' && process.env.NAVER_QNA !== 'off';
+const qnaLive = qnaReady && process.env.NAVER_ANSWER === 'on';
+const inboxSources = [...mailAccounts.map(a => createMailSource(a)), ...(qnaReady ? [createNaverQnaSource()] : [])];
+const inboxCollector = inboxSources.length ? createInboxCollector({ db, sources: inboxSources, notifier }) : null;
 const inbox = {
   collector: inboxCollector,
-  sourceLabels: Object.fromEntries(mailAccounts.map(a => [a.source, a.label])),
-  senders: mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {},
+  sourceLabels: Object.fromEntries([...mailAccounts.map(a => [a.source, a.label]), ...(qnaReady ? [[QNA_SOURCE, QNA_LABEL]] : [])]),
+  senders: {
+    ...(mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {}),
+    ...(qnaLive ? { [QNA_SOURCE]: createNaverQnaSender() } : {}),
+  },
   // 첨부파일 열기는 연습 모드여도 된다 (읽기만)
   files: Object.fromEntries(mailAccounts.map(a => [a.source, createMailFiles(a)])),
 };
@@ -117,7 +124,9 @@ app.listen(PORT, HOST, () => {
   if (coupangReady) console.log(`쿠팡 상품준비중·송장: ${coupangLive ? '실제로 쿠팡에 보냄 (COUPANG_WRITE=on)' : '연습 모드 (쿠팡으로 보내지 않음)'}`);
   if (godoReady) console.log(`자사몰 발주확인·송장: ${godoLive ? '실제로 자사몰에 보냄 (GODO_WRITE=on)' : '연습 모드 (자사몰로 보내지 않음)'}`);
   if (inboxCollector) {
-    console.log(`문의함: ${mailAccounts.map(a => a.label).join(' + ')}, ${intervalMinutes(db, 'inbox_interval_minutes')}분마다, 답장 ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
+    console.log(`문의함: ${inboxSources.map(s => s.label).join(' + ')}, ${intervalMinutes(db, 'inbox_interval_minutes')}분마다`);
+    if (mailAccounts.length) console.log(`  메일 답장: ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
+    if (qnaReady) console.log(`  스마트스토어 상품문의 답변: ${qnaLive ? '실제로 등록 (NAVER_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
     collectInbox();
   }
   if (collector) {

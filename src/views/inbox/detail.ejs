@@ -59,21 +59,32 @@
         <noscript><button type="submit" class="btn-sm">지정</button></noscript>
       </form>
 
+      <% const confirmText = isMail
+           ? `${inquiry.reply_to || inquiry.from_addr} 에게 답변을 보낼까요?&#10;보낸 메일은 되돌릴 수 없습니다.`
+           : `${label} 상품문의에 이 답변을 등록할까요?&#10;고객에게 바로 보입니다.`; %>
       <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form" enctype="multipart/form-data" data-once
-            data-confirm="<%= inquiry.reply_to || inquiry.from_addr %> 에게 답변을 보낼까요?&#10;보낸 메일은 되돌릴 수 없습니다.">
+            data-confirm="<%= confirmText %>">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="version" value="<%= inquiry.version %>">
-        <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
-          <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
-        </label>
-        <%# 파일 첨부: 끌어다 놓거나 눌러서 고르기 (답변 칸에 놓아도 됨) %>
+        <% if (isMail) { %>
+          <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
+            <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
+          </label>
+        <% } else { %>
+          <label><%= label %> 상품문의 답변 <span class="muted small">(상품 페이지에 공개됩니다)</span>
+            <textarea name="body" rows="8" maxlength="10000" required placeholder="고객에게 보일 답변을 적어 주세요."></textarea>
+          </label>
+        <% } %>
+        <%# 파일 첨부(메일만): 끌어다 놓거나 눌러서 고르기 (답변 칸에 놓아도 됨) %>
+        <% if (isMail) { %>
         <div class="drop-zone" data-drop-zone>
           <input type="file" name="files" id="reply-files" multiple data-max-total="20971520" class="visually-hidden">
           <label for="reply-files" class="drop-hint">📎 파일을 여기로 끌어다 놓거나 <span class="link-like">눌러서 고르세요</span></label>
           <ul class="drop-list" data-drop-list></ul>
           <span class="muted small">합계 20MB까지 · 큰 파일은 웹하드 링크로 보내 주세요</span>
         </div>
+        <% } %>
         <button type="submit" class="wide">답변 보내기</button>
       </form>
 
@@ -92,7 +103,7 @@
           </form>
           <span class="muted small"><%= STATUS_LABELS[inquiry.status] %><%= inquiry.handled_name ? ` · ${inquiry.handled_name}` : '' %><%= inquiry.handled_at ? ` · ${kst(inquiry.handled_at)}` : '' %></span>
         <% } %>
-        <% if (inquiry.from_name) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.from_name) %>" target="_top">이 이름으로 주문 찾기</a><% } %>
+        <% if (isMail && inquiry.from_name) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.from_name) %>" target="_top">이 이름으로 주문 찾기</a><% } %>
       </div>
 
       <% if (replies.length) { %>

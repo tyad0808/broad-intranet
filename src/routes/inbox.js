@@ -3,7 +3,7 @@
 // 답변 보내기는 출처마다 따로 켠다 (메일: .env 의 MAIL_SEND=on). 꺼져 있으면 연습 모드 — 보내지 않고 기록만 남긴다.
 const express = require('express');
 const { transaction } = require('../db');
-const { previewType } = require('../inbox/mail');
+const { previewType, PROVIDERS } = require('../inbox/mail');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
@@ -139,6 +139,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       navSection: 'inbox',
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),
+      isMail: Boolean(PROVIDERS[inquiry.source]),
       previewType,
       label: labelOf(inquiry.source),
       mode: modeOf(inquiry.source),

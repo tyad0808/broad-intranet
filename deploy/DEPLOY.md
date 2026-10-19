@@ -223,6 +223,16 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 
 ---
 
+## 12. 문의함 — 스마트스토어 상품문의
+
+1. 커머스API센터 → 내 애플리케이션 → API 그룹에서 **'문의'** 를 [추가]
+2. 업데이트 후 점검 (읽기만): `cd /opt/broad-intranet/app && sudo -u intranet npm run naver-inquiry-check`
+   → `✓ 문의 N건` 이 나오면 OK. 실패하면 그 줄을 확인
+3. `systemctl restart broad-intranet` → 문의함에 '스마트스토어' 출처가 생기고 상품문의가 들어온다 (처음엔 최근 30일)
+4. 답변을 실제로 등록하려면 `.env` 에 `NAVER_ANSWER=on` → 재시작 (그 전에는 연습 모드)
+
+---
+
 ## 평소에 쓰는 명령어 (서버에서)
 
 | 하고 싶은 일 | 명령어 |

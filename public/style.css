@@ -929,3 +929,5 @@ body.embed .container { padding-top: 56px; }
 /* 관리자 → 주문 수집: 자동 수집 간격 */
 .interval-form label { display: inline-flex; align-items: center; gap: 6px; margin: 0 12px 0 0; }
 .interval-form input[type=number] { width: 5em; }
+.src-tag.src-smartstore_qna { background: #e8f8ee; border-color: #a7e3bd; color: #03a94d; }
+.inquiry-actions { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }

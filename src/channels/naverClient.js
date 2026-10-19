@@ -18,10 +18,14 @@ const ALLOWED = [
   { method: 'POST', path: '/v1/pay-order/seller/product-orders/confirm', write: true },
   // 발송처리 (송장 입력)
   { method: 'POST', path: '/v1/pay-order/seller/product-orders/dispatch', write: true },
+  // ── 4차: 상품문의(Q&A) ── 조회 2개 + 답변 등록 1개 (답변은 .env 의 NAVER_ANSWER=on 일 때만)
+  { method: 'GET', path: '/v1/contents/qnas' },
+  { method: 'GET', path: '/v1/contents/qnas/templates' },
+  { method: 'PUT', pattern: /^\/v1\/contents\/qnas\/\d+$/, write: true, flag: 'NAVER_ANSWER' },
 ];
 
 function findAllowed(method, path) {
-  return ALLOWED.find(a => a.method === method && a.path === path);
+  return ALLOWED.find(a => a.method === method && (a.path === path || (a.pattern && a.pattern.test(path))));
 }
 
 function isAllowed(method, path) {
@@ -112,7 +116,7 @@ function createNaverClient({
       throw notSent(`허용되지 않은 네이버 API 호출입니다: ${method} ${path}`);
     }
     if (rule.write && !allowWrite) {
-      throw notSent(`주문 상태 변경이 꺼져 있습니다 (NAVER_WRITE=on 이 아님): ${method} ${path}`);
+      throw notSent(`네이버로 보내기가 꺼져 있습니다 (${rule.flag || 'NAVER_WRITE'}=on 이 아님): ${method} ${path}`);
     }
     const url = new URL(BASE_URL + path);
     for (const [key, value] of Object.entries(query || {})) {
@@ -142,7 +146,10 @@ function createNaverClient({
     const body = await res.json().catch(() => null);
     if (!res.ok) {
       if (res.status === 401) token = null; // 토큰이 만료됐으면 다음 요청 때 새로 받는다
-      const detail = body && (body.message || body.code) ? `: ${body.message || body.code}` : '';
+      // 입력값 오류(400)는 어떤 항목이 틀렸는지(invalidInputs)까지 보여준다
+      const invalid = body && Array.isArray(body.invalidInputs) && body.invalidInputs.length
+        ? ` [${body.invalidInputs.map(i => `${i.name}: ${i.message || i.type}`).join(', ')}]` : '';
+      const detail = (body && (body.message || body.code) ? `: ${body.message || body.code}` : '') + invalid;
       throw new NaverApiError(`네이버 API 오류 (HTTP ${res.status})${detail}`, res.status, body);
     }
     return body;
