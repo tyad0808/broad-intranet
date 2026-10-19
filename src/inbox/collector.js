@@ -70,6 +70,7 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
       if (!running) running = runOnce().finally(() => { running = null; });
       return running;
     },
+    isRunning: () => Boolean(running),
   };
 }
 

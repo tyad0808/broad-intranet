@@ -96,7 +96,13 @@ if (collector) setInterval(collect, COLLECT_INTERVAL_MINUTES * 60 * 1000);
 
 // 문의함 자동 받기: 주문 수집과 같은 간격
 async function collectInbox() {
-  const result = await inboxCollector.run();
+  let result;
+  try {
+    result = await inboxCollector.run();
+  } catch (e) {
+    console.error(`문의함 받기 오류: ${e.message}`);
+    return;
+  }
   const time = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' });
   if (result.ok) console.log(`[${time}] 문의함: 새 문의 ${result.created}건${result.answered ? `, 메일 사이트에서 답장 ${result.answered}건` : ''}`);
   else console.error(`[${time}] 문의함 받기 실패: ${result.errors.join(' / ')}`);

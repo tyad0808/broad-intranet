@@ -20,6 +20,16 @@ const FIRST_DAYS = 30;          // 처음 연결할 때 가져올 기간
 const MAX_PER_RUN = 200;        // 한 번에 가져올 최대 메일 수 (처음에 메일이 아주 많을 때)
 const MAX_SIZE = 8 * 1024 * 1024; // 이보다 큰 메일(큰 첨부)은 본문을 받지 않고 제목만
 const MAX_BODY = 20_000;        // 저장할 본문 글자 수
+const FETCH_LIMIT_MS = 4 * 60 * 1000; // 한 계정 받기가 이보다 오래 걸리면 끊는다 (멈춘 연결이 다음 받기를 막지 않게)
+
+// 정해진 시간 안에 끝나지 않으면 오류
+function withTimeout(promise, ms, message) {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); }),
+  ]).finally(() => clearTimeout(timer));
+}
 
 // .env 에 계정이 있는 메일만: NAVER_MAIL_USER / NAVER_MAIL_PASS, GMAIL_USER / GMAIL_PASS
 function mailAccountsFromEnv(env = process.env) {
@@ -65,12 +75,24 @@ async function parseMail(source, raw, { uidKey, flags = new Set(), date = null, 
 }
 
 // 받은편지함 읽기. state: { uidValidity, lastUid } (지난번 어디까지 읽었는지), openIds: 아직 답변 전인 메일 번호들
-function createMailSource(account, { connect = acc => defaultConnect(acc), parse = simpleParser, now = () => new Date() } = {}) {
+function createMailSource(account, {
+  connect = acc => defaultConnect(acc), parse = simpleParser, now = () => new Date(), limitMs = FETCH_LIMIT_MS,
+} = {}) {
   return {
     source: account.source,
     label: account.label,
-    async fetch({ state = {}, openIds = [] } = {}) {
-      const client = await connect(account);
+    fetch(options) {
+      // 전체 시간 제한: 넘으면 연결을 끊어서 멈춘 작업도 함께 끝낸다
+      let client = null;
+      return withTimeout(this.fetchInner(options, c => { client = c; }), limitMs, `시간 초과 (${Math.round(limitMs / 60000)}분 안에 끝나지 않음)`)
+        .catch(e => {
+          if (client && typeof client.close === 'function') client.close();
+          throw e;
+        });
+    },
+    async fetchInner({ state = {}, openIds = [] } = {}, onClient = () => {}) {
+      const client = await withTimeout(connect(account), 60_000, '메일 서버 연결 시간 초과 (60초)');
+      onClient(client);
       try {
         const lock = await client.getMailboxLock('INBOX');
         try {
@@ -136,6 +158,8 @@ function defaultConnect(account) {
     host: account.imap, port: 993, secure: true,
     auth: { user: account.user, pass: account.pass },
     logger: false,
+    connectionTimeout: 30_000,
+    greetingTimeout: 20_000,
     socketTimeout: 60_000,
   });
   return client.connect().then(() => client);
@@ -200,4 +224,4 @@ async function markOriginal(account, inquiry, raw, connect) {
   }
 }
 
-module.exports = { PROVIDERS, mailAccountsFromEnv, createMailSource, createMailSender, parseMail, htmlToText };
+module.exports = { PROVIDERS, withTimeout, defaultConnect, mailAccountsFromEnv, createMailSource, createMailSender, parseMail, htmlToText };

@@ -235,3 +235,22 @@ test('담당자 지정·처리 완료·다시 열기·여러 건 처리 완료',
   assert.deepStrictEqual([row(id1).status, row(id2).status], ['closed', 'closed']);
   assert.ok(!(await kim.request('/')).text.includes('문의함 <span class="badge">'), '미답변이 없으면 숫자 없음');
 });
+
+test('메일 받기가 멈추면 시간 제한으로 끊고 실패로 남긴다 (다음 받기를 막지 않음)', async () => {
+  let closed = 0;
+  const stuck = {
+    mailbox: { uidValidity: 1n },
+    getMailboxLock: () => new Promise(() => {}), // 영원히 응답 없음
+    close() { closed++; },
+    async logout() {},
+  };
+  const src = createMailSource({ source: 'gmail', label: '지메일' }, { connect: async () => stuck, limitMs: 50 });
+  await assert.rejects(src.fetch({ state: {} }), /시간 초과/);
+  assert.strictEqual(closed, 1, '멈춘 연결은 끊는다');
+
+  const db = openDb(':memory:');
+  const col = createInboxCollector({ db, sources: [src] });
+  const r = await col.run();
+  assert.deepStrictEqual([r.ok, r.errors[0]], [false, '지메일: 시간 초과 (0분 안에 끝나지 않음)']);
+  assert.strictEqual(col.isRunning(), false);
+});

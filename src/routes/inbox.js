@@ -91,6 +91,10 @@ function inboxRoutes(db, { collector = null, senders = {}, sourceLabels = {}, no
     try {
       const b = back(req);
       if (!collector) return flashTo(req, res, b, 'error', '연결된 메일이 없습니다. .env 에 메일 계정을 넣어 주세요.');
+      // 자동 받기가 진행 중이면 기다리게 하지 않고 바로 알려준다 (처음 30일치는 몇 분 걸릴 수 있음)
+      if (collector.isRunning && collector.isRunning()) {
+        return flashTo(req, res, b, 'warn', '지금 메일을 받는 중입니다. 1~2분 뒤 새로고침해 보세요. (처음에는 30일치라 오래 걸릴 수 있어요)');
+      }
       const r = await collector.run();
       const parts = [`새 문의 ${r.created}건`];
       if (r.answered) parts.push(`메일 사이트에서 답장한 ${r.answered}건은 답변완료로`);
