@@ -284,3 +284,15 @@ test('받지 않을 확장자는 받지 않고, 나중에 설정에서 빼도 �
   await again.tick();
   assert.deepStrictEqual((await again.tick()).received.map(e => e.name), ['원본.psd']);
 });
+
+test('NAS 에 못 닿은 까닭을 사람 말로 알려 준다', async t => {
+  const { offlineReason } = require('../tools/file-sync/src/core/sync.js');
+  assert.strictEqual(offlineReason({ code: 'ENOENT' }), '폴더를 찾을 수 없음');
+  assert.strictEqual(offlineReason({ code: 'EPERM' }), '권한 없음 (NAS 로그인 확인)');
+  assert.strictEqual(offlineReason({ code: 'UNKNOWN' }), '네트워크 응답 없음 (UNKNOWN)');
+  const s = setup(t);
+  const sync = s.make();
+  await sync.tick();
+  fs.rmSync(s.nas, { recursive: true });
+  assert.strictEqual((await sync.tick()).message, '폴더를 찾을 수 없음');
+});

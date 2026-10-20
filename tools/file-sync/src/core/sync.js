@@ -38,6 +38,15 @@ function parseExts(v) {
 }
 const extOf = rel => { const m = /\.([^./]+)$/.exec(rel); return m ? m[1].toLowerCase() : ''; };
 
+// NAS 에 못 닿은 까닭을 사람 말로 (윈도우 네트워크 오류는 Node 에서 UNKNOWN 으로 오는 경우가 많다)
+function offlineReason(e) {
+  const c = e && e.code;
+  if (c === 'ENOENT') return '폴더를 찾을 수 없음';
+  if (c === 'EACCES' || c === 'EPERM') return '권한 없음 (NAS 로그인 확인)';
+  if (c === 'ENOTDIR') return '폴더가 아닙니다';
+  return '네트워크 응답 없음' + (c ? ' (' + c + ')' : '');
+}
+
 // 폴더 안의 파일들 (하위 폴더 포함): Map<'하위/이름', { size, mtimeMs }>
 async function scan(root, maxDepth = 12) {
   const out = new Map();
@@ -142,10 +151,10 @@ class Syncer {
     let files;
     try {
       const st = await fsp.stat(this.source);
-      if (!st.isDirectory()) throw new Error('폴더가 아닙니다');
+      if (!st.isDirectory()) throw Object.assign(new Error('폴더가 아닙니다'), { code: 'ENOTDIR' });
       files = await scan(this.source);
     } catch (e) {
-      return { status: 'offline', received: [], errors: [], message: e.code || e.message };
+      return { status: 'offline', received: [], errors: [], message: offlineReason(e) };
     }
 
     // 처음: 이미 있던 파일은 '받은 것'으로 치고 넘어간다 (옛 파일이 한꺼번에 쏟아지지 않게)
@@ -306,4 +315,4 @@ class Syncer {
   }
 }
 
-module.exports = { Syncer, scan, isIgnored, isUrgent, parseExts, DONE_DIR };
+module.exports = { Syncer, scan, isIgnored, isUrgent, parseExts, offlineReason, DONE_DIR };

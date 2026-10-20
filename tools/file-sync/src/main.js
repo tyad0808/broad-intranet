@@ -41,6 +41,12 @@ function saveConfig(c) {
 }
 
 let config, win, tray, syncer = null, timer = null, busy = false, paused = false;
+// 와이파이·NAS 가 잠깐 늦게 답하는 것은 끊김으로 치지 않는다: 연달아 이만큼 실패해야 '연결 끊김'
+const OFFLINE_AFTER = 3;
+let failCount = 0;
+// 파일이 몇 번에 나눠 들어와도 소리는 한 번: 마지막 소리 뒤 이 시간 안에 온 것은 조용히 알림만
+const CHIME_GAP_MS = 60e3;
+let lastChime = 0, lastChimeUrgent = false;
 let status = { state: 'setup', message: 'NAS 폴더를 정하세요.' };
 
 // ---- 상태 알리기 (창·트레이) ----
@@ -102,8 +108,13 @@ async function loop() {
   try {
     const r = await syncer.tick();
     if (r.status === 'offline') {
-      status = { state: 'offline', message: r.message, since: status.state === 'offline' ? status.since : Date.now() };
+      failCount++;
+      // 처음 몇 번은 '받는 중' 그대로 두고 곧 다시 확인한다
+      if (failCount >= OFFLINE_AFTER || status.state !== 'ok') {
+        status = { state: 'offline', message: r.message, since: status.state === 'offline' ? status.since : Date.now() };
+      }
     } else {
+      failCount = 0;
       status = { state: 'ok', lastCheck: Date.now(), baseline: r.baseline, errors: r.errors };
     }
     if (r.received.length) notify(r.received);
@@ -112,7 +123,8 @@ async function loop() {
   }
   busy = false;
   send();
-  timer = setTimeout(loop, Math.max(2, Number(config.intervalSec) || 5) * 1000);
+  const retrying = failCount > 0 && failCount < OFFLINE_AFTER;
+  timer = setTimeout(loop, (retrying ? 2 : Math.max(2, Number(config.intervalSec) || 5)) * 1000);
 }
 
 function checkNow() { if (!busy) loop(); }
@@ -144,7 +156,18 @@ function remind() {
     n.on('click', showWindow);
     n.show();
   }
-  if (config.sound && win && !win.isDestroyed()) win.webContents.send('chime', { repeat: false, urgent: stale.some(e => e.urgent) });
+  chimeOnce(stale.some(e => e.urgent), false);
+}
+
+// 소리 한 번. 반복은 설정에서 '확인할 때까지 소리 반복' 을 켰을 때만
+function chimeOnce(urgent, repeat) {
+  if (!config.sound || !win || win.isDestroyed()) return;
+  const now = Date.now();
+  // 급한 파일은 방금 보통 소리가 났어도 한 번은 급한 소리로
+  if (now - lastChime < CHIME_GAP_MS && (!urgent || lastChimeUrgent)) return;
+  lastChime = now;
+  lastChimeUrgent = urgent;
+  win.webContents.send('chime', { repeat: !!repeat, urgent });
 }
 
 function notify(list) {
@@ -160,8 +183,7 @@ function notify(list) {
     n.on('click', showWindow);
     n.show();
   }
-  // 급한 파일은 '확인할 때까지 반복' 을 꺼 두었어도 반복한다
-  if (config.sound && win && !win.isDestroyed()) win.webContents.send('chime', { repeat: config.repeatSound || urgent > 0, urgent: urgent > 0 });
+  chimeOnce(urgent > 0, config.repeatSound);
 }
 
 // ---- 창 ----

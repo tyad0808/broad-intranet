@@ -115,6 +115,8 @@
     $('pendingCount').textContent = state.pending;
     $('pendingCount').classList.toggle('zero', state.pending === 0);
     $('doneAll').disabled = state.pending === 0;
+    $('seenAll').disabled = state.unseen === 0;
+    $('seenAll').textContent = state.unseen ? `모두 확인 (${state.unseen})` : '모두 확인';
     const empty = $('empty');
     empty.hidden = list.length > 0;
     empty.textContent = q ? '찾는 파일이 없습니다.'
@@ -224,6 +226,7 @@
   $('checkNow').onclick = () => { window.api.checkNow(); toast('확인 중…'); };
   $('pause').onclick = () => window.api.togglePause();
   $('openDest').onclick = () => window.api.openDest();
+  $('seenAll').onclick = () => { stopRepeat(); window.api.markSeen('all'); };
   $('doneAll').onclick = () => {
     if (confirm(`출력 전인 ${state.pending}개를 모두 출력 완료로 체크할까요?`)) {
       window.api.markDone('all', true).then(w => { if (w) toast(w); });
