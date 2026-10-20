@@ -15,6 +15,7 @@ const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
 const { inboxRoutes } = require('./routes/inbox');
 const { replyUpload } = require('./inbox/upload');
+const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
@@ -102,6 +103,25 @@ function createApp({
     },
   }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
+
+  // 5차 네이버 톡톡: 네이버가 새 메시지를 알려 주는 비밀 주소 (로그인·CSRF 대신 비밀 주소 + 네이버 서버 IP 로 확인)
+  if (inbox.talktalk) {
+    const expected = Buffer.from(String(inbox.talktalk.token));
+    app.post('/hooks/talktalk/:token', express.json({ limit: '1mb' }), (req, res) => {
+      const given = Buffer.from(String(req.params.token));
+      if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return res.status(404).end();
+      if (!ipAllowed(req.ip)) {
+        console.warn(`[톡톡] 네이버가 아닌 곳에서 온 요청을 막았습니다: ${req.ip}`);
+        return res.status(403).end();
+      }
+      try {
+        inbox.talktalk.handle(req.body);
+      } catch (e) {
+        console.error(`[톡톡] 메시지 처리 실패: ${e.message}`);
+      }
+      res.status(200).json({ success: true });
+    });
+  }
   app.use(express.urlencoded({ extended: false }));
 
   app.use(session({

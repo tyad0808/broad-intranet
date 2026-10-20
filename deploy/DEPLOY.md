@@ -254,6 +254,16 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 3. `systemctl restart broad-intranet` → 문의함 🛒 쇼핑몰 문의 탭에 '자사몰' 출처 (처음엔 최근 30일)
 4. 답변을 실제로 등록하려면 `.env` 에 `GODO_ANSWER=on` → 재시작 (그 전에는 연습 모드)
 
+## 15. 채팅 — 네이버 톡톡 (챗봇 API, 1단계: 받기·알림·대화 보기)
+
+※ 채널톡에 톡톡이 연동돼 있으면 먼저 채널톡에서 톡톡 연동을 끊는다 (챗봇 API 자리는 하나뿐)
+1. 비밀 주소용 글자 만들기: `openssl rand -hex 24` → `.env` 에 `TALKTALK_WEBHOOK_TOKEN=만든글자`
+2. `systemctl restart broad-intranet` → `cd /opt/broad-intranet/app && sudo -u intranet npm run talktalk-check`
+   (나오는 Webhook 주소는 캡처·공유하지 말 것)
+3. 톡톡 파트너센터 → 개발자도구 → 챗봇 API 설정: Webhook 에 위 주소, 이벤트에서 **echo** 켜기, **보내기 API** 인증키 발급
+4. `.env` 에 `TALKTALK_SEND_KEY=발급받은키` → 재시작 (고객 말이 오면 주도권을 파트너센터로 넘김)
+5. 내 휴대폰 톡톡으로 메시지를 보내 → 문의함 💬 채팅 탭에 오는지, 파트너센터에서 답장이 되는지 확인
+
 ---
 
 ## 평소에 쓰는 명령어 (서버에서)

@@ -4,13 +4,17 @@
 const express = require('express');
 const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
+const { IMAGE_HOSTS, PARTNER_CENTER_URL } = require('../inbox/talktalk');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
-// 위쪽 큰 탭: 쇼핑몰 문의 / 메일 (섞여 있으면 헷갈려서 나눈다)
-const BOXES = { shop: '쇼핑몰 문의', mail: '메일' };
-const boxOf = source => (isMailSource(source) ? 'mail' : 'shop');
+// 위쪽 큰 탭: 쇼핑몰 문의 / 메일 / 채팅 (섞여 있으면 헷갈려서 나눈다)
+const BOXES = { shop: '쇼핑몰 문의', mail: '메일', chat: '채팅' };
+const isChatSource = source => source === 'talktalk';
+const boxOf = source => (isMailSource(source) ? 'mail' : isChatSource(source) ? 'chat' : 'shop');
 // 메일 출처: naver_mail, naver_mail2, gmail … (계정을 늘려도 그대로)
 const MAIL_SQL = "(q.source GLOB 'naver_mail*' OR q.source GLOB 'gmail*')";
+const CHAT_SQL = "(q.source = 'talktalk')";
+const BOX_SQL = { mail: MAIL_SQL, chat: CHAT_SQL, shop: `(NOT ${MAIL_SQL} AND NOT ${CHAT_SQL})` };
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
 const MAX_REPLY = 10_000;
 
@@ -51,12 +55,15 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const q = String(req.query.q || '').trim().slice(0, 50);
     // 출처를 골랐으면 그 출처의 탭, 아니면 고른 탭 (처음엔 쇼핑몰 문의)
     // 큰 탭 순서는 직원마다 (끌어다 놓아 바꿈). 맨 앞 탭이 처음 열린다
-    const boxOrder = userBoxOrder(req.user);
-    const box = src ? boxOf(src) : BOXES[req.query.box] ? req.query.box : boxOrder[0];
-    const boxSql = b => (b === 'mail' ? MAIL_SQL : `NOT ${MAIL_SQL}`);
+    // 채팅 탭은 톡톡을 연결했거나 채팅이 있을 때만
+    const shown = Object.keys(BOXES).filter(b => b !== 'chat' || Object.keys(sourceLabels).some(isChatSource)
+      || db.prepare(`SELECT 1 FROM inquiries q WHERE ${CHAT_SQL} LIMIT 1`).get());
+    const boxOrder = userBoxOrder(req.user).filter(b => shown.includes(b));
+    const box = src ? boxOf(src) : shown.includes(req.query.box) ? req.query.box : boxOrder[0];
+    const boxSql = b => BOX_SQL[b];
 
     // 큰 탭에 붙일 미답변 건수
-    const boxCounts = Object.fromEntries(Object.keys(BOXES).map(b => [b,
+    const boxCounts = Object.fromEntries(shown.map(b => [b,
       db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE q.status = 'open' AND ${boxSql(b)}`).get().n]));
 
     const base = [boxSql(box)];
@@ -110,13 +117,14 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       title: '문의함',
       navSection: 'inbox',
       rows, tab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
-      box, BOXES, boxCounts, chipLabel, boxOrder, defaultBox: boxOrder[0],
+      box, BOXES: Object.fromEntries(shown.map(b => [b, BOXES[b]])), boxCounts, chipLabel, boxOrder, defaultBox: boxOrder[0],
       staff: staff(),
       canCollect: Boolean(collector),
       noSources: !Object.keys(sourceLabels).some(s => boxOf(s) === box),
       lastRun,
       currentUrl: req.originalUrl,
-      modes: Object.fromEntries(Object.keys(sourceLabels).filter(s => boxOf(s) === box).map(s => [s, modeOf(s)])),
+      // 채팅(톡톡)은 답장을 파트너센터에서 하므로 연습 모드 안내에서 뺀다
+      modes: Object.fromEntries(Object.keys(sourceLabels).filter(s => boxOf(s) === box && !isChatSource(s)).map(s => [s, modeOf(s)])),
     });
   });
 
@@ -169,6 +177,10 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     if (!inquiry) return res.status(404).render('error', { title: '없는 문의', message: '문의를 찾을 수 없습니다.' });
     let attachments = [];
     try { attachments = JSON.parse(inquiry.attachments || '[]'); } catch { attachments = []; }
+    // 채팅이면 주고받은 말 (오래된 것부터, 최근 500개)
+    const chat = isChatSource(inquiry.source)
+      ? db.prepare('SELECT * FROM (SELECT * FROM chat_messages WHERE inquiry_id = ? ORDER BY id DESC LIMIT 500) ORDER BY id').all(inquiry.id)
+      : null;
     const replies = db.prepare(`
       SELECT r.*, u.name AS user_name FROM inquiry_replies r LEFT JOIN users u ON u.id = r.user_id
       WHERE r.inquiry_id = ? ORDER BY r.id
@@ -179,6 +191,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),
       isMail: isMailSource(inquiry.source),
+      chat, PARTNER_CENTER_URL,
       withRo,
       previewType,
       label: labelOf(inquiry.source),
@@ -252,6 +265,25 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     file.stream.on('error', () => res.destroy());
     res.on('close', () => { file.done().catch(() => {}); });
     file.stream.pipe(res);
+  });
+
+  // 채팅 사진: 네이버에 있는 사진을 서버가 대신 가져와 보여 준다 (화면이 바깥 주소를 직접 부르지 않게, 저장은 안 함)
+  router.get('/inbox/:id/chat-image/:mid', async (req, res) => {
+    const m = db.prepare("SELECT image_url FROM chat_messages WHERE id = ? AND inquiry_id = ? AND image_url IS NOT NULL")
+      .get(Number(req.params.mid), Number(req.params.id));
+    let url = null;
+    try { url = m ? new URL(m.image_url) : null; } catch { url = null; }
+    if (!url || url.protocol !== 'https:' || !IMAGE_HOSTS.test(url.hostname)) return res.status(404).end();
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(15_000), redirect: 'error' });
+      const type = r.headers.get('content-type') || '';
+      if (!r.ok || !/^image\/(png|jpeg|gif|webp)/.test(type)) return res.status(502).end();
+      const buf = Buffer.from(await r.arrayBuffer());
+      if (buf.length > 20 * 1024 * 1024) return res.status(502).end();
+      res.set({ 'Content-Type': type, 'Cache-Control': 'private, max-age=3600' }).send(buf);
+    } catch {
+      res.status(502).end();
+    }
   });
 
   // 담당자 지정

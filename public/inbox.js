@@ -64,3 +64,6 @@
     add([...e.dataTransfer.files]);
   });
 })();
+
+// 채팅: 처음 열면 가장 최근 말이 보이게 맨 아래로
+document.querySelectorAll('.chat-thread').forEach(el => { el.scrollTop = el.scrollHeight; });

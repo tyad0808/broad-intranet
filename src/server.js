@@ -14,6 +14,7 @@ const { mailAccountsFromEnv, createMailSource, createMailSender, createMailFiles
 const { createInboxCollector } = require('./inbox/collector');
 const { createNaverQnaSource, createNaverQnaSender, SOURCE: QNA_SOURCE, LABEL: QNA_LABEL } = require('./inbox/naverQna');
 const { createCoupangInquirySource, createCoupangInquirySender, SOURCE: CQ_SOURCE, LABEL: CQ_LABEL } = require('./inbox/coupangInquiry');
+const { createTalktalkHandler, createTalktalkClient, SOURCE: TALK_SOURCE, LABEL: TALK_LABEL } = require('./inbox/talktalk');
 const { createGodoInquirySource, createGodoInquirySender, SOURCE: GQ_SOURCE, LABEL: GQ_LABEL } = require('./inbox/godoInquiry');
 
 const PORT = process.env.PORT || 3000;
@@ -83,14 +84,25 @@ const inboxSources = [
   ...(cqReady ? [createCoupangInquirySource()] : []),
   ...(gqReady ? [createGodoInquirySource()] : []),
 ];
+// 5차 네이버 톡톡: .env 에 비밀 주소용 TALKTALK_WEBHOOK_TOKEN 이 있으면 받는다 (끄려면 TALKTALK=off)
+// 주도권을 파트너센터로 넘기려면 보내기 API 키 TALKTALK_SEND_KEY 가 필요하다
+const talkReady = Boolean(process.env.TALKTALK_WEBHOOK_TOKEN) && process.env.TALKTALK !== 'off';
+if (talkReady && process.env.TALKTALK_WEBHOOK_TOKEN.length < 24) {
+  console.warn('[주의] TALKTALK_WEBHOOK_TOKEN 이 너무 짧습니다 (24자 이상). openssl rand -hex 24 로 만들어 주세요.');
+}
 const inboxCollector = inboxSources.length ? createInboxCollector({ db, sources: inboxSources, notifier }) : null;
 const inbox = {
   collector: inboxCollector,
+  talktalk: talkReady ? {
+    token: process.env.TALKTALK_WEBHOOK_TOKEN,
+    handle: createTalktalkHandler({ db, notifier, client: process.env.TALKTALK_SEND_KEY ? createTalktalkClient() : null }),
+  } : null,
   sourceLabels: Object.fromEntries([
     ...mailAccounts.map(a => [a.source, a.label]),
     ...(qnaReady ? [[QNA_SOURCE, QNA_LABEL]] : []),
     ...(cqReady ? [[CQ_SOURCE, CQ_LABEL]] : []),
     ...(gqReady ? [[GQ_SOURCE, GQ_LABEL]] : []),
+    ...(talkReady ? [[TALK_SOURCE, TALK_LABEL]] : []),
   ]),
   senders: {
     ...(mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {}),
@@ -152,6 +164,7 @@ app.listen(PORT, HOST, () => {
     if (mailAccounts.length) console.log(`  메일 답장: ${mailLive ? '실제로 보냄 (MAIL_SEND=on)' : '연습 모드 (보내지 않음)'}`);
     if (qnaReady) console.log(`  스마트스토어 상품문의 답변: ${qnaLive ? '실제로 등록 (NAVER_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
     if (cqReady) console.log(`  쿠팡 문의 답변: ${cqLive ? '실제로 등록 (COUPANG_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
+    if (talkReady) console.log(`  네이버 톡톡: 받기 켜짐 (답장은 톡톡 파트너센터에서)${process.env.TALKTALK_SEND_KEY ? '' : ' — TALKTALK_SEND_KEY 가 없어 주도권 넘기기는 안 함'}`);
     if (gqReady) console.log(`  자사몰 문의 답변: ${gqLive ? '실제로 등록 (GODO_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
     collectInbox();
   }

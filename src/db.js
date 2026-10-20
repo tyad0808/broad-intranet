@@ -244,6 +244,19 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_inquiry_replies ON inquiry_replies(inquiry_id);
 
+    -- 5차 채팅(네이버 톡톡): 대화방 하나 = inquiries 한 줄, 주고받은 말은 여기에 (글자와 네이버 사진 주소만, 사진 파일은 저장하지 않음)
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id          INTEGER PRIMARY KEY,
+      inquiry_id  INTEGER NOT NULL REFERENCES inquiries(id),
+      direction   TEXT    NOT NULL CHECK (direction IN ('in', 'out')),
+      kind        TEXT    NOT NULL DEFAULT 'text',
+      text        TEXT,
+      image_url   TEXT,
+      sender      TEXT,
+      created_at  TEXT    NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_chat_messages ON chat_messages(inquiry_id, id);
+
     -- 회사 일정 (주문 목록 옆 달력). 승인된 직원 누구나 넣고, 넣은 사람과 관리자만 고치거나 지운다
     CREATE TABLE IF NOT EXISTS events (
       id          INTEGER PRIMARY KEY,
