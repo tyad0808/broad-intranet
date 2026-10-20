@@ -123,6 +123,7 @@ async function loop() {
   clearTimeout(timer);
   if (!syncer || paused || busy) return;
   busy = true;
+  if (win && !win.isDestroyed()) win.webContents.send('checking', true);
   try {
     const r = await syncer.tick();
     if (r.status === 'offline') {
@@ -140,6 +141,7 @@ async function loop() {
     status = { state: 'error', message: e.message };
   }
   busy = false;
+  if (win && !win.isDestroyed()) win.webContents.send('checking', false);
   send();
   // 잠깐 실패면 2초 뒤 다시, 끊긴 게 확실하면 30초마다만 (NAS·노트북에 부담 주지 않게)
   const every = Math.max(2, Number(config.intervalSec) || 5);

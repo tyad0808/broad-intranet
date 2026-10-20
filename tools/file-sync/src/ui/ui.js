@@ -1,7 +1,7 @@
 // 목록 화면: 받은 파일 목록, 상태, 설정, 알림 소리
 (function () {
   const $ = id => document.getElementById(id);
-  let state = null, tab = 'pending', repeatTimer = null;
+  let state = null, tab = 'pending', repeatTimer = null, looking = false, lookTimer = null;
 
   // ---- 표시용 ----
   function fmtSize(n) {
@@ -46,7 +46,7 @@
     const s = state.status, st = $('status');
     let cls = s.state, text;
     if (state.paused) { cls = 'paused'; text = '잠시 멈춤'; }
-    else if (s.state === 'ok') text = state.progress ? '받는 중' : '새 파일 기다리는 중';
+    else if (s.state === 'ok') text = state.progress ? '받는 중' : looking ? 'NAS 살펴보는 중…' : '새 파일 기다리는 중';
     else if (s.state === 'offline') text = 'NAS 연결 끊김';
     else if (s.state === 'setup') text = '설정 필요';
     else text = '오류';
@@ -57,6 +57,7 @@
     const c = state.config;
     $('paths').textContent = c.source ? `${c.source}  →  ${c.dest}` : 'NAS 폴더를 아직 정하지 않았습니다. [설정] 에서 정하세요.';
     if (s.state === 'offline') $('paths').textContent += `  (연결 안 됨: ${s.message})`;
+    else if (s.lastCheck) $('paths').textContent += `  · 마지막 확인 ${new Date(s.lastCheck).toTimeString().slice(0, 8)}`;
     if (s.errors && s.errors.length) $('paths').textContent += `  · 받지 못한 파일 ${s.errors.length}개 (다음 확인 때 다시 시도)`;
   }
 
@@ -155,6 +156,12 @@
     $('pFile').textContent = p.rel;
     $('pFileSize').textContent = `${fmtSize(p.fileDone)} / ${fmtSize(p.fileTotal)}`;
   }
+  // NAS 를 살펴보는 데 1.5초 넘게 걸리면 '살펴보는 중' (파일이 많은 폴더는 오래 걸림)
+  window.api.onChecking(on => {
+    clearTimeout(lookTimer);
+    if (on) lookTimer = setTimeout(() => { looking = true; if (state) renderStatus(); }, 1500);
+    else if (looking) { looking = false; if (state) renderStatus(); }
+  });
   window.api.onProgress(p => { if (state) { state.progress = p; renderProgress(p, state.waiting); renderStatus(); } });
 
   function render(s) {
