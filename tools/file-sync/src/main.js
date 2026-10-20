@@ -56,6 +56,8 @@ function snapshot() {
   return {
     config, status, paused,
     history: syncer ? syncer.history.slice(0, 500) : [],
+    progress: syncer ? syncer.progress : null,
+    waiting: syncer ? syncer.waitingCount : 0,
     unseen: syncer ? syncer.unseen : 0,
     pending: syncer ? syncer.pending : 0,
   };
@@ -66,7 +68,10 @@ function updateTray() {
   const unseen = syncer ? syncer.unseen : 0, pending = syncer ? syncer.pending : 0;
   const off = paused || status.state !== 'ok';
   tray.setImage(icon(off ? 'tray-off' : unseen ? 'tray-new' : 'tray'));
-  const line = paused ? '잠시 멈춤' : status.state === 'ok' ? (pending ? `출력 전 ${pending}개` : '받는 중 (출력 전 파일 없음)')
+  const p = syncer && syncer.progress;
+  const line = paused ? '잠시 멈춤'
+    : p ? `받는 중 ${p.index}/${p.count}개 (${p.batchTotal ? Math.floor(p.batchDone / p.batchTotal * 100) : 0}%)`
+    : status.state === 'ok' ? (pending ? `출력 전 ${pending}개` : '새 파일 기다리는 중 (출력 전 파일 없음)')
     : status.state === 'offline' ? 'NAS 연결 끊김' : status.message;
   tray.setToolTip('브로애드 파일 받기 - ' + line);
   tray.setContextMenu(Menu.buildFromTemplate([
@@ -99,8 +104,19 @@ async function startSync() {
     statePath: path.join(app.getPath('userData'), 'state.json'),
     skipExisting: config.skipExisting,
     skipExt: config.skipExt,
+    onProgress,
   }).load();
   loop();
+}
+
+// 받는 중 진행 상황: 창에는 0.3초마다, 목록·트레이는 2초마다 (파일이 수백 개여도 화면이 버벅이지 않게)
+let lastProgress = 0, lastFull = 0;
+function onProgress(p) {
+  const now = Date.now();
+  if (!p || now - lastFull > 2000) { lastFull = now; lastProgress = now; send(); return; }
+  if (now - lastProgress < 300) return;
+  lastProgress = now;
+  if (win && !win.isDestroyed()) win.webContents.send('progress', p);
 }
 
 async function loop() {

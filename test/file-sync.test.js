@@ -349,3 +349,24 @@ test('예전 버전이 두 번 넣은 같은 파일 기록을 켤 때 하나로 
   assert.strictEqual(h[1].seen, true);
   assert.strictEqual(dedupeHistory(h), false);
 });
+
+test('받는 중 진행 상황: 몇 번째·몇 개, 받은 양, 끝나면 null', async t => {
+  const s = setup(t);
+  const seen = [];
+  const sync = s.make({ onProgress: p => seen.push(p && { ...p }) });
+  await sync.tick();
+  s.put('a.pdf', 'x'.repeat(3000)); s.put('b.pdf', 'y'.repeat(5000));
+  await sync.tick();
+  assert.strictEqual(sync.waitingCount, 2, 'NAS 에 올라가는 중인지 지켜보는 파일');
+  await sync.tick();
+  assert.strictEqual(sync.waitingCount, 0);
+  const last = seen.filter(Boolean).pop();
+  assert.strictEqual(last.count, 2);
+  assert.strictEqual(last.index, 2);
+  assert.strictEqual(last.batchTotal, 8000);
+  assert.strictEqual(last.batchDone, 8000);
+  assert.strictEqual(last.fileDone, last.fileTotal);
+  assert.ok(seen.some(p => p && p.index === 1 && p.fileDone === 0), '파일을 받기 시작할 때도 알린다');
+  assert.strictEqual(seen[seen.length - 1], null);
+  assert.strictEqual(sync.progress, null);
+});

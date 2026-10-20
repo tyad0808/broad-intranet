@@ -17,4 +17,5 @@ contextBridge.exposeInMainWorld('api', {
   clearHistory: () => ipcRenderer.invoke('clear-history'),
   onState: cb => ipcRenderer.on('state', (_e, s) => cb(s)),
   onChime: cb => ipcRenderer.on('chime', (_e, o) => cb(o)),
+  onProgress: cb => ipcRenderer.on('progress', (_e, p) => cb(p)),
 });

@@ -8,6 +8,7 @@
 const fs = require('node:fs');
 const fsp = fs.promises;
 const path = require('node:path');
+const { pipeline } = require('node:stream/promises');
 const { readInfo } = require('./fileinfo');
 
 // 출력 완료한 NAS 원본을 옮겨 두는 폴더 (NAS 폴더 바로 아래). 받기에서는 건너뛴다
@@ -140,6 +141,8 @@ class Syncer {
     this.historyLimit = o.historyLimit || 1000;
     this.skipExt = parseExts(o.skipExt);
     this.scan = o.scan || scan; // 시험용으로 바꿔 끼울 수 있게
+    this.onProgress = o.onProgress || null; // 받는 중 진행 상황
+    this.progress = null;
     this.now = o.now || Date.now;
     this.waiting = new Map(); // 올라가는 중인지 지켜보는 파일
     this.state = null;
@@ -209,18 +212,14 @@ class Syncer {
 
     const known = this.state.known, received = [], errors = [];
     let skipped = false;
+    // 1) 이번에 받을 것 고르기 (다 올라간 것만)
+    const ready = [];
     for (const [rel, info] of files) {
       const k = known[rel];
       if (k && k.size === info.size && k.mtimeMs === info.mtimeMs) continue;
-      // 받지 않을 확장자: 받은 것으로만 쳐 둔다 (나중에 설정에서 빼도 옛 파일이 한꺼번에 쏟아지지 않게)
-      // 똑같은 파일을 이미 받아 두었으면 받은 것으로만 쳐 둔다 (기록이 어긋나도 같은 파일이 또 쏟아지지 않게)
-      if (!k && this.alreadyHave(rel, info)) {
-        known[rel] = info;
-        this.waiting.delete(rel);
-        skipped = true;
-        continue;
-      }
-      if (this.skipExt.has(extOf(rel))) {
+      // 똑같은 파일을 이미 받아 두었거나(기록이 어긋나도 같은 파일이 또 쏟아지지 않게),
+      // 받지 않을 확장자면(나중에 설정에서 빼도 옛 파일이 한꺼번에 쏟아지지 않게) 받은 것으로만 쳐 둔다
+      if ((!k && this.alreadyHave(rel, info)) || this.skipExt.has(extOf(rel))) {
         known[rel] = info;
         this.waiting.delete(rel);
         skipped = true;
@@ -233,8 +232,22 @@ class Syncer {
       } else if (++p.ticks < this.stableTicks) {
         continue;
       }
+      ready.push({ rel, info, k });
+    }
+
+    // 2) 받기. 진행 상황(몇 번째, 몇 MB)을 onProgress 로 알린다
+    const batch = { count: ready.length, index: 0, rel: '', fileDone: 0, fileTotal: 0, batchDone: 0,
+      batchTotal: ready.reduce((n, r) => n + r.info.size, 0), startedAt: this.now() };
+    let before = 0;
+    for (const { rel, info, k } of ready) {
+      Object.assign(batch, { index: batch.index + 1, rel, fileDone: 0, fileTotal: info.size });
+      this.report(batch);
       try {
-        const localPath = await this.copy(rel, info);
+        const localPath = await this.copy(rel, info, done => {
+          batch.fileDone = done;
+          batch.batchDone = before + done;
+          this.report(batch);
+        });
         known[rel] = info;
         const entry = {
           id: this.state.nextId++, rel, name: path.posix.basename(rel), folder: path.posix.dirname(rel) === '.' ? '' : path.posix.dirname(rel),
@@ -250,8 +263,12 @@ class Syncer {
       } catch (e) {
         errors.push({ rel, message: e.code || e.message });
       }
+      before += info.size;
+      batch.batchDone = before;
       this.waiting.delete(rel);
     }
+    this.progress = null;
+    if (ready.length) this.report(null);
     // 그사이 NAS 에서 사라진 것은 기다리지 않는다 (받은 파일은 지우지 않음)
     for (const rel of this.waiting.keys()) if (!files.has(rel)) this.waiting.delete(rel);
     // 잠깐 못 읽은 폴더·파일은 지우지 않는다 (지우면 다음에 읽힐 때 전부 새 파일로 다시 받게 됨)
@@ -264,12 +281,29 @@ class Syncer {
     return { status: 'ok', received, errors };
   }
 
-  async copy(rel, info) {
+  // 진행 상황 알리기 (null 이면 끝). 받는 중이 아닐 때 기다리는 파일 수는 waitingCount
+  report(batch) {
+    this.progress = batch ? { ...batch } : null;
+    if (this.onProgress) this.onProgress(this.progress);
+  }
+  // NAS 에 올라가는 중이라 기다리는 파일 수
+  get waitingCount() { return this.waiting.size; }
+
+  async copy(rel, info, onBytes) {
     const src = toPath(this.source, rel);
     let dst = toPath(this.dest, rel);
     await fsp.mkdir(path.dirname(dst), { recursive: true });
     const part = dst + '.part';
-    await fsp.copyFile(src, part);
+    // 받은 양을 셀 수 있게 조금씩 읽어 쓴다 (1MB 씩)
+    const rs = fs.createReadStream(src, { highWaterMark: 1 << 20 });
+    let done = 0;
+    rs.on('data', c => { done += c.length; if (onBytes) onBytes(done); });
+    try {
+      await pipeline(rs, fs.createWriteStream(part));
+    } catch (e) {
+      await fsp.rm(part, { force: true });
+      throw e;
+    }
     const st = await fsp.stat(part);
     if (st.size !== info.size) {
       await fsp.rm(part, { force: true });

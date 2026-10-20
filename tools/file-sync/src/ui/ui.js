@@ -46,7 +46,7 @@
     const s = state.status, st = $('status');
     let cls = s.state, text;
     if (state.paused) { cls = 'paused'; text = '잠시 멈춤'; }
-    else if (s.state === 'ok') text = '받는 중';
+    else if (s.state === 'ok') text = state.progress ? '받는 중' : '새 파일 기다리는 중';
     else if (s.state === 'offline') text = 'NAS 연결 끊김';
     else if (s.state === 'setup') text = '설정 필요';
     else text = '오류';
@@ -129,9 +129,38 @@
     if (state.unseen === 0) stopRepeat();
   }
 
+  // 받는 중: 몇 번째 / 몇 개, 받은 MB / 전체 MB, 속도, 남은 시간, 지금 받는 파일
+  function fmtLeft(sec) {
+    if (!isFinite(sec)) return '';
+    if (sec < 60) return `약 ${Math.max(1, Math.round(sec))}초 남음`;
+    if (sec < 3600) return `약 ${Math.round(sec / 60)}분 남음`;
+    return `약 ${Math.floor(sec / 3600)}시간 ${Math.round(sec % 3600 / 60)}분 남음`;
+  }
+  function renderProgress(p, waiting) {
+    const box = $('progress');
+    if (!p && !waiting) { box.hidden = true; return; }
+    box.hidden = false;
+    box.classList.toggle('wait', !p);
+    if (!p) {
+      $('pMain').textContent = `NAS 에 올라가는 중인 파일 ${waiting}개`;
+      $('pRate').textContent = '다 올라가면 바로 받습니다';
+      $('pFile').textContent = ''; $('pFileSize').textContent = '';
+      return;
+    }
+    const pct = p.batchTotal ? Math.min(100, Math.floor(p.batchDone / p.batchTotal * 100)) : 100;
+    const sec = (Date.now() - p.startedAt) / 1000, speed = sec > 0.5 ? p.batchDone / sec : 0;
+    $('pMain').textContent = `받는 중 ${p.index} / ${p.count}개 · ${fmtSize(p.batchDone)} / ${fmtSize(p.batchTotal)} (${pct}%)`;
+    $('pRate').textContent = speed ? `${fmtSize(Math.round(speed))}/초 · ${fmtLeft((p.batchTotal - p.batchDone) / speed)}` : '';
+    $('pBar').style.width = pct + '%';
+    $('pFile').textContent = p.rel;
+    $('pFileSize').textContent = `${fmtSize(p.fileDone)} / ${fmtSize(p.fileTotal)}`;
+  }
+  window.api.onProgress(p => { if (state) { state.progress = p; renderProgress(p, state.waiting); renderStatus(); } });
+
   function render(s) {
     state = s;
     renderStatus();
+    renderProgress(s.progress, s.waiting);
     renderList();
     if (s.status.state === 'setup' && $('settings').hidden && !render.askedOnce) { render.askedOnce = true; openSettings(); }
   }
