@@ -1,7 +1,7 @@
 // 목록 화면: 받은 파일 목록, 상태, 설정, 알림 소리
 (function () {
   const $ = id => document.getElementById(id);
-  let state = null, tab = 'pending', repeatTimer = null, looking = false, lookTimer = null;
+  let state = null, tab = 'pending', repeatTimer = null, looking = false, lookTimer = null, lookStart = 0, lastMove = 0, tickTimer = null;
 
   // ---- 표시용 ----
   function fmtSize(n) {
@@ -46,7 +46,12 @@
     const s = state.status, st = $('status');
     let cls = s.state, text;
     if (state.paused) { cls = 'paused'; text = '잠시 멈춤'; }
-    else if (s.state === 'ok') text = state.progress ? '받는 중' : looking ? 'NAS 살펴보는 중…' : '새 파일 기다리는 중';
+    else if (s.state === 'ok') {
+      // NAS 가 1분 넘게 대답이 없으면 (노트북 와이파이·파일 공유가 멈춘 경우) 멈췄다고 알린다
+      const stuck = Math.round((Date.now() - (state.progress ? lastMove : lookStart)) / 1000);
+      if ((state.progress || looking) && stuck >= 60) { cls = 'offline'; text = `NAS 응답 없음 (${stuck}초째)`; }
+      else text = state.progress ? '받는 중' : looking ? `NAS 살펴보는 중… ${stuck}초` : '새 파일 기다리는 중';
+    }
     else if (s.state === 'offline') text = 'NAS 연결 끊김';
     else if (s.state === 'setup') text = '설정 필요';
     else text = '오류';
@@ -56,7 +61,8 @@
     $('pause').textContent = state.paused ? '다시 받기' : '잠시 멈춤';
     const c = state.config;
     $('paths').textContent = c.source ? `${c.source}  →  ${c.dest}` : 'NAS 폴더를 아직 정하지 않았습니다. [설정] 에서 정하세요.';
-    if (s.state === 'offline') $('paths').textContent += `  (연결 안 됨: ${s.message})`;
+    if (st.textContent.startsWith('NAS 응답 없음')) $('paths').textContent += '  · 와이파이를 껐다 켜 보세요';
+    else if (s.state === 'offline') $('paths').textContent += `  (연결 안 됨: ${s.message})`;
     else if (s.lastCheck) $('paths').textContent += `  · 마지막 확인 ${new Date(s.lastCheck).toTimeString().slice(0, 8)}`;
     if (s.errors && s.errors.length) $('paths').textContent += `  · 받지 못한 파일 ${s.errors.length}개 (다음 확인 때 다시 시도)`;
   }
@@ -159,10 +165,14 @@
   // NAS 를 살펴보는 데 1.5초 넘게 걸리면 '살펴보는 중' (파일이 많은 폴더는 오래 걸림)
   window.api.onChecking(on => {
     clearTimeout(lookTimer);
-    if (on) lookTimer = setTimeout(() => { looking = true; if (state) renderStatus(); }, 1500);
-    else if (looking) { looking = false; if (state) renderStatus(); }
+    clearInterval(tickTimer);
+    if (on) {
+      lookStart = lastMove = Date.now();
+      lookTimer = setTimeout(() => { looking = true; if (state) renderStatus(); }, 1500);
+      tickTimer = setInterval(() => { if (state && (looking || state.progress)) renderStatus(); }, 1000); // 초 세기
+    } else if (looking) { looking = false; if (state) renderStatus(); }
   });
-  window.api.onProgress(p => { if (state) { state.progress = p; renderProgress(p, state.waiting); renderStatus(); } });
+  window.api.onProgress(p => { lastMove = Date.now(); if (state) { state.progress = p; renderProgress(p, state.waiting); renderStatus(); } });
 
   function renderSkipped(sk) {
     $('skipped').hidden = !sk;
