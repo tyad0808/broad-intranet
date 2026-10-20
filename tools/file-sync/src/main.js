@@ -166,7 +166,8 @@ async function loop() {
       failCount = 0;
       status = { state: 'ok', lastCheck: Date.now(), baseline: r.baseline, errors: r.errors };
     }
-    if (r.received.length) notify(r.received);
+    if (r.received.length) held.push(...r.received);
+    flushNotify();
   } catch (e) {
     status = { state: 'error', message: e.message };
   }
@@ -220,6 +221,17 @@ function chimeOnce(urgent, repeat) {
   lastChime = now;
   lastChimeUrgent = urgent;
   win.webContents.send('chime', { repeat: !!repeat, urgent });
+}
+
+// 알림은 한 번에: NAS 에 아직 올라가는 중인 파일이 있으면 다 받을 때까지 모아 두었다가 알린다 (최대 3분)
+const held = [];
+let heldSince = 0;
+function flushNotify() {
+  if (!held.length) { heldSince = 0; return; }
+  if (!heldSince) heldSince = Date.now();
+  if (syncer && syncer.waitingCount > 0 && Date.now() - heldSince < 3 * 60e3) return;
+  notify(held.splice(0));
+  heldSince = 0;
 }
 
 function notify(list) {

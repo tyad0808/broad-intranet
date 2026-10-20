@@ -83,6 +83,18 @@ async function scan(root, maxDepth = 12, onDir = null) {
 }
 
 const toPath = (root, rel) => path.join(root, ...rel.split('/'));
+
+// 다른 컴퓨터가 아직 쓰고 있는 파일인지: 쓰기로 열어 보고(아무것도 쓰지 않음) '사용 중' 이면 true.
+// NAS 쓰기 권한이 없어서 못 여는 것은 사용 중이 아니다
+async function isBusy(file) {
+  try {
+    const fh = await fsp.open(file, 'r+');
+    await fh.close();
+    return false;
+  } catch (e) {
+    return e.code === 'EBUSY';
+  }
+}
 const isPending = h => !h.done && !h.replaced;
 
 // 같은 이름 파일을 바꿀 수 없을 때(출력 프로그램이 열고 있는 등) 쓸 다른 이름: '이름 (2).확장자'
@@ -236,6 +248,11 @@ class Syncer {
       } else if (++p.ticks < this.stableTicks) {
         continue;
       }
+      // 크기가 그대로여도 올리는 프로그램이 아직 쓰고 있으면 기다린다 (탐색기는 처음부터 최종 크기를 잡아 두기도 함)
+      if (await isBusy(toPath(this.source, rel))) {
+        this.waiting.set(rel, { size: info.size, mtimeMs: info.mtimeMs, ticks: 1 });
+        continue;
+      }
       ready.push({ rel, info, k });
     }
 
@@ -309,7 +326,9 @@ class Syncer {
       throw e;
     }
     const st = await fsp.stat(part);
-    if (st.size !== info.size) {
+    // 받는 동안 NAS 쪽 파일이 바뀌었으면 (아직 올리는 중이었음) 버리고 다음에 다시
+    const now = await fsp.stat(src).catch(() => null);
+    if (st.size !== info.size || !now || now.size !== info.size || Math.floor(now.mtimeMs) !== info.mtimeMs) {
       await fsp.rm(part, { force: true });
       throw new Error('복사한 크기가 다릅니다 (올리는 중일 수 있음)');
     }
