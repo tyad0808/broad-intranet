@@ -50,13 +50,14 @@ function offlineReason(e) {
 
 // 폴더 안의 파일들 (하위 폴더 포함): Map<'하위/이름', { size, mtimeMs }>
 // out.unsure: 이번에 못 읽은 하위 폴더('폴더/')·파일 — 없어진 게 아니라 잠깐 못 읽은 것이라 기록을 지우면 안 된다
-async function scan(root, maxDepth = 12) {
+async function scan(root, maxDepth = 12, onDir = null) {
   const out = new Map();
   out.unsure = [];
   async function walk(dir, rel, depth) {
     let entries;
     try {
       entries = await fsp.readdir(dir, { withFileTypes: true });
+      if (onDir) onDir(rel); // 폴더 하나 읽을 때마다 '살아 있음' (큰 NAS 폴더는 살펴보기만 오래 걸림)
     } catch (e) {
       if (depth === 0) throw e; // 맨 위 폴더를 못 읽으면 연결 문제
       if (e.code !== 'ENOENT') out.unsure.push(rel + '/'); // 하위 폴더 하나를 못 읽으면 이번엔 건너뛴다
@@ -142,6 +143,7 @@ class Syncer {
     this.skipExt = parseExts(o.skipExt);
     this.scan = o.scan || scan; // 시험용으로 바꿔 끼울 수 있게
     this.onProgress = o.onProgress || null; // 받는 중 진행 상황
+    this.onActivity = o.onActivity || null; // NAS 폴더를 하나 읽을 때마다 (멈췄는지 알아보기용)
     this.progress = null;
     this.now = o.now || Date.now;
     this.waiting = new Map(); // 올라가는 중인지 지켜보는 파일
@@ -195,7 +197,7 @@ class Syncer {
     try {
       const st = await fsp.stat(this.source);
       if (!st.isDirectory()) throw Object.assign(new Error('폴더가 아닙니다'), { code: 'ENOTDIR' });
-      files = await this.scan(this.source);
+      files = await this.scan(this.source, 12, this.onActivity);
     } catch (e) {
       return { status: 'offline', received: [], errors: [], message: offlineReason(e) };
     }

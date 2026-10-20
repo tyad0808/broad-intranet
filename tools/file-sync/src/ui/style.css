@@ -7,6 +7,7 @@
   :root { --bg: #1e1f22; --panel: #26282c; --text: #e6e8eb; --muted: #9aa0a8; --line: #383b41; --row-new: #24324a; }
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 13px 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; display: flex; flex-direction: column; height: 100vh; }
 button { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); cursor: pointer; }
 button:hover { border-color: var(--accent); }

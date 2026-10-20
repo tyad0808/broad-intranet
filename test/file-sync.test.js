@@ -387,3 +387,19 @@ test('처음 볼 때 건너뛴 파일 수를 남기고, 모두 받기나 닫기�
   await again.tick();
   assert.strictEqual((await again.tick()).received.length, 2);
 });
+
+test('와이파이 이름 읽기 (netsh wlan show interfaces)', () => {
+  const { currentSsid } = require('../tools/file-sync/src/core/wifi.js');
+  const out = '\r\n    이름                   : Wi-Fi\r\n    SSID                   : broad\r\n    AP BSSID               : 12:34:56:78:9a:bc\r\n';
+  assert.strictEqual(currentSsid(out), 'broad');
+  assert.strictEqual(currentSsid('연결 안 됨'), '');
+});
+
+test('NAS 폴더를 읽을 때마다 살아 있다고 알린다', async t => {
+  const s = setup(t);
+  s.put('a/b/c.pdf', '1');
+  let n = 0;
+  const sync = s.make({ onActivity: () => n++ });
+  await sync.tick();
+  assert.strictEqual(n, 3, '맨 위, a, a/b');
+});

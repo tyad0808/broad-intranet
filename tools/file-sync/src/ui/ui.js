@@ -64,6 +64,8 @@
     if (st.textContent.startsWith('NAS 응답 없음')) $('paths').textContent += '  · 와이파이를 껐다 켜 보세요';
     else if (s.state === 'offline') $('paths').textContent += `  (연결 안 됨: ${s.message})`;
     else if (s.lastCheck) $('paths').textContent += `  · 마지막 확인 ${new Date(s.lastCheck).toTimeString().slice(0, 8)}`;
+    const rc = state.reconnects;
+    if (rc && rc.count) $('paths').textContent += `  · 와이파이 자동 재연결 ${rc.count}번 (마지막 ${fmtTime(rc.last)})`;
     if (s.errors && s.errors.length) $('paths').textContent += `  · 받지 못한 파일 ${s.errors.length}개 (다음 확인 때 다시 시도)`;
   }
 
@@ -239,7 +241,7 @@
   });
 
   // ---- 설정 ----
-  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin', 'skipExt'], CHECKS = ['sound', 'urgentFirst', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas'];
+  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin', 'skipExt', 'wifiName'], CHECKS = ['sound', 'urgentFirst', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas', 'wifiReconnect'];
   function openSettings() {
     const c = state.config;
     FIELDS.forEach(k => { $(k).value = c[k] == null ? '' : c[k]; });

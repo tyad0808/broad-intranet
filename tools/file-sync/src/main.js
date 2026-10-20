@@ -5,6 +5,7 @@ const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
 const { Syncer, parseExts } = require('./core/sync');
+const wifi = require('./core/wifi');
 
 const APP_ID = 'com.broad.filesync';
 const ASSETS = path.join(__dirname, '..', 'assets');
@@ -32,6 +33,8 @@ const DEFAULTS = {
   skipExt: '',                                             // 받지 않을 확장자 (예: psd, zip)
   sortOrder: 'new',                                        // 목록 순서: new 최신순 / old 오래된순
   urgentFirst: true,                                       // 출력 전인 급한 파일을 맨 위로
+  wifiReconnect: false,                                    // NAS 가 1분 넘게 대답 없으면 와이파이 다시 연결
+  wifiName: '',                                            // 다시 연결할 와이파이 이름 (비우면 지금 연결된 것)
 };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
@@ -58,6 +61,7 @@ function snapshot() {
     history: syncer ? syncer.history.slice(0, 500) : [],
     progress: syncer ? syncer.progress : null,
     waiting: syncer ? syncer.waitingCount : 0,
+    reconnects,
     skipped: syncer && syncer.state ? syncer.state.skipped || null : null,
     unseen: syncer ? syncer.unseen : 0,
     pending: syncer ? syncer.pending : 0,
@@ -106,6 +110,7 @@ async function startSync() {
     skipExisting: config.skipExisting,
     skipExt: config.skipExt,
     onProgress,
+    onActivity: () => { lastActivity = Date.now(); },
   }).load();
   loop();
 }
@@ -114,16 +119,40 @@ async function startSync() {
 let lastProgress = 0, lastFull = 0;
 function onProgress(p) {
   const now = Date.now();
+  lastActivity = now;
   if (!p || now - lastFull > 2000) { lastFull = now; lastProgress = now; send(); return; }
   if (now - lastProgress < 300) return;
   lastProgress = now;
   if (win && !win.isDestroyed()) win.webContents.send('progress', p);
 }
 
+// ---- 와이파이 자동 다시 연결 (설정에서 켬) ----
+// NAS 읽기가 1분 넘게 안 끝나거나(멈춤) 연결 끊김이 이어지면 와이파이를 다시 잡는다. 한 번 하면 3분은 쉼
+const STUCK_MS = 60e3, RECONNECT_GAP_MS = 3 * 60e3;
+let lastActivity = 0, lastReconnect = 0, reconnecting = false;
+const reconnects = { count: 0, last: null, message: '' };
+async function maybeReconnect(why) {
+  if (!config.wifiReconnect || reconnecting || paused || Date.now() - lastReconnect < RECONNECT_GAP_MS) return;
+  reconnecting = true;
+  lastReconnect = Date.now();
+  const r = await wifi.reconnect(String(config.wifiName || '').trim());
+  reconnecting = false;
+  reconnects.count++;
+  reconnects.last = Date.now();
+  reconnects.message = `${why} → 와이파이 ${r.name || ''} ${r.message}`;
+  lastActivity = Date.now();
+  send();
+}
+setInterval(() => {
+  if (busy && Date.now() - lastActivity > STUCK_MS) maybeReconnect('NAS 응답 없음');
+  else if (!busy && status.state === 'offline') maybeReconnect('NAS 연결 끊김');
+}, 10e3);
+
 async function loop() {
   clearTimeout(timer);
   if (!syncer || paused || busy) return;
   busy = true;
+  lastActivity = Date.now();
   if (win && !win.isDestroyed()) win.webContents.send('checking', true);
   try {
     const r = await syncer.tick();
