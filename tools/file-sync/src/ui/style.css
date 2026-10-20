@@ -20,6 +20,8 @@ header { display: flex; align-items: center; gap: 6px; padding: 10px 12px; backg
 .pill.offline, .pill.error { background: #fee2e2; color: #991b1b; }
 .pill.setup, .pill.paused { background: #fef3c7; color: #92400e; }
 .paths { padding: 6px 12px; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.notice { display: flex; align-items: center; gap: 8px; margin: 0 12px 4px; padding: 8px 10px; background: #fef3c7; color: #92400e; border-radius: 8px; }
+.notice span { flex: 1; }
 .progress { margin: 0 12px 4px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .progress .p-line, .progress .p-file { display: flex; justify-content: space-between; gap: 10px; }
 .progress .p-line span, .progress .p-file span:last-child { color: var(--muted); white-space: nowrap; }

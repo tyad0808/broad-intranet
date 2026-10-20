@@ -164,9 +164,20 @@
   });
   window.api.onProgress(p => { if (state) { state.progress = p; renderProgress(p, state.waiting); renderStatus(); } });
 
+  function renderSkipped(sk) {
+    $('skipped').hidden = !sk;
+    if (sk) $('skippedText').textContent = `이 NAS 폴더를 처음 볼 때(${fmtTime(sk.at)}) 원래 있던 파일 ${sk.count}개는 받지 않았습니다. 그 뒤에 올린 파일만 받습니다.`;
+  }
+  $('skippedImport').onclick = async () => {
+    if (!confirm(`원래 있던 파일 ${state.skipped.count}개를 지금 받을까요? (이미 받은 똑같은 파일은 건너뜁니다)`)) return;
+    await window.api.importAll();
+  };
+  $('skippedClose').onclick = () => window.api.dismissSkipped();
+
   function render(s) {
     state = s;
     renderStatus();
+    renderSkipped(s.skipped);
     renderProgress(s.progress, s.waiting);
     renderList();
     if (s.status.state === 'setup' && $('settings').hidden && !render.askedOnce) { render.askedOnce = true; openSettings(); }

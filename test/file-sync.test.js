@@ -370,3 +370,20 @@ test('받는 중 진행 상황: 몇 번째·몇 개, 받은 양, 끝나면 null'
   assert.strictEqual(seen[seen.length - 1], null);
   assert.strictEqual(sync.progress, null);
 });
+
+test('처음 볼 때 건너뛴 파일 수를 남기고, 모두 받기나 닫기로 지운다', async t => {
+  const s = setup(t);
+  s.put('옛1.pdf', '1'); s.put('폴더/옛2.pdf', '2');
+  const sync = s.make();
+  await sync.tick();
+  assert.strictEqual(sync.state.skipped.count, 2);
+  await sync.dismissSkipped();
+  assert.strictEqual(sync.state.skipped, null);
+  const again = await s.make({ source: s.nas }).load();
+  assert.strictEqual(again.state.skipped, null, '껐다 켜도 닫은 그대로');
+  again.state.skipped = { count: 2, at: 1 };
+  await again.importAll();
+  assert.strictEqual(again.state.skipped, null);
+  await again.tick();
+  assert.strictEqual((await again.tick()).received.length, 2);
+});

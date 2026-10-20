@@ -205,6 +205,8 @@ class Syncer {
       this.state.known = {};
       if (this.skipExisting) {
         for (const [rel, info] of files) this.state.known[rel] = info;
+        // 화면에 "원래 있던 파일 N개는 받지 않았습니다 [모두 받기]" 로 알린다
+        this.state.skipped = files.size ? { count: files.size, at: this.now() } : null;
         await this.save();
         return { status: 'ok', received: [], errors: [], baseline: files.size };
       }
@@ -325,7 +327,14 @@ class Syncer {
   async importAll() {
     if (!this.state) await this.load();
     this.state.known = {};
+    this.state.skipped = null;
     this.waiting.clear();
+    await this.save();
+  }
+
+  // 처음 켤 때 건너뛴 파일 알림 닫기
+  async dismissSkipped() {
+    this.state.skipped = null;
     await this.save();
   }
 

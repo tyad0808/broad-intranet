@@ -58,6 +58,7 @@ function snapshot() {
     history: syncer ? syncer.history.slice(0, 500) : [],
     progress: syncer ? syncer.progress : null,
     waiting: syncer ? syncer.waitingCount : 0,
+    skipped: syncer && syncer.state ? syncer.state.skipped || null : null,
     unseen: syncer ? syncer.unseen : 0,
     pending: syncer ? syncer.pending : 0,
   };
@@ -311,7 +312,11 @@ ipcMain.handle('toggle-pause', () => togglePause());
 ipcMain.handle('import-all', async () => {
   if (!syncer) return;
   await syncer.importAll();
+  send();
   checkNow();
+});
+ipcMain.handle('dismiss-skipped', async () => {
+  if (syncer) { await syncer.dismissSkipped(); send(); }
 });
 ipcMain.handle('clear-history', async () => {
   if (syncer) { await syncer.clearHistory(); send(); }

@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
   checkNow: () => ipcRenderer.invoke('check-now'),
   togglePause: () => ipcRenderer.invoke('toggle-pause'),
   importAll: () => ipcRenderer.invoke('import-all'),
+  dismissSkipped: () => ipcRenderer.invoke('dismiss-skipped'),
   clearHistory: () => ipcRenderer.invoke('clear-history'),
   onState: cb => ipcRenderer.on('state', (_e, s) => cb(s)),
   onChime: cb => ipcRenderer.on('chime', (_e, o) => cb(o)),
