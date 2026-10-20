@@ -21,6 +21,12 @@ function joinAddress(addr) {
 }
 
 // 네이버 응답 1건 → 인트라넷 주문 1건
+// 날짜 글자 → UTC ISO (DB 에서 글자끼리 비교할 수 있게 한 모양으로)
+function utcIso(value) {
+  const t = value ? Date.parse(value) : NaN;
+  return Number.isFinite(t) ? new Date(t).toISOString() : null;
+}
+
 function normalize(item) {
   const order = item.order || {};
   const po = item.productOrder || {};
@@ -45,6 +51,9 @@ function normalize(item) {
     claim_status: po.claimStatus || null,
     // 판매자센터에서 발주확인을 하면 placeOrderStatus 가 'OK' 가 된다 (조회로 알아내기만 함)
     channel_confirmed: po.placeOrderStatus === 'OK' ? 1 : 0,
+    // 오늘출발 상품이면 TODAY (옵션별 오늘출발은 OPTION_TODAY). 발송기한은 네이버가 상품별 마감 시간으로 계산해 준 값
+    delivery_type: po.deliveryAttributeType || 'NORMAL',
+    ship_due: utcIso(po.shippingDueDate),
   };
 }
 
@@ -87,6 +96,7 @@ function createSmartstoreSource(options = {}) {
   return {
     channel: CHANNEL,
     label: '스마트스토어',
+    fillsDeliveryType: true, // 주문에 오늘출발·발송기한이 들어 있다 (모르는 주문은 다시 읽어 채운다)
     async fetchChanges({ from, to }) {
       const ids = await changedIds(from, to);
       if (ids.length === 0) return [];

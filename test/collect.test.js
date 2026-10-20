@@ -143,6 +143,8 @@ test('바뀐 주문 목록 → 상세 조회 → 인트라넷 형식으로 바�
     channel_confirmed: 0,
     claim_type: null,
     claim_status: null,
+    delivery_type: 'NORMAL',
+    ship_due: null,
   });
   assert.strictEqual(orders[1].channel_confirmed, 1);
 

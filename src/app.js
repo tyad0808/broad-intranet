@@ -68,6 +68,19 @@ function createApp({
     if (due === tomorrow) return { cls: 'due-soon', text: '내일' };
     return { cls: '', text: due.slice(5) };
   };
+  // 채널 발송기한 표시: 지났으면 빨강, 오늘이면 주황 (예: '오늘 15:00까지', '10/22 15:00까지')
+  app.locals.shipDueInfo = (shipDue, now = new Date()) => {
+    const t = shipDue ? Date.parse(shipDue) : NaN;
+    if (!Number.isFinite(t)) return { cls: '', text: '' };
+    const kstOf = ms => new Date(ms + 9 * 3600 * 1000).toISOString();
+    const due = kstOf(t);
+    const today = kstOf(now.getTime()).slice(0, 10);
+    const tomorrow = kstOf(now.getTime() + 86400000).slice(0, 10);
+    const day = due.slice(0, 10) === today ? '오늘' : due.slice(0, 10) === tomorrow ? '내일' : `${due.slice(5, 7)}/${due.slice(8, 10)}`;
+    const time = due.slice(11, 16);
+    if (t < now.getTime()) return { cls: 'due-over', text: `발송기한 지남 (${day} ${time})` };
+    return { cls: day === '오늘' ? 'due-soon' : '', text: `${day} ${time}까지 발송` };
+  };
   // 화면에 시각을 한국 시간으로 보여준다 (DB 에는 UTC 로 저장)
   app.locals.kst = value => {
     if (!value) return '-';

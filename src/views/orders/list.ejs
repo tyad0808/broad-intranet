@@ -75,7 +75,7 @@
       <% Object.entries(ALERTS).forEach(([key, label]) => { const n = alertCounts[key] || 0; %>
         <a href="<%= alert === key ? link({ alert: '', stage: '' }) : link({ alert: key, st: '', view: '', stage: '' }) %>"
            class="alert-tab alert-<%= key %> <%= alert === key ? 'on' : '' %> <%= n ? '' : 'zero' %>">
-          <%= key === 'claim' ? '⚠' : '⏰' %> <%= label %> <span class="count"><%= n %></span>
+          <%= { today: '🚀', claim: '⚠', late: '⏰', shiplate: '🚚' }[key] %> <%= label %> <span class="count"><%= n %></span>
         </a>
       <% }) %>
     </span>
@@ -177,6 +177,7 @@
             <% if (o.channel === 'manual') { %>
               <span class="src-tag <%= o.source_id ? `src-c${o.source_id % 6}` : 'none' %>"><%= o.source_name || '출처 미지정' %></span>
             <% } %>
+            <% if (g.today) { %><span class="today-badge" title="스마트스토어 오늘출발 상품">🚀 오늘출발</span><% } %>
             <% if (g.claim && claimLevel(g.claim.claim_status)) { %>
               <span class="claim-badge <%= claimLevel(g.claim.claim_status) %>"><%= claimLabel(g.claim.claim_status) %></span>
             <% } %>
@@ -224,6 +225,8 @@
             <noscript><button type="submit" class="btn-sm">지정</button></noscript>
           </form>
           <% if (due.text) { %><span class="pill <%= due.cls %>">납기 <%= due.text %></span><% } %>
+          <%# 채널 발송기한: 오늘출발은 늘, 일반 주문은 오늘까지이거나 지났을 때만 %>
+          <% const ship = shipDueInfo(g.shipDue); if (ship.text && (g.today || ship.cls)) { %><span class="pill ship-due <%= ship.cls %>" title="채널 발송기한"><%= ship.text %></span><% } %>
           <% if (g.shipped) { %>
             <span class="pill shipped" title="<%= kst(g.shipped.shipped_at) %>">발송 · <%= g.shipped.ship_company ? `${courierLabel(g.shipped.ship_company)} ${g.shipped.tracking_no}` : shipMethodLabel(g.shipped.ship_method) %></span>
           <% } else { %>

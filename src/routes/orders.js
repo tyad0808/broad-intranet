@@ -37,7 +37,12 @@ const GROUP_SHIP_STATE = `CASE
 // '확인 필요' 모아보기
 //   claim: 고객이 취소·반품·교환을 요청해 진행 중 (거부됨·완료 등은 제외)
 //   late : 납기가 지났는데 아직 안 나간 주문
-const ALERTS = { claim: '취소·반품·교환 요청', late: '납기 지남' };
+//   today: 스마트스토어 오늘출발 상품이 들어 있는데 아직 발송 전인 주문 (발송기한 이른 순)
+//   shiplate: 채널의 발송기한이 지났는데 아직 발송 전인 주문
+const ALERTS = { today: '오늘출발', claim: '취소·반품·교환 요청', late: '납기 지남', shiplate: '발송기한 지남' };
+const TODAY_TYPES = "('TODAY', 'OPTION_TODAY')";
+const TODAY_HAVING = `MAX(o.channel_status = 'PAYED' AND o.delivery_type IN ${TODAY_TYPES}) = 1`;
+const shipLateHaving = () => `MIN(CASE WHEN o.channel_status = 'PAYED' THEN o.ship_due END) < '${new Date().toISOString()}'`;
 // 검색: 상품·고객·주문번호·메모 + 수기 주문의 판매처 주문번호와 출처 이름
 const SEARCH_SQL = `(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ?
   OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ? OR o.source_order_no LIKE ?
@@ -146,16 +151,22 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const lateHaving = `MIN(o.due_date) < '${kstToday()}' AND ${GROUP_ENDED} = 0 AND MAX(o.stage_id IS NULL OR o.stage_id != ${Number(last)}) = 1`;
     if (alert === 'claim') having.push(`MAX(${OPEN_CLAIM_SQL}) = 1`);
     if (alert === 'late') having.push(lateHaving);
+    if (alert === 'today') having.push(TODAY_HAVING);
+    if (alert === 'shiplate') having.push(shipLateHaving());
     const havingSql = having.length ? 'HAVING ' + having.join(' AND ') : '';
 
-    const groupOrder = sort === 'due'
-      ? 'g_due IS NULL, g_due ASC, g_paid DESC, oid DESC'
-      : 'g_paid DESC, oid DESC';
+    // 오늘출발·발송기한 모아보기는 발송기한이 이른 것부터
+    const groupOrder = alert === 'today' || alert === 'shiplate'
+      ? 'g_ship IS NULL, g_ship ASC, g_paid DESC, oid DESC'
+      : sort === 'due'
+        ? 'g_due IS NULL, g_due ASC, g_paid DESC, oid DESC'
+        : 'g_paid DESC, oid DESC';
 
     // ① 조건에 맞는 주문 묶음을 고르고(최대 300개) ② 그 묶음에 든 상품을 모두 가져온다
     const rows = db.prepare(`
       WITH g AS (
-        SELECT o.channel AS ch, o.channel_order_id AS oid, MAX(o.paid_at) AS g_paid, MIN(o.due_date) AS g_due
+        SELECT o.channel AS ch, o.channel_order_id AS oid, MAX(o.paid_at) AS g_paid, MIN(o.due_date) AS g_due,
+          MIN(CASE WHEN o.channel_status = 'PAYED' THEN o.ship_due END) AS g_ship
         FROM orders o ${whereSql}
         GROUP BY o.channel, o.channel_order_id
         ${havingSql}
@@ -185,6 +196,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
       g.canDispatch = g.items.some(canDispatch);
       g.claim = g.items.find(hasOpenClaim) || g.items.find(i => i.claim_status) || null;
       g.shipped = g.items.find(i => i.shipped_at) || null;
+      // 오늘출발 여부와 발송 전 상품 중 가장 이른 발송기한
+      g.today = g.items.some(i => i.channel_status === 'PAYED' && (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY'));
+      g.shipDue = g.items.filter(i => i.channel_status === 'PAYED' && i.ship_due).map(i => i.ship_due).sort()[0] || null;
     }
 
     // 단계 버튼에 보여줄 건수: 지금 탭·검색 조건 그대로, 그 단계 필터만 빼고 센다
@@ -268,9 +282,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const alertCounts = db.prepare(`
       SELECT
         COALESCE(SUM(claim), 0) AS claim,
-        COALESCE(SUM(late), 0) AS late
+        COALESCE(SUM(late), 0) AS late,
+        COALESCE(SUM(today), 0) AS today,
+        COALESCE(SUM(shiplate), 0) AS shiplate
       FROM (
-        SELECT MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late
+        SELECT MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late, (${TODAY_HAVING}) AS today, COALESCE(${shipLateHaving()}, 0) AS shiplate
         FROM orders o ${countWhere}
         GROUP BY o.channel, o.channel_order_id
       )
