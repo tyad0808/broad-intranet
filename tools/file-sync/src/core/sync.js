@@ -31,6 +31,13 @@ function isIgnored(name) {
     n.endsWith('.partial') || n.endsWith('.download');
 }
 
+// 받지 않을 확장자 (설정): 'psd, .zip mp4' → Set{'psd','zip','mp4'}
+function parseExts(v) {
+  const list = Array.isArray(v) ? v : String(v || '').split(/[\s,;]+/);
+  return new Set(list.map(x => String(x).trim().toLowerCase().replace(/^\*?\./, '')).filter(Boolean));
+}
+const extOf = rel => { const m = /\.([^./]+)$/.exec(rel); return m ? m[1].toLowerCase() : ''; };
+
 // 폴더 안의 파일들 (하위 폴더 포함): Map<'하위/이름', { size, mtimeMs }>
 async function scan(root, maxDepth = 12) {
   const out = new Map();
@@ -80,6 +87,7 @@ class Syncer {
    * @param {string} o.statePath   기록 파일 경로
    * @param {number} [o.stableTicks=2]   몇 번 연달아 같아야 다 올라간 것으로 볼지
    * @param {boolean} [o.skipExisting=true] 처음 켤 때 이미 NAS 에 있던 파일은 받지 않기
+   * @param {string|string[]} [o.skipExt] 받지 않을 확장자 (예: 'psd, zip')
    * @param {number} [o.historyLimit=1000]
    * @param {() => number} [o.now]
    */
@@ -90,6 +98,7 @@ class Syncer {
     this.stableTicks = o.stableTicks || 2;
     this.skipExisting = o.skipExisting !== false;
     this.historyLimit = o.historyLimit || 1000;
+    this.skipExt = parseExts(o.skipExt);
     this.now = o.now || Date.now;
     this.waiting = new Map(); // 올라가는 중인지 지켜보는 파일
     this.state = null;
@@ -150,9 +159,17 @@ class Syncer {
     }
 
     const known = this.state.known, received = [], errors = [];
+    let skipped = false;
     for (const [rel, info] of files) {
       const k = known[rel];
       if (k && k.size === info.size && k.mtimeMs === info.mtimeMs) continue;
+      // 받지 않을 확장자: 받은 것으로만 쳐 둔다 (나중에 설정에서 빼도 옛 파일이 한꺼번에 쏟아지지 않게)
+      if (this.skipExt.has(extOf(rel))) {
+        known[rel] = info;
+        this.waiting.delete(rel);
+        skipped = true;
+        continue;
+      }
       const p = this.waiting.get(rel);
       if (!p || p.size !== info.size || p.mtimeMs !== info.mtimeMs) {
         this.waiting.set(rel, { size: info.size, mtimeMs: info.mtimeMs, ticks: 1 });
@@ -184,7 +201,7 @@ class Syncer {
     for (const rel of Object.keys(known)) if (!files.has(rel)) delete known[rel];
 
     if (this.state.history.length > this.historyLimit) this.state.history.length = this.historyLimit;
-    if (received.length) await this.save();
+    if (received.length || skipped) await this.save();
     return { status: 'ok', received, errors };
   }
 
@@ -289,4 +306,4 @@ class Syncer {
   }
 }
 
-module.exports = { Syncer, scan, isIgnored, isUrgent, DONE_DIR };
+module.exports = { Syncer, scan, isIgnored, isUrgent, parseExts, DONE_DIR };

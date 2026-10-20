@@ -4,7 +4,7 @@ const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, dialog, shell, na
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('node:os');
-const { Syncer } = require('./core/sync');
+const { Syncer, parseExts } = require('./core/sync');
 
 const APP_ID = 'com.broad.filesync';
 const ASSETS = path.join(__dirname, '..', 'assets');
@@ -29,6 +29,7 @@ const DEFAULTS = {
   skipExisting: true,                                      // 처음 켤 때 이미 있던 파일은 받지 않기
   remindMin: 30,                                           // 출력 전인 채 이만큼(분) 지나면 다시 알림 (0 이면 끔)
   moveDoneOnNas: false,                                    // 출력 완료하면 NAS 원본을 '_출력완료' 폴더로 (디자이너가 NAS 에서 보게)
+  skipExt: '',                                             // 받지 않을 확장자 (예: psd, zip)
 };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
@@ -89,6 +90,7 @@ async function startSync() {
     dest: config.dest,
     statePath: path.join(app.getPath('userData'), 'state.json'),
     skipExisting: config.skipExisting,
+    skipExt: config.skipExt,
   }).load();
   loop();
 }
@@ -208,6 +210,8 @@ ipcMain.handle('save-config', async (_e, patch) => {
   config = { ...config, ...patch };
   config.intervalSec = Math.min(600, Math.max(2, Number(config.intervalSec) || 5));
   config.remindMin = Math.min(1440, Math.max(0, Math.round(Number(config.remindMin) || 0)));
+  config.skipExt = [...parseExts(config.skipExt)].join(', ');
+  if (syncer) syncer.skipExt = parseExts(config.skipExt);
   saveConfig(config);
   applyAutoStart();
   if (before.source !== config.source || before.dest !== config.dest || before.skipExisting !== config.skipExisting) await startSync();

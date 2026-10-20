@@ -262,3 +262,25 @@ test('NAS 파일이 받은 뒤에 바뀌었으면 옮기지 않고 알려 준다
   assert.strictEqual(sync.history[0].done, true);
   assert.ok(fs.existsSync(path.join(s.nas, '시안.pdf')), '새 버전은 그대로');
 });
+
+test('받지 않을 확장자는 받지 않고, 나중에 설정에서 빼도 옛 파일이 쏟아지지 않는다', async t => {
+  const s = setup(t);
+  const sync = s.make({ skipExt: 'PSD, .zip  *.mp4' });
+  assert.deepStrictEqual([...sync.skipExt], ['psd', 'zip', 'mp4']);
+  await sync.tick();
+  s.put('현수막.pdf', 'x');
+  s.put('원본.psd', 'x');
+  s.put('홍길동/모음.ZIP', 'x');
+  await sync.tick();
+  const r = await sync.tick();
+  assert.deepStrictEqual(r.received.map(e => e.name), ['현수막.pdf']);
+  assert.ok(!fs.existsSync(s.pcFile('원본.psd')) && !fs.existsSync(s.pcFile('홍길동/모음.ZIP')));
+
+  // 설정에서 psd 를 빼면: 이미 있던 원본.psd 는 그대로 두고, 새로 바뀐 psd 만 받는다
+  const again = s.make({ skipExt: 'zip' });
+  await again.tick();
+  assert.strictEqual((await again.tick()).received.length, 0);
+  s.put('원본.psd', 'changed', new Date(Date.now() + 5000));
+  await again.tick();
+  assert.deepStrictEqual((await again.tick()).received.map(e => e.name), ['원본.psd']);
+});

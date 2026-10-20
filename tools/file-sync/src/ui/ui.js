@@ -177,10 +177,10 @@
   });
 
   // ---- 설정 ----
-  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin'], CHECKS = ['sound', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas'];
+  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin', 'skipExt'], CHECKS = ['sound', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas'];
   function openSettings() {
     const c = state.config;
-    FIELDS.forEach(k => { $(k).value = c[k]; });
+    FIELDS.forEach(k => { $(k).value = c[k] == null ? '' : c[k]; });
     CHECKS.forEach(k => { $(k).checked = !!c[k]; });
     $('testResult').textContent = '';
     $('settings').hidden = false;
