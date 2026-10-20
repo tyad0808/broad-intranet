@@ -48,15 +48,18 @@ function offlineReason(e) {
 }
 
 // 폴더 안의 파일들 (하위 폴더 포함): Map<'하위/이름', { size, mtimeMs }>
+// out.unsure: 이번에 못 읽은 하위 폴더('폴더/')·파일 — 없어진 게 아니라 잠깐 못 읽은 것이라 기록을 지우면 안 된다
 async function scan(root, maxDepth = 12) {
   const out = new Map();
+  out.unsure = [];
   async function walk(dir, rel, depth) {
     let entries;
     try {
       entries = await fsp.readdir(dir, { withFileTypes: true });
     } catch (e) {
       if (depth === 0) throw e; // 맨 위 폴더를 못 읽으면 연결 문제
-      return;                   // 하위 폴더 하나를 못 읽으면 건너뛴다
+      if (e.code !== 'ENOENT') out.unsure.push(rel + '/'); // 하위 폴더 하나를 못 읽으면 이번엔 건너뛴다
+      return;
     }
     for (const e of entries) {
       if (isIgnored(e.name)) continue;
@@ -67,7 +70,9 @@ async function scan(root, maxDepth = 12) {
         try {
           const st = await fsp.stat(full);
           out.set(r, { size: st.size, mtimeMs: Math.floor(st.mtimeMs) });
-        } catch { /* 그사이 지워진 파일 */ }
+        } catch (err) {
+          if (err.code !== 'ENOENT') out.unsure.push(r); // ENOENT 는 그사이 지워진 파일
+        }
       }
     }
   }
@@ -86,6 +91,32 @@ async function freeName(file) {
     try { await fsp.access(cand); } catch { return cand; }
   }
   throw new Error('같은 이름 파일이 너무 많습니다: ' + file);
+}
+
+// 1.6.0 까지: NAS 하위 폴더를 잠깐 못 읽으면 그 안의 파일을 다시 받아 같은 파일이 목록에 두 번 들어갔다.
+// 같은 이름·크기·수정 시각인 기록은 먼저 받은 하나만 남기고, 출력 완료·확인 표시는 합친다. 고친 게 있으면 true
+function dedupeHistory(history) {
+  const first = new Map(), drop = new Set();
+  for (let i = history.length - 1; i >= 0; i--) { // 뒤가 먼저 받은 것
+    const h = history[i], key = h.rel + '\0' + h.size + '\0' + h.mtimeMs, keep = first.get(key);
+    if (!keep) { first.set(key, h); continue; }
+    if (h.done && !keep.done) { keep.done = true; keep.doneAt = h.doneAt; keep.nasDone = keep.nasDone || h.nasDone; }
+    keep.seen = keep.seen || h.seen;
+    keep.openedAt = keep.openedAt || h.openedAt;
+    if (!fs.existsSync(keep.localPath) && h.localPath) keep.localPath = h.localPath;
+    drop.add(h);
+  }
+  if (!drop.size) return false;
+  const kept = history.filter(h => !drop.has(h));
+  // '새 버전으로 바뀜' 다시 계산: 출력 전이고, 같은 이름의 더 나중 기록이 있을 때만
+  const newest = new Map();
+  for (const h of kept) {
+    if (newest.has(h.rel)) h.replaced = !h.done;
+    else { newest.set(h.rel, h); h.replaced = false; }
+  }
+  history.length = 0;
+  history.push(...kept);
+  return true;
 }
 
 class Syncer {
@@ -108,6 +139,7 @@ class Syncer {
     this.skipExisting = o.skipExisting !== false;
     this.historyLimit = o.historyLimit || 1000;
     this.skipExt = parseExts(o.skipExt);
+    this.scan = o.scan || scan; // 시험용으로 바꿔 끼울 수 있게
     this.now = o.now || Date.now;
     this.waiting = new Map(); // 올라가는 중인지 지켜보는 파일
     this.state = null;
@@ -124,7 +156,15 @@ class Syncer {
     } catch {
       this.state = { version: 1, source: this.source, known: null, history: [], nextId: 1 };
     }
+    if (dedupeHistory(this.state.history)) await this.save();
     return this;
+  }
+
+  // 이미 받은 것과 똑같은 파일(같은 이름·크기·수정 시각)이고 받은 파일도 그대로 있으면 다시 받지 않는다
+  // (_출력완료 로 옮겼던 것을 다시 올린 건 다시 출력하려는 것이라 받는다)
+  alreadyHave(rel, info) {
+    return this.state.history.some(h => h.rel === rel && !h.nasDone && h.size === info.size && h.mtimeMs === info.mtimeMs &&
+      fs.existsSync(h.localPath) && fs.statSync(h.localPath).size === info.size);
   }
 
   async save() {
@@ -152,7 +192,7 @@ class Syncer {
     try {
       const st = await fsp.stat(this.source);
       if (!st.isDirectory()) throw Object.assign(new Error('폴더가 아닙니다'), { code: 'ENOTDIR' });
-      files = await scan(this.source);
+      files = await this.scan(this.source);
     } catch (e) {
       return { status: 'offline', received: [], errors: [], message: offlineReason(e) };
     }
@@ -173,6 +213,13 @@ class Syncer {
       const k = known[rel];
       if (k && k.size === info.size && k.mtimeMs === info.mtimeMs) continue;
       // 받지 않을 확장자: 받은 것으로만 쳐 둔다 (나중에 설정에서 빼도 옛 파일이 한꺼번에 쏟아지지 않게)
+      // 똑같은 파일을 이미 받아 두었으면 받은 것으로만 쳐 둔다 (기록이 어긋나도 같은 파일이 또 쏟아지지 않게)
+      if (!k && this.alreadyHave(rel, info)) {
+        known[rel] = info;
+        this.waiting.delete(rel);
+        skipped = true;
+        continue;
+      }
       if (this.skipExt.has(extOf(rel))) {
         known[rel] = info;
         this.waiting.delete(rel);
@@ -207,7 +254,10 @@ class Syncer {
     }
     // 그사이 NAS 에서 사라진 것은 기다리지 않는다 (받은 파일은 지우지 않음)
     for (const rel of this.waiting.keys()) if (!files.has(rel)) this.waiting.delete(rel);
-    for (const rel of Object.keys(known)) if (!files.has(rel)) delete known[rel];
+    // 잠깐 못 읽은 폴더·파일은 지우지 않는다 (지우면 다음에 읽힐 때 전부 새 파일로 다시 받게 됨)
+    const unsure = files.unsure || [];
+    const isUnsure = rel => unsure.some(u => (u.endsWith('/') ? rel.startsWith(u) : rel === u));
+    for (const rel of Object.keys(known)) if (!files.has(rel) && !isUnsure(rel)) delete known[rel];
 
     if (this.state.history.length > this.historyLimit) this.state.history.length = this.historyLimit;
     if (received.length || skipped) await this.save();
@@ -315,4 +365,4 @@ class Syncer {
   }
 }
 
-module.exports = { Syncer, scan, isIgnored, isUrgent, parseExts, offlineReason, DONE_DIR };
+module.exports = { Syncer, scan, isIgnored, isUrgent, parseExts, offlineReason, dedupeHistory, DONE_DIR };

@@ -215,7 +215,7 @@
     toast('저장했습니다.');
   };
   $('importAll').onclick = async () => {
-    if (!confirm('지금 NAS 폴더에 있는 파일을 모두 받습니다. (이미 받은 것도 다시 받습니다) 할까요?')) return;
+    if (!confirm('지금 NAS 폴더에 있는 파일을 모두 받습니다. (이미 받은 똑같은 파일은 건너뜁니다) 할까요?')) return;
     await window.api.importAll();
     $('settings').hidden = true;
     toast('모두 받는 중입니다.');

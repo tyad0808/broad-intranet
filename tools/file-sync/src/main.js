@@ -125,8 +125,10 @@ async function loop() {
   }
   busy = false;
   send();
-  const retrying = failCount > 0 && failCount < OFFLINE_AFTER;
-  timer = setTimeout(loop, (retrying ? 2 : Math.max(2, Number(config.intervalSec) || 5)) * 1000);
+  // 잠깐 실패면 2초 뒤 다시, 끊긴 게 확실하면 30초마다만 (NAS·노트북에 부담 주지 않게)
+  const every = Math.max(2, Number(config.intervalSec) || 5);
+  const sec = failCount === 0 ? every : failCount < OFFLINE_AFTER ? 2 : Math.max(30, every);
+  timer = setTimeout(loop, sec * 1000);
 }
 
 function checkNow() { if (!busy) loop(); }

@@ -296,3 +296,56 @@ test('NAS 에 못 닿은 까닭을 사람 말로 알려 준다', async t => {
   fs.rmSync(s.nas, { recursive: true });
   assert.strictEqual((await sync.tick()).message, '폴더를 찾을 수 없음');
 });
+
+test('하위 폴더를 잠깐 못 읽어도, 다시 읽힐 때 그 안의 파일을 또 받지 않는다', async t => {
+  const s = setup(t);
+  const { scan } = require('../tools/file-sync/src/core/sync.js');
+  let broken = false;
+  const sync = s.make({
+    scan: async root => {
+      const m = await scan(root);
+      if (broken) { for (const k of [...m.keys()]) if (k.startsWith('홍길동/')) m.delete(k); m.unsure.push('홍길동/'); }
+      return m;
+    },
+  });
+  await sync.tick();
+  s.put('홍길동/현수막.pdf', 'x'); s.put('홍길동/배너.pdf', 'y');
+  await sync.tick();
+  assert.strictEqual((await sync.tick()).received.length, 2);
+  broken = true;                       // NAS 가 잠깐 그 폴더를 못 읽음
+  await sync.tick();
+  broken = false;
+  await sync.tick();
+  assert.strictEqual((await sync.tick()).received.length, 0);
+  assert.strictEqual(sync.history.length, 2);
+});
+
+test('기록이 어긋나도 이미 받은 똑같은 파일은 다시 받지 않는다 (지금 있는 것 모두 받기 포함)', async t => {
+  const s = setup(t);
+  const sync = s.make();
+  await sync.tick();
+  s.put('a.pdf', '1');
+  await sync.tick(); await sync.tick();
+  await sync.importAll();              // 받을 목록을 비움
+  await sync.tick();
+  assert.strictEqual((await sync.tick()).received.length, 0);
+  assert.strictEqual(sync.history.length, 1);
+  s.put('a.pdf', '22', new Date(Date.now() + 5000)); // 고친 파일은 받는다
+  await sync.tick();
+  assert.strictEqual((await sync.tick()).received[0].kind, 'updated');
+});
+
+test('예전 버전이 두 번 넣은 같은 파일 기록을 켤 때 하나로 합친다', () => {
+  const { dedupeHistory } = require('../tools/file-sync/src/core/sync.js');
+  const base = { rel: 'a.eps', size: 5, mtimeMs: 100, localPath: '/없음' };
+  const h = [
+    { ...base, id: 3, seen: false, done: false, replaced: false },             // 두 번째로 또 받은 것
+    { ...base, rel: 'b.eps', id: 2, seen: true, done: false, replaced: false },
+    { ...base, id: 1, seen: true, done: false, replaced: true },              // 처음 받은 것 (두 번째 때문에 '바뀜' 표시됨)
+  ];
+  assert.strictEqual(dedupeHistory(h), true);
+  assert.deepStrictEqual(h.map(x => x.id), [2, 1]);
+  assert.strictEqual(h[1].replaced, false, '바뀜 표시가 풀려 다시 출력 전');
+  assert.strictEqual(h[1].seen, true);
+  assert.strictEqual(dedupeHistory(h), false);
+});

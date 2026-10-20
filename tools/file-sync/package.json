@@ -1,7 +1,7 @@
 {
   "name": "broad-file-sync",
   "productName": "BroadFileSync",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "private": true,
   "description": "브로애드 파일 받기: NAS 에 올린 파일을 출력 컴퓨터로 자동으로 받아 목록과 알림으로 보여 준다",
   "main": "src/main.js",
