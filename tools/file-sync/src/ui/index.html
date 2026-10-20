@@ -25,6 +25,10 @@
       <button data-tab="all" class="tab">전체</button>
     </div>
     <input id="search" type="search" placeholder="파일 이름 찾기">
+    <select id="sortOrder" title="받은 시각 순서">
+      <option value="new">최신순</option>
+      <option value="old">오래된순</option>
+    </select>
     <button id="seenAll" title="NEW 표시를 모두 지우고 소리를 멈춥니다">모두 확인</button>
     <button id="doneAll" title="출력 전인 파일을 모두 출력 완료로 체크합니다">모두 출력 완료</button>
   </nav>
@@ -53,6 +57,7 @@
         <label class="field">출력 안 한 파일 다시 알림 (분, 0 이면 끔) <input id="remindMin" type="number" min="0" max="1440" step="5"></label>
         <label class="field full">받지 않을 확장자 (쉼표로 구분, 비우면 다 받음) <input id="skipExt" type="text" placeholder="예: psd, zip, mp4"></label>
         <label class="check"><input id="sound" type="checkbox"> 받으면 소리</label>
+        <label class="check"><input id="urgentFirst" type="checkbox"> 급한 파일은 순서와 상관없이 맨 위에</label>
         <label class="check"><input id="repeatSound" type="checkbox"> 확인할 때까지 소리 반복</label>
         <label class="check"><input id="autoStart" type="checkbox"> 윈도우 켤 때 자동 실행</label>
         <label class="check"><input id="skipExisting" type="checkbox"> 처음 켤 때 NAS 에 있던 파일은 받지 않기</label>

@@ -25,6 +25,8 @@ header { display: flex; align-items: center; gap: 6px; padding: 10px 12px; backg
 .tab.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
 .badge { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 9px; background: var(--new); color: #fff; font-size: 11px; text-align: center; }
 .badge.zero { background: var(--off); }
+#sortOrder { padding: 6px 4px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; }
+.toolbar button, .tab { white-space: nowrap; }
 #search { flex: 1; min-width: 80px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--text); font: inherit; }
 main { flex: 1; overflow: auto; padding: 0 12px 12px; }
 table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }

@@ -66,8 +66,11 @@
     const q = $('search').value.trim().toLowerCase();
     const inTab = h => tab === 'all' || (tab === 'pending' ? isPending(h) : h.done);
     const list = state.history.filter(h => inTab(h) && (!q || (h.folder + '/' + h.name).toLowerCase().includes(q)));
-    // 출력 전인 급한 파일을 맨 위로 (나머지는 받은 순서 그대로)
-    list.sort((a, b) => (isPending(b) && b.urgent ? 1 : 0) - (isPending(a) && a.urgent ? 1 : 0));
+    // 받은 시각 순서 (최신순·오래된순). '급한 것 위로' 를 켜면 출력 전인 급한 파일을 맨 위로
+    const dir = state.config.sortOrder === 'old' ? 1 : -1, urgentFirst = state.config.urgentFirst !== false;
+    const top = h => (urgentFirst && isPending(h) && h.urgent ? 1 : 0);
+    list.sort((a, b) => (top(b) - top(a)) || dir * ((a.receivedAt - b.receivedAt) || (a.id - b.id)));
+    $('sortOrder').value = dir === 1 ? 'old' : 'new';
     const tbody = $('rows');
     tbody.textContent = '';
     for (const h of list) {
@@ -179,7 +182,7 @@
   });
 
   // ---- 설정 ----
-  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin', 'skipExt'], CHECKS = ['sound', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas'];
+  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin', 'skipExt'], CHECKS = ['sound', 'urgentFirst', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas'];
   function openSettings() {
     const c = state.config;
     FIELDS.forEach(k => { $(k).value = c[k] == null ? '' : c[k]; });
@@ -240,6 +243,8 @@
     };
   });
   $('search').oninput = renderList;
+  // 순서 설정은 저장해 두어 다음에 켜도 그대로
+  $('sortOrder').onchange = async () => render(await window.api.saveConfig({ sortOrder: $('sortOrder').value }));
   setInterval(() => { if (state) renderList(); }, 60000); // '오늘/어제' 표시 새로
 
   window.api.onState(render);

@@ -30,6 +30,8 @@ const DEFAULTS = {
   remindMin: 30,                                           // 출력 전인 채 이만큼(분) 지나면 다시 알림 (0 이면 끔)
   moveDoneOnNas: false,                                    // 출력 완료하면 NAS 원본을 '_출력완료' 폴더로 (디자이너가 NAS 에서 보게)
   skipExt: '',                                             // 받지 않을 확장자 (예: psd, zip)
+  sortOrder: 'new',                                        // 목록 순서: new 최신순 / old 오래된순
+  urgentFirst: true,                                       // 출력 전인 급한 파일을 맨 위로
 };
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
@@ -233,6 +235,8 @@ ipcMain.handle('save-config', async (_e, patch) => {
   config.intervalSec = Math.min(600, Math.max(2, Number(config.intervalSec) || 5));
   config.remindMin = Math.min(1440, Math.max(0, Math.round(Number(config.remindMin) || 0)));
   config.skipExt = [...parseExts(config.skipExt)].join(', ');
+  config.sortOrder = config.sortOrder === 'old' ? 'old' : 'new';
+  config.urgentFirst = config.urgentFirst !== false;
   if (syncer) syncer.skipExt = parseExts(config.skipExt);
   saveConfig(config);
   applyAutoStart();
