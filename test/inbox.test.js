@@ -206,7 +206,8 @@ async function setupInbox(t, { senders = {} } = {}) {
 test('문의함 목록: 위쪽 메뉴에 미답변 건수, 출처 칩·탭, 본문은 글자로만', async t => {
   const { kim, id1 } = await setupInbox(t);
   const home = (await kim.request('/')).text;
-  assert.match(home, /문의함 <span class="badge">2<\/span>/);
+  assert.match(home, /메일함 <span class="badge">2<\/span>/);
+  assert.ok(!home.includes('문의함 <span class="badge">'), '메일은 문의함 숫자에 넣지 않는다');
   const list = (await kim.request('/inbox?box=mail')).text;
   assert.match(list, /미답변 <span class="count">2<\/span>/);
   assert.match(list, /네이버메일 <span class="count">1<\/span>/);
@@ -269,7 +270,9 @@ test('메일 삭제: 여러 통·한 통, 내용·답변 기록은 지우고 표
   assert.strictEqual((await kim.request(`/inbox/${id1}`)).status, 404);
   const after = (await kim.request('/inbox?box=mail&tab=all')).text;
   assert.match(after, /전체 <span class="count">1<\/span>/);
-  assert.match((await kim.request('/')).text, /문의함 <span class="badge">2<\/span>/, '위쪽 미답변 건수에서도 빠짐 (특가 안내 + 쇼핑몰 1)');
+  const nav = (await kim.request('/')).text;
+  assert.match(nav, /메일함 <span class="badge">1<\/span>/, '왼쪽 메뉴 미답변 건수에서도 빠짐 (특가 안내만)');
+  assert.match(nav, /문의함 <span class="badge">1<\/span>/, '쇼핑몰 문의 1');
 
   assert.strictEqual((await kim.submit(`/inbox/${shopId}`, `/inbox/${shopId}/delete`, {})).status, 302);
   assert.strictEqual(db.prepare('SELECT deleted_at FROM inquiries WHERE id = ?').get(shopId).deleted_at, null);
@@ -349,7 +352,7 @@ test('담당자 지정·처리 완료·다시 열기·여러 건 처리 완료',
   const res = await kim.submit('/inbox', '/inbox/bulk/close', { ids: [String(id1), String(id2)] });
   assert.strictEqual(res.location, '/inbox');
   assert.deepStrictEqual([row(id1).status, row(id2).status], ['closed', 'closed']);
-  assert.ok(!(await kim.request('/')).text.includes('문의함 <span class="badge">'), '미답변이 없으면 숫자 없음');
+  assert.ok(!(await kim.request('/')).text.includes('메일함 <span class="badge">'), '미답변이 없으면 숫자 없음');
 });
 
 test('메일 받기가 멈추면 시간 제한으로 끊고 실패로 남긴다 (다음 받기를 막지 않음)', async () => {
@@ -498,28 +501,34 @@ test('메일 계정 두 개는 동시에 받는다 (하나씩 기다리지 않�
   assert.ok(Date.now() - t0 < 550, `걸린 시간 ${Date.now() - t0}ms — 동시에 받으면 300ms 남짓`);
 });
 
-test('문의함은 쇼핑몰 문의 / 메일 탭으로 나뉜다 (섞이지 않음, 탭마다 미답변 숫자)', async t => {
+test('왼쪽 메뉴에서 문의함(쇼핑몰 문의·채팅)과 메일함이 나뉜다 (섞이지 않음, 메뉴마다 미답변 숫자)', async t => {
   const { kim, db } = await setupInbox(t);
   db.prepare(`INSERT INTO inquiries (source, external_id, from_name, subject, body, attachments, received_at)
     VALUES ('smartstore_qna', '99', 'abc***', '[상품문의] 명함', '사이즈?', '[]', '2026-10-19T02:00:00Z')`).run();
   const shop = (await kim.request('/inbox')).text;
-  assert.match(shop, /class="on"[^>]*data-key="shop"[^>]*>\s*쇼핑몰 문의 <span class="badge">1<\/span>/);
-  assert.match(shop, /메일 <span class="badge">2<\/span>/);
-  assert.ok(shop.includes('[상품문의] 명함') && !shop.includes('견적 문의'), '쇼핑몰 탭엔 메일 없음');
+  assert.match(shop, /<h1 class="page-title">문의함<\/h1>/);
+  assert.match(shop, /href="\/inbox" class="on"/, '왼쪽 메뉴 문의함');
+  assert.match(shop, /문의함 <span class="badge">1<\/span>/);
+  assert.match(shop, /메일함 <span class="badge">2<\/span>/);
+  assert.ok(!shop.includes('data-key="mail"'), '문의함 안에는 메일 탭이 없다');
+  assert.ok(shop.includes('[상품문의] 명함') && !shop.includes('견적 문의'), '문의함엔 메일 없음');
   const mail = (await kim.request('/inbox?box=mail')).text;
-  assert.ok(mail.includes('견적 문의') && !mail.includes('[상품문의] 명함'), '메일 탭엔 쇼핑몰 문의 없음');
-  assert.match((await kim.request('/inbox?src=gmail')).text, /class="on"[^>]*data-key="mail"/, '출처를 고르면 그 탭으로');
+  assert.match(mail, /<h1 class="page-title">메일함<\/h1>/);
+  assert.match(mail, /href="\/inbox\?box=mail" class="on"/, '왼쪽 메뉴 메일함');
+  assert.ok(mail.includes('견적 문의') && !mail.includes('[상품문의] 명함'), '메일함엔 쇼핑몰 문의 없음');
+  assert.match((await kim.request('/inbox?src=gmail')).text, /<h1 class="page-title">메일함<\/h1>/, '메일 출처를 고르면 메일함');
 });
 
-test('문의함 큰 탭 순서는 직원마다 바꿀 수 있고, 맨 앞 탭이 처음 열린다', async t => {
+test('문의함 큰 탭(쇼핑몰 문의·채팅) 순서는 직원마다 바꿀 수 있고, 맨 앞 탭이 처음 열린다', async t => {
   const { kim, kimId, db } = await setupInbox(t);
+  db.prepare(`INSERT INTO inquiries (source, external_id, subject, body, received_at) VALUES ('talktalk', 'u1', '[톡톡] 안녕하세요', '', '2026-10-19T02:00:00Z')`).run();
   const first = (await kim.request('/inbox')).text;
-  assert.ok(first.indexOf('data-key="shop"') < first.indexOf('data-key="mail"'), '처음엔 쇼핑몰 문의가 앞');
+  assert.ok(first.indexOf('data-key="shop"') < first.indexOf('data-key="chat"'), '처음엔 쇼핑몰 문의가 앞');
   assert.match(first, /data-sortable data-url="\/me\/inbox-order"/);
-  await kim.submit('/inbox', '/me/inbox-order', { order: 'mail,shop,zzz' });
-  assert.strictEqual(db.prepare('SELECT inbox_order FROM users WHERE id = ?').get(kimId).inbox_order, '["mail","shop"]');
+  await kim.submit('/inbox', '/me/inbox-order', { order: 'chat,shop,zzz' });
+  assert.strictEqual(db.prepare('SELECT inbox_order FROM users WHERE id = ?').get(kimId).inbox_order, '["chat","shop"]');
   const after = (await kim.request('/inbox')).text;
-  assert.ok(after.indexOf('data-key="mail"') < after.indexOf('data-key="shop"'), '메일이 앞으로');
-  assert.ok(after.includes('견적 문의'), '메일 탭이 처음 열림');
+  assert.ok(after.indexOf('data-key="chat"') < after.indexOf('data-key="shop"'), '채팅이 앞으로');
+  assert.ok(after.includes('[톡톡] 안녕하세요'), '채팅 탭이 처음 열림');
   assert.match(after, /href="\/inbox\?box=shop"/, '쇼핑몰 탭 링크엔 box=shop');
 });

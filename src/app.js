@@ -167,7 +167,12 @@ function createApp({
   // 화면 공통 값: 처리 결과 안내 문구(한 번만 표시), 관리자에게 보이는 가입 신청 건수
   const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
   const currentChannelInfo = channelInfoWith(db);
-  const openInquiriesStmt = db.prepare("SELECT COUNT(*) AS n FROM inquiries WHERE status = 'open' AND deleted_at IS NULL");
+  // 왼쪽 메뉴의 미답변 건수: 문의함(쇼핑몰 문의·채팅)과 메일함을 따로
+  const openCountsStmt = db.prepare(`
+    SELECT COALESCE(SUM(NOT (source GLOB 'naver_mail*' OR source GLOB 'gmail*')), 0) AS inquiries,
+      COALESCE(SUM(source GLOB 'naver_mail*' OR source GLOB 'gmail*'), 0) AS mails
+    FROM inquiries WHERE status = 'open' AND deleted_at IS NULL
+  `);
   app.use((req, res, next) => {
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;
@@ -182,7 +187,9 @@ function createApp({
       req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
     res.locals.unassignedAlert = notifier.unassignedBanner(req.user);
     // 위쪽 메뉴의 문의함 미답변 건수
-    res.locals.openInquiries = req.user && req.user.status === 'active' ? openInquiriesStmt.get().n : 0;
+    const open = req.user && req.user.status === 'active' ? openCountsStmt.get() : { inquiries: 0, mails: 0 };
+    res.locals.openInquiries = open.inquiries;
+    res.locals.openMails = open.mails;
     next();
   });
 

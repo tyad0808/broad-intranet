@@ -86,7 +86,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const shown = Object.keys(BOXES).filter(b => b !== 'chat' || Object.keys(sourceLabels).some(isChatSource)
       || db.prepare(`SELECT 1 FROM inquiries q WHERE ${CHAT_SQL} LIMIT 1`).get());
     const boxOrder = userBoxOrder(req.user).filter(b => shown.includes(b));
-    const box = src ? boxOf(src) : shown.includes(req.query.box) ? req.query.box : boxOrder[0];
+    // 왼쪽 메뉴가 '문의함'(쇼핑몰 문의·채팅)과 '메일함'(/inbox?box=mail)으로 나뉜다. 그냥 /inbox 는 문의함의 첫 탭
+    const inquiryBoxes = boxOrder.filter(b => b !== 'mail');
+    const box = src ? boxOf(src) : shown.includes(req.query.box) ? req.query.box : inquiryBoxes[0];
     const boxSql = b => BOX_SQL[b];
 
     // 큰 탭에 붙일 미답변 건수
@@ -154,12 +156,13 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     try { lastRun = JSON.parse((db.prepare("SELECT value FROM settings WHERE key = 'inbox_last_run'").get() || {}).value || 'null'); } catch { lastRun = null; }
 
     res.render('inbox/list', {
-      title: '문의함',
-      navSection: 'inbox',
+      title: box === 'mail' ? '메일함' : '문의함',
+      navSection: box === 'mail' ? 'mail' : 'inbox',
+      inquiryBoxes,
       rows, tab, defaultTab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
       hl: text => highlightParts(text, terms), otherHits,
       from: period ? period.from : '', to: period ? period.to : '', periodText: periodLabel(period), quick: quickPeriods(), hidingOld: hidingOld && tab !== 'open' && tab !== 'mine', hideDays: hideDays(db),
-      box, BOXES: Object.fromEntries(shown.map(b => [b, BOXES[b]])), boxCounts, chipLabel, boxOrder, defaultBox: boxOrder[0],
+      box, BOXES: Object.fromEntries(shown.map(b => [b, BOXES[b]])), boxCounts, chipLabel, boxOrder, defaultBox: inquiryBoxes[0],
       staff: staff(),
       canCollect: Boolean(collector),
       noSources: !Object.keys(sourceLabels).some(s => boxOf(s) === box),
@@ -266,7 +269,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     `).all(inquiry.id);
     res.render('inbox/detail', {
       title: inquiry.subject || '문의',
-      navSection: 'inbox',
+      navSection: isMailSource(inquiry.source) ? 'mail' : 'inbox',
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),
       isMail: isMailSource(inquiry.source),

@@ -145,9 +145,13 @@
       try {
         const res = await fetch('/inbox?tab=open&src=_none_', { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
         if (!res.ok || res.redirected) return;
-        const fresh = new DOMParser().parseFromString(await res.text(), 'text/html').querySelector('#main-nav a[href="/inbox"]');
-        const link = nav.querySelector('a[href="/inbox"]');
-        if (fresh && link) link.innerHTML = fresh.innerHTML;
+        const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+        // 문의함·메일함 두 칸의 미답변 숫자
+        for (const href of ['/inbox', '/inbox?box=mail']) {
+          const fresh = doc.querySelector(`#main-nav a[href="${href}"]`);
+          const link = nav.querySelector(`a[href="${href}"]`);
+          if (fresh && link) link.innerHTML = fresh.innerHTML;
+        }
       } catch {
         // 다음 소식 때 다시
       }
