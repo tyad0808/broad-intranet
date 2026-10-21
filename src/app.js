@@ -61,7 +61,7 @@ function createApp({
   // 처리 기록에 보여줄 이름
   app.locals.ACTION_LABELS = { confirm: '발주확인', dispatch: '발송처리', create: '수기 등록', paid: '입금확인', edit: '수정', cancel: '취소' };
   app.locals.RESULT_LABELS = { ok: '완료', partial: '일부', fail: '실패', unknown: '확인 필요', practice: '연습' };
-  // 납기 표시: 지났으면 빨강, 오늘·내일이면 주황 (today 는 한국 날짜 YYYY-MM-DD)
+  // 납기 표시: 지났으면 빨강, 오늘·내일이면 연한 빨강 (today 는 한국 날짜 YYYY-MM-DD)
   app.locals.dueInfo = (due, today) => {
     if (!due) return { cls: '', text: '' };
     const tomorrow = new Date(Date.parse(today + 'T00:00:00Z') + 86400000).toISOString().slice(0, 10);
@@ -70,7 +70,7 @@ function createApp({
     if (due === tomorrow) return { cls: 'due-soon', text: '내일' };
     return { cls: '', text: due.slice(5) };
   };
-  // 채널 발송기한 표시: 지났으면 빨강, 오늘이면 주황 (예: '오늘 15:00까지', '10/22 15:00까지')
+  // 채널 발송기한 표시: 지났으면 빨강, 오늘이면 연한 빨강 (예: '오늘 15:00까지', '10/22 15:00까지')
   app.locals.shipDueInfo = (shipDue, now = new Date()) => {
     const t = shipDue ? Date.parse(shipDue) : NaN;
     if (!Number.isFinite(t)) return { cls: '', text: '' };

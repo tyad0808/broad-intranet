@@ -843,7 +843,7 @@ body.embed .container { padding-top: 56px; } /* 오른쪽 위 ✕ 버튼과 겹�
 .ev-more { padding-left: 4px; font-size: 11.5px; color: var(--muted); }
 .ev.ev-blue, .ev.ev-blue:hover { background: var(--primary-weak); color: var(--primary-dark); border: 0; }
 .ev.ev-green, .ev.ev-green:hover { background: var(--ok-bg); color: var(--ok); border: 0; }
-.ev.ev-orange, .ev.ev-orange:hover { background: #fff3e0; color: #b25e00; border: 0; }
+.ev.ev-orange, .ev.ev-orange:hover { background: #e3f6f4; color: #0b7a6c; border: 0; } /* 예전 '주황' 일정은 청록으로 보인다 (주황은 쓰지 않음) */
 .ev.ev-red, .ev.ev-red:hover { background: var(--error-bg); color: #d22030; border: 0; }
 .ev.ev-purple, .ev.ev-purple:hover { background: var(--purple-bg); color: var(--purple); border: 0; }
 .ev:hover { filter: brightness(0.96); }
@@ -858,7 +858,7 @@ body.embed .container { padding-top: 56px; } /* 오른쪽 위 ✕ 버튼과 겹�
 .cal-item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 7px 8px; border: 0; border-radius: 8px; background: none; color: var(--text); font-size: 14px; font-weight: 500; text-align: left; }
 .cal-item:hover { background: var(--line-2); border: 0; }
 .dot { display: inline-block; flex: none; width: 8px; height: 8px; border-radius: 50%; }
-.dot.ev-blue { background: var(--primary); } .dot.ev-green { background: #16a34a; } .dot.ev-orange { background: #f08c00; }
+.dot.ev-blue { background: var(--primary); } .dot.ev-green { background: #16a34a; } .dot.ev-orange { background: #14a394; }
 .dot.ev-red { background: var(--error); } .dot.ev-purple { background: var(--purple); }
 .cal-when { flex: none; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
 .cal-what { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

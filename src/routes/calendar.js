@@ -6,7 +6,7 @@
 const express = require('express');
 const { lastStageId, ENDED_SQL } = require('../collector');
 
-const COLORS = { blue: '파랑', green: '초록', orange: '주황', red: '빨강', purple: '보라' };
+const COLORS = { blue: '파랑', green: '초록', orange: '청록', red: '빨강', purple: '보라' };
 const MAX_DAYS = 62; // 여러 날 일정은 최대 두 달
 
 // 오늘 날짜 (한국 시간) YYYY-MM-DD
