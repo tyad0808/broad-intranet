@@ -6,7 +6,7 @@ const { transaction } = require('../db');
 const { CHANNELS } = require('../channels/labels');
 const { storageInfo, humanSize } = require('../storage');
 const retention = require('../retention');
-const { parseRecipients, settingsOf: weeklySettings } = require('../weeklyReport');
+const { parseRecipients, settingsOf: weeklySettings, DAYS, DEFAULT_SUBJECT, SAFE_SUBJECT, MIN_PASSWORD } = require('../weeklyReport');
 const { intervalMinutes, MIN_MINUTES, MAX_MINUTES } = require('../schedule');
 
 const STATUS_LABELS = {
@@ -331,19 +331,40 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       staff,
       unassigned: notifier.unassignedCount(),
       weekly: { ...weeklySettings(db), ready: Boolean(weekly && weekly.ready), sender: weekly ? weekly.sender : null },
+      DAYS, DEFAULT_SUBJECT, SAFE_SUBJECT, MIN_PASSWORD,
     });
   });
 
   // 주간 매출 보고 메일: 받는 주소·켜기
+  // 받는 주소·요일·시각·제목·암호화(비밀번호 PDF)
   router.post('/weekly-report', (req, res) => {
+    const fail = message => { flash(req, 'error', message); res.redirect('/admin/notify#weekly'); };
     const parsed = parseRecipients(req.body.recipients);
-    if (parsed.error) {
-      flash(req, 'error', parsed.error);
-      return res.redirect('/admin/notify#weekly');
+    if (parsed.error) return fail(parsed.error);
+    const day = Number(req.body.day);
+    const hour = Number(req.body.hour);
+    if (!Number.isInteger(day) || day < 0 || day > 6 || !Number.isInteger(hour) || hour < 0 || hour > 23) return fail('보내는 요일과 시각을 골라 주세요.');
+    const subject = String(req.body.subject || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+    const encrypt = req.body.encrypt === '1';
+    // 비밀번호: 새로 적었을 때만 바꾼다 (비워 두면 그대로)
+    const pw = String(req.body.password || '');
+    if (pw) {
+      if (pw.length < MIN_PASSWORD) return fail(`PDF 비밀번호는 ${MIN_PASSWORD}자 이상으로 정해 주세요.`);
+      if (pw !== String(req.body.password2 || '')) return fail('비밀번호 두 칸이 서로 달라요.');
     }
+    if (encrypt && !pw && !weeklySettings(db).hasPassword) return fail('암호화를 켜려면 PDF 비밀번호를 정해 주세요.');
     putSetting('weekly_report_to', JSON.stringify(parsed.list));
     putSetting('weekly_report_on', req.body.enabled === '1' && parsed.list.length ? '1' : '0');
-    flash(req, 'ok', parsed.list.length ? `저장했습니다. ${req.body.enabled === '1' ? '매주 금요일 오후 6시에 보냅니다.' : '지금은 꺼져 있어요.'}` : '받는 주소를 모두 지웠습니다 (보내지 않음).');
+    putSetting('weekly_report_day', day);
+    putSetting('weekly_report_hour', hour);
+    putSetting('weekly_report_subject', subject);
+    putSetting('weekly_report_encrypt', encrypt ? '1' : '0');
+    if (pw) putSetting('weekly_report_pw', pw);
+    const when = `매주 ${DAYS[day]}요일 ${hour}시`;
+    const warn = encrypt && /\{(매출|변화)\}/.test(subject) ? ' 암호화 중이라 제목의 {매출}·{변화}는 빼고 보내요.' : '';
+    flash(req, 'ok', parsed.list.length
+      ? `저장했습니다. ${req.body.enabled === '1' ? `${when}에 보냅니다${encrypt ? ' (비밀번호 PDF)' : ''}.` : '지금은 꺼져 있어요.'}${warn}`
+      : '받는 주소를 모두 지웠습니다 (보내지 않음).');
     res.redirect('/admin/notify#weekly');
   });
   // 지금 테스트로 한 통 보내기 (이번 주 월요일부터 지금까지)

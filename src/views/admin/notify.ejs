@@ -48,18 +48,50 @@
 </section>
 <section class="card" id="weekly">
   <h2>주간 매출 보고 메일</h2>
-  <p class="muted">매주 <strong>금요일 오후 6시</strong>에 이번 주(월요일 0시 ~ 금요일 18시)의 <strong>매출 · 객단가 · 발송된 택배 수</strong>를 지난주 같은 구간과 비교해서 보내요. 채널별 매출도 함께 들어가요.</p>
+  <p class="muted">정한 요일·시각에 이번 주(월요일 0시 ~ 보내는 시각)의 <strong>매출 · 객단가 · 발송된 택배 수</strong>를 지난주 같은 구간과 비교해서 보내요. 채널별 매출도 함께 들어가요.
+    <br>월요일로 정하면 <strong>지난주 월~일 전체</strong>를 그 전 주와 비교해요.</p>
   <% if (!weekly.ready) { %>
     <p class="error">보낼 메일 계정이 없어요. 서버 .env 에 네이버메일(또는 지메일) 계정을 넣어야 보낼 수 있어요.</p>
   <% } else { %>
     <p class="muted small">보내는 메일: <%= weekly.sender %></p>
   <% } %>
-  <form method="post" action="/admin/weekly-report" class="settings-form">
+  <form method="post" action="/admin/weekly-report" class="settings-form weekly-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <label>받는 사람 메일 주소 <span class="muted small">(여러 명은 쉼표로, 최대 10명)</span>
       <textarea name="recipients" rows="2" placeholder="예: boss@broadstore.co.kr, manager@naver.com"><%= weekly.recipients.join(', ') %></textarea>
     </label>
-    <label class="check"><input type="checkbox" name="enabled" value="1" <%= weekly.enabled ? 'checked' : '' %>> 매주 금요일 오후 6시에 보내기</label>
+    <div class="two-fields">
+      <label>보내는 요일
+        <select name="day">
+          <% [1, 2, 3, 4, 5, 6, 0].forEach(d => { %><option value="<%= d %>" <%= weekly.day === d ? 'selected' : '' %>><%= DAYS[d] %>요일</option><% }) %>
+        </select>
+      </label>
+      <label>보내는 시각
+        <select name="hour">
+          <% for (let h = 0; h < 24; h++) { %><option value="<%= h %>" <%= weekly.hour === h ? 'selected' : '' %>><%= h < 12 ? `오전 ${h === 0 ? 12 : h}시` : `오후 ${h === 12 ? 12 : h - 12}시` %> (<%= String(h).padStart(2, '0') %>:00)</option><% } %>
+        </select>
+      </label>
+    </div>
+    <label>메일 제목 <span class="muted small">(비우면 기본 제목)</span>
+      <input type="text" name="subject" maxlength="120" value="<%= weekly.subject %>" placeholder="<%= weekly.encrypt ? SAFE_SUBJECT : DEFAULT_SUBJECT %>">
+    </label>
+    <p class="muted small">자동으로 바뀌는 칸: <code class="var">{회사명}</code> <code class="var">{기간}</code> <code class="var">{매출}</code> <code class="var">{변화}</code> — 암호화를 켜면 {매출}·{변화}는 제목에서 빠져요.</p>
+
+    <fieldset class="encrypt-box">
+      <legend>암호화 (비밀번호 PDF)</legend>
+      <label class="check"><input type="checkbox" name="encrypt" value="1" <%= weekly.encrypt ? 'checked' : '' %>> 메일 본문에는 숫자를 넣지 않고, 비밀번호가 걸린 PDF로 보내기</label>
+      <div class="two-fields">
+        <label>PDF 비밀번호 <span class="muted small"><%= weekly.hasPassword ? '(설정됨 · 바꿀 때만 적으세요)' : `(${MIN_PASSWORD}자 이상)` %></span>
+          <input type="password" name="password" autocomplete="new-password" minlength="<%= MIN_PASSWORD %>" placeholder="<%= weekly.hasPassword ? '●●●●●● (그대로 두기)' : '' %>">
+        </label>
+        <label>비밀번호 한 번 더
+          <input type="password" name="password2" autocomplete="new-password">
+        </label>
+      </div>
+      <p class="muted small">비밀번호는 PDF를 잠글 때 써야 해서 서버에만 저장돼요. 한 번 저장하면 화면에 다시 보이지 않아요. 받는 분들께는 따로(전화·카톡) 알려 주세요.</p>
+    </fieldset>
+
+    <label class="check"><input type="checkbox" name="enabled" value="1" <%= weekly.enabled ? 'checked' : '' %>> 매주 정한 요일·시각에 보내기</label>
     <div class="form-actions">
       <button type="submit" class="btn-sm primary">저장</button>
     </div>
@@ -67,7 +99,7 @@
   <form method="post" action="/admin/weekly-report/test" data-once class="weekly-test">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <button type="submit" class="btn-sm" <%= weekly.ready && weekly.recipients.length ? '' : 'disabled' %>>지금 테스트로 보내기</button>
-    <span class="muted small">이번 주 월요일부터 지금까지 내용으로 한 통 보내요 (제목에 [테스트])</span>
+    <span class="muted small">이번 주 월요일부터 지금까지 내용으로 한 통 보내요 (제목에 [테스트]<%= weekly.encrypt ? ', 비밀번호 PDF' : '' %>)</span>
   </form>
   <% if (weekly.last) { %>
     <p class="small <%= weekly.last.ok ? 'muted' : 'error' %>">마지막 발송: <%= kst(weekly.last.at) %><%= weekly.last.test ? ' (테스트)' : '' %> · <%= weekly.last.message %></p>

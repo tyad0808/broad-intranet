@@ -36,6 +36,7 @@
     "helmet": "^8.3.0",
     "imapflow": "^2.5.5",
     "mailparser": "^3.9.46",
-    "nodemailer": "^10.1.7"
+    "nodemailer": "^10.1.7",
+    "pdfkit": "^0.17.2"
   }
 }
