@@ -6,6 +6,7 @@ const { transaction } = require('../db');
 const { CHANNELS } = require('../channels/labels');
 const { storageInfo, humanSize } = require('../storage');
 const retention = require('../retention');
+const { parseRecipients, settingsOf: weeklySettings } = require('../weeklyReport');
 const { intervalMinutes, MIN_MINUTES, MAX_MINUTES } = require('../schedule');
 
 const STATUS_LABELS = {
@@ -15,7 +16,7 @@ const STATUS_LABELS = {
   rejected: '거절',
 };
 
-function adminRoutes(db, sessionStore, collector, notifier, brand = null) {
+function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly = null) {
   const router = express.Router();
   // 왼쪽 메뉴에서 '관리자' 를 켜 둔다
   router.use((req, res, next) => { res.locals.navSection = 'admin'; next(); });
@@ -329,7 +330,31 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null) {
       recipients,
       staff,
       unassigned: notifier.unassignedCount(),
+      weekly: { ...weeklySettings(db), ready: Boolean(weekly && weekly.ready), sender: weekly ? weekly.sender : null },
     });
+  });
+
+  // 주간 매출 보고 메일: 받는 주소·켜기
+  router.post('/weekly-report', (req, res) => {
+    const parsed = parseRecipients(req.body.recipients);
+    if (parsed.error) {
+      flash(req, 'error', parsed.error);
+      return res.redirect('/admin/notify#weekly');
+    }
+    putSetting('weekly_report_to', JSON.stringify(parsed.list));
+    putSetting('weekly_report_on', req.body.enabled === '1' && parsed.list.length ? '1' : '0');
+    flash(req, 'ok', parsed.list.length ? `저장했습니다. ${req.body.enabled === '1' ? '매주 금요일 오후 6시에 보냅니다.' : '지금은 꺼져 있어요.'}` : '받는 주소를 모두 지웠습니다 (보내지 않음).');
+    res.redirect('/admin/notify#weekly');
+  });
+  // 지금 테스트로 한 통 보내기 (이번 주 월요일부터 지금까지)
+  router.post('/weekly-report/test', async (req, res, next) => {
+    try {
+      const r = weekly ? await weekly.send({ test: true }) : { ok: false, message: '보낼 메일 계정이 없습니다.' };
+      flash(req, r.ok ? 'ok' : 'error', r.ok ? `테스트 메일을 ${r.message}` : r.message);
+      res.redirect('/admin/notify#weekly');
+    } catch (e) {
+      next(e);
+    }
   });
 
   router.post('/notify', (req, res) => {

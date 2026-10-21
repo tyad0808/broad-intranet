@@ -35,8 +35,9 @@ function browser(baseUrl) {
   return { request, submit, cookie: () => cookie };
 }
 
-async function startServer({ db = openDb(':memory:'), collector = null, actions, notifier, inbox } = {}) {
-  const app = createApp({ db, collector, secret: 'test-secret', ...(actions ? { actions } : {}), ...(notifier ? { notifier } : {}), ...(inbox ? { inbox } : {}) });
+async function startServer({ db = openDb(':memory:'), collector = null, actions, notifier, inbox, weeklyAccount, weeklyTransport } = {}) {
+  const app = createApp({ db, collector, secret: 'test-secret', ...(actions ? { actions } : {}), ...(notifier ? { notifier } : {}), ...(inbox ? { inbox } : {}),
+    ...(weeklyAccount ? { weeklyAccount, weeklyTransport } : {}) });
   const server = await new Promise(resolve => {
     const s = app.listen(0, () => resolve(s));
   });

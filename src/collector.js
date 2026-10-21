@@ -8,6 +8,7 @@ const CANCELED = new Set(['CANCELED']);
 // 처음 보는 주문인데 이미 배송이 시작됐거나 끝난 것 → 지난 주문이므로 마지막 단계(발송)로 바로 넣는다.
 // (최근 며칠 동안 '구매확정' 등으로 상태만 바뀐 오래된 주문이 새 주문처럼 쌓이는 것을 막는다)
 const ALREADY_DONE = new Set(['DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED', 'EXCHANGED', 'RETURNED']);
+const SHIPPED_STATUSES = new Set(['DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED']);
 // 채널에서 끝난 주문 (배송 시작·완료, 취소, 반품 등) → '진행 중' 목록과 미지정 알림에서 뺀다
 const ENDED = [...new Set([...ALREADY_DONE, ...CANCELED, 'CANCELED_BY_NOPAYMENT'])];
 // SQL 에 바로 넣는 목록 (코드에 적힌 상수라 안전)
@@ -83,6 +84,7 @@ function applyOrders(db, orders) {
     "UPDATE orders SET stage_id = ?, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ? AND stage_id = ?"
   );
   const notify = db.prepare("INSERT INTO notifications (type, message, order_id) VALUES ('new_order', ?, ?)");
+  const markChannelShipped = db.prepare("UPDATE orders SET channel_shipped_at = COALESCE(channel_shipped_at, datetime('now')) WHERE id = ?");
   const endedList = [...ALREADY_DONE, ...CANCELED, 'CANCELED_BY_NOPAYMENT'].map(x => `'${x}'`).join(', ');
   const moveShippedGroup = db.prepare(`
     UPDATE orders SET stage_id = ? WHERE channel = ? AND channel_order_id = ? AND (stage_id IS NULL OR stage_id != ?)
@@ -134,6 +136,10 @@ function applyOrders(db, orders) {
         o.claim_type || null, o.claim_status || null, o.channel_status_label || null,
         o.delivery_type || null, o.ship_due || null, o.ship_delayed || null, o.pay_amount ?? null, existing.id
       );
+      // 채널에서 발송됨(배송중·배송완료·구매확정)을 처음 본 때를 발송 시각으로 (주간 보고의 택배 수)
+      if (SHIPPED_STATUSES.has(o.channel_status) && !SHIPPED_STATUSES.has(existing.channel_status)) {
+        markChannelShipped.run(existing.id);
+      }
       if (isClaimRequest(o.claim_status) && o.claim_status !== existing.claim_status) {
         result.claims.push({ id: existing.id, claim_status: o.claim_status });
       }

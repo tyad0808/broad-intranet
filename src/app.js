@@ -18,6 +18,7 @@ const { templateRoutes } = require('./routes/templates');
 const { statsRoutes } = require('./routes/stats');
 const { replyUpload } = require('./inbox/upload');
 const { createBrand } = require('./brand');
+const { createWeeklyReporter } = require('./weeklyReport');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
@@ -42,6 +43,9 @@ function createApp({
   notifier = createNotifier({ db }),
   actions = createOrderActions({ db }), // 기본은 연습 모드 (네이버로 보내지 않음)
   secret = sessionSecret(),
+  // 주간 매출 보고: 보낼 회사 메일 계정 (테스트는 weeklyTransport 로 가짜 발송)
+  weeklyAccount = null,
+  weeklyTransport = null,
 }) {
   const app = express();
   const isProd = process.env.NODE_ENV === 'production';
@@ -123,6 +127,8 @@ function createApp({
 
   // 회사 로고 (로그인 화면에도 보여야 해서 로그인 검사 전에). 주소에 그림 지문(v)이 들어 있어 오래 저장해 둬도 된다
   const brand = createBrand(db);
+  const weekly = createWeeklyReporter({ db, account: weeklyAccount, transport: weeklyTransport, brandName: () => brand.view().name });
+  app.locals.weekly = weekly;
   app.get('/brand/logo', (req, res) => {
     const logo = brand.logo();
     if (!logo) return res.status(404).end();
@@ -210,7 +216,7 @@ function createApp({
     notifier.hub.add(req, res, req.user.id);
   });
 
-  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand));
+  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly));
   app.use('/stats', requireAdmin, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
   app.use(requireActive, calendarRoutes(db, notifier));

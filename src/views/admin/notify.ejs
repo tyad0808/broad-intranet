@@ -46,4 +46,32 @@
   </ul>
   <p class="muted">알림은 인트라넷 화면이 열려 있을 때 화면 알림 + 소리로 뜨고, 브라우저 알림을 허용하면 다른 창을 보고 있어도 뜹니다.</p>
 </section>
+<section class="card" id="weekly">
+  <h2>주간 매출 보고 메일</h2>
+  <p class="muted">매주 <strong>금요일 오후 6시</strong>에 이번 주(월요일 0시 ~ 금요일 18시)의 <strong>매출 · 객단가 · 발송된 택배 수</strong>를 지난주 같은 구간과 비교해서 보내요. 채널별 매출도 함께 들어가요.</p>
+  <% if (!weekly.ready) { %>
+    <p class="error">보낼 메일 계정이 없어요. 서버 .env 에 네이버메일(또는 지메일) 계정을 넣어야 보낼 수 있어요.</p>
+  <% } else { %>
+    <p class="muted small">보내는 메일: <%= weekly.sender %></p>
+  <% } %>
+  <form method="post" action="/admin/weekly-report" class="settings-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>받는 사람 메일 주소 <span class="muted small">(여러 명은 쉼표로, 최대 10명)</span>
+      <textarea name="recipients" rows="2" placeholder="예: boss@broadstore.co.kr, manager@naver.com"><%= weekly.recipients.join(', ') %></textarea>
+    </label>
+    <label class="check"><input type="checkbox" name="enabled" value="1" <%= weekly.enabled ? 'checked' : '' %>> 매주 금요일 오후 6시에 보내기</label>
+    <div class="form-actions">
+      <button type="submit" class="btn-sm primary">저장</button>
+    </div>
+  </form>
+  <form method="post" action="/admin/weekly-report/test" data-once class="weekly-test">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button type="submit" class="btn-sm" <%= weekly.ready && weekly.recipients.length ? '' : 'disabled' %>>지금 테스트로 보내기</button>
+    <span class="muted small">이번 주 월요일부터 지금까지 내용으로 한 통 보내요 (제목에 [테스트])</span>
+  </form>
+  <% if (weekly.last) { %>
+    <p class="small <%= weekly.last.ok ? 'muted' : 'error' %>">마지막 발송: <%= kst(weekly.last.at) %><%= weekly.last.test ? ' (테스트)' : '' %> · <%= weekly.last.message %></p>
+  <% } %>
+</section>
+<script src="/confirm.js"></script>
 <%- include('../partials/footer') %>

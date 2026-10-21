@@ -983,3 +983,4 @@ code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak)
 .staff-table td { vertical-align: middle; }
 .staff-table td.num, .staff-table th:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
 .staff-table .avatar { width: 24px; height: 24px; font-size: 11.5px; vertical-align: middle; }
+.weekly-test { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--line); }

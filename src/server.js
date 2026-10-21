@@ -113,7 +113,10 @@ const inbox = {
   // 첨부파일 열기는 연습 모드여도 된다 (읽기만)
   files: Object.fromEntries(mailAccounts.map(a => [a.source, createMailFiles(a)])),
 };
-const app = createApp({ db, collector, notifier, actions, inbox });
+const app = createApp({ db, collector, notifier, actions, inbox, weeklyAccount: mailAccounts[0] || null });
+
+// 주간 매출 보고: 5분마다 '금요일 18시가 지났고 이번 주 아직 안 보냈는지' 확인
+setInterval(() => app.locals.weekly.tick().catch(e => console.error(`[주간 보고] ${e.message}`)), 5 * 60 * 1000).unref();
 
 // 미지정 초과 알림: 1분마다 확인 (해소될 때까지 정해진 간격으로 다시 알림)
 setInterval(() => notifier.checkUnassigned(), 60 * 1000).unref();

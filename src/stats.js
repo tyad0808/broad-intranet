@@ -205,4 +205,4 @@ function staffReport(db, fromDay, toDay) {
   return { fromDay, toDay, rows, speedBySource, eventsSince };
 }
 
-module.exports = { salesReport, staffReport, utcRange, previousRange, DEAD };
+module.exports = { salesReport, staffReport, totals, byChannel, utcRange, previousRange, DEAD };

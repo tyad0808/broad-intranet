@@ -75,6 +75,8 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'ship_delayed', 'TEXT');
   // 상품주문 한 줄의 실제 결제 금액 (할인 뒤, 배송비 제외). 채널에서 받아 온다. 수기 주문은 amount(주문 전체 금액)를 쓴다
   addColumn(db, 'orders', 'pay_amount', 'INTEGER');
+  // 판매자센터·WING 에서 직접 발송한 주문: 수집 중 '배송중' 으로 바뀐 걸 처음 본 시각 (인트라넷 발송은 shipped_at)
+  addColumn(db, 'orders', 'channel_shipped_at', 'TEXT');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.
