@@ -1,16 +1,17 @@
 <!doctype html>
+<% const brand = locals.brand || { name: '통합 어드민(브로애드)', logoUrl: null }; %>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><%= title === '주문' ? '통합 어드민(브로애드)' : `${title} · 통합 어드민(브로애드)` %></title>
+  <title><%= title === '주문' ? brand.name : `${title} · ${brand.name}` %></title>
   <link rel="stylesheet" href="/style.css">
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <% if (brand.logoUrl) { %><link rel="icon" href="<%= brand.logoUrl %>" type="<%= brand.logoType %>"><% } else { %><link rel="icon" href="/favicon.svg" type="image/svg+xml"><% } %>
 </head>
 <body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %><% if (locals.embed) { %> class="embed"<% } %>>
   <% if (!locals.embed) { %>
   <header class="topbar">
-    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">B</span>통합 어드민(브로애드)</a>
+    <a class="brand" href="/"><% if (brand.logoUrl) { %><img class="brand-logo" src="<%= brand.logoUrl %>" alt=""><% } else { %><span class="brand-mark" aria-hidden="true">B</span><% } %><%= brand.name %></a>
     <% if (locals.user && user.status === 'active') { %>
       <%# 주요 메뉴: 주문 / 문의함 (미답변 건수) %>
       <nav class="main-nav" id="main-nav">

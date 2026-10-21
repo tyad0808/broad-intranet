@@ -2,10 +2,10 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { startServer, addUser, loginAs } = require('./helpers');
-const { monthRange, previewCleanup } = require('../src/retention');
+const { periodRange, quickPeriods, previewCleanup } = require('../src/retention');
 
 const daysAgo = n => new Date(Date.now() - n * 24 * 3600 * 1000).toISOString();
-const kstMonth = iso => new Date(Date.parse(iso) + 9 * 3600 * 1000).toISOString().slice(0, 7);
+const kstDay = iso => new Date(Date.parse(iso) + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
 async function setup(t) {
   const ctx = await startServer({ inbox: { sourceLabels: { naver_mail: '네이버메일', naver_qna: '스마트스토어' } } });
@@ -21,10 +21,19 @@ async function setup(t) {
   return ctx;
 }
 
-test('월 범위는 한국 시간 기준 (8월 = 7/31 15:00Z ~ 8/31 15:00Z)', () => {
-  assert.deepStrictEqual(monthRange('2026-08'), ['2026-07-31 15:00:00', '2026-08-31 15:00:00']);
-  assert.strictEqual(monthRange('2026-13'), null);
-  assert.strictEqual(monthRange('x'), null);
+test('기간은 한국 날짜 기준, 종료일은 그날 끝까지, 거꾸로 넣으면 바로잡고 한쪽만도 된다', () => {
+  const p = periodRange('2026-08-01', '2026-08-31');
+  assert.deepStrictEqual([p.start, p.end], ['2026-07-31 15:00:00', '2026-08-31 15:00:00']);
+  assert.deepStrictEqual([periodRange('2026-08-31', '2026-08-01').from, periodRange('2026-08-31', '2026-08-01').to], ['2026-08-01', '2026-08-31']);
+  assert.deepStrictEqual(periodRange('2026-10-21', ''), { from: '2026-10-21', to: '', start: '2026-10-20 15:00:00', end: '9999-12-31 00:00:00' });
+  assert.strictEqual(periodRange('2026-02-31', 'x'), null, '없는 날짜');
+  assert.strictEqual(periodRange('', ''), null);
+  const q = quickPeriods(new Date('2026-10-21T16:00:00Z')); // 한국 10/22 새벽 1시
+  assert.deepStrictEqual(q.map(x => [x.label, x.from, x.to]), [
+    ['오늘', '2026-10-22', '2026-10-22'], ['어제', '2026-10-21', '2026-10-21'], ['최근 7일', '2026-10-16', '2026-10-22'],
+    ['이번 달', '2026-10-01', '2026-10-22'], ['지난달', '2026-09-01', '2026-09-30'],
+  ]);
+  assert.deepStrictEqual(quickPeriods(new Date('2026-01-10T03:00:00Z'))[4], { label: '지난달', from: '2025-12-01', to: '2025-12-31' });
 });
 
 test('주문: 끝난 지 2주 지난 주문은 전체·배송완료에서 숨기고, 월별 보기·검색으로는 보인다', async t => {
@@ -41,10 +50,13 @@ test('주문: 끝난 지 2주 지난 주문은 전체·배송완료에서 숨기
   assert.match(all, /전체 <span class="count">2<\/span>/);
   assert.ok(!(await admin.request('/?st=delivered')).text.includes('작년현수막'));
 
-  const month = kstMonth(old);
-  const byMonth = (await admin.request(`/?month=${month}`)).text;
-  assert.ok(byMonth.includes('작년현수막') && byMonth.includes('오래된진행중'), '월별 보기는 끝난 것까지');
-  assert.match(byMonth, new RegExp(`<option value="${month}" selected>`));
+  const day = kstDay(old);
+  const byDay = (await admin.request(`/?from=${day}&to=${day}`)).text;
+  assert.ok(byDay.includes('작년현수막') && byDay.includes('오래된진행중'), '기간 보기는 끝난 것까지');
+  assert.ok(!byDay.includes('최근명함'), '기간 밖은 빼고');
+  assert.match(byDay, new RegExp(`name="from" value="${day}"`));
+  assert.match(byDay, new RegExp(`${day} 하루</strong> 주문을`));
+  assert.match(byDay, /class="chip ">최근 7일</);
   assert.ok((await admin.request('/?view=all&q=' + encodeURIComponent('작년현수막'))).text.includes('작년현수막'), '검색은 지난 주문까지');
 });
 
@@ -58,8 +70,8 @@ test('문의: 답변한 지 2주 지난 문의는 답변완료·전체에서 숨
   const all = (await admin.request('/inbox?box=mail&tab=all')).text;
   assert.ok(all.includes('오래된미답변') && all.includes('최근처리') && !all.includes('지난달견적'));
   assert.ok(!(await admin.request('/inbox?box=mail&tab=done')).text.includes('지난달견적'));
-  const month = (await admin.request(`/inbox?box=mail&month=${kstMonth(old)}`)).text;
-  assert.ok(month.includes('지난달견적') && month.includes('오래된미답변'), '월별 보기는 전체 탭에서 모두');
+  const range = (await admin.request(`/inbox?box=mail&from=${kstDay(daysAgo(40))}&to=${kstDay(daysAgo(20))}`)).text;
+  assert.ok(range.includes('지난달견적') && range.includes('오래된미답변') && !range.includes('최근처리'), '기간 보기는 전체 탭에서 모두');
   assert.ok((await admin.request('/inbox?box=mail&q=' + encodeURIComponent('지난달견적'))).text.includes('지난달견적'));
 });
 

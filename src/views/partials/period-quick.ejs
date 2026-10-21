@@ -1,0 +1,7 @@
+<%# 빠른 기간 선택: 누르면 날짜 칸이 채워진 채로 바로 조회 %>
+<nav class="period-quick" aria-label="빠른 기간 선택">
+  <span class="chips-label">기간</span>
+  <% quick.forEach(p => { const on = from === p.from && to === p.to; %>
+    <a href="<%= on ? link({ from: '', to: '' }) : link({ from: p.from, to: p.to }) %>" class="chip <%= on ? 'on' : '' %>"><%= p.label %></a>
+  <% }) %>
+</nav>

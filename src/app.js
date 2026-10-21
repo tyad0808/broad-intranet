@@ -15,6 +15,7 @@ const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
 const { inboxRoutes } = require('./routes/inbox');
 const { replyUpload } = require('./inbox/upload');
+const { createBrand } = require('./brand');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
@@ -104,6 +105,15 @@ function createApp({
   }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
+  // 회사 로고 (로그인 화면에도 보여야 해서 로그인 검사 전에). 주소에 그림 지문(v)이 들어 있어 오래 저장해 둬도 된다
+  const brand = createBrand(db);
+  app.get('/brand/logo', (req, res) => {
+    const logo = brand.logo();
+    if (!logo) return res.status(404).end();
+    res.set('Cache-Control', req.query.v === logo.v ? 'public, max-age=31536000, immutable' : 'no-cache');
+    res.type(logo.type).send(logo.data);
+  });
+
   // 5차 네이버 톡톡: 네이버가 새 메시지를 알려 주는 비밀 주소 (로그인·CSRF 대신 비밀 주소 + 네이버 서버 IP 로 확인)
   if (inbox.talktalk) {
     const expected = Buffer.from(String(inbox.talktalk.token));
@@ -147,6 +157,8 @@ function createApp({
   app.use((req, res, next) => {
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;
+    // 회사 이름·로고 (관리자 > 회사·로고)
+    res.locals.brand = brand.view();
     res.locals.tab = null;
     // 관리자가 바꾼 수기 주문 채널 이름을 반영 (화면은 이 channelInfo 를 쓴다)
     res.locals.channelInfo = currentChannelInfo();
@@ -162,6 +174,7 @@ function createApp({
 
   // 문의 답장에 붙인 파일: 보안 검사가 폼 값을 읽을 수 있도록 그 전에 읽는다 (로그인한 직원만)
   app.use('/inbox/:id/reply', replyUpload);
+  app.use('/admin/brand/logo', replyUpload);
   app.use(csrf);
 
   app.get('/health', (req, res) => res.json({ ok: true }));
@@ -174,7 +187,7 @@ function createApp({
     notifier.hub.add(req, res, req.user.id);
   });
 
-  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier));
+  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
   app.use(requireActive, calendarRoutes(db, notifier));
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier }));

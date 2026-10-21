@@ -73,7 +73,8 @@
   function systemNotify({ type, title, body, url }) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
     if (document.visibilityState === 'visible') return; // 화면을 보고 있으면 토스트로 충분
-    const n = new Notification(title, { body, tag: type });
+    const icon = document.querySelector('link[rel="icon"]');
+    const n = new Notification(title, { body, tag: type, icon: icon ? icon.href : undefined });
     n.onclick = () => {
       window.focus();
       if (url) location.href = url;

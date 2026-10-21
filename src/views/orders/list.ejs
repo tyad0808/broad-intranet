@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view: st || alert || month || view === 'active' ? '' : view, st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, src, month, ...changes };
+    const merged = { view: st || alert || from || to || view === 'active' ? '' : view, st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, src, from, to, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -66,7 +66,7 @@
 
   <nav class="tabs">
     <% Object.entries(VIEWS).forEach(([key, label]) => { %>
-      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', alert: '', stage: '', month: '' }) %>" class="<%= !st && !alert && !month && view === key ? 'on' : '' %>">
+      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', alert: '', stage: '', from: '', to: '' }) %>" class="<%= !st && !alert && !periodText && view === key ? 'on' : '' %>">
         <%= label %> <span class="count"><%= counts[key] || 0 %></span>
       </a>
     <% }) %>
@@ -83,8 +83,8 @@
   <% if (alert) { %>
     <p class="muted small st-note"><strong><%= ALERTS[alert] %></strong> 주문만 모아 보는 중입니다 (탭과 상관없이). <a href="<%= link({ alert: '' }) %>">해제</a></p>
   <% } %>
-  <% if (month) { %>
-    <p class="muted small st-note"><strong><%= month.slice(0, 4) %>년 <%= Number(month.slice(5)) %>월</strong> 주문을 끝난 것까지 모두 보여줍니다 (주문일 기준). <a href="<%= link({ month: '' }) %>">해제</a></p>
+  <% if (periodText) { %>
+    <p class="muted small st-note"><strong><%= periodText %></strong> 주문을 끝난 것까지 모두 보여줍니다 (결제일 기준). <a href="<%= link({ from: '', to: '' }) %>">해제</a></p>
   <% } %>
   <% if (due) { %>
     <p class="muted small st-note"><strong>납기 <%= due %></strong> 주문만 보는 중입니다. <a href="<%= link({ due: '' }) %>">해제</a></p>
@@ -120,7 +120,7 @@
 
 <form method="get" action="/" class="filters" data-autosubmit>
   <% if (alert) { %><input type="hidden" name="alert" value="<%= alert %>"><% } %>
-  <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active' && !month) { %><input type="hidden" name="view" value="<%= view %>"><% } %>
+  <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active' && !periodText) { %><input type="hidden" name="view" value="<%= view %>"><% } %>
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
   <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
   <% if (stageFilter) { %><input type="hidden" name="stage" value="<%= stageFilter %>"><% } %>
@@ -130,17 +130,14 @@
     <option value="">최근 주문순</option>
     <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>
   </select>
-  <%# 월별 보기: 그달 주문을 끝난 것까지 모두 (주문일 기준) %>
-  <select name="month" aria-label="월별 보기">
-    <option value="">월별 보기</option>
-    <% months.forEach(m => { %><option value="<%= m %>" <%= month === m ? 'selected' : '' %>><%= m.slice(0, 4) %>년 <%= Number(m.slice(5)) %>월</option><% }) %>
-  </select>
+  <%- include('../partials/period-inputs', { from, to }) %>
   <input type="search" name="q" value="<%= q %>" placeholder="상품, 고객, 주문번호, 메모 검색" aria-label="검색">
   <button type="submit" class="btn-sm">검색</button>
-  <% if (q || month) { %><a href="<%= link({ q: '', month: '' }) %>" class="btn-sm" title="검색·월 지우기">✕ 지우기</a><% } %>
+  <% if (q || periodText) { %><a href="<%= link({ q: '', from: '', to: '' }) %>" class="btn-sm" title="검색·기간 지우기">✕ 지우기</a><% } %>
 </form>
+<%- include('../partials/period-quick', { quick, from, to, link }) %>
 <% if (hidingOld) { %>
-  <p class="muted small hide-note">끝난 주문은 <%= hideDays %>일이 지나면 여기서 숨겨요. 지난 주문은 <strong>월별 보기</strong>나 <strong>검색</strong>으로 찾으세요.</p>
+  <p class="muted small hide-note">끝난 주문은 <%= hideDays %>일이 지나면 여기서 숨겨요. 지난 주문은 <strong>기간</strong>이나 <strong>검색</strong>으로 찾으세요.</p>
 <% } %>
 
 <% const practiceChannels = Object.keys(actionModes).filter(ch => actionModes[ch] !== 'live' && (ch === 'smartstore' || channels.includes(ch))); %>

@@ -1,0 +1,43 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<section class="card">
+  <h2>회사 이름</h2>
+  <form method="post" action="/admin/brand/name" class="settings-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>왼쪽 위·브라우저 탭·로그인 화면에 보이는 이름
+      <input type="text" name="name" value="<%= brand.name %>" maxlength="<%= MAX_NAME %>" required>
+    </label>
+    <button type="submit" class="btn-sm">저장</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>로고</h2>
+  <div class="brand-preview">
+    <span class="muted small">지금 로고</span>
+    <span class="brand"><% if (brand.logoUrl) { %><img class="brand-logo" src="<%= brand.logoUrl %>" alt="지금 로고"><% } else { %><span class="brand-mark" aria-hidden="true">B</span><% } %><%= brand.name %></span>
+  </div>
+  <form method="post" action="/admin/brand/logo" enctype="multipart/form-data" class="settings-form" data-once>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>새 로고 그림 (PNG·JPG·WEBP, 1MB 이하)
+      <input type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
+    </label>
+    <p class="muted small">정사각형이나 가로로 조금 긴 그림이 잘 어울려요. 배경이 투명한 PNG 를 추천해요. 일러스트레이터 파일(AI·SVG)은 PNG 로 내보내서 올려 주세요.</p>
+    <button type="submit" class="btn-sm">올리기</button>
+  </form>
+</section>
+
+<% if (brand.logoUrl || !brand.isDefaultName) { %>
+<section class="card">
+  <h2>처음으로 되돌리기</h2>
+  <p class="muted small">이름을 '<%= DEFAULT_NAME %>' 으로, 로고를 B 로 되돌립니다.</p>
+  <form method="post" action="/admin/brand/reset" data-once data-confirm="이름과 로고를 처음으로 되돌릴까요?">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button type="submit" class="btn-sm danger">처음으로 되돌리기</button>
+  </form>
+</section>
+<% } %>
+<script src="/confirm.js"></script>
+<%- include('../partials/footer') %>

@@ -9,7 +9,7 @@ const { ENDED_SQL } = require('../collector');
 const { buildMonth, COLORS } = require('./calendar');
 const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
-const { ORDER_TIME, hideCutoff, hideDays, monthRange, monthsOf } = require('../retention');
+const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
 
@@ -92,9 +92,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const st = SHIP_STATES[req.query.st] ? req.query.st : '';
     // 확인 필요(alert)를 누르면 탭과 상관없이 해당 주문을 모두 보여준다
     const alert = ALERTS[req.query.alert] ? req.query.alert : '';
-    // 월별 보기 (month=YYYY-MM): 그달 주문을 끝난 것까지 모두
-    const month = monthRange(req.query.month) ? String(req.query.month) : '';
-    const view = st || alert || month ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
+    // 기간 보기 (from·to=YYYY-MM-DD, 결제일 기준): 그 기간 주문을 끝난 것까지 모두
+    const period = periodRange(req.query.from, req.query.to);
+    const view = st || alert || period ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
     const stageFilter = Number(req.query.stage) || null;
     // 디자인 단계 거르기 (ds). 비어 있는 주문은 첫 번째 디자인 단계로 본다
     const designFilter = Number(req.query.ds) || null;
@@ -133,10 +133,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
       where.push(SEARCH_SQL);
       params.push(...Array(SEARCH_PARAMS).fill(`%${q}%`));
     }
-    if (month) {
-      const [from, to] = monthRange(month);
+    if (period) {
       where.push(`${ORDER_TIME} >= ? AND ${ORDER_TIME} < ?`);
-      params.push(from, to);
+      params.push(period.start, period.end);
     }
     // 출처 칩 건수는 출처 필터만 빼고 센다
     const whereNoSrc = [...where];
@@ -165,7 +164,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const cutoff = hideCutoff(db);
     const doneGroup = `(${GROUP_ENDED} = 1 OR MIN(COALESCE(o.stage_id = ${Number(last)}, 0)) = 1)`;
     const oldDone = `(${doneGroup} AND MAX(${ORDER_TIME}) < '${cutoff}')`;
-    const hidingOld = view === 'all' && !alert && !q && !due && !month;
+    const hidingOld = view === 'all' && !alert && !q && !due && !period;
     if (hidingOld) having.push(`NOT ${oldDone}`);
     const havingSql = having.length ? 'HAVING ' + having.join(' AND ') : '';
 
@@ -339,8 +338,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
       channels: channelsInUse(req.user),
       sort,
       q,
-      month,
-      months: monthsOf(db, 'orders', ORDER_TIME),
+      from: period ? period.from : '',
+      to: period ? period.to : '',
+      periodText: periodLabel(period),
+      quick: quickPeriods(),
       hidingOld,
       hideDays: hideDays(db),
       stages: stages(),

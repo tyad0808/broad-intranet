@@ -20,22 +20,48 @@ const utcSql = d => d.toISOString().replace('T', ' ').slice(0, 19);
 const hideDays = db => Number(getSetting(db, 'hide_done_days')) || DEFAULT_HIDE_DAYS;
 const hideCutoff = (db, now = new Date()) => utcSql(new Date(now.getTime() - hideDays(db) * 24 * 3600 * 1000));
 
-// 'YYYY-MM' (한국 시간의 달) → [시작, 끝) UTC
-function monthRange(month) {
-  const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(month || ''));
+// 기간 보기: 'YYYY-MM-DD'(한국 날짜) 시작일·종료일 → { from, to, start, end } (start·end 는 UTC, 종료일은 그날 끝까지)
+//   한쪽만 있어도 된다 (시작일만: 그날부터 지금까지 / 종료일만: 처음부터 그날까지). 둘 다 없거나 틀리면 null
+const DAY = 24 * 3600 * 1000;
+const KST = 9 * 3600 * 1000;
+function kstDayStart(text) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(text || ''));
   if (!m) return null;
-  const start = Date.UTC(Number(m[1]), Number(m[2]) - 1, 1) - 9 * 3600 * 1000;
-  const end = Date.UTC(Number(m[1]), Number(m[2]), 1) - 9 * 3600 * 1000;
-  return [utcSql(new Date(start)), utcSql(new Date(end))];
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  // 2026-02-31 처럼 없는 날짜는 받지 않는다
+  return new Date(t).toISOString().slice(0, 10) === m[0] ? t - KST : null;
 }
-
-// 월 선택 목록: 자료가 있는 달 (최근 것부터, 최대 36개)
-function monthsOf(db, table, timeExpr, where = '1') {
-  const alias = table === 'orders' ? 'o' : 'q';
-  return db.prepare(`
-    SELECT DISTINCT strftime('%Y-%m', ${timeExpr}, '+9 hours') AS m FROM ${table} ${alias}
-    WHERE ${where} AND ${timeExpr} IS NOT NULL ORDER BY m DESC LIMIT 36
-  `).all().map(r => r.m).filter(Boolean);
+function periodRange(fromText, toText) {
+  let from = kstDayStart(fromText) === null ? '' : String(fromText);
+  let to = kstDayStart(toText) === null ? '' : String(toText);
+  if (!from && !to) return null;
+  if (from && to && from > to) [from, to] = [to, from];
+  return {
+    from, to,
+    start: from ? utcSql(new Date(kstDayStart(from))) : '0000-01-01 00:00:00',
+    end: to ? utcSql(new Date(kstDayStart(to) + DAY)) : '9999-12-31 00:00:00',
+  };
+}
+// 기간 이름 (안내 문구): '2026-10-01 ~ 2026-10-21', '2026-10-21 하루', '2026-10-01부터', '2026-10-21까지'
+function periodLabel(p) {
+  if (!p) return '';
+  if (p.from && p.to) return p.from === p.to ? `${p.from} 하루` : `${p.from} ~ ${p.to}`;
+  return p.from ? `${p.from}부터` : `${p.to}까지`;
+}
+// 빠른 선택 버튼: 오늘 · 어제 · 최근 7일 · 이번 달 · 지난달 (한국 날짜)
+function quickPeriods(now = new Date()) {
+  const day = offset => new Date(now.getTime() + KST + offset * DAY).toISOString().slice(0, 10);
+  const today = day(0);
+  const [y, m] = today.split('-').map(Number);
+  const first = (yy, mm) => new Date(Date.UTC(yy, mm - 1, 1)).toISOString().slice(0, 10);
+  const lastMonthEnd = new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
+  return [
+    { label: '오늘', from: today, to: today },
+    { label: '어제', from: day(-1), to: day(-1) },
+    { label: '최근 7일', from: day(-6), to: today },
+    { label: '이번 달', from: first(y, m), to: today },
+    { label: '지난달', from: first(y, m - 1), to: lastMonthEnd },
+  ];
 }
 
 // ───────── 정리 (삭제) ─────────
@@ -111,5 +137,5 @@ function cleanupLog(db) {
 
 module.exports = {
   DEFAULT_HIDE_DAYS, DEFAULT_KEEP_MONTHS, KEEP_CHOICES, HIDE_CHOICES, ORDER_TIME, INQUIRY_TIME,
-  utcSql, hideDays, hideCutoff, monthRange, monthsOf, keepMonths, previewCleanup, runCleanup, cleanupLog,
+  utcSql, hideDays, hideCutoff, periodRange, periodLabel, quickPeriods, keepMonths, previewCleanup, runCleanup, cleanupLog,
 };

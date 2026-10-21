@@ -15,7 +15,7 @@ const STATUS_LABELS = {
   rejected: '거절',
 };
 
-function adminRoutes(db, sessionStore, collector, notifier) {
+function adminRoutes(db, sessionStore, collector, notifier, brand = null) {
   const router = express.Router();
 
   // 처리 결과 안내 문구를 다음 화면에 한 번만 보여준다
@@ -363,6 +363,28 @@ function adminRoutes(db, sessionStore, collector, notifier) {
       HIDE_CHOICES: retention.HIDE_CHOICES, KEEP_CHOICES: retention.KEEP_CHOICES,
       preview: retention.previewCleanup(db), log: retention.cleanupLog(db),
     });
+  });
+
+  // ───────── 회사 이름·로고 ─────────
+  router.get('/brand', (req, res) => {
+    res.render('admin/brand', { title: '회사·로고', tab: 'brand', MAX_NAME: require('../brand').MAX_NAME, DEFAULT_NAME: require('../brand').DEFAULT_NAME });
+  });
+  router.post('/brand/name', (req, res) => {
+    const error = brand.setName(req.body.name);
+    flash(req, error ? 'error' : 'ok', error || '이름을 바꿨습니다.');
+    res.redirect('/admin/brand');
+  });
+  // 로고 파일은 app.js 에서 미리 읽어 둔다 (req.files)
+  router.post('/brand/logo', (req, res) => {
+    const file = (req.files || [])[0];
+    const error = req.uploadError ? '로고는 1MB 이하로 올려 주세요.' : brand.setLogo(file && file.content);
+    flash(req, error ? 'error' : 'ok', error || '로고를 바꿨습니다.');
+    res.redirect('/admin/brand');
+  });
+  router.post('/brand/reset', (req, res) => {
+    brand.reset();
+    flash(req, 'ok', '처음 이름과 B 로고로 되돌렸습니다.');
+    res.redirect('/admin/brand');
   });
 
   // 목록에서 숨기는 기간, 보관 기간 (정해진 값 중에서만)

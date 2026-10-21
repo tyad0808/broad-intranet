@@ -3,6 +3,11 @@
 document.addEventListener('change', event => {
   const select = event.target;
   if (select.matches('form[data-autosubmit] select')) select.form.submit();
+  // 기간: 시작일·종료일이 둘 다 제대로 들어가면 바로 조회 (연도를 치는 중에는 기다린다)
+  if (select.matches('input[data-period]')) {
+    const dates = [...select.form.querySelectorAll('input[data-period]')].map(i => i.value);
+    if (dates.every(v => /^(19|20)\d\d-\d\d-\d\d$/.test(v))) select.form.submit();
+  }
 });
 
 // 발송처리: 배송 방법이 택배일 때만 택배사·송장번호 칸을 보여준다
