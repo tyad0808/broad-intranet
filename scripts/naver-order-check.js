@@ -47,5 +47,12 @@ const PRIVATE = /address|name|tel|phone|memo|zip|base|detail|city|state/i;
     const top = [...values].sort((a, b) => b[1] - a[1]).slice(0, 8).map(([v, n]) => `${v} ${n}건`).join(' / ');
     console.log(`  ${k}: ${top}`);
   }
+  // 발송지연 처리한 주문: 네이버가 발송기한을 새 날짜로 바꿔 주는지 (지난 날짜 / 앞으로의 날짜 건수)
+  const delayed = items.map(it => it.productOrder || {}).filter(po => po.delayedDispatchReason);
+  if (delayed.length) {
+    const now = Date.now();
+    const future = delayed.filter(po => Date.parse(po.shippingDueDate) > now).length;
+    console.log(`\n▶ 발송지연 처리한 주문 ${delayed.length}건: 발송기한이 앞으로인 것 ${future}건 / 이미 지난 것 ${delayed.length - future}건`);
+  }
   console.log('\n위 결과를 그대로 보여 주세요. (고객 정보는 출력되지 않습니다)');
 })().catch(e => console.log(`실패: ${e.message}`));

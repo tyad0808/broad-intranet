@@ -54,6 +54,8 @@ function normalize(item) {
     // 오늘출발 상품이면 TODAY (옵션별 오늘출발은 OPTION_TODAY). 발송기한은 네이버가 상품별 마감 시간으로 계산해 준 값
     delivery_type: po.deliveryAttributeType || 'NORMAL',
     ship_due: utcIso(po.shippingDueDate),
+    // 판매자센터에서 '발송지연 처리' 를 하면 사유가 들어온다 (발송기한도 새 날짜로 바뀜)
+    ship_delayed: po.delayedDispatchReason || null,
   };
 }
 

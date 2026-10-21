@@ -902,3 +902,5 @@ body.embed .container { padding-top: 56px; } /* 오른쪽 위 ✕ 버튼과 겹�
 .staff-c9 { --sc-bg: #eef1f5; --sc-fg: #334155; }
 select[class*="staff-c"], .avatar[class*="staff-c"] { background-color: var(--sc-bg); color: var(--sc-fg); border-color: transparent; }
 select[class*="staff-c"] { font-weight: 650; }
+/* 판매자센터에서 발송지연 처리한 주문: 차분한 남색 (이미 고객에게 알렸으므로 빨강 아님) */
+.pill.delayed { background: #eceefe; color: #3b4cca; }

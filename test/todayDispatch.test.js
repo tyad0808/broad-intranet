@@ -28,12 +28,13 @@ test('이 기능 전에 받은 발송 전 주문은 한 번 다시 읽어 오늘
   const source = {
     channel: 'smartstore', fillsDeliveryType: true,
     fetchChanges: async () => [],
-    fetchByIds: async ids => { asked.push(...ids); return ids.map(id => order(id.slice(1), { channel_confirmed: 1, delivery_type: 'TODAY', ship_due: '2026-10-20T06:00:00.000Z' })); },
+    fetchByIds: async ids => { asked.push(...ids); return ids.map(id => order(id.slice(1), { channel_confirmed: 1, delivery_type: 'TODAY', ship_due: due })); },
   };
+  const due = new Date(Date.now() + 3 * 86400 * 1000).toISOString();
   const collector = createCollector({ db, source });
   await collector.run();
   assert.deepStrictEqual(asked, ['P1'], '발송 전(PAYED) 주문만');
-  assert.deepStrictEqual({ ...db.prepare("SELECT delivery_type, ship_due FROM orders WHERE channel_item_id = 'P1'").get() }, { delivery_type: 'TODAY', ship_due: '2026-10-20T06:00:00.000Z' });
+  assert.deepStrictEqual({ ...db.prepare("SELECT delivery_type, ship_due FROM orders WHERE channel_item_id = 'P1'").get() }, { delivery_type: 'TODAY', ship_due: due });
   asked.length = 0;
   await collector.run();
   assert.deepStrictEqual(asked, [], '채운 뒤에는 다시 읽지 않는다 (발주확인된 주문)');
@@ -66,4 +67,36 @@ test('화면: 오늘출발 표시·발송기한, 오늘출발만 모아 보기(�
   assert.deepStrictEqual(names, ['구매자2', '구매자1'], '발송기한 이른 순');
   const id = db.prepare("SELECT id FROM orders WHERE channel_item_id = 'P2'").get().id;
   assert.match((await kim.request(`/orders/${id}`)).text, /today-badge">오늘출발<\/span>\s*<span class="pill [^"]*">(오늘|내일) \d\d:\d\d까지 발송/);
+});
+
+test('발송기한이 지난 발송 전 주문은 다시 읽고, 판매자센터에서 발송지연 처리했으면 빨간 표시 대신 \'발송지연 처리됨\'', async t => {
+  const o = normalize({ order: {}, productOrder: { productOrderId: 'P9', delayedDispatchReason: 'CUSTOM_BUILD' } });
+  assert.strictEqual(o.ship_delayed, 'CUSTOM_BUILD');
+
+  const ctx = await startServer();
+  t.after(() => ctx.server.close());
+  const { db } = ctx;
+  const past = new Date(Date.now() - 86400 * 1000).toISOString();
+  const newDue = new Date(Date.now() + 3 * 86400 * 1000).toISOString();
+  applyOrders(db, [order(1, { channel_confirmed: 1, delivery_type: 'NORMAL', ship_due: past }), order(2, { channel_confirmed: 1, delivery_type: 'NORMAL', ship_due: past })]);
+  const asked = [];
+  const source = {
+    channel: 'smartstore', fillsDeliveryType: true,
+    fetchChanges: async () => [],
+    // P1 만 판매자센터에서 발송지연 처리 (새 기한)
+    fetchByIds: async ids => { asked.push(...ids); return ids.map(id => id === 'P1'
+      ? order(1, { channel_confirmed: 1, delivery_type: 'NORMAL', ship_due: newDue, ship_delayed: 'CUSTOM_BUILD' })
+      : order(2, { channel_confirmed: 1, delivery_type: 'NORMAL', ship_due: past })); },
+  };
+  await createCollector({ db, source }).run();
+  assert.deepStrictEqual(asked.sort(), ['P1', 'P2'], '발주확인됐어도 기한이 지났으면 다시 읽는다');
+  assert.deepStrictEqual({ ...db.prepare("SELECT ship_due, ship_delayed FROM orders WHERE channel_item_id = 'P1'").get() }, { ship_due: newDue, ship_delayed: 'CUSTOM_BUILD' });
+
+  addUser(db, { email: 'kim@broad.test' });
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  const list = (await kim.request('/')).text;
+  assert.match(list, /alert-shiplate[^"]*"[^>]*>\s*발송기한 지남 <span class="count">1</, '발송지연 처리한 주문은 빼고 1건');
+  assert.match(list, /class="pill delayed" title="[^"]*주문 제작[^"]*">발송지연 처리됨 · \d+\/\d+까지</);
+  const id = db.prepare("SELECT id FROM orders WHERE channel_item_id = 'P1'").get().id;
+  assert.match((await kim.request(`/orders/${id}`)).text, /class="pill delayed"[^>]*>발송지연 처리됨/);
 });

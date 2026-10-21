@@ -71,6 +71,8 @@ function addMissingColumns(db) {
   // 스마트스토어 배송 속성(TODAY = 오늘출발, NORMAL = 일반)과 발송기한(UTC ISO, 상품별 오늘출발 마감 시간이 반영된 값)
   addColumn(db, 'orders', 'delivery_type', 'TEXT');
   addColumn(db, 'orders', 'ship_due', 'TEXT');
+  // 채널에서 발송지연 처리한 주문: 사유 코드 (예: CUSTOM_BUILD). 비어 있으면 발송지연 처리 안 함
+  addColumn(db, 'orders', 'ship_delayed', 'TEXT');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.

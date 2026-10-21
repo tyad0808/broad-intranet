@@ -43,7 +43,8 @@ const GROUP_SHIP_STATE = `CASE
 const ALERTS = { today: '오늘출발', claim: '취소·반품·교환 요청', late: '납기 지남', shiplate: '발송기한 지남' };
 const TODAY_TYPES = "('TODAY', 'OPTION_TODAY')";
 const TODAY_HAVING = `MAX(o.channel_status = 'PAYED' AND o.delivery_type IN ${TODAY_TYPES}) = 1`;
-const shipLateHaving = () => `MIN(CASE WHEN o.channel_status = 'PAYED' THEN o.ship_due END) < '${new Date().toISOString()}'`;
+// 발송지연 처리한 상품은 '발송기한 지남' 에서 뺀다 (판매자센터에서 이미 새 기한을 알렸으므로)
+const shipLateHaving = () => `MIN(CASE WHEN o.channel_status = 'PAYED' AND o.ship_delayed IS NULL THEN o.ship_due END) < '${new Date().toISOString()}'`;
 // 검색: 상품·고객·주문번호·메모 + 수기 주문의 판매처 주문번호와 출처 이름
 const SEARCH_SQL = `(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ?
   OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ? OR o.source_order_no LIKE ?
@@ -212,7 +213,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
       g.shipped = g.items.find(i => i.shipped_at) || null;
       // 오늘출발 여부와 발송 전 상품 중 가장 이른 발송기한
       g.today = g.items.some(i => i.channel_status === 'PAYED' && (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY'));
-      g.shipDue = g.items.filter(i => i.channel_status === 'PAYED' && i.ship_due).map(i => i.ship_due).sort()[0] || null;
+      g.shipDue = g.items.filter(i => i.channel_status === 'PAYED' && i.ship_due && !i.ship_delayed).map(i => i.ship_due).sort()[0] || null;
+      // 발송지연 처리한 상품 (판매자센터에서 새 발송 예정일을 알림)
+      g.delayed = g.items.find(i => i.channel_status === 'PAYED' && i.ship_delayed) || null;
     }
 
     // 단계 버튼에 보여줄 건수: 지금 탭·검색 조건 그대로, 그 단계 필터만 빼고 센다
