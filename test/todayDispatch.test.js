@@ -57,13 +57,13 @@ test('화면: 오늘출발 표시·발송기한, 오늘출발만 모아 보기(�
   const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   const list = (await kim.request('/')).text;
   assert.strictEqual((list.match(/class="today-badge"/g) || []).length, 2, '발송 전 오늘출발 주문만 표시');
-  assert.match(list, /alert-today[^"]*"[^>]*>\s*🚀 오늘출발 <span class="count">2</);
-  assert.match(list, /alert-shiplate[^"]*"[^>]*>\s*🚚 발송기한 지남 <span class="count">1</);
+  assert.match(list, /alert-today[^"]*"[^>]*>\s*오늘출발 <span class="count">2</);
+  assert.match(list, /alert-shiplate[^"]*"[^>]*>\s*발송기한 지남 <span class="count">1</);
   assert.match(list, /class="pill ship-due due-over"[^>]*>발송기한 지남/);
   assert.strictEqual((list.match(/class="pill ship-due/g) || []).length, 3, '일반 주문은 기한이 멀면 표시하지 않는다');
   const today = (await kim.request('/?alert=today')).text;
   const names = [...today.matchAll(/class="buyer">(구매자\d)/g)].map(m => m[1]);
   assert.deepStrictEqual(names, ['구매자2', '구매자1'], '발송기한 이른 순');
   const id = db.prepare("SELECT id FROM orders WHERE channel_item_id = 'P2'").get().id;
-  assert.match((await kim.request(`/orders/${id}`)).text, /today-badge">🚀 오늘출발<\/span>\s*<span class="pill [^"]*">(오늘|내일) \d\d:\d\d까지 발송/);
+  assert.match((await kim.request(`/orders/${id}`)).text, /today-badge">오늘출발<\/span>\s*<span class="pill [^"]*">(오늘|내일) \d\d:\d\d까지 발송/);
 });

@@ -103,6 +103,8 @@ function createApp({
       },
     },
   }));
+  // 글꼴은 바뀌지 않으므로 브라우저가 오래 저장해 두게 한다
+  app.use('/fonts', express.static(path.join(__dirname, '..', 'public', 'fonts'), { maxAge: '365d', immutable: true }));
   app.use(express.static(path.join(__dirname, '..', 'public')));
 
   // 회사 로고 (로그인 화면에도 보여야 해서 로그인 검사 전에). 주소에 그림 지문(v)이 들어 있어 오래 저장해 둬도 된다

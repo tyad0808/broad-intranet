@@ -278,7 +278,7 @@
           <% const ship = i.channel_status === 'PAYED' ? shipDueInfo(i.ship_due) : { text: '' }; %>
           <% if (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY' || ship.text) { %>
             <div class="ship-line">
-              <% if (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY') { %><span class="today-badge">🚀 오늘출발</span><% } %>
+              <% if (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY') { %><span class="today-badge">오늘출발</span><% } %>
               <% if (ship.text) { %><span class="pill <%= ship.cls %>"><%= ship.text %></span><% } %>
             </div>
           <% } %>

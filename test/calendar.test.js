@@ -32,20 +32,22 @@ test('달력 칸: 일요일부터 시작하는 주 단위, 이달 일정과 여�
   assert.strictEqual(buildMonth(db, 'nonsense', null).month.length, 7, '잘못된 달은 이번 달로');
 });
 
-test('주문 목록에 달력이 있고, 직원이 일정을 넣으면 그 달로 돌아와 보인다', async t => {
+test('일정 화면에 달력이 있고, 직원이 일정을 넣으면 그 달로 돌아와 보인다. 주문 목록 위에는 이번 주 출고', async t => {
   const ctx = await setup(t);
+  assert.match((await ctx.kim.request('/schedule')).text, /id="calendar-panel"/);
   const list = (await ctx.kim.request('/')).text;
-  assert.match(list, /id="calendar-panel"/);
-  const res = await ctx.kim.submit('/', '/calendar/events', {
-    title: '거래처 미팅', start_date: '2026-12-03', time: '14:30', memo: '샘플 지참', color: 'green', back: '/?view=all',
+  assert.match(list, /class="week-strip"/);
+  assert.match(list, /href="\/schedule"/);
+  const res = await ctx.kim.submit('/schedule', '/calendar/events', {
+    title: '거래처 미팅', start_date: '2026-12-03', time: '14:30', memo: '샘플 지참', color: 'green', back: '/schedule',
   });
-  assert.strictEqual(res.location, '/?view=all&cal=2026-12');
+  assert.strictEqual(res.location, '/schedule?cal=2026-12');
   const [ev] = ctx.events();
   assert.deepStrictEqual([ev.title, ev.start_date, ev.time, ev.memo, ev.color, ev.created_by], ['거래처 미팅', '2026-12-03', '14:30', '샘플 지참', 'green', ctx.kimId]);
   const panel = (await ctx.kim.request('/calendar?month=2026-12')).text;
   assert.match(panel, /2026년 12월/);
   assert.match(panel, /class="ev ev-green"[^>]*>거래처 미팅</);
-  assert.match((await ctx.kim.request('/?cal=2026-12')).text, /거래처 미팅/);
+  assert.match((await ctx.kim.request('/schedule?cal=2026-12')).text, /거래처 미팅/);
 });
 
 test('잘못된 일정은 넣지 않는다', async t => {

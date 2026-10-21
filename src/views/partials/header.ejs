@@ -5,41 +5,53 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title === '주문' ? brand.name : `${title} · ${brand.name}` %></title>
+  <link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
   <link rel="stylesheet" href="/style.css">
   <% if (brand.logoUrl) { %><link rel="icon" href="<%= brand.logoUrl %>" type="<%= brand.logoType %>"><% } else { %><link rel="icon" href="/favicon.svg" type="image/svg+xml"><% } %>
 </head>
-<body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %><% if (locals.embed) { %> class="embed"<% } %>>
+<body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %> class="<%= locals.embed ? 'embed' : locals.user && user.status === 'active' ? 'with-sidebar' : 'no-sidebar' %>">
   <% if (!locals.embed) { %>
-  <header class="topbar">
-    <a class="brand" href="/"><% if (brand.logoUrl) { %><img class="brand-logo" src="<%= brand.logoUrl %>" alt=""><% } else { %><span class="brand-mark" aria-hidden="true">B</span><% } %><%= brand.name %></a>
+  <%# 왼쪽 메뉴 (휴대폰에서는 위쪽 줄 + 아래쪽 탭) %>
+  <%
+    const icon = name => ({
+      orders: '<path d="M4 6h16M4 12h16M4 18h10"/>',
+      inbox: '<path d="M4 5h16v11H8.5L4 20z"/>',
+      schedule: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+      admin: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+    })[name];
+    const section = locals.navSection || 'orders';
+  %>
+  <aside class="sidebar">
+    <a class="brand" href="/"><% if (brand.logoUrl) { %><img class="brand-logo" src="<%= brand.logoUrl %>" alt=""><% } else { %><span class="brand-mark" aria-hidden="true">B</span><% } %><span class="brand-name"><%= brand.name %></span></a>
     <% if (locals.user && user.status === 'active') { %>
-      <%# 주요 메뉴: 주문 / 문의함 (미답변 건수) %>
-      <nav class="main-nav" id="main-nav">
-        <a href="/" class="<%= locals.navSection === 'inbox' || locals.tab ? '' : 'on' %>">주문</a>
-        <a href="/inbox" class="<%= locals.navSection === 'inbox' ? 'on' : '' %>">문의함<% if (locals.openInquiries > 0) { %> <span class="badge"><%= openInquiries %></span><% } %></a>
+      <nav class="main-nav" id="main-nav" aria-label="주요 메뉴">
+        <a href="/" class="<%= section === 'orders' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('orders') %></svg><span>주문</span></a>
+        <a href="/inbox" class="<%= section === 'inbox' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('inbox') %></svg><span>문의함<% if (locals.openInquiries > 0) { %> <span class="badge"><%= openInquiries %></span><% } %></span></a>
+        <a href="/schedule" class="<%= section === 'schedule' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('schedule') %></svg><span>일정</span></a>
+        <% if (user.role === 'admin') { %>
+          <a href="/admin/users"<%- section === 'admin' ? "" : " target=\"_blank\" rel=\"noopener\"" %> class="<%= section === 'admin' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('admin') %></svg><span>관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></span></a>
+        <% } %>
       </nav>
     <% } %>
     <% if (locals.user) { %>
-      <nav class="me">
-        <% if (user.role === 'admin' && user.status === 'active') { %>
-          <a href="/admin/users"<%- locals.tab ? "" : " target=\"_blank\" rel=\"noopener\"" %>>관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
-        <% } %>
-        <button type="button" id="enable-notify" class="link" hidden>알림 켜기</button>
-        <span><%= user.name %></span>
+      <div class="me">
+        <button type="button" id="enable-notify" class="link" hidden>🔔 알림 켜기</button>
+        <span class="me-name"><span class="avatar" aria-hidden="true"><%= String(user.name || '?').slice(0, 1) %></span><%= user.name %></span>
         <form method="post" action="/logout">
           <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
           <button class="link" type="submit">로그아웃</button>
         </form>
-      </nav>
+      </div>
     <% } %>
-  </header>
-  <% if (locals.unassignedAlert) { %>
+  </aside>
+  <% } %>
+  <div class="page">
+  <% if (!locals.embed && locals.unassignedAlert) { %>
     <a class="alert-bar" id="unassigned-bar" href="/?view=unassigned">
-      담당 디자이너가 없는 주문이 <strong><%= unassignedAlert.count %>건</strong>입니다 (기준 <%= unassignedAlert.threshold %>건). 눌러서 확인하세요.
+      담당 디자이너가 없는 주문이 <strong><%= unassignedAlert.count %>건</strong>이에요 (기준 <%= unassignedAlert.threshold %>건). 눌러서 확인하세요.
     </a>
   <% } %>
-  <% } %>
-  <main class="container<%= locals.sideCalendar ? ' container-side' : '' %>">
+  <main class="container<%= locals.wide ? ' container-wide' : '' %>">
     <% if (locals.flash) { %>
       <div class="<%= flash.type === 'error' ? 'error' : flash.type === 'warn' ? 'warn-box' : 'notice' %> flash">
         <%= flash.message %>

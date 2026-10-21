@@ -6,7 +6,7 @@
 const express = require('express');
 const { CHANNELS } = require('../channels/labels');
 const { ENDED_SQL } = require('../collector');
-const { buildMonth, COLORS } = require('./calendar');
+const { buildWeek } = require('./calendar');
 const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
@@ -94,8 +94,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const alert = ALERTS[req.query.alert] ? req.query.alert : '';
     // 기간 보기 (from·to=YYYY-MM-DD, 결제일 기준): 그 기간 주문을 끝난 것까지 모두
     const period = periodRange(req.query.from, req.query.to);
-    const view = st || alert || period ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
     const stageFilter = Number(req.query.stage) || null;
+    const last = lastStageId();
+    // 마지막 단계(발송)를 고르면 끝난 주문이라 '전체' 탭에서 보여준다
+    const view = st || alert || period || (stageFilter && stageFilter === last) ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
     // 디자인 단계 거르기 (ds). 비어 있는 주문은 첫 번째 디자인 단계로 본다
     const designFilter = Number(req.query.ds) || null;
     const firstDesign = firstDesignId() || -1;
@@ -107,7 +109,6 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const due = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.due || '')) ? req.query.due : '';
     // 수기 주문 출처 거르기 (src: 출처 번호, 'none' 은 출처 미지정). 수기 주문 채널을 볼 때만
     const src = channel === 'manual' && (req.query.src === 'none' || Number(req.query.src) > 0) ? String(req.query.src) : '';
-    const last = lastStageId();
 
     // 상품 단위 조건 (단계 필터는 단계별 건수를 셀 때 빼야 해서 따로 둔다)
     const where = [];
@@ -352,9 +353,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       currentUrl: req.originalUrl,
       canCollect: Boolean(collector),
       // 넓은 PC 화면에서만 오른쪽에 보이는 회사 일정 달력
-      sideCalendar: true,
-      cal: buildMonth(db, req.query.cal, req.user),
-      COLORS,
+      week: buildWeek(db),
       lastRun,
     });
   });

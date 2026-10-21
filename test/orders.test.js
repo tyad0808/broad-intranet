@@ -272,7 +272,7 @@ test('판매자센터처럼 신규주문·배송준비·배송중·배송완료 
   applyOrders(db, [order(2, { channel_confirmed: 1 }), order(3, { channel_confirmed: 1, channel_status: 'DELIVERING' })]);
   applyOrders(db, [order(4, { channel_confirmed: 1, channel_status: 'DELIVERED' })]);
   const text = (await kim.request('/')).text;
-  const count = key => new RegExp(`st-${key} [^"]*">\\s*<span class="ship-label">[^<]+</span>\\s*<strong class="ship-count">(\\d+)`).exec(text)[1];
+  const count = key => new RegExp(`st-${key} [^"]*">\\s*<span class="ship-label">[^<]+(?:<span[^>]*>[^<]*</span>)?</span>\\s*<strong class="ship-count">(\\d+)`).exec(text)[1];
   assert.deepStrictEqual(['new', 'ready', 'shipping', 'delivered'].map(count), ['1', '1', '1', '1']);
   assert.match(text, /주문 1건/);
 
@@ -319,13 +319,13 @@ test('주문 단계·디자인 단계 버튼이 따로 있고 건수가 보이�
   const { kim, idOf, designId, stageId } = await setup(t);
   await save(kim, idOf('P1'), { design_stage_id: String(designId('디자인 작업 중')) });
   const text = (await kim.request('/')).text;
-  assert.match(text, /aria-label="주문 단계"[\s\S]*?발주 <span class="count">3</);
-  assert.match(text, /aria-label="디자인 단계"[\s\S]*?디자인 작업 전 <span class="count">2</);
-  assert.match(text, /디자인 작업 중 <span class="count">1</);
+  assert.match(text, /aria-label="주문 단계"[\s\S]*?>발주 3<\/option>/);
+  assert.match(text, /aria-label="디자인 단계"[\s\S]*?>디자인 작업 전 2<\/option>/);
+  assert.match(text, />디자인 작업 중 1<\/option>/);
   const working = (await kim.request(`/?ds=${designId('디자인 작업 중')}`)).text;
   assert.match(working, />상품1</);
   assert.doesNotMatch(working, />상품2</);
-  assert.match(working, /디자인 작업 전 <span class="count">2</, '디자인 단계를 골라도 다른 디자인 단계 건수는 그대로');
+  assert.match(working, />디자인 작업 전 2<\/option>/, '디자인 단계를 골라도 다른 디자인 단계 건수는 그대로');
   const byStage = (await kim.request(`/?stage=${stageId('발주')}`)).text;
   assert.match(byStage, />상품2</);
 });
@@ -363,19 +363,19 @@ test('디자이너가 아닌 직원은 디자인 단계를, 관리자가 아닌 
   assert.strictEqual(row('P1').stage_id, stageId('발송'), '관리자는 주문 단계를 손으로 고칠 수 있다');
 });
 
-test('수기 주문 등록 버튼은 목록 바로 위 오른쪽에 있다', async t => {
+test('수기 주문 등록 버튼은 화면 제목 오른쪽에 있다', async t => {
   const { kim } = await setup(t);
   const text = (await kim.request('/')).text;
-  assert.match(text, /class="list-toolbar"[\s\S]*?＋ 수기 주문 등록/);
+  assert.match(text, /class="page-actions"[\s\S]*?＋ 수기 주문 등록/);
 });
 
 test('팝업(iframe) 안에서 열린 주문 카드는 위쪽 메뉴 없이 닫기 버튼과 함께 보인다', async t => {
   const { kim, idOf } = await setup(t);
   const normal = (await kim.request(`/orders/${idOf('P1')}`)).text;
-  assert.match(normal, /class="topbar"/);
+  assert.match(normal, /class="sidebar"/);
   assert.match(normal, /← 목록으로/);
   const embed = (await kim.request(`/orders/${idOf('P1')}?embed=1`)).text;
-  assert.doesNotMatch(embed, /class="topbar"/);
+  assert.doesNotMatch(embed, /class="sidebar"/);
   assert.doesNotMatch(embed, /← 목록으로/);
   assert.match(embed, /\/embed\.js/);
   assert.doesNotMatch(embed, /\/live\.js/, '팝업 안에서는 알림이 두 번 뜨지 않게 실시간 연결을 하지 않는다');
@@ -390,13 +390,13 @@ test('관리자 메뉴는 주문 화면에서 새 탭으로 열린다', async t 
   assert.doesNotMatch((await boss.request('/admin/users')).text, /href="\/admin\/users" target="_blank"/, '관리자 화면 안에서는 같은 탭');
 });
 
-test('진행 중 탭에서도 발송 버튼에는 발송된 주문 수가 나오고, 누르면 전체 탭에서 보여준다', async t => {
+test('진행 중 탭에서도 발송 단계에는 발송된 주문 수가 나오고, 고르면 전체 탭에서 보여준다', async t => {
   const { db, kim, stageId } = await setup(t);
   db.prepare("UPDATE orders SET stage_id = ? WHERE channel_item_id IN ('P1', 'P2')").run(stageId('발송'));
   const text = (await kim.request('/')).text;
-  assert.match(text, new RegExp(`href="/\\?view=all&amp;stage=${stageId('발송')}"`));
-  assert.match(text, /발송 <span class="count">2</);
-  const shipped = (await kim.request(`/?view=all&stage=${stageId('발송')}`)).text;
+  assert.match(text, new RegExp(`<option value="${stageId('발송')}" >발송 2</option>`));
+  const shipped = (await kim.request(`/?stage=${stageId('발송')}`)).text;
+  assert.match(shipped, /class="on">\s*전체 /, '발송을 고르면 전체 탭');
   assert.match(shipped, />상품1</);
   assert.doesNotMatch(shipped, />상품3</);
 });

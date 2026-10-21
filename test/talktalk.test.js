@@ -62,7 +62,7 @@ test('비밀 주소로 받은 톡톡이 💬 채팅 탭에 말풍선으로, 답�
   addUser(ctx.db, { email: 'kim@broad.test' });
   const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   const list = (await kim.request('/inbox?box=chat')).text;
-  assert.match(list, /💬 채팅/);
+  assert.match(list, /data-key="chat"[^>]*>\s*채팅/);
   assert.match(list, /톡톡 고객 9999/);
   const id = ctx.db.prepare("SELECT id FROM inquiries WHERE source = 'talktalk'").get().id;
   const detail = (await kim.request(`/inbox/${id}`)).text;

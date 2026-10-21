@@ -503,8 +503,8 @@ test('문의함은 쇼핑몰 문의 / 메일 탭으로 나뉜다 (섞이지 않�
   db.prepare(`INSERT INTO inquiries (source, external_id, from_name, subject, body, attachments, received_at)
     VALUES ('smartstore_qna', '99', 'abc***', '[상품문의] 명함', '사이즈?', '[]', '2026-10-19T02:00:00Z')`).run();
   const shop = (await kim.request('/inbox')).text;
-  assert.match(shop, /class="on"[^>]*data-key="shop"[^>]*>\s*🛒 쇼핑몰 문의 <span class="badge">1<\/span>/);
-  assert.match(shop, /✉️ 메일 <span class="badge">2<\/span>/);
+  assert.match(shop, /class="on"[^>]*data-key="shop"[^>]*>\s*쇼핑몰 문의 <span class="badge">1<\/span>/);
+  assert.match(shop, /메일 <span class="badge">2<\/span>/);
   assert.ok(shop.includes('[상품문의] 명함') && !shop.includes('견적 문의'), '쇼핑몰 탭엔 메일 없음');
   const mail = (await kim.request('/inbox?box=mail')).text;
   assert.ok(mail.includes('견적 문의') && !mail.includes('[상품문의] 명함'), '메일 탭엔 쇼핑몰 문의 없음');

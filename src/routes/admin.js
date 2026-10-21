@@ -17,6 +17,8 @@ const STATUS_LABELS = {
 
 function adminRoutes(db, sessionStore, collector, notifier, brand = null) {
   const router = express.Router();
+  // 왼쪽 메뉴에서 '관리자' 를 켜 둔다
+  router.use((req, res, next) => { res.locals.navSection = 'admin'; next(); });
 
   // 처리 결과 안내 문구를 다음 화면에 한 번만 보여준다
   const flash = (req, type, message) => {

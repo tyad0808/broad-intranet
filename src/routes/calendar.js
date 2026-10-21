@@ -39,16 +39,7 @@ function buildMonth(db, monthParam, user) {
     canEdit: Boolean(user) && (user.role === 'admin' || e.created_by === user.id),
   }));
 
-  // 납기(출고 예정): 날짜별로 아직 끝나지 않은 주문 수 (주문번호 단위)
-  const dueCounts = {};
-  for (const r of db.prepare(`
-    SELECT due, COUNT(*) AS n FROM (
-      SELECT MIN(o.due_date) AS due FROM orders o
-      WHERE o.due_date BETWEEN ? AND ? AND (o.stage_id IS NULL OR o.stage_id != ?)
-      GROUP BY o.channel, o.channel_order_id
-      HAVING MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END) = 0
-    ) GROUP BY due
-  `).all(gridStart, gridEnd, lastStageId(db) || -1)) dueCounts[r.due] = r.n;
+  const dueCounts = dueCountsBetween(db, gridStart, gridEnd);
 
   const weeks = [];
   for (let w = 0; w < weeksCount; w++) {
@@ -77,8 +68,45 @@ function buildMonth(db, monthParam, user) {
   return { month, label: `${y}년 ${m}월`, weeks, prev: shift(-1), next: shift(1), today, monthEvents, COLORS };
 }
 
+// 납기(출고 예정): 날짜별로 아직 끝나지 않은 주문 수 (주문번호 단위)
+function dueCountsBetween(db, from, to) {
+  const out = {};
+  for (const r of db.prepare(`
+    SELECT due, COUNT(*) AS n FROM (
+      SELECT MIN(o.due_date) AS due FROM orders o
+      WHERE o.due_date BETWEEN ? AND ? AND (o.stage_id IS NULL OR o.stage_id != ?)
+      GROUP BY o.channel, o.channel_order_id
+      HAVING MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END) = 0
+    ) GROUP BY due
+  `).all(from, to, lastStageId(db) || -1)) out[r.due] = r.n;
+  return out;
+}
+
+// 주문 목록 위 '이번 주 출고': 오늘부터 7일의 출고 건수와 일정
+function buildWeek(db) {
+  const today = kstToday();
+  const end = addDays(today, 6);
+  const due = dueCountsBetween(db, today, end);
+  const events = db.prepare(`
+    SELECT id, title, color, start_date, end_date FROM events
+    WHERE start_date <= ? AND COALESCE(end_date, start_date) >= ? ORDER BY start_date, time IS NOT NULL, time, id
+  `).all(end, today);
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(today, i);
+    return {
+      date, isToday: i === 0, weekday: toDate(date).getUTCDay(), due: due[date] || 0,
+      events: events.filter(e => e.start_date <= date && (e.end_date || e.start_date) >= date),
+    };
+  });
+}
+
 function calendarRoutes(db, notifier) {
   const router = express.Router();
+
+  // 일정 화면 (왼쪽 메뉴 '일정')
+  router.get('/schedule', (req, res) => {
+    res.render('schedule', { title: '일정', navSection: 'schedule', cal: buildMonth(db, req.query.cal, req.user), COLORS, currentUrl: req.originalUrl });
+  });
 
   // 달력 칸만 (달 넘기기·실시간 새로고침용)
   router.get('/calendar', (req, res) => {
@@ -154,14 +182,15 @@ function parseEvent(body) {
   };
 }
 
-// 저장 뒤 돌아갈 주소: 우리 목록 주소 + 일정이 있는 달 (cal=YYYY-MM)
+// 저장 뒤 돌아갈 주소: 일정 화면(또는 주문 목록) + 일정이 있는 달 (cal=YYYY-MM)
 function backTo(value, date) {
   const v = String(value || '');
-  const base = /^\/(\?[^\s]*)?$/.test(v) ? v : '/';
+  const base = /^\/(schedule)?(\?[^\s]*)?$/.test(v) ? v : '/schedule';
+  const path = base.split('?')[0];
   const params = new URLSearchParams(base.includes('?') ? base.slice(base.indexOf('?') + 1) : '');
   if (date && /^\d{4}-\d{2}/.test(date)) params.set('cal', date.slice(0, 7));
   const q = params.toString();
-  return q ? `/?${q}` : '/';
+  return q ? `${path}?${q}` : path;
 }
 
 function fail(req, res, back, message) {
@@ -169,4 +198,4 @@ function fail(req, res, back, message) {
   res.redirect(back);
 }
 
-module.exports = { calendarRoutes, buildMonth, COLORS };
+module.exports = { calendarRoutes, buildMonth, buildWeek, COLORS };

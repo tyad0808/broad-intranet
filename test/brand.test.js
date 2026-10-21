@@ -27,7 +27,7 @@ test('관리자가 이름·로고를 바꾸면 모든 화면에 보이고, 되�
   await admin.submit('/admin/brand', '/admin/brand/name', { name: '  브로애드   통합관리 솔루션 ' });
   const home = (await admin.request('/')).text;
   assert.match(home, /<title>브로애드 통합관리 솔루션<\/title>/);
-  assert.match(home, /class="brand-mark" aria-hidden="true">B<\/span>브로애드 통합관리 솔루션/);
+  assert.match(home, /class="brand-mark" aria-hidden="true">B<\/span><span class="brand-name">브로애드 통합관리 솔루션/);
   assert.match((await browser(baseUrl).request('/login')).text, /브로애드 통합관리 솔루션/, '로그인 화면에도');
   await admin.submit('/admin/brand', '/admin/brand/name', { name: 'ㄱ'.repeat(31) });
   assert.match((await admin.request('/')).text, /<title>브로애드 통합관리 솔루션<\/title>/, '31자는 안 바뀜');
