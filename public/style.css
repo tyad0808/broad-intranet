@@ -18,8 +18,10 @@
   --notice-bg: #e8f3ff;
   --error: #e42939;
   --error-bg: #ffeeee;
-  --warn: #c76a00;
-  --warn-bg: #fff4e5;
+  --warn: #c4314b;      /* 곧 마감·확인 필요: 연한 빨강 (주황은 쓰지 않는다) */
+  --warn-bg: #fff0f2;
+  --navy: #1f2a44;      /* 위쪽 알림 띠 */
+  --calm-bg: #f2f4f6;   /* 연습 모드·안내: 차분한 회색 */
   --ok: #08875c;
   --ok-bg: #e5f8ef;
   --purple: #6b4ce6;
@@ -89,7 +91,6 @@ body.with-sidebar { padding-left: var(--sidebar); }
 .me form { margin: 0; margin-left: auto; }
 .me-name { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--text); }
 .avatar { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--primary-weak); color: var(--primary-dark); font-size: 12px; font-weight: 700; }
-.me #enable-notify { flex-basis: 100%; text-align: left; }
 
 /* 로그인 전 화면: 가운데에 회사 이름·로고, 그 아래 카드 */
 body.no-sidebar .sidebar { position: static; width: auto; flex-direction: column; align-items: center; padding: 64px 20px 0; border: 0; background: none; }
@@ -109,7 +110,6 @@ body.no-sidebar .card.narrow { margin-top: 24px; }
   .brand { padding: 0; font-size: 15px; }
   .me { margin: 0 0 0 auto; padding: 0; border: 0; flex-wrap: nowrap; }
   .me-name { display: none; }
-  .me #enable-notify { flex-basis: auto; }
   .main-nav {
     position: fixed;
     inset: auto 0 0 0;
@@ -246,13 +246,16 @@ form.inline { display: inline; margin: 0; }
 .error, .notice, .warn-box { padding: 12px 14px; border-radius: 10px; font-size: 14px; }
 .error { background: var(--error-bg); color: #b4111f; }
 .notice { background: var(--primary-weak); color: #164ea8; }
-.warn-box { background: var(--warn-bg); color: #8a4b00; }
+.warn-box { background: var(--calm-bg); color: var(--text-2); }
 .flash { margin: 0 0 16px; }
 .flash-details { margin: 6px 0 0; padding-left: 20px; font-size: 13px; }
-.practice-note { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: var(--warn-bg); color: #8a4b00; font-size: 13.5px; }
+.practice-note { margin: 0 0 14px; padding: 10px 14px; border-radius: 10px; background: var(--calm-bg); color: var(--text-2); font-size: 13.5px; }
+.practice-note strong { color: var(--text); }
 .practice-note strong { margin-right: 6px; }
-.alert-bar { display: block; padding: 10px 16px; background: var(--warn-bg); color: #8a4b00; font-size: 14px; text-align: center; border-bottom: 1px solid #ffe2bd; }
-.alert-bar:hover { background: #ffecd2; text-decoration: none; }
+.alert-bar { display: block; padding: 10px 16px; background: var(--navy); color: #fff; font-size: 14px; text-align: center; }
+.alert-bar strong { color: #9cc3ff; }
+.alert-bar::after { content: " →"; opacity: 0.7; }
+.alert-bar:hover { background: #2a3858; text-decoration: none; }
 .claim-box { margin: 0 0 12px; padding: 12px 14px; border-radius: 10px; background: var(--error-bg); color: #b4111f; font-size: 14px; }
 .claim-box strong { margin-right: 6px; }
 .claim-box.done { background: var(--line-2); color: var(--text-2); }
@@ -282,13 +285,13 @@ form.inline { display: inline; margin: 0; }
 .tag { height: 20px; padding: 0 6px; font-size: 11.5px; margin-right: 4px; }
 .pill.stage { background: transparent; padding: 0; color: var(--text); font-size: 13.5px; }
 .pill.light { color: var(--text-2); }
-.pill.wait { background: var(--warn-bg); color: var(--warn); }
+.pill.wait { background: var(--primary-weak); color: var(--primary-dark); }
 .pill.warn, .pill.due-soon { background: var(--warn-bg); color: var(--warn); }
 .pill.due-over { background: var(--error-bg); color: var(--error); }
 .pill.shipped { background: var(--ok-bg); color: var(--ok); }
 .pill.design { background: var(--purple-bg); color: var(--purple); }
 .status-active { background: var(--ok-bg); color: var(--ok); }
-.status-pending { background: var(--warn-bg); color: var(--warn); }
+.status-pending { background: var(--primary-weak); color: var(--primary-dark); }
 .status-suspended, .status-rejected { background: var(--error-bg); color: var(--error); }
 .status { margin-left: 6px; }
 .result { min-width: 40px; justify-content: center; height: 20px; font-size: 11.5px; }
@@ -317,7 +320,7 @@ form.inline { display: inline; margin: 0; }
 .src-tag.src-godo_qna, .src-tag.src-c3 { background: var(--primary-weak); color: var(--primary-dark); }
 .src-tag.src-naver_mail2, .src-tag.src-naver_mail4 { background: #e3f5f2; color: #0b7a6c; }
 .src-tag.src-naver_mail3, .src-tag.src-naver_mail5, .src-tag.src-c5 { background: var(--purple-bg); color: var(--purple); }
-.src-tag.src-gmail2, .src-tag.src-gmail4, .src-tag.src-c4 { background: var(--warn-bg); color: var(--warn); }
+.src-tag.src-gmail2, .src-tag.src-gmail4, .src-tag.src-c4 { background: #fdf6dc; color: #8a6d00; }
 .src-tag.none { color: var(--muted); font-weight: 500; }
 .src-mark { display: none; }
 
@@ -523,7 +526,7 @@ form.inline { display: inline; margin: 0; }
   background-position: right 10px center;
 }
 .assign-select { border-color: var(--line); color: var(--text); }
-.assign-select.unassigned { color: var(--warn); border-color: #ffd9a8; background-color: var(--warn-bg); }
+.assign-select.unassigned { color: var(--muted); border: 1px dashed #c5ccd3; background-color: #fff; }
 .stage-select { border-color: transparent; background-color: var(--line-2); color: var(--text-2); }
 .stage-select.design { background-color: var(--purple-bg); color: var(--purple); }
 
@@ -796,7 +799,7 @@ body.in-pane .detail .detail-side { order: 0; }
 .toast { position: relative; display: block; padding: 14px 40px 14px 16px; border-radius: 12px; background: var(--text); color: #fff; font-size: 14px; text-decoration: none; box-shadow: var(--shadow-pop); animation: toast-in 0.2s ease-out; }
 .toast:hover { text-decoration: none; }
 .toast strong { display: block; margin-bottom: 2px; }
-.toast-unassigned_over { box-shadow: inset 4px 0 0 #ffb340, var(--shadow-pop); }
+.toast-unassigned_over { box-shadow: inset 4px 0 0 #9cc3ff, var(--shadow-pop); }
 .toast-signup { box-shadow: inset 4px 0 0 #34c77b, var(--shadow-pop); }
 .toast-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: rgba(255, 255, 255, 0.6); font-size: 18px; line-height: 28px; }
 .toast-close:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
@@ -840,7 +843,7 @@ body.embed .container { padding-top: 56px; } /* 오른쪽 위 ✕ 버튼과 겹�
 .ev-more { padding-left: 4px; font-size: 11.5px; color: var(--muted); }
 .ev.ev-blue, .ev.ev-blue:hover { background: var(--primary-weak); color: var(--primary-dark); border: 0; }
 .ev.ev-green, .ev.ev-green:hover { background: var(--ok-bg); color: var(--ok); border: 0; }
-.ev.ev-orange, .ev.ev-orange:hover { background: var(--warn-bg); color: var(--warn); border: 0; }
+.ev.ev-orange, .ev.ev-orange:hover { background: #fff3e0; color: #b25e00; border: 0; }
 .ev.ev-red, .ev.ev-red:hover { background: var(--error-bg); color: #d22030; border: 0; }
 .ev.ev-purple, .ev.ev-purple:hover { background: var(--purple-bg); color: var(--purple); border: 0; }
 .ev:hover { filter: brightness(0.96); }
@@ -876,3 +879,12 @@ body.embed .container { padding-top: 56px; } /* 오른쪽 위 ✕ 버튼과 겹�
   .cal-page .cal-day { min-height: 74px; }
   .cal-head { flex-wrap: wrap; }
 }
+
+/* 왼쪽 메뉴 아래: 윈도우 알림 켜기 안내 */
+.notify-card { flex-basis: 100%; display: grid; gap: 6px; margin-bottom: 8px; padding: 12px; border-radius: 10px; background: var(--primary-weak); font-size: 13px; }
+.notify-card[hidden] { display: none; }
+.notify-card strong { color: var(--text); font-size: 13px; }
+.notify-card .muted { color: var(--text-2); }
+.notify-card .btn-sm { min-height: 32px; font-size: 13px; }
+.notify-card [hidden] { display: none; }
+@media (max-width: 900px) { .notify-card { display: none !important; } }

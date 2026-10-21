@@ -35,7 +35,13 @@
     <% } %>
     <% if (locals.user) { %>
       <div class="me">
-        <button type="button" id="enable-notify" class="link" hidden>🔔 알림 켜기</button>
+        <%# 윈도우 알림(다른 창을 볼 때 오른쪽 아래에 뜨는 알림) 켜기 — 아직 안 켰거나 막혀 있을 때만 보인다 %>
+        <div class="notify-card" id="notify-card" hidden>
+          <strong>다른 창을 볼 때도 알림 받기</strong>
+          <span class="muted small" data-notify-ask>새 주문·문의가 오면 화면 오른쪽 아래에 알려 드려요.</span>
+          <span class="muted small" data-notify-denied hidden>알림이 막혀 있어요. 주소창 왼쪽 아이콘 → 사이트 설정 → 알림을 '허용'으로 바꿔 주세요.</span>
+          <button type="button" id="enable-notify" class="btn-sm primary">알림 켜기</button>
+        </div>
         <span class="me-name"><span class="avatar" aria-hidden="true"><%= String(user.name || '?').slice(0, 1) %></span><%= user.name %></span>
         <form method="post" action="/logout">
           <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">

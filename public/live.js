@@ -59,22 +59,34 @@
     if (type !== 'unassigned_over') setTimeout(() => el.remove(), 10_000);
   }
 
-  // ───────── 브라우저 알림 (다른 창을 보고 있어도) ─────────
-  const askButton = document.getElementById('enable-notify');
-  if (askButton && 'Notification' in window && Notification.permission === 'default') {
-    askButton.hidden = false;
-    askButton.addEventListener('click', async () => {
+  // ───────── 윈도우 알림 (다른 창을 보고 있어도 화면 오른쪽 아래에) ─────────
+  // 아직 안 켰으면 '알림 켜기', 막혀 있으면 푸는 방법을 왼쪽 메뉴 아래에 보여준다
+  const card = document.getElementById('notify-card');
+  function syncNotifyCard() {
+    if (!card || !('Notification' in window)) return;
+    const p = Notification.permission;
+    card.hidden = p === 'granted';
+    card.querySelector('[data-notify-ask]').hidden = p !== 'default';
+    card.querySelector('[data-notify-denied]').hidden = p !== 'denied';
+    card.querySelector('#enable-notify').hidden = p !== 'default';
+  }
+  if (card && 'Notification' in window) {
+    syncNotifyCard();
+    card.querySelector('#enable-notify').addEventListener('click', async () => {
       wakeAudio();
       await Notification.requestPermission();
-      askButton.hidden = true;
+      syncNotifyCard();
+      if (Notification.permission === 'granted') new Notification('알림이 켜졌어요', { body: '새 주문·문의가 오면 이렇게 알려 드려요.' });
     });
   }
 
   function systemNotify({ type, title, body, url }) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    if (document.visibilityState === 'visible') return; // 화면을 보고 있으면 토스트로 충분
+    // 이 창을 보고 있으면 화면 안 알림으로 충분. 다른 창(다른 프로그램·다른 탭)을 보고 있을 때만 윈도우 알림
+    if (document.visibilityState === 'visible' && document.hasFocus()) return;
     const icon = document.querySelector('link[rel="icon"]');
-    const n = new Notification(title, { body, tag: type, icon: icon ? icon.href : undefined });
+    // 인트라넷 탭을 여러 개 열어 두어도 같은 소식은 한 번만 (같은 tag 는 하나로 합쳐진다)
+    const n = new Notification(title, { body, tag: `${type}:${title}:${body}`.slice(0, 200), icon: icon ? icon.href : undefined });
     n.onclick = () => {
       window.focus();
       if (url) location.href = url;
