@@ -34,10 +34,11 @@ test('백업 파일은 압축되어 있고, 풀면 원본과 같은 내용으로
   fs.mkdirSync(backups, { recursive: true });
   const old = path.join(backups, 'intranet-2026-09-01-0300.db');
   fs.writeFileSync(old, 'old');
-  const twentyDaysAgo = new Date(Date.now() - 20 * 24 * 3600 * 1000);
+  const now = new Date('2026-10-14T18:00:00Z');
+  const twentyDaysAgo = new Date(now.getTime() - 20 * 24 * 3600 * 1000);
   fs.utimesSync(old, twentyDaysAgo, twentyDaysAgo);
 
-  const { target, removed } = await backup({ dbPath, dir: backups, now: new Date('2026-10-14T18:00:00Z') });
+  const { target, removed } = await backup({ dbPath, dir: backups, now });
   db.close();
 
   assert.strictEqual(path.basename(target), 'intranet-2026-10-15-0300.db.gz', '파일 이름은 한국 시간');

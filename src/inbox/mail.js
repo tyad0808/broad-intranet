@@ -114,6 +114,51 @@ async function parseMail(source, raw, { uidKey, flags = new Set(), date = null, 
   };
 }
 
+// 메일 번호(uid) 목록 → 문의함 줄들
+//   빠르게: 메일마다 따로 묻지 않고 한 번에 묻는다 (① 제목·크기·구조 전부, ② 본문은 20통씩 묶어서)
+async function fetchItems(client, account, uids, uidValidity, { parse = simpleParser, now = () => new Date() } = {}) {
+  const metas = [];
+  if (uids.length) {
+    for await (const m of client.fetch(uids.join(','), { uid: true, flags: true, size: true, envelope: true, internalDate: true, bodyStructure: true }, { uid: true })) {
+      metas.push(m);
+    }
+  }
+  metas.sort((a, b) => a.uid - b.uid);
+  const small = metas.filter(m => !(m.size > MAX_SIZE)).map(m => m.uid);
+  const sources = new Map();
+  for (let i = 0; i < small.length; i += SOURCE_BATCH) {
+    for await (const m of client.fetch(small.slice(i, i + SOURCE_BATCH).join(','), { uid: true, source: true }, { uid: true })) {
+      sources.set(m.uid, m.source);
+    }
+  }
+
+  const items = [];
+  for (const meta of metas) {
+    const uid = meta.uid;
+    const uidKey = `${uidValidity}:${uid}`;
+    const flags = new Set(meta.flags || []);
+    if (meta.size > MAX_SIZE) {
+      const env = meta.envelope || {};
+      const from = (env.from && env.from[0]) || {};
+      items.push({
+        source: account.source, external_id: uidKey, from_name: from.name || null, from_addr: from.address || null,
+        reply_to: null, subject: env.subject || '(제목 없음)',
+        body: `(메일이 커서(${Math.round(meta.size / 1024 / 1024)}MB) 본문을 가져오지 않았습니다. ${account.label}에서 확인하세요.)`,
+        attachments: JSON.stringify(attachmentParts(meta.bodyStructure)), message_id: env.messageId || null, references_hdr: null,
+        received_at: new Date(meta.internalDate || now()).toISOString(), answered: flags.has('\\Answered'),
+      });
+      continue;
+    }
+    const raw = sources.get(uid);
+    if (!raw) continue;
+    const item = await parseMail(account.source, raw, { uidKey, flags, date: meta.internalDate, parse });
+    // 첨부 목록은 메일 구조에서 (나중에 그 부분만 내려받을 수 있게 위치 번호까지)
+    if (meta.bodyStructure) item.attachments = JSON.stringify(attachmentParts(meta.bodyStructure));
+    items.push(item);
+  }
+  return items;
+}
+
 // 받은편지함 읽기. state: { uidValidity, lastUid } (지난번 어디까지 읽었는지), openIds: 아직 답변 전인 메일 번호들
 function createMailSource(account, {
   connect = acc => defaultConnect(acc), parse = simpleParser, now = () => new Date(), limitMs = FETCH_LIMIT_MS,
@@ -149,46 +194,7 @@ function createMailSource(account, {
           }
           uids = uids.sort((a, b) => a - b).slice(-MAX_PER_RUN);
 
-          // 빠르게: 메일마다 따로 묻지 않고 한 번에 묻는다 (① 제목·크기·구조 전부, ② 본문은 20통씩 묶어서)
-          const metas = [];
-          if (uids.length) {
-            for await (const m of client.fetch(uids.join(','), { uid: true, flags: true, size: true, envelope: true, internalDate: true, bodyStructure: true }, { uid: true })) {
-              metas.push(m);
-            }
-          }
-          metas.sort((a, b) => a.uid - b.uid);
-          const small = metas.filter(m => !(m.size > MAX_SIZE)).map(m => m.uid);
-          const sources = new Map();
-          for (let i = 0; i < small.length; i += SOURCE_BATCH) {
-            for await (const m of client.fetch(small.slice(i, i + SOURCE_BATCH).join(','), { uid: true, source: true }, { uid: true })) {
-              sources.set(m.uid, m.source);
-            }
-          }
-
-          const items = [];
-          for (const meta of metas) {
-            const uid = meta.uid;
-            const uidKey = `${uidValidity}:${uid}`;
-            const flags = new Set(meta.flags || []);
-            if (meta.size > MAX_SIZE) {
-              const env = meta.envelope || {};
-              const from = (env.from && env.from[0]) || {};
-              items.push({
-                source: account.source, external_id: uidKey, from_name: from.name || null, from_addr: from.address || null,
-                reply_to: null, subject: env.subject || '(제목 없음)',
-                body: `(메일이 커서(${Math.round(meta.size / 1024 / 1024)}MB) 본문을 가져오지 않았습니다. ${account.label}에서 확인하세요.)`,
-                attachments: JSON.stringify(attachmentParts(meta.bodyStructure)), message_id: env.messageId || null, references_hdr: null,
-                received_at: new Date(meta.internalDate || now()).toISOString(), answered: flags.has('\\Answered'),
-              });
-              continue;
-            }
-            const raw = sources.get(uid);
-            if (!raw) continue;
-            const item = await parseMail(account.source, raw, { uidKey, flags, date: meta.internalDate, parse });
-            // 첨부 목록은 메일 구조에서 (나중에 그 부분만 내려받을 수 있게 위치 번호까지)
-            if (meta.bodyStructure) item.attachments = JSON.stringify(attachmentParts(meta.bodyStructure));
-            items.push(item);
-          }
+          const items = await fetchItems(client, account, uids, uidValidity, { parse, now });
 
           // 답변 전인 메일 중 메일 사이트에서 답장한 것 찾기 (\Answered 표시)
           const answeredIds = [];
@@ -209,6 +215,36 @@ function createMailSource(account, {
       }
     },
   };
+}
+
+// 예전 메일 가져오기 (한 번만 쓰는 명령: npm run mail-backfill)
+//   지난 days 일 중 아직 인트라넷에 없는 메일만, 100통씩 나눠 받아 onBatch(items) 로 넘긴다 (onBatch 가 없으면 세기만).
+//   '어디까지 읽었는지(lastUid)' 는 건드리지 않는다 (평소 받기와 겹치지 않게)
+const BACKFILL_BATCH = 100;
+async function backfillMail(account, {
+  days = 365, has = () => false, onBatch = null, connect = acc => defaultConnect(acc), parse = simpleParser, now = () => new Date(),
+} = {}) {
+  const client = await withTimeout(connect(account), 60_000, '메일 서버 연결 시간 초과 (60초)');
+  try {
+    const lock = await client.getMailboxLock('INBOX');
+    try {
+      const uidValidity = String(client.mailbox.uidValidity);
+      const since = new Date(now().getTime() - days * 24 * 3600 * 1000);
+      const all = ((await client.search({ since }, { uid: true })) || []).sort((a, b) => a - b);
+      const todo = all.filter(u => !has(`${uidValidity}:${u}`));
+      let done = 0;
+      // onBatch 가 없으면 세기만 한다 (미리보기)
+      for (let i = 0; onBatch && i < todo.length; i += BACKFILL_BATCH) {
+        const items = await fetchItems(client, account, todo.slice(i, i + BACKFILL_BATCH), uidValidity, { parse, now });
+        done += await onBatch(items) || 0;
+      }
+      return { found: all.length, todo: todo.length, added: done };
+    } finally {
+      lock.release();
+    }
+  } finally {
+    await client.logout().catch(() => {});
+  }
 }
 
 function defaultConnect(account) {
@@ -322,4 +358,4 @@ function createMailFiles(account, { connect = acc => defaultConnect(acc) } = {})
   };
 }
 
-module.exports = { PROVIDERS, isMailSource, attachmentParts, previewType, PREVIEW_TYPES, createMailFiles, withTimeout, defaultConnect, mailAccountsFromEnv, createMailSource, createMailSender, parseMail, htmlToText };
+module.exports = { PROVIDERS, isMailSource, attachmentParts, previewType, PREVIEW_TYPES, createMailFiles, withTimeout, defaultConnect, mailAccountsFromEnv, createMailSource, createMailSender, backfillMail, parseMail, htmlToText };

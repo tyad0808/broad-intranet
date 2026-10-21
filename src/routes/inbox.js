@@ -18,6 +18,25 @@ const BOX_SQL = { mail: MAIL_SQL, chat: CHAT_SQL, shop: `(NOT ${MAIL_SQL} AND NO
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
 const MAX_REPLY = 10_000;
 
+// 검색어 → 단어들 (띄어쓰기로 나눔, 최대 5개). 단어가 모두 들어 있는 문의를 찾는다
+const searchTerms = q => [...new Set(String(q || '').trim().split(/\s+/).filter(Boolean))].slice(0, 5);
+const SEARCH_FIELDS = ['q.subject', 'q.body', 'q.from_name', 'q.from_addr', 'q.order_no'];
+// LIKE 에서 % _ 는 '아무 글자' 라서, 그 글자 자체를 찾을 수 있게 \ 를 앞에 붙인다
+const likeOf = term => `%${term.replace(/[\\%_]/g, c => `\\${c}`)}%`;
+function searchWhere(terms) {
+  return {
+    sql: terms.map(() => `(${SEARCH_FIELDS.map(f => `${f} LIKE ? ESCAPE '\\'`).join(' OR ')})`),
+    params: terms.flatMap(t => Array(SEARCH_FIELDS.length).fill(likeOf(t))),
+  };
+}
+// 글자를 [{ text, hit }] 조각으로 (찾은 단어를 화면에서 노란색으로 칠할 때)
+function highlightParts(text, terms) {
+  const s = String(text || '');
+  if (!terms.length || !s) return [{ text: s, hit: false }];
+  const re = new RegExp(`(${terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})`, 'gi');
+  return s.split(re).filter(Boolean).map(part => ({ text: part, hit: terms.some(t => t.toLowerCase() === part.toLowerCase()) }));
+}
+
 // '쿠팡으로 / 스마트스토어로 / 메일주소로' — 받침에 따라 '으로'/'로' (ㄹ 받침은 '로')
 function withRo(word) {
   const last = String(word || '').trim().slice(-1);
@@ -50,9 +69,12 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
 
   // ───────── 목록 ─────────
   router.get('/inbox', (req, res) => {
-    const tab = TABS[req.query.tab] ? req.query.tab : 'open';
     const src = String(req.query.src || '');
     const q = String(req.query.q || '').trim().slice(0, 50);
+    const terms = searchTerms(q);
+    // 검색할 때는 처음에 '전체' 탭 (이미 답한 메일도 찾을 수 있게)
+    const defaultTab = terms.length ? 'all' : 'open';
+    const tab = TABS[req.query.tab] ? req.query.tab : defaultTab;
     // 출처를 골랐으면 그 출처의 탭, 아니면 고른 탭 (처음엔 쇼핑몰 문의)
     // 큰 탭 순서는 직원마다 (끌어다 놓아 바꿈). 맨 앞 탭이 처음 열린다
     // 채팅 탭은 톡톡을 연결했거나 채팅이 있을 때만
@@ -66,12 +88,16 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const boxCounts = Object.fromEntries(shown.map(b => [b,
       db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE q.status = 'open' AND ${boxSql(b)}`).get().n]));
 
-    const base = [boxSql(box)];
-    const params = [];
-    if (q) {
-      base.push('(q.subject LIKE ? OR q.body LIKE ? OR q.from_name LIKE ? OR q.from_addr LIKE ?)');
-      params.push(...Array(4).fill(`%${q}%`));
-    }
+    const search = searchWhere(terms);
+    const base = [boxSql(box), ...search.sql];
+    const params = [...search.params];
+    // 검색할 때: 다른 큰 탭에서 찾은 건수 (메일에서 찾았는데 쇼핑몰 문의에 있는 경우 알려주기)
+    const otherHits = terms.length
+      ? shown.filter(b => b !== box).map(b => ({
+        box: b,
+        n: db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE ${[boxSql(b), ...search.sql].join(' AND ')}`).get(...search.params).n,
+      })).filter(h => h.n)
+      : [];
     const tabWhere = {
       open: ["q.status = 'open'"],
       mine: ["q.status = 'open'", 'q.assignee_id = ?'],
@@ -103,12 +129,14 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     };
 
     const rows = db.prepare(`
-      SELECT q.id, q.source, q.from_name, q.from_addr, q.subject, substr(q.body, 1, 160) AS preview, q.received_at,
+      SELECT q.id, q.source, q.from_name, q.from_addr, q.subject, q.received_at,
+        substr(q.body, max(1, instr(lower(q.body), lower(?1)) - 40), 160) AS preview,
+        instr(lower(q.body), lower(?1)) > 41 AS preview_cut,
         q.status, q.assignee_id, q.attachments, u.name AS assignee_name
       FROM inquiries q LEFT JOIN users u ON u.id = q.assignee_id
       ${whereSql([...base, ...srcWhere, ...tabWhere[tab]])}
       ORDER BY q.received_at DESC, q.id DESC LIMIT 300
-    `).all(...params, ...srcParams, ...(tabParams[tab] || []));
+    `).all(terms[0] || '', ...params, ...srcParams, ...(tabParams[tab] || []));
 
     let lastRun = null;
     try { lastRun = JSON.parse((db.prepare("SELECT value FROM settings WHERE key = 'inbox_last_run'").get() || {}).value || 'null'); } catch { lastRun = null; }
@@ -116,7 +144,8 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     res.render('inbox/list', {
       title: '문의함',
       navSection: 'inbox',
-      rows, tab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
+      rows, tab, defaultTab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
+      hl: text => highlightParts(text, terms), otherHits,
       box, BOXES: Object.fromEntries(shown.map(b => [b, BOXES[b]])), boxCounts, chipLabel, boxOrder, defaultBox: boxOrder[0],
       staff: staff(),
       canCollect: Boolean(collector),

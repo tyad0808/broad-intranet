@@ -223,6 +223,54 @@ test('문의함 목록: 위쪽 메뉴에 미답변 건수, 출처 칩·탭, 본�
   assert.match(detail, /시안\.ai/);
 });
 
+test('문의함 검색: 처음엔 전체 탭, 띄어쓰기 단어 모두 포함, 주문번호, 찾은 단어 칠하기, 다른 큰 탭 결과 안내', async t => {
+  const { kim, db, id2 } = await setupInbox(t);
+  db.prepare("UPDATE inquiries SET status = 'closed' WHERE id = ?").run(id2);
+  db.prepare(`INSERT INTO inquiries (source, external_id, from_name, subject, body, order_no, received_at)
+    VALUES ('naver_qna', '9', '박고객', '아크릴 상품문의', '특가 언제까지인가요 100%', '2026102012345', '2026-10-19T00:00:00Z')`).run();
+  const q = text => kim.request('/inbox?box=mail&q=' + encodeURIComponent(text)).then(r => r.text);
+
+  const done = await q('특가');
+  assert.ok(done.includes('광고입니다'), '이미 처리한 메일도 찾는다 (전체 탭)');
+  assert.match(done, /<a href="[^"]*" class="on">전체 /);
+  assert.match(done, /<mark>특가<\/mark> 안내/);
+  assert.match(done, /다른 곳에도 있어요:[\s\S]*쇼핑몰 문의 1건/);
+  assert.match(done, /href="\/inbox\?box=mail&amp;tab=open&amp;q=%ED%8A%B9%EA%B0%80"/, '검색 중 미답변 탭은 tab=open 으로');
+  assert.match(done, /✕ 지우기/);
+
+  const both = await q('현수막 알려주세요');
+  assert.ok(both.includes('견적 문의'), '두 단어가 다른 줄에 있어도');
+  assert.ok(!(await q('현수막 광고')).includes('견적 문의'), '단어가 모두 있어야');
+
+  const shop = (await kim.request('/inbox?q=2026102012345')).text;
+  assert.ok(shop.includes('아크릴 상품문의'), '주문번호로');
+  assert.ok((await kim.request('/inbox?q=' + encodeURIComponent('100%'))).text.includes('아크릴 상품문의'));
+  assert.ok(!(await kim.request('/inbox?q=' + encodeURIComponent('0%0'))).text.includes('아크릴 상품문의'), '% 는 글자 그대로');
+  assert.ok(!(await kim.request('/inbox?q=' + encodeURIComponent('<b>'))).text.includes('<mark><b>'), '칠할 때도 HTML 은 글자로');
+});
+
+test('예전 메일 가져오기: 미리보기는 세기만, 가져오면 처리 완료(답장한 메일은 답변완료)로 넣고 알림·읽은 위치는 그대로, 두 번 해도 한 번만', async () => {
+  const { importOldMail } = require('../scripts/mail-backfill');
+  const { backfillMail } = require('../src/inbox/mail');
+  const db = openDb(':memory:');
+  const box = { 5: { raw: raw({ subject: '작년 견적' }) }, 6: { raw: raw({ subject: '작년 답장함' }), flags: ['\\Answered'] }, 41: { raw: raw() } };
+  const { connect } = fakeImap(box);
+  db.prepare("INSERT INTO inquiries (source, external_id, subject, received_at) VALUES ('naver_mail', '7:41', '이미 있음', '2026-10-19T00:00:00Z')").run();
+  const account = { source: 'naver_mail', label: '네이버메일' };
+  const backfill = (acc, opts) => backfillMail(acc, { ...opts, connect });
+
+  const preview = await importOldMail(db, account, { backfill });
+  assert.deepStrictEqual(preview, { found: 3, todo: 2, added: 0 });
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM inquiries').get().n, 1);
+
+  const out = await importOldMail(db, account, { backfill, apply: true });
+  assert.deepStrictEqual(out, { found: 3, todo: 2, added: 2 });
+  assert.deepStrictEqual(db.prepare("SELECT subject, status FROM inquiries WHERE external_id != '7:41' ORDER BY external_id").all().map(r => [r.subject, r.status]),
+    [['작년 견적', 'closed'], ['작년 답장함', 'answered']]);
+  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM settings WHERE key LIKE 'inbox_state_%'").get().n, 0);
+  assert.deepStrictEqual(await importOldMail(db, account, { backfill, apply: true }), { found: 3, todo: 0, added: 0 });
+});
+
 test('연습 모드 답변: 보내지 않고 기록만, 미답변 그대로', async t => {
   const { kim, id1, row, db } = await setupInbox(t);
   const res = await kim.submit(`/inbox/${id1}`, `/inbox/${id1}/reply`, { body: '견적 보내드립니다', version: '0' });

@@ -292,3 +292,18 @@ rm -f /var/lib/broad-intranet/intranet.db-wal /var/lib/broad-intranet/intranet.d
 chown intranet:intranet /var/lib/broad-intranet/intranet.db
 systemctl start broad-intranet
 ```
+
+## 16. 예전 메일 가져오기 (검색용, 한 번만)
+
+처음 메일을 연결할 때는 최근 30일만 가져왔습니다. 그보다 오래된 메일도 문의함에서 검색하려면 아래를 한 번 실행합니다.
+- 가져온 메일은 이미 지난 메일이라 **'처리 완료'** 로 들어갑니다 (메일 사이트에서 답장한 메일은 '답변완료'). 알림은 오지 않습니다.
+- 이미 들어와 있는 메일은 건너뛰므로 여러 번 실행해도 괜찮습니다.
+
+```bash
+cd /opt/broad-intranet/app
+sudo -u intranet npm run mail-backfill                 # 미리보기: 몇 통인지 세기만 (아무것도 바꾸지 않음)
+sudo -u intranet npm run mail-backfill -- --apply      # 실제로 지난 1년치 가져오기
+```
+
+- 기간을 바꾸려면 `--days 180` 처럼 붙입니다 (최대 730일).
+- 메일이 많으면 몇 분 걸립니다. `… N통 넣음` 이 늘어나면 정상입니다.

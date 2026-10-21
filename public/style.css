@@ -964,3 +964,10 @@ body.embed .container { padding-top: 56px; }
 .chat-msg img { max-width: 240px; max-height: 240px; border-radius: 10px; border: 1px solid var(--line); display: block; }
 .src-tag.src-talktalk { background: #e8f8ee; border-color: #a7e3bd; color: #03a94d; }
 .wide-link { display: flex; justify-content: center; margin: 8px 0 4px; text-decoration: none; }
+
+/* 문의함 검색: 지우기 버튼, 찾은 단어 칠하기, 다른 탭 결과 */
+.filters a.btn-sm { display: inline-flex; align-items: center; white-space: nowrap; text-decoration: none; color: var(--text); }
+.inbox-list mark { background: #fff1a8; color: inherit; border-radius: 2px; padding: 0 1px; }
+.search-elsewhere { margin: -8px 0 12px; }
+.search-elsewhere a { margin-left: 6px; }
+@media (max-width: 480px) { .filters:has(> a.btn-sm) input[type=search] { flex-basis: 150px; min-width: 0; } }

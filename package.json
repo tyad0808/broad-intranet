@@ -23,7 +23,8 @@
     "godo-inquiry-check": "node --disable-warning=ExperimentalWarning scripts/godo-inquiry-check.js",
     "naver-order-check": "node --disable-warning=ExperimentalWarning scripts/naver-order-check.js",
     "talktalk-check": "node --disable-warning=ExperimentalWarning scripts/talktalk-check.js",
-    "logen-check": "node --disable-warning=ExperimentalWarning scripts/logen-check.js"
+    "logen-check": "node --disable-warning=ExperimentalWarning scripts/logen-check.js",
+    "mail-backfill": "node --disable-warning=ExperimentalWarning scripts/mail-backfill.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

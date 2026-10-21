@@ -3,7 +3,7 @@
   // 지금 걸린 조건을 유지한 채 하나만 바꾼 주소
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { box: box === defaultBox ? '' : box, tab: tab === 'open' ? '' : tab, src, q, ...changes };
+    const merged = { box: box === defaultBox ? '' : box, tab: tab === defaultTab ? '' : tab, src, q, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/inbox?${s}` : '/inbox';
@@ -46,7 +46,7 @@
 <div id="live-tabs">
   <nav class="tabs">
     <% Object.entries(TABS).forEach(([key, label]) => { %>
-      <a href="<%= link({ tab: key === 'open' ? '' : key }) %>" class="<%= tab === key ? 'on' : '' %>"><%= label %> <span class="count"><%= tabCounts[key] %></span></a>
+      <a href="<%= link({ tab: key === defaultTab ? '' : key }) %>" class="<%= tab === key ? 'on' : '' %>"><%= label %> <span class="count"><%= tabCounts[key] %></span></a>
     <% }) %>
   </nav>
   <% if (sources.length > 1) { %>
@@ -60,13 +60,19 @@
   <% } %>
 </div>
 
+<%# 새로 검색하면 '전체' 탭에서 찾는다 (탭은 넘기지 않음) %>
 <form method="get" action="/inbox" class="filters">
   <% if (box !== defaultBox) { %><input type="hidden" name="box" value="<%= box %>"><% } %>
-  <% if (tab !== 'open') { %><input type="hidden" name="tab" value="<%= tab %>"><% } %>
   <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
-  <input type="search" name="q" value="<%= q %>" placeholder="<%= box === 'mail' ? '제목, 내용, 보낸 사람 검색' : '상품명, 문의 내용, 작성자 검색' %>" aria-label="검색">
+  <input type="search" name="q" value="<%= q %>" placeholder="<%= box === 'mail' ? '제목, 내용, 보낸 사람, 메일 주소 검색 (띄어쓰기로 여러 단어)' : '상품명, 문의 내용, 작성자, 주문번호 검색' %>" aria-label="검색">
   <button type="submit" class="btn-sm">검색</button>
+  <% if (q) { %><a href="<%= link({ q: '', tab: '' }) %>" class="btn-sm" title="검색 지우기">✕ 지우기</a><% } %>
 </form>
+<% if (q && otherHits.length) { %>
+  <p class="search-elsewhere muted small">다른 곳에도 있어요:
+    <% otherHits.forEach(h => { %><a href="<%= link({ box: h.box === defaultBox ? '' : h.box, src: '', tab: '' }) %>"><%= BOXES[h.box] %> <%= h.n %>건</a> <% }) %>
+  </p>
+<% } %>
 
 <form id="bulk-form" method="post" action="/inbox/bulk/close" data-once>
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -92,10 +98,10 @@
         <a class="oi-main" href="/inbox/<%= r.id %>?back=<%= encodeURIComponent(currentUrl) %>">
           <div class="oi-head">
             <span class="src-tag src-<%= r.source %>"><%= labelOf(r.source) %></span>
-            <span class="muted"><strong class="buyer"><%= r.from_name || r.from_addr || '-' %></strong><% if (r.from_name && r.from_addr) { %> &lt;<%= r.from_addr %>&gt;<% } %> · <%= kst(r.received_at) %></span>
+            <span class="muted"><strong class="buyer"><% hl(r.from_name || r.from_addr || '-').forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></strong><% if (r.from_name && r.from_addr) { %> &lt;<%= r.from_addr %>&gt;<% } %> · <%= kst(r.received_at) %></span>
           </div>
-          <div class="oi-name"><%= r.subject %><% if (files.length) { %> <span class="muted small" title="첨부 <%= files.length %>개">📎<%= files.length %></span><% } %></div>
-          <div class="muted inbox-preview"><%= (r.preview || '').replace(/\s+/g, ' ') %></div>
+          <div class="oi-name"><% hl(r.subject).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %><% if (files.length) { %> <span class="muted small" title="첨부 <%= files.length %>개">📎<%= files.length %></span><% } %></div>
+          <div class="muted inbox-preview"><%= r.preview_cut ? '…' : '' %><% hl((r.preview || '').replace(/\s+/g, ' ')).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></div>
         </a>
         <div class="oi-meta">
           <form method="post" action="/inbox/<%= r.id %>/assign" class="inline" data-autosubmit>
