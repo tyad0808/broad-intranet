@@ -183,7 +183,7 @@ function createWeeklyReporter({ db, account, transport = null, brandName = () =>
     const password = s.encrypt ? getSetting(db, 'weekly_report_pw') : null;
     if (s.encrypt && !password) return { ok: false, message: '암호화가 켜져 있는데 비밀번호가 없어요. 비밀번호를 먼저 정해 주세요.' };
     const rep = buildReport(db, until);
-    const opts = { brandName: brandName(), siteUrl, channelName: ch => channelInfo(ch).name, subjectTemplate: s.subject };
+    const opts = { brandName: brandName(), siteUrl, channelName: ch => channelInfo()(ch).name, subjectTemplate: s.subject };
     try {
       const mail = s.encrypt ? await renderEncrypted(rep, { ...opts, password }) : renderReport(rep, opts);
       await mailer.sendMail({

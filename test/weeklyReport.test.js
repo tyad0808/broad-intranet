@@ -71,6 +71,8 @@ test('금요일 18시가 지나면 한 번만 보내고, 실패하면 3번까지
   assert.deepStrictEqual(sent[0].to, ['boss@x.com']);
   assert.match(sent[0].subject, /\[브로애드\] 이번 주 매출 80,000원 \(▲ 100%\)/);
   assert.match(sent[0].html, /발송된 택배/);
+  assert.match(sent[0].html, /스마트스토어/, '채널별 매출에 채널 이름이 나온다');
+  assert.match(sent[0].text, /- 스마트스토어: /);
   assert.ok(!sent[0].html.includes('99,000'), '18시 뒤 주문은 이번 보고에 넣지 않음');
   clock = new Date('2026-10-23T09:30:00Z');
   await weekly.tick();
