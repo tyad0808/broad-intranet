@@ -39,7 +39,7 @@
         <% }) %>
         <% if (user.role === 'admin') { %>
           <a href="/stats" class="<%= section === 'stats' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('stats') %></svg><span>통계</span></a>
-          <a href="/admin/users"<%- section === 'admin' ? "" : " target=\"_blank\" rel=\"noopener\"" %> class="<%= section === 'admin' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('admin') %></svg><span>관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></span></a>
+          <a href="/admin/users" class="<%= section === 'admin' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('admin') %></svg><span>관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></span></a>
         <% } %>
       </nav>
     <% } %>

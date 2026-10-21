@@ -382,12 +382,13 @@ test('팝업(iframe) 안에서 열린 주문 카드는 위쪽 메뉴 없이 닫�
   assert.match((await kim.request('/')).text, /\/modal\.js/);
 });
 
-test('관리자 메뉴는 주문 화면에서 새 탭으로 열린다', async t => {
+test('관리자 메뉴도 다른 메뉴처럼 같은 화면에서 열린다 (새 탭 아님)', async t => {
   const { db, baseUrl } = await setup(t);
   addUser(db, { email: 'boss@broad.test', role: 'admin' });
   const boss = await loginAs(baseUrl, 'boss@broad.test');
-  assert.match((await boss.request('/')).text, /href="\/admin\/users" target="_blank"/);
-  assert.doesNotMatch((await boss.request('/admin/users')).text, /href="\/admin\/users" target="_blank"/, '관리자 화면 안에서는 같은 탭');
+  const home = (await boss.request('/')).text;
+  assert.match(home, /href="\/admin\/users" class=""/);
+  assert.doesNotMatch(home, /target="_blank"[^>]*>[^<]*<svg[^>]*>[\s\S]{0,1200}관리자/);
 });
 
 test('진행 중 탭에서도 발송 단계에는 발송된 주문 수가 나오고, 고르면 전체 탭에서 보여준다', async t => {
