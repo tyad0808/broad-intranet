@@ -383,6 +383,13 @@ function orderRoutes(db, notifier, actions, collector = null) {
     }
   });
 
+  // 담당자·디자인 단계 바뀐 기록 (직원별 처리 현황에서 씀). 값이 그대로면 남기지 않는다
+  const logEvent = (order, userId, kind, from, to) => {
+    if ((from || null) === (to || null)) return;
+    db.prepare('INSERT INTO order_events (channel, channel_order_id, user_id, kind, from_value, to_value) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(order.channel, order.channel_order_id, userId, kind, from || null, to || null);
+  };
+
   // 목록에서 바로 디자인 단계 바꾸기 (주문 묶음 전체, 디자이너·관리자만)
   router.post('/orders/:id/design', (req, res) => {
     const back = safeBack(req.body.back);
@@ -397,6 +404,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
     db.prepare(
       "UPDATE orders SET design_stage_id = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?"
     ).run(stage.id, order.channel, order.channel_order_id);
+    logEvent(order, req.user.id, 'design', order.design_stage_id || firstDesignId(), stage.id);
     notifier.ordersChanged(items.map(i => i.id), req.user.id);
     req.session.flash = { type: 'ok', message: `'${items[0].product_name}' → ${stage.name}` };
     res.redirect(`${back}#o${items[0].id}`);
@@ -421,6 +429,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
     db.prepare(
       "UPDATE orders SET assignee_id = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?"
     ).run(assignee, order.channel, order.channel_order_id);
+    logEvent(order, req.user.id, 'assign', order.assignee_id, assignee);
     notifier.ordersChanged(items.map(i => i.id), req.user.id);
     notifier.checkUnassigned();
     const name = items[0].product_name;
@@ -617,6 +626,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
       WHERE channel = ? AND channel_order_id = ?
     `).run(changes.assignee_id, changes.stage_id, changes.design_stage_id, changes.due_date, changes.memo, changes.nas_path,
       order.channel, order.channel_order_id);
+    logEvent(order, req.user.id, 'assign', order.assignee_id, changes.assignee_id);
+    logEvent(order, req.user.id, 'design', order.design_stage_id || firstDesignId(), changes.design_stage_id || firstDesignId());
 
     notifier.ordersChanged(groupItems(order).map(i => i.id), req.user.id);
     if (changes.assignee_id !== order.assignee_id || changes.stage_id !== order.stage_id) notifier.checkUnassigned();

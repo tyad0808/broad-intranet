@@ -264,6 +264,19 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_chat_messages ON chat_messages(inquiry_id, id);
 
+    -- 주문 담당자·디자인 단계가 언제 누구에 의해 바뀌었는지 (직원별 처리 현황용)
+    CREATE TABLE IF NOT EXISTS order_events (
+      id               INTEGER PRIMARY KEY,
+      channel          TEXT    NOT NULL,
+      channel_order_id TEXT    NOT NULL,
+      user_id          INTEGER REFERENCES users(id),
+      kind             TEXT    NOT NULL CHECK (kind IN ('assign', 'design')),
+      from_value       INTEGER,
+      to_value         INTEGER,
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_order_events ON order_events(kind, created_at);
+
     -- 자주 쓰는 답장 문구 (직원 누구나 만들고 고친다). scope: all 모두 · mail 메일만 · shop 쇼핑몰 문의만
     CREATE TABLE IF NOT EXISTS reply_templates (
       id          INTEGER PRIMARY KEY,

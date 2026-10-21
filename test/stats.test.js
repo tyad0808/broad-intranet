@@ -54,3 +54,49 @@ test('통계 화면은 관리자만, 왼쪽 메뉴에도 관리자에게만', as
   assert.strictEqual((await kim.request('/stats')).status, 403);
   assert.ok(!(await kim.request('/')).text.includes('href="/stats"'));
 });
+
+test('직원별 처리 현황: 담당·디자인 단계 바뀐 기록이 남고, 디자이너별·직원별·응답 속도를 센다', async t => {
+  const { applyOrders } = require('../src/collector');
+  const { staffReport } = require('../src/stats');
+  const ctx = await startServer();
+  t.after(() => ctx.server.close());
+  const { db } = ctx;
+  const designerJob = db.prepare("SELECT id FROM jobs WHERE name = '디자이너'").get().id;
+  const kimId = addUser(db, { email: 'kim@broad.test', name: '김디자' });
+  db.prepare('UPDATE users SET job_id = ? WHERE id = ?').run(designerJob, kimId);
+  const now = new Date();
+  const paid = new Date(now.getTime() - 5 * 3600 * 1000).toISOString();
+  applyOrders(db, [1, 2].map(n => ({
+    channel: 'smartstore', channel_order_id: `O${n}`, channel_item_id: `P${n}`, product_name: `상품${n}`, quantity: 1, option_text: null,
+    buyer_name: '구매자', receiver_name: '수령', receiver_phone: null, receiver_address: null,
+    paid_at: paid, channel_status: 'PAYED', channel_confirmed: 0,
+  })));
+  const id = n => db.prepare('SELECT id FROM orders WHERE channel_item_id = ?').get(`P${n}`).id;
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  await kim.submit('/', `/orders/${id(1)}/assign`, { assignee_id: String(kimId), back: '/' });
+  await kim.submit('/', `/orders/${id(2)}/assign`, { assignee_id: String(kimId), back: '/' });
+  const last = db.prepare('SELECT id FROM design_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get().id;
+  await kim.submit('/', `/orders/${id(1)}/design`, { design_stage_id: String(last), back: '/' });
+  assert.deepStrictEqual(db.prepare('SELECT kind, user_id, to_value FROM order_events ORDER BY id').all().map(e => [e.kind, e.user_id, e.to_value]),
+    [['assign', kimId, kimId], ['assign', kimId, kimId], ['design', kimId, last]]);
+  await kim.submit('/', `/orders/${id(1)}/assign`, { assignee_id: String(kimId), back: '/' });
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM order_events').get().n, 3, '값이 그대로면 기록하지 않는다');
+
+  // 문의: 3시간 전에 들어와 지금 답변
+  const qid = Number(db.prepare("INSERT INTO inquiries (source, external_id, subject, body, received_at) VALUES ('naver_mail', '7:1', '견적', '', ?)")
+    .run(new Date(now.getTime() - 3 * 3600 * 1000).toISOString()).lastInsertRowid);
+  db.prepare("INSERT INTO inquiry_replies (inquiry_id, user_id, body, mode, result) VALUES (?, ?, '답변', 'practice', 'practice')").run(qid, kimId);
+
+  const today = new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const yesterday = new Date(now.getTime() + 9 * 3600 * 1000 - 86400000).toISOString().slice(0, 10);
+  const r = staffReport(db, yesterday, today).rows.find(x => x.id === kimId);
+  assert.deepStrictEqual([r.open, r.assigned, r.designCount, r.replies], [2, 2, 1, 1]);
+  assert.ok(r.designHours > 4.9 && r.designHours < 5.2, `결제→디자인 끝 약 5시간 (${r.designHours})`);
+  assert.ok(r.replyHours > 2.9 && r.replyHours < 3.2, `첫 답변까지 약 3시간 (${r.replyHours})`);
+
+  db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").run(kimId);
+  const page = (await kim.request(`/stats?tab=staff&from=${yesterday}&to=${today}`)).text;
+  assert.match(page, /디자이너별/);
+  assert.match(page, /김디자/);
+  assert.match(page, /네이버메일/);
+});

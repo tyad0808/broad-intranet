@@ -127,4 +127,82 @@ function salesReport(db, fromDay, toDay) {
   };
 }
 
-module.exports = { salesReport, utcRange, previousRange, DEAD };
+// ───────── 직원별 처리 현황 ─────────
+// 시간 차이(시간 단위): julianday 는 'YYYY-MM-DD HH:MM:SS'·'…Z'·'…+09:00' 을 모두 읽는다
+const HOURS = (a, b) => `(julianday(${a}) - julianday(${b})) * 24`;
+
+function staffReport(db, fromDay, toDay) {
+  const [start, end] = utcRange(fromDay, toDay);
+  const lastStage = (db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get() || {}).id || -1;
+  const lastDesign = (db.prepare('SELECT id FROM design_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get() || {}).id || -1;
+  const users = db.prepare(`
+    SELECT u.id, u.name, j.name AS job, COALESCE(j.is_designer, 0) AS designer FROM users u LEFT JOIN jobs j ON j.id = u.job_id
+    WHERE u.status = 'active' ORDER BY u.name
+  `).all();
+  const byUser = rows => new Map(rows.map(r => [r.uid, r]));
+
+  // 디자이너: 지금 맡은 진행 중 주문 / 기간에 결제된 주문 중 맡은 것·그중 끝난 것 / 결제→발송 평균 시간
+  const open = byUser(db.prepare(`
+    SELECT uid, COUNT(*) AS n FROM (
+      SELECT MAX(o.assignee_id) AS uid FROM orders o GROUP BY o.channel, o.channel_order_id
+      HAVING MAX(o.assignee_id) IS NOT NULL AND MIN(o.channel_status IN ${DEAD} OR o.channel_status IN ('DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED', 'EXCHANGED', 'RETURNED')) = 0
+        AND MAX(o.stage_id IS NULL OR o.stage_id != ${Number(lastStage)}) = 1
+    ) GROUP BY uid
+  `).all());
+  const period = byUser(db.prepare(`
+    SELECT uid, COUNT(*) AS n, SUM(done) AS done, AVG(ship_h) AS ship_h, COUNT(ship_h) AS shipped FROM (
+      SELECT MAX(o.assignee_id) AS uid,
+        MIN(o.channel_status IN ('DELIVERING', 'DELIVERED', 'PURCHASE_DECIDED', 'EXCHANGED') OR COALESCE(o.stage_id = ${Number(lastStage)}, 0)) AS done,
+        CASE WHEN MAX(o.shipped_at) IS NOT NULL THEN ${HOURS('MAX(o.shipped_at)', 'MIN(COALESCE(o.paid_at, o.created_at))')} END AS ship_h
+      FROM orders o GROUP BY o.channel, o.channel_order_id
+      HAVING MAX(o.assignee_id) IS NOT NULL AND MIN(${T}) >= ? AND MIN(${T}) < ? AND MIN(o.channel_status IN ${DEAD}) = 0
+    ) GROUP BY uid
+  `).all(start, end));
+  // 디자인 끝(마지막 디자인 단계)까지 걸린 시간: 결제 → 마지막 디자인 단계로 바꾼 때 (기록이 쌓인 주문만)
+  const design = byUser(db.prepare(`
+    SELECT e.user_id AS uid, COUNT(*) AS n, AVG(${HOURS('e.created_at', '(SELECT MIN(COALESCE(o.paid_at, o.created_at)) FROM orders o WHERE o.channel = e.channel AND o.channel_order_id = e.channel_order_id)')}) AS h
+    FROM order_events e WHERE e.kind = 'design' AND e.to_value = ? AND e.created_at >= ? AND e.created_at < ?
+    GROUP BY e.user_id
+  `).all(lastDesign, start, end));
+
+  // 처리: 발주확인·발송처리·수기 등록 (실패 빼고)
+  const actions = byUser(db.prepare(`
+    SELECT user_id AS uid, SUM(action = 'confirm') AS confirm, SUM(action = 'dispatch') AS dispatch, SUM(action = 'create') AS created
+    FROM order_actions WHERE created_at >= ? AND created_at < ? AND result != 'fail' GROUP BY user_id
+  `).all(start, end));
+  // 문의·메일: 보낸 답변, 답변 없이 완료, 첫 답변까지 걸린 평균 시간
+  const replies = byUser(db.prepare(`
+    SELECT user_id AS uid, COUNT(*) AS n FROM inquiry_replies
+    WHERE created_at >= ? AND created_at < ? AND result IN ('ok', 'practice') GROUP BY user_id
+  `).all(start, end));
+  const closed = byUser(db.prepare(`
+    SELECT handled_by AS uid, COUNT(*) AS n FROM inquiries
+    WHERE status = 'closed' AND handled_by IS NOT NULL AND handled_at >= ? AND handled_at < ? GROUP BY handled_by
+  `).all(start, end));
+  const FIRST = `
+    SELECT q.source, r.user_id, ${HOURS('r.created_at', 'q.received_at')} AS h FROM inquiries q
+    JOIN inquiry_replies r ON r.id = (SELECT MIN(x.id) FROM inquiry_replies x WHERE x.inquiry_id = q.id AND x.result IN ('ok', 'practice'))
+    WHERE r.created_at >= ? AND r.created_at < ?`;
+  const speed = byUser(db.prepare(`SELECT user_id AS uid, AVG(h) AS h, COUNT(*) AS n FROM (${FIRST}) GROUP BY user_id`).all(start, end));
+  const speedBySource = db.prepare(`SELECT source, AVG(h) AS h, COUNT(*) AS n FROM (${FIRST}) GROUP BY source ORDER BY n DESC`).all(start, end);
+
+  const rows = users.map(u => ({
+    ...u,
+    open: (open.get(u.id) || {}).n || 0,
+    assigned: (period.get(u.id) || {}).n || 0,
+    done: (period.get(u.id) || {}).done || 0,
+    shipHours: (period.get(u.id) || {}).ship_h ?? null,
+    designHours: (design.get(u.id) || {}).h ?? null,
+    designCount: (design.get(u.id) || {}).n || 0,
+    confirm: (actions.get(u.id) || {}).confirm || 0,
+    dispatch: (actions.get(u.id) || {}).dispatch || 0,
+    created: (actions.get(u.id) || {}).created || 0,
+    replies: (replies.get(u.id) || {}).n || 0,
+    closed: (closed.get(u.id) || {}).n || 0,
+    replyHours: (speed.get(u.id) || {}).h ?? null,
+  }));
+  const eventsSince = (db.prepare("SELECT MIN(created_at) AS t FROM order_events").get() || {}).t;
+  return { fromDay, toDay, rows, speedBySource, eventsSince };
+}
+
+module.exports = { salesReport, staffReport, utcRange, previousRange, DEAD };

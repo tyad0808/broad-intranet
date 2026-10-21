@@ -1,0 +1,55 @@
+<%# 직원별 처리 현황 (관리자만) %>
+<%
+  const hours = h => (h === null || h === undefined ? '-' : h < 1 ? `${Math.max(1, Math.round(h * 60))}분` : h < 48 ? `${h.toFixed(1)}시간` : `${(h / 24).toFixed(1)}일`);
+  const designers = staff.rows.filter(r => r.designer || r.open || r.assigned);
+  const STAFF_SRC = { naver_qna: '스마트스토어', coupang_qna: '쿠팡', godo_qna: '자사몰', talktalk: '톡톡' };
+  const srcName = s => STAFF_SRC[s] || (/^naver_mail/.test(s) ? '네이버메일' : /^gmail/.test(s) ? '지메일' : s);
+%>
+<section class="card">
+  <h2>디자이너별</h2>
+  <p class="muted small">지금 맡은 건은 오늘 기준, 나머지는 기간 안에 결제된 주문 기준이에요.</p>
+  <div class="table-wrap"><table class="table staff-table">
+    <tr><th>이름</th><th>지금 맡은 진행 중</th><th>기간 담당</th><th>그중 끝남</th><th>결제→발송 평균</th><th>결제→디자인 끝 평균</th></tr>
+    <% if (!designers.length) { %><tr><td colspan="6" class="muted">디자이너가 없어요. 관리자 › 직무에서 디자이너 직무를 정해 주세요.</td></tr><% } %>
+    <% designers.forEach(r => { %>
+      <tr>
+        <td><span class="avatar <%= staffColor(r.id) %>"><%= String(r.name).slice(0, 1) %></span> <%= r.name %></td>
+        <td class="num"><strong><%= r.open %></strong>건</td>
+        <td class="num"><%= r.assigned %>건</td>
+        <td class="num"><%= r.done %>건</td>
+        <td class="num"><%= hours(r.shipHours) %></td>
+        <td class="num"><%= hours(r.designHours) %><% if (r.designCount) { %> <span class="muted small">(<%= r.designCount %>건)</span><% } %></td>
+      </tr>
+    <% }) %>
+  </table></div>
+  <p class="muted small">결제→발송은 인트라넷에서 발송처리한 주문만 계산해요. 결제→디자인 끝은 디자인 단계를 마지막 단계로 바꾼 기록으로 계산하는데, <%= staff.eventsSince ? `기록은 ${kst(staff.eventsSince).slice(0, 10)}부터 쌓이고 있어요.` : '기록이 이제부터 쌓여요.' %></p>
+</section>
+
+<section class="card">
+  <h2>직원별 처리</h2>
+  <div class="table-wrap"><table class="table staff-table">
+    <tr><th>이름</th><th>발주확인</th><th>발송처리</th><th>수기 등록</th><th>문의·메일 답변</th><th>답변 없이 완료</th><th>첫 답변까지 평균</th></tr>
+    <% staff.rows.forEach(r => { %>
+      <tr>
+        <td><span class="avatar <%= staffColor(r.id) %>"><%= String(r.name).slice(0, 1) %></span> <%= r.name %><% if (r.job) { %> <span class="muted small"><%= r.job %></span><% } %></td>
+        <td class="num"><%= r.confirm %></td><td class="num"><%= r.dispatch %></td><td class="num"><%= r.created %></td>
+        <td class="num"><strong><%= r.replies %></strong></td><td class="num"><%= r.closed %></td><td class="num"><%= hours(r.replyHours) %></td>
+      </tr>
+    <% }) %>
+  </table></div>
+  <p class="muted small">연습 모드로 보낸 답변도 셉니다. 메일 사이트나 판매자센터에서 직접 처리한 것은 들어가지 않아요.</p>
+</section>
+
+<section class="card">
+  <h2>문의 응답 속도 <span class="muted small">들어와서 첫 답변까지</span></h2>
+  <% if (!staff.speedBySource.length) { %><p class="muted">이 기간 인트라넷에서 보낸 답변이 없어요.</p><% } %>
+  <ul class="hbars">
+    <% const smax = Math.max(1, ...staff.speedBySource.map(s => s.h || 0)); staff.speedBySource.forEach(s => { %>
+      <li data-tip="<%= srcName(s.source) %> · 평균 <%= hours(s.h) %> · <%= s.n %>건">
+        <span class="hbar-label"><%= srcName(s.source) %></span>
+        <span class="hbar-track"><span class="hbar" style="width: <%= ((s.h || 0) / smax * 100).toFixed(2) %>%"></span></span>
+        <span class="hbar-value"><%= hours(s.h) %> <span class="muted"><%= s.n %>건</span></span>
+      </li>
+    <% }) %>
+  </ul>
+</section>
