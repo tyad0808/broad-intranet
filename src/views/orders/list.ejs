@@ -243,7 +243,7 @@
           <% if (due.text) { %><span class="pill <%= due.cls %>">납기 <%= due.text %></span><% } %>
           <%# 채널 발송기한: 오늘출발은 늘, 일반 주문은 오늘까지이거나 지났을 때만 %>
           <% const ship = shipDueInfo(g.shipDue); if (ship.text && (g.today || ship.cls)) { %><span class="pill ship-due <%= ship.cls %>" title="채널 발송기한"><%= ship.text %></span><% } %>
-          <% if (g.delayed) { const d = delayInfo(g.delayed.ship_delayed, g.delayed.ship_due); %><span class="pill delayed" title="<%= d.title %>"><%= d.text %></span><% } %>
+          <% if (g.delayed) { const d = delayInfo(g.delayed.ship_delayed, g.delayed.ship_due); %><span class="pill <%= d.cls %>" title="<%= d.title %>"><%= d.text %></span><% } %>
           <% if (!due.text && !(ship.text && (g.today || ship.cls)) && !g.delayed) { %><span class="muted small">-</span><% } %>
           </span>
           <span class="cell c-status">

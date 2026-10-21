@@ -43,8 +43,8 @@ const GROUP_SHIP_STATE = `CASE
 const ALERTS = { today: '오늘출발', claim: '취소·반품·교환 요청', late: '납기 지남', shiplate: '발송기한 지남' };
 const TODAY_TYPES = "('TODAY', 'OPTION_TODAY')";
 const TODAY_HAVING = `MAX(o.channel_status = 'PAYED' AND o.delivery_type IN ${TODAY_TYPES}) = 1`;
-// 발송지연 처리한 상품은 '발송기한 지남' 에서 뺀다 (판매자센터에서 이미 새 기한을 알렸으므로)
-const shipLateHaving = () => `MIN(CASE WHEN o.channel_status = 'PAYED' AND o.ship_delayed IS NULL THEN o.ship_due END) < '${new Date().toISOString()}'`;
+// 발송지연 처리하면 네이버가 발송기한을 새 날짜로 바꿔 준다 → 새 기한까지 지나야 '발송기한 지남'
+const shipLateHaving = () => `MIN(CASE WHEN o.channel_status = 'PAYED' THEN o.ship_due END) < '${new Date().toISOString()}'`;
 // 검색: 상품·고객·주문번호·메모 + 수기 주문의 판매처 주문번호와 출처 이름
 const SEARCH_SQL = `(o.product_name LIKE ? OR o.option_text LIKE ? OR o.buyer_name LIKE ? OR o.receiver_name LIKE ?
   OR o.channel_order_id LIKE ? OR o.channel_item_id LIKE ? OR o.memo LIKE ? OR o.source_order_no LIKE ?
