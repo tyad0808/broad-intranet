@@ -80,9 +80,11 @@
 </form>
 
 <div id="live-list" data-feed="inbox">
-<% const anyOpen = rows.some(r => r.status === 'open'); %>
+<%# 메일은 모든 줄을 체크할 수 있다 (삭제). 그 밖에는 미답변만 (처리 완료) %>
+<% const canDelete = box === 'mail'; %>
+<% const anyOpen = rows.some(r => r.status === 'open') || (canDelete && rows.length > 0); %>
 <% if (anyOpen) { %>
-  <div class="list-toolbar"><label class="check-all"><input type="checkbox" data-check-all> 미답변 모두 선택</label></div>
+  <div class="list-toolbar"><label class="check-all"><input type="checkbox" data-check-all> <%= canDelete ? '모두 선택' : '미답변 모두 선택' %></label></div>
 <% } %>
 <% if (rows.length === 0) { %>
   <section class="card"><p class="muted">조건에 맞는 문의가 없습니다.</p></section>
@@ -92,7 +94,7 @@
       <li class="order-item inbox-item <%= r.status === 'open' ? 'unread' : '' %>">
         <% if (anyOpen) { %>
           <span class="oi-check">
-            <% if (r.status === 'open') { %><input type="checkbox" name="ids" value="<%= r.id %>" form="bulk-form" data-can="close" aria-label="선택: <%= r.subject %>"><% } %>
+            <% if (r.status === 'open' || canDelete) { %><input type="checkbox" name="ids" value="<%= r.id %>" form="bulk-form" data-can="<%= [r.status === 'open' ? 'close' : '', canDelete ? 'delete' : ''].join(' ').trim() %>" aria-label="선택: <%= r.subject %>"><% } %>
           </span>
         <% } %>
         <a class="oi-main" href="/inbox/<%= r.id %>?back=<%= encodeURIComponent(currentUrl) %>">
@@ -126,6 +128,10 @@
   <span><strong data-bulk-count>0</strong>건 선택</span>
   <button type="submit" form="bulk-form" data-bulk-kind="close"
           data-confirm="체크한 문의를 '처리 완료'(답변 필요 없음)로 바꿀까요?&#10;메일로는 아무것도 보내지 않습니다.">처리 완료 <span data-n>0</span>건</button>
+  <% if (box === 'mail') { %>
+    <button type="submit" form="bulk-form" formaction="/inbox/bulk/delete" class="danger" data-bulk-kind="delete"
+            data-confirm="체크한 메일 {n}통을 인트라넷에서 삭제할까요?&#10;되돌릴 수 없습니다. (네이버메일·지메일의 원본은 그대로 남아요)">🗑 삭제 <span data-n>0</span>통</button>
+  <% } %>
   <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>
 </div>
 

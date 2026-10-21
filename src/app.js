@@ -143,7 +143,7 @@ function createApp({
   // 화면 공통 값: 처리 결과 안내 문구(한 번만 표시), 관리자에게 보이는 가입 신청 건수
   const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
   const currentChannelInfo = channelInfoWith(db);
-  const openInquiriesStmt = db.prepare("SELECT COUNT(*) AS n FROM inquiries WHERE status = 'open'");
+  const openInquiriesStmt = db.prepare("SELECT COUNT(*) AS n FROM inquiries WHERE status = 'open' AND deleted_at IS NULL");
   app.use((req, res, next) => {
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;

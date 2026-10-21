@@ -27,7 +27,7 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
     const createdRows = [];
     // 메일 계정들을 동시에 받는다 (걸리는 시간 = 가장 느린 계정 하나만큼)
     const fetched = await Promise.allSettled(sources.map(src => {
-      const openIds = db.prepare("SELECT external_id FROM inquiries WHERE source = ? AND status = 'open'")
+      const openIds = db.prepare("SELECT external_id FROM inquiries WHERE source = ? AND status = 'open' AND deleted_at IS NULL")
         .all(src.source).map(r => r.external_id);
       return src.fetch({ state: getState(src.source), openIds });
     }));

@@ -14,7 +14,9 @@ const boxOf = source => (isMailSource(source) ? 'mail' : isChatSource(source) ? 
 // 메일 출처: naver_mail, naver_mail2, gmail … (계정을 늘려도 그대로)
 const MAIL_SQL = "(q.source GLOB 'naver_mail*' OR q.source GLOB 'gmail*')";
 const CHAT_SQL = "(q.source = 'talktalk')";
-const BOX_SQL = { mail: MAIL_SQL, chat: CHAT_SQL, shop: `(NOT ${MAIL_SQL} AND NOT ${CHAT_SQL})` };
+// 지운 메일(deleted_at)은 어디에도 보이지 않는다
+const LIVE_SQL = 'q.deleted_at IS NULL';
+const BOX_SQL = { mail: `(${MAIL_SQL} AND ${LIVE_SQL})`, chat: CHAT_SQL, shop: `(NOT ${MAIL_SQL} AND NOT ${CHAT_SQL})` };
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
 const MAX_REPLY = 10_000;
 
@@ -55,7 +57,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
   const findInquiry = id => db.prepare(`
     SELECT q.*, u.name AS assignee_name, h.name AS handled_name FROM inquiries q
     LEFT JOIN users u ON u.id = q.assignee_id LEFT JOIN users h ON h.id = q.handled_by
-    WHERE q.id = ?
+    WHERE q.id = ? AND q.deleted_at IS NULL
   `).get(Number(id));
   const staff = () => db.prepare("SELECT id, name FROM users WHERE status = 'active' ORDER BY name").all();
   const modeOf = source => (senders[source] ? 'live' : 'practice');
@@ -198,6 +200,43 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     `).run(req.user.id, ...ids).changes;
     notifier.inboxChanged(ids, req.user.id);
     flashTo(req, res, b, 'ok', `${n}건을 처리 완료로 바꿨습니다.`);
+  });
+
+  // 메일 삭제 (인트라넷에서만 — 네이버메일·지메일의 원본은 그대로)
+  //   내용·답변 기록은 지우고 '누가 언제 지웠는지' 만 남긴다. 쇼핑몰 문의·채팅은 지우지 않는다
+  const deleteMails = (ids, userId) => {
+    const marks = ids.map(() => '?').join(',');
+    const targets = db.prepare(`SELECT q.id FROM inquiries q WHERE q.id IN (${marks}) AND ${BOX_SQL.mail}`).all(...ids).map(r => r.id);
+    if (!targets.length) return 0;
+    const tm = targets.map(() => '?').join(',');
+    transaction(db, () => {
+      db.prepare(`DELETE FROM inquiry_replies WHERE inquiry_id IN (${tm})`).run(...targets);
+      db.prepare(`
+        UPDATE inquiries SET deleted_at = datetime('now'), deleted_by = ?, subject = NULL, body = NULL, from_name = NULL, from_addr = NULL,
+          reply_to = NULL, attachments = '[]', message_id = NULL, references_hdr = NULL, order_no = NULL, meta = NULL, assignee_id = NULL,
+          version = version + 1, updated_at = datetime('now')
+        WHERE id IN (${tm})
+      `).run(userId, ...targets);
+    });
+    notifier.inboxChanged(targets, userId);
+    return targets.length;
+  };
+
+  router.post('/inbox/bulk/delete', (req, res) => {
+    const ids = [].concat(req.body.ids || []).map(Number).filter(Boolean).slice(0, 300);
+    const b = back(req);
+    if (!ids.length) return flashTo(req, res, b, 'error', '지울 메일을 체크해 주세요.');
+    const n = deleteMails(ids, req.user.id);
+    flashTo(req, res, b, n ? 'ok' : 'error', n ? `메일 ${n}통을 삭제했습니다. (메일 사이트의 원본은 그대로 있어요)` : '지울 수 있는 메일이 없습니다. (메일만 지울 수 있어요)');
+  });
+
+  router.post('/inbox/:id/delete', (req, res) => {
+    const b = back(req);
+    const inquiry = findInquiry(req.params.id);
+    if (!inquiry) return flashTo(req, res, b, 'error', '문의를 찾을 수 없습니다.');
+    if (!isMailSource(inquiry.source)) return flashTo(req, res, selfUrl(inquiry.id, b), 'error', '메일만 지울 수 있습니다.');
+    deleteMails([inquiry.id], req.user.id);
+    flashTo(req, res, b, 'ok', '메일을 삭제했습니다. (메일 사이트의 원본은 그대로 있어요)');
   });
 
   // ───────── 문의 하나 ─────────

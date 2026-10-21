@@ -23,9 +23,11 @@
     return prep.length ? `\n(${prep.join('·')}은 상품준비중으로 처리됩니다)` : '';
   }
 
-  function fill(raw, form) {
+  function fill(raw, form, button) {
     const names = checkedChannels(form);
+    const n = button && button.querySelector('[data-n]');
     return raw
+      .replace('{n}', n ? n.textContent : '')
       .replace('{ship}', shipSummary(form))
       .replace('{channels}', names.join(' · ') || '각 채널')
       .replace('{coupangNote}', prepNote(names));
@@ -48,7 +50,7 @@
       return;
     }
     const raw = (button && button.getAttribute('data-confirm')) || form.getAttribute('data-confirm');
-    if (raw && !window.confirm(fill(raw, form))) {
+    if (raw && !window.confirm(fill(raw, form, button))) {
       event.preventDefault();
       return;
     }

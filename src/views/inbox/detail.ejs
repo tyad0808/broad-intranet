@@ -127,6 +127,14 @@
         <% } %>
         <% if (inquiry.order_no) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.order_no) %>" target="_top">관련 주문 보기</a><% } %>
         <% if (isMail && inquiry.from_name) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.from_name) %>" target="_top">이 이름으로 주문 찾기</a><% } %>
+        <% if (isMail) { %>
+          <form method="post" action="/inbox/<%= inquiry.id %>/delete" class="inline" data-once target="_top"
+                data-confirm="이 메일을 인트라넷에서 삭제할까요?&#10;되돌릴 수 없습니다. (네이버메일·지메일의 원본은 그대로 남아요)">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="back" value="<%= back %>">
+            <button type="submit" class="btn-sm danger">🗑 삭제</button>
+          </form>
+        <% } %>
       </div>
 
       <% if (replies.length) { %>

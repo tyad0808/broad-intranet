@@ -249,6 +249,41 @@ test('문의함 검색: 처음엔 전체 탭, 띄어쓰기 단어 모두 포함,
   assert.ok(!(await kim.request('/inbox?q=' + encodeURIComponent('<b>'))).text.includes('<mark><b>'), '칠할 때도 HTML 은 글자로');
 });
 
+test('메일 삭제: 여러 통·한 통, 내용·답변 기록은 지우고 표시만 남김, 어디에도 안 보이고, 쇼핑몰 문의는 못 지움, 다시 가져와도 안 들어옴', async t => {
+  const { kim, db, id1, id2, kimId } = await setupInbox(t);
+  const shopId = Number(db.prepare(`INSERT INTO inquiries (source, external_id, subject, body, received_at)
+    VALUES ('naver_qna', '9', '아크릴 상품문의', '견적', '2026-10-19T00:00:00Z')`).run().lastInsertRowid);
+  await kim.submit(`/inbox/${id1}`, `/inbox/${id1}/reply`, { body: '견적 보내드립니다', version: '0' });
+
+  const list = (await kim.request('/inbox?box=mail')).text;
+  assert.match(list, /모두 선택/);
+  assert.match(list, /formaction="\/inbox\/bulk\/delete"/);
+  assert.ok(!(await kim.request('/inbox')).text.includes('bulk/delete'), '쇼핑몰 문의 탭엔 삭제 버튼 없음');
+
+  const res = await kim.submit('/inbox?box=mail', '/inbox/bulk/delete', { ids: [String(id1), String(shopId)], back: '/inbox?box=mail' });
+  assert.strictEqual(res.status, 302);
+  const gone = db.prepare('SELECT * FROM inquiries WHERE id = ?').get(id1);
+  assert.deepStrictEqual([gone.subject, gone.body, gone.from_addr, gone.deleted_by, Boolean(gone.deleted_at)], [null, null, null, kimId, true]);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM inquiry_replies WHERE inquiry_id = ?').get(id1).n, 0);
+  assert.strictEqual(db.prepare('SELECT deleted_at FROM inquiries WHERE id = ?').get(shopId).deleted_at, null, '쇼핑몰 문의는 그대로');
+  assert.strictEqual((await kim.request(`/inbox/${id1}`)).status, 404);
+  const after = (await kim.request('/inbox?box=mail&tab=all')).text;
+  assert.match(after, /전체 <span class="count">1<\/span>/);
+  assert.match((await kim.request('/')).text, /문의함 <span class="badge">2<\/span>/, '위쪽 미답변 건수에서도 빠짐 (특가 안내 + 쇼핑몰 1)');
+
+  assert.strictEqual((await kim.submit(`/inbox/${shopId}`, `/inbox/${shopId}/delete`, {})).status, 302);
+  assert.strictEqual(db.prepare('SELECT deleted_at FROM inquiries WHERE id = ?').get(shopId).deleted_at, null);
+  await kim.submit(`/inbox/${id2}`, `/inbox/${id2}/delete`, {});
+  assert.ok(db.prepare('SELECT deleted_at FROM inquiries WHERE id = ?').get(id2).deleted_at, '상세 화면에서 한 통');
+
+  // 예전 메일 가져오기를 다시 해도 지운 메일은 안 들어온다
+  const { importOldMail } = require('../scripts/mail-backfill');
+  const { backfillMail } = require('../src/inbox/mail');
+  const { connect } = fakeImap({ 1: { raw: raw() } });
+  const out = await importOldMail(db, { source: 'naver_mail', label: '네이버메일' }, { apply: true, backfill: (acc, o) => backfillMail(acc, { ...o, connect }) });
+  assert.deepStrictEqual(out, { found: 1, todo: 0, added: 0 });
+});
+
 test('예전 메일 가져오기: 미리보기는 세기만, 가져오면 처리 완료(답장한 메일은 답변완료)로 넣고 알림·읽은 위치는 그대로, 두 번 해도 한 번만', async () => {
   const { importOldMail } = require('../scripts/mail-backfill');
   const { backfillMail } = require('../src/inbox/mail');

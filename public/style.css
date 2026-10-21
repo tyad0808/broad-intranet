@@ -971,3 +971,6 @@ body.embed .container { padding-top: 56px; }
 .search-elsewhere { margin: -8px 0 12px; }
 .search-elsewhere a { margin-left: 6px; }
 @media (max-width: 480px) { .filters:has(> a.btn-sm) input[type=search] { flex-basis: 150px; min-width: 0; } }
+/* 메일 삭제 버튼은 빨간색 (되돌릴 수 없어서) */
+.bulk-bar button.danger { background: var(--error); border-color: var(--error); color: #fff; }
+.bulk-bar button.danger:hover { background: #912018; }
