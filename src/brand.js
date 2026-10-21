@@ -5,6 +5,11 @@ const crypto = require('crypto');
 const { getSetting, setSetting } = require('./collector');
 
 const DEFAULT_NAME = '통합 어드민(브로애드)';
+// 왼쪽 메뉴 (관리자는 늘 맨 아래). 순서는 관리자 > 회사·로고 에서 바꾼다
+const NAV_ITEMS = { orders: '주문', mail: '메일함', inbox: '문의함', schedule: '일정' };
+const DEFAULT_NAV = ['orders', 'mail', 'inbox', 'schedule'];
+// 저장된 순서에 빠진 메뉴(나중에 생긴 메뉴)는 기본 순서대로 뒤에 붙인다
+const navOrderOf = saved => [...new Set([...(Array.isArray(saved) ? saved : []).filter(k => NAV_ITEMS[k]), ...DEFAULT_NAV])];
 const MAX_NAME = 30;
 const MAX_LOGO = 1024 * 1024;
 
@@ -26,14 +31,16 @@ function createBrand(db) {
       const saved = JSON.parse(getSetting(db, 'brand_logo') || 'null');
       if (saved && saved.type && saved.data) logo = { type: saved.type, data: Buffer.from(saved.data, 'base64'), v: saved.v };
     } catch { logo = null; }
-    cache = { name: getSetting(db, 'brand_name') || DEFAULT_NAME, logo };
+    let nav = null;
+    try { nav = JSON.parse(getSetting(db, 'nav_order') || 'null'); } catch { nav = null; }
+    cache = { name: getSetting(db, 'brand_name') || DEFAULT_NAME, logo, navOrder: navOrderOf(nav) };
     return cache;
   }
   return {
     // 화면에 넘길 값: 이름, 로고 주소(바뀔 때마다 주소가 달라져 브라우저가 새로 받는다)
     view() {
       const b = load();
-      return { name: b.name, logoUrl: b.logo ? `/brand/logo?v=${b.logo.v}` : null, logoType: b.logo ? b.logo.type : null, isDefaultName: b.name === DEFAULT_NAME };
+      return { name: b.name, logoUrl: b.logo ? `/brand/logo?v=${b.logo.v}` : null, logoType: b.logo ? b.logo.type : null, isDefaultName: b.name === DEFAULT_NAME, navOrder: b.navOrder };
     },
     logo: () => load().logo,
     setName(name) {
@@ -53,6 +60,16 @@ function createBrand(db) {
       cache = null;
       return null;
     },
+    // 메뉴 하나를 위(-1)·아래(+1)로 한 칸
+    moveNav(key, dir) {
+      const order = load().navOrder.slice();
+      const i = order.indexOf(key);
+      const j = i + (dir === 'up' ? -1 : 1);
+      if (i < 0 || j < 0 || j >= order.length) return;
+      [order[i], order[j]] = [order[j], order[i]];
+      setSetting(db, 'nav_order', JSON.stringify(order));
+      cache = null;
+    },
     reset() {
       db.prepare("DELETE FROM settings WHERE key IN ('brand_name', 'brand_logo')").run();
       cache = null;
@@ -60,4 +77,4 @@ function createBrand(db) {
   };
 }
 
-module.exports = { createBrand, imageType, DEFAULT_NAME, MAX_NAME, MAX_LOGO };
+module.exports = { createBrand, imageType, DEFAULT_NAME, MAX_NAME, MAX_LOGO, NAV_ITEMS, DEFAULT_NAV };

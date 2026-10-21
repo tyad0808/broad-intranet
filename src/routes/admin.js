@@ -369,7 +369,13 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null) {
 
   // ───────── 회사 이름·로고 ─────────
   router.get('/brand', (req, res) => {
-    res.render('admin/brand', { title: '회사·로고', tab: 'brand', MAX_NAME: require('../brand').MAX_NAME, DEFAULT_NAME: require('../brand').DEFAULT_NAME });
+    const { MAX_NAME, DEFAULT_NAME, NAV_ITEMS } = require('../brand');
+    res.render('admin/brand', { title: '회사·로고', tab: 'brand', MAX_NAME, DEFAULT_NAME, NAV_ITEMS });
+  });
+  // 왼쪽 메뉴 순서 (모든 직원에게 같이 적용)
+  router.post('/brand/nav', (req, res) => {
+    brand.moveNav(String(req.body.key || ''), req.body.dir === 'up' ? 'up' : 'down');
+    res.redirect('/admin/brand#nav');
   });
   router.post('/brand/name', (req, res) => {
     const error = brand.setName(req.body.name);

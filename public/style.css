@@ -233,7 +233,7 @@ button.wide { width: 100%; }
 .btn-sm.ghost:hover { background: var(--line-2); }
 .btn-sm.danger { color: var(--error); border-color: #fcd0d4; }
 .btn-sm.danger:hover { background: var(--error-bg); }
-.btn-sm:disabled { opacity: 0.4; cursor: default; }
+.btn-sm:disabled, .btn-sm:disabled:hover { opacity: 0.4; cursor: default; background: #fff; border-color: var(--line); color: var(--muted); }
 .btn-back { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px 7px 8px; border-radius: var(--radius-sm); color: var(--text-2); font-size: 14px; font-weight: 600; text-decoration: none; }
 .btn-back:hover { background: var(--line-2); color: var(--text); text-decoration: none; }
 .back-row { margin: -8px 0 12px; }

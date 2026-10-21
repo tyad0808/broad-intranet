@@ -60,3 +60,20 @@ test('관리자가 이름·로고를 바꾸면 모든 화면에 보이고, 되�
   assert.ok(back.includes(`<title>${DEFAULT_NAME}</title>`) && !back.includes('brand-logo'));
   assert.strictEqual((await fetch(baseUrl + '/brand/logo')).status, 404);
 });
+
+test('왼쪽 메뉴 순서: 처음엔 주문·메일함·문의함·일정, 관리자가 바꾸면 모든 직원에게, 관리자 메뉴는 늘 맨 아래', async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  addUser(db, { email: 'boss@broad.test', role: 'admin', name: '대표' });
+  addUser(db, { email: 'kim@broad.test', name: '김직원' });
+  const admin = await loginAs(baseUrl, 'boss@broad.test');
+  const staff = await loginAs(baseUrl, 'kim@broad.test');
+  const menu = text => [...text.slice(text.indexOf('id="main-nav"')).matchAll(/<span>(주문|메일함|문의함|일정|관리자)/g)].map(m => m[1]);
+  assert.deepStrictEqual(menu((await admin.request('/')).text), ['주문', '메일함', '문의함', '일정', '관리자']);
+  await admin.submit('/admin/brand', '/admin/brand/nav', { key: 'schedule', dir: 'up' });
+  await admin.submit('/admin/brand', '/admin/brand/nav', { key: 'schedule', dir: 'up' });
+  await admin.submit('/admin/brand', '/admin/brand/nav', { key: 'orders', dir: 'up' }); // 맨 위에서 위로: 그대로
+  assert.deepStrictEqual(menu((await staff.request('/')).text), ['주문', '일정', '메일함', '문의함'], '직원 화면에도 같은 순서 (직원은 관리자 메뉴 없음)');
+  assert.deepStrictEqual(menu((await admin.request('/')).text).slice(-1), ['관리자']);
+  assert.strictEqual((await staff.submit('/', '/admin/brand/nav', { key: 'inbox', dir: 'up' })).status, 403, '직원은 못 바꿈');
+});

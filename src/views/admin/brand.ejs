@@ -29,6 +29,29 @@
   </form>
 </section>
 
+<section class="card" id="nav">
+  <h2>왼쪽 메뉴 순서</h2>
+  <p class="muted small">모든 직원에게 같은 순서로 보여요. 관리자 메뉴는 늘 맨 아래예요.</p>
+  <ul class="rows">
+    <% brand.navOrder.forEach((key, i) => { %>
+      <li class="row">
+        <span class="order"><%= i + 1 %></span>
+        <span class="row-main"><strong><%= NAV_ITEMS[key] %></strong></span>
+        <span class="row-actions">
+          <% [['up', '↑ 위로', i === 0], ['down', '↓ 아래로', i === brand.navOrder.length - 1]].forEach(([dir, label, off]) => { %>
+            <form method="post" action="/admin/brand/nav" class="inline">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="key" value="<%= key %>">
+              <input type="hidden" name="dir" value="<%= dir %>">
+              <button type="submit" class="btn-sm" <%= off ? 'disabled' : '' %> aria-label="<%= NAV_ITEMS[key] %> <%= label %>"><%= label %></button>
+            </form>
+          <% }) %>
+        </span>
+      </li>
+    <% }) %>
+  </ul>
+</section>
+
 <% if (brand.logoUrl || !brand.isDefaultName) { %>
 <section class="card">
   <h2>처음으로 되돌리기</h2>

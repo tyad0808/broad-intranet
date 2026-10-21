@@ -26,10 +26,16 @@
     <a class="brand" href="/"><% if (brand.logoUrl) { %><img class="brand-logo" src="<%= brand.logoUrl %>" alt=""><% } else { %><span class="brand-mark" aria-hidden="true">B</span><% } %><span class="brand-name"><%= brand.name %></span></a>
     <% if (locals.user && user.status === 'active') { %>
       <nav class="main-nav" id="main-nav" aria-label="주요 메뉴">
-        <a href="/" class="<%= section === 'orders' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('orders') %></svg><span>주문</span></a>
-        <a href="/inbox" class="<%= section === 'inbox' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('inbox') %></svg><span>문의함<% if (locals.openInquiries > 0) { %> <span class="badge"><%= openInquiries %></span><% } %></span></a>
-        <a href="/inbox?box=mail" class="<%= section === 'mail' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('mail') %></svg><span>메일함<% if (locals.openMails > 0) { %> <span class="badge"><%= openMails %></span><% } %></span></a>
-        <a href="/schedule" class="<%= section === 'schedule' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('schedule') %></svg><span>일정</span></a>
+        <%# 순서는 관리자 > 회사·로고 에서 정한다 %>
+        <% const navItems = {
+             orders: { href: '/', label: '주문', count: 0 },
+             mail: { href: '/inbox?box=mail', label: '메일함', count: locals.openMails },
+             inbox: { href: '/inbox', label: '문의함', count: locals.openInquiries },
+             schedule: { href: '/schedule', label: '일정', count: 0 },
+           };
+           (brand.navOrder || Object.keys(navItems)).forEach(key => { const it = navItems[key]; if (!it) return; %>
+          <a href="<%= it.href %>" class="<%= section === key ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon(key) %></svg><span><%= it.label %><% if (it.count > 0) { %> <span class="badge"><%= it.count %></span><% } %></span></a>
+        <% }) %>
         <% if (user.role === 'admin') { %>
           <a href="/admin/users"<%- section === 'admin' ? "" : " target=\"_blank\" rel=\"noopener\"" %> class="<%= section === 'admin' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('admin') %></svg><span>관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></span></a>
         <% } %>
