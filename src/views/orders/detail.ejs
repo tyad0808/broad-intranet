@@ -55,7 +55,7 @@
       </div>
 
       <label>담당 디자이너
-        <select name="assignee_id">
+        <select name="assignee_id" class="<%= staffColor(order.assignee_id) %>">
           <option value="">미지정</option>
           <% if (order.assignee_id && !designers.some(d => d.id === order.assignee_id)) { %>
             <option value="<%= order.assignee_id %>" selected><%= order.assignee_name %> (디자이너 아님)</option>

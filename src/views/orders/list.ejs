@@ -229,7 +229,7 @@
           <form method="post" action="/orders/<%= o.id %>/assign" class="inline" data-autosubmit>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= currentUrl %>">
-            <select name="assignee_id" class="assign-select <%= o.assignee_id ? '' : 'unassigned' %>" aria-label="담당 디자이너">
+            <select name="assignee_id" class="assign-select <%= o.assignee_id ? staffColor(o.assignee_id) : 'unassigned' %>" aria-label="담당 디자이너">
               <option value="">미지정</option>
               <% if (keepCurrent) { %><option value="<%= o.assignee_id %>" selected><%= o.assignee_name %></option><% } %>
               <% designers.forEach(d => { %>

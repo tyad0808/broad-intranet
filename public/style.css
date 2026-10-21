@@ -888,3 +888,17 @@ body.embed .container { padding-top: 56px; } /* 오른쪽 위 ✕ 버튼과 겹�
 .notify-card .btn-sm { min-height: 32px; font-size: 13px; }
 .notify-card [hidden] { display: none; }
 @media (max-width: 900px) { .notify-card { display: none !important; } }
+
+/* 직원마다 고유 색 (담당자 칸·왼쪽 아래 내 이름). 주황·빨강은 '주의' 와 헷갈려서 쓰지 않는다 */
+.staff-c0 { --sc-bg: #e8f3ff; --sc-fg: #1b64da; }
+.staff-c1 { --sc-bg: #e5f8ef; --sc-fg: #08875c; }
+.staff-c2 { --sc-bg: #f1edfe; --sc-fg: #6b4ce6; }
+.staff-c3 { --sc-bg: #e3f6f4; --sc-fg: #0b7a6c; }
+.staff-c4 { --sc-bg: #fdeef6; --sc-fg: #c2297a; }
+.staff-c5 { --sc-bg: #eceefe; --sc-fg: #3b4cca; }
+.staff-c6 { --sc-bg: #e2f5fb; --sc-fg: #0a7ea4; }
+.staff-c7 { --sc-bg: #eef6e0; --sc-fg: #4d7c0f; }
+.staff-c8 { --sc-bg: #f5eee8; --sc-fg: #8a5a3c; }
+.staff-c9 { --sc-bg: #eef1f5; --sc-fg: #334155; }
+select[class*="staff-c"], .avatar[class*="staff-c"] { background-color: var(--sc-bg); color: var(--sc-fg); border-color: transparent; }
+select[class*="staff-c"] { font-weight: 650; }

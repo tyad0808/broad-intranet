@@ -71,7 +71,7 @@
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="from" value="detail">
         <label>담당
-          <select name="assignee_id" class="assign-select <%= inquiry.assignee_id ? '' : 'unassigned' %>">
+          <select name="assignee_id" class="assign-select <%= inquiry.assignee_id ? staffColor(inquiry.assignee_id) : 'unassigned' %>">
             <option value="">담당 미지정</option>
             <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === inquiry.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
           </select>

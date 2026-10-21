@@ -122,7 +122,7 @@
           <form method="post" action="/inbox/<%= r.id %>/assign" class="inline" data-autosubmit>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= currentUrl %>">
-            <select name="assignee_id" class="assign-select <%= r.assignee_id ? '' : 'unassigned' %>" aria-label="담당자">
+            <select name="assignee_id" class="assign-select <%= r.assignee_id ? staffColor(r.assignee_id) : 'unassigned' %>" aria-label="담당자">
               <option value="">담당 미지정</option>
               <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === r.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
             </select>

@@ -84,6 +84,8 @@ function createApp({
     return { cls: day === '오늘' ? 'due-soon' : '', text: `${day} ${time}까지 발송` };
   };
   // 화면에 시각을 한국 시간으로 보여준다 (DB 에는 UTC 로 저장)
+  // 직원마다 고유 색 (담당자 칸·이름 표시). 직원 번호로 정해서 늘 같은 색, 미지정은 색 없음
+  app.locals.staffColor = id => (id ? `staff-c${Number(id) % 10}` : '');
   app.locals.kst = value => {
     if (!value) return '-';
     const text = String(value);

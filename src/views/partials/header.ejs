@@ -42,7 +42,7 @@
           <span class="muted small" data-notify-denied hidden>알림이 막혀 있어요. 주소창 왼쪽 아이콘 → 사이트 설정 → 알림을 '허용'으로 바꿔 주세요.</span>
           <button type="button" id="enable-notify" class="btn-sm primary">알림 켜기</button>
         </div>
-        <span class="me-name"><span class="avatar" aria-hidden="true"><%= String(user.name || '?').slice(0, 1) %></span><%= user.name %></span>
+        <span class="me-name"><span class="avatar <%= staffColor(user.id) %>" aria-hidden="true"><%= String(user.name || '?').slice(0, 1) %></span><%= user.name %></span>
         <form method="post" action="/logout">
           <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
           <button class="link" type="submit">로그아웃</button>
