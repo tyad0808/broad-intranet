@@ -262,6 +262,17 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_chat_messages ON chat_messages(inquiry_id, id);
 
+    -- 자주 쓰는 답장 문구 (직원 누구나 만들고 고친다). scope: all 모두 · mail 메일만 · shop 쇼핑몰 문의만
+    CREATE TABLE IF NOT EXISTS reply_templates (
+      id          INTEGER PRIMARY KEY,
+      title       TEXT    NOT NULL,
+      body        TEXT    NOT NULL,
+      scope       TEXT    NOT NULL DEFAULT 'all' CHECK (scope IN ('all', 'mail', 'shop')),
+      use_count   INTEGER NOT NULL DEFAULT 0,
+      updated_by  INTEGER REFERENCES users(id),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+
     -- 회사 일정 (주문 목록 옆 달력). 승인된 직원 누구나 넣고, 넣은 사람과 관리자만 고치거나 지운다
     CREATE TABLE IF NOT EXISTS events (
       id          INTEGER PRIMARY KEY,

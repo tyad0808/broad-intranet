@@ -1,0 +1,59 @@
+<%- include('partials/header') %>
+<div class="page-head">
+  <h1 class="page-title">답장 문구</h1>
+  <p class="muted small">메일·쇼핑몰 문의 답장 칸 위 <strong>[자주 쓰는 문구 넣기]</strong> 에서 고르면 바로 들어가요. 직원 누구나 만들고 고칠 수 있어요.</p>
+</div>
+
+<% const editing = edit && templates.find(t => t.id === edit); %>
+<section class="card">
+  <h2><%= editing ? '문구 고치기' : '새 문구' %></h2>
+  <form method="post" action="<%= editing ? `/templates/${editing.id}` : '/templates' %>" class="template-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="two-fields">
+      <label>문구 이름 <span class="muted small">(목록에 보이는 이름)</span>
+        <input type="text" name="title" maxlength="40" required value="<%= editing ? editing.title : '' %>" placeholder="예: 시안 확인 요청">
+      </label>
+      <label>쓰는 곳
+        <select name="scope">
+          <% Object.entries(SCOPES).forEach(([k, v]) => { %><option value="<%= k %>" <%= (editing ? editing.scope : 'all') === k ? 'selected' : '' %>><%= v %></option><% }) %>
+        </select>
+      </label>
+    </div>
+    <label>내용
+      <textarea name="body" rows="7" maxlength="5000" required placeholder="예: {고객명}님, 주문하신 {상품명} 시안 보내드립니다. 확인 부탁드립니다."><%= editing ? editing.body : '' %></textarea>
+    </label>
+    <p class="muted small">자동으로 바뀌는 칸: <% VARIABLES.forEach(v => { %><code class="var">{<%= v %>}</code> <% }) %> — 값을 모르면 그대로 남아서 직접 고칠 수 있어요.</p>
+    <div class="form-actions">
+      <button type="submit" class="btn-sm primary"><%= editing ? '고친 내용 저장' : '문구 만들기' %></button>
+      <% if (editing) { %><a href="/templates" class="btn-sm ghost">취소</a><% } %>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>저장된 문구 <span class="count"><%= templates.length %></span></h2>
+  <% if (!templates.length) { %>
+    <p class="muted">아직 문구가 없어요. 위에서 자주 쓰는 답장을 만들어 보세요.</p>
+  <% } else { %>
+    <ul class="rows">
+      <% templates.forEach(t => { %>
+        <li class="row">
+          <div class="row-main">
+            <strong><%= t.title %></strong> <span class="tag"><%= SCOPES[t.scope] %></span>
+            <span class="muted small"><%= t.use_count %>번 사용<%= t.updated_name ? ` · ${t.updated_name}` : '' %> · <%= kst(t.updated_at).slice(0, 10) %></span>
+            <div class="template-preview"><%= t.body %></div>
+          </div>
+          <div class="row-actions">
+            <a href="/templates?edit=<%= t.id %>" class="btn-sm">고치기</a>
+            <form method="post" action="/templates/<%= t.id %>/delete" class="inline" data-confirm="'<%= t.title %>' 문구를 지울까요?">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn-sm danger">지우기</button>
+            </form>
+          </div>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+<script src="/confirm.js"></script>
+<%- include('partials/footer') %>

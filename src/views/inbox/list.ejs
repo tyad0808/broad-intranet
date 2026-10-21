@@ -25,6 +25,7 @@
     <% } %>
   </div>
   <div class="page-actions">
+    <a href="/templates" class="btn-sm ghost">답장 문구</a>
     <% if (canCollect) { %>
       <form method="post" action="/inbox/collect" class="collect-form" data-once>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">

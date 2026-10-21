@@ -67,3 +67,24 @@
 
 // 채팅: 처음 열면 가장 최근 말이 보이게 맨 아래로
 document.querySelectorAll('.chat-thread').forEach(el => { el.scrollTop = el.scrollHeight; });
+
+// 자주 쓰는 답장 문구: 고르면 답장 칸의 커서 자리에 넣는다 (이미 쓴 글이 있으면 그 뒤에)
+document.querySelectorAll('select[data-template]').forEach(select => {
+  select.addEventListener('change', () => {
+    const option = select.selectedOptions[0];
+    const textarea = select.closest('form').querySelector('textarea[name="body"]');
+    if (!option || !option.value || !textarea) return;
+    const text = option.dataset.body || '';
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    const before = textarea.value.slice(0, start);
+    const glue = before && !before.endsWith('\n') ? '\n' : '';
+    textarea.value = before + glue + text + textarea.value.slice(end);
+    textarea.focus();
+    const pos = (before + glue + text).length;
+    textarea.setSelectionRange(pos, pos);
+    // 많이 쓰는 문구가 위로 오게 기록 (실패해도 괜찮음)
+    fetch(`/templates/${option.value}/used`, { method: 'POST', headers: { 'x-csrf-token': select.dataset.csrf }, credentials: 'same-origin' }).catch(() => {});
+    select.value = '';
+  });
+});

@@ -904,3 +904,9 @@ select[class*="staff-c"], .avatar[class*="staff-c"] { background-color: var(--sc
 select[class*="staff-c"] { font-weight: 650; }
 /* 판매자센터에서 발송지연 처리한 주문: 차분한 남색 (이미 고객에게 알렸으므로 빨강 아님) */
 .pill.delayed { background: #eceefe; color: #3b4cca; }
+
+/* 답장 문구 */
+.template-row { display: flex; gap: 8px; align-items: center; margin: 4px 0 10px; }
+.template-row select { flex: 1; margin: 0; height: 38px; padding-top: 0; padding-bottom: 0; font-size: 14px; color: var(--text-2); }
+.template-preview { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-size: 13.5px; white-space: pre-wrap; max-height: 120px; overflow: auto; }
+code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak); color: var(--primary-dark); font-family: inherit; font-size: 12.5px; font-weight: 600; }

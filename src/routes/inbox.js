@@ -5,6 +5,7 @@ const express = require('express');
 const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
 const { IMAGE_HOSTS, PARTNER_CENTER_URL } = require('../inbox/talktalk');
+const { templatesFor } = require('./templates');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
@@ -50,7 +51,7 @@ function withRo(word) {
 }
 
 // files: { naver_mail: 첨부파일 열기 } (메일함에서 그때그때 가져온다)
-function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLabels = {}, notifier }) {
+function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLabels = {}, notifier, brandName = () => '' }) {
   const router = express.Router();
   const busy = new Set(); // 같은 문의에 답변을 두 번 연달아 보내는 것 방지
 
@@ -267,8 +268,19 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       SELECT r.*, u.name AS user_name FROM inquiry_replies r LEFT JOIN users u ON u.id = r.user_id
       WHERE r.inquiry_id = ? ORDER BY r.id
     `).all(inquiry.id);
+    // 답장 문구에 넣을 값: 고객 이름('홍길동 (hong123)' → 홍길동), 주문번호로 찾은 상품명
+    const relatedOrder = inquiry.order_no
+      ? db.prepare("SELECT product_name FROM orders WHERE channel_order_id = ? ORDER BY item_type = 'addon', id LIMIT 1").get(String(inquiry.order_no))
+      : null;
+    const templates = templatesFor(db, isMailSource(inquiry.source) ? 'mail' : 'shop', {
+      고객명: String(inquiry.from_name || '').replace(/\s*\(.*\)\s*$/, '').trim(),
+      상품명: relatedOrder ? relatedOrder.product_name : '',
+      주문번호: inquiry.order_no || '',
+      회사명: brandName(),
+    });
     res.render('inbox/detail', {
       title: inquiry.subject || '문의',
+      templates,
       navSection: isMailSource(inquiry.source) ? 'mail' : 'inbox',
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),

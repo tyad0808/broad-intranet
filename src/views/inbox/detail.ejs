@@ -88,6 +88,14 @@
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="version" value="<%= inquiry.version %>">
+        <%# 자주 쓰는 답장 문구: 고르면 답장 칸에 들어간다 (그 뒤에 고쳐 써도 됨) %>
+        <div class="template-row">
+          <select data-template aria-label="답장 문구 넣기" data-csrf="<%= csrfToken %>">
+            <option value=""><%= templates.length ? '＋ 자주 쓰는 문구 넣기' : '저장된 문구가 없어요' %></option>
+            <% templates.forEach(t => { %><option value="<%= t.id %>" data-body="<%= t.body %>"><%= t.title %></option><% }) %>
+          </select>
+          <a href="/templates" target="_top" class="btn-sm ghost">문구 관리</a>
+        </div>
         <% if (isMail) { %>
           <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
             <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
