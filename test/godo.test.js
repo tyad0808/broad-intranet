@@ -13,7 +13,7 @@ function mallOrder(no, status = 'p1', extra = {}) {
     orderer: { name: '홍길동', email: 'a@b.c', phone: '', cellPhone: '010-1111-2222' },
     receiver: { name: '김수령', phone: '', cellPhone: '010-3333-4444', zipcode: '06236', address: '서울 강남구 테헤란로 1', addressDetail: '2층' },
     items: [
-      { itemNo: 1, type: 'goods', status, goodsNo: 1000701702, name: '포맥스 안내판', option: '3T', textOption: '문구: 화장실', sizeW: 300, sizeH: 150, quantity: 2 },
+      { itemNo: 1, type: 'goods', status, goodsNo: 1000701702, name: '포맥스 안내판', option: '3T', textOption: '문구: 화장실', sizeW: 300, sizeH: 150, quantity: 2, amount: 24000, discount: 1000 },
       { itemNo: 2, type: 'addGoods', parentGoodsNo: 1000701702, status, goodsNo: 1000000001, name: '양면테이프', option: '', textOption: '', quantity: 1 },
     ],
     ...extra,
@@ -43,6 +43,7 @@ test('자사몰 주문 → 인트라넷 주문: 추가상품은 묶음 안 추�
     buyer_name: '홍길동', receiver_name: '김수령', receiver_phone: '010-3333-4444',
     receiver_address: '(06236) 서울 강남구 테헤란로 1 2층', paid_at: '2026-10-17T10:01:00+09:00',
     channel_status: 'PAYED', channel_confirmed: 0, claim_type: null, claim_status: null, channel_status_label: '결제완료',
+    pay_amount: 23000,
   });
   assert.strictEqual(addon.item_type, 'addon');
   assert.strictEqual(addon.channel_order_id, main.channel_order_id);

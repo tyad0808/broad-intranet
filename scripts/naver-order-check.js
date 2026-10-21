@@ -6,7 +6,7 @@ const { createNaverClient } = require('../src/channels/naverClient');
 const { toKstIso } = require('../src/channels/smartstore');
 
 const DAYS = 3;
-const WANT = /deliver|ship|dispatch|today|due|hope|arrival|sla|expect/i;
+const WANT = /deliver|ship|dispatch|today|due|hope|arrival|sla|expect|amount|price/i;
 const PRIVATE = /address|name|tel|phone|memo|zip|base|detail|city|state/i;
 
 (async () => {

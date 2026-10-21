@@ -19,6 +19,7 @@ test('스마트스토어 주문의 배송 속성(TODAY)과 발송기한을 UTC �
   assert.deepStrictEqual([o.delivery_type, o.ship_due], ['TODAY', '2026-10-20T06:00:00.000Z']);
   const n = normalize({ order: {}, productOrder: { productOrderId: 'P2' } });
   assert.deepStrictEqual([n.delivery_type, n.ship_due], ['NORMAL', null]);
+  assert.strictEqual(normalize({ order: {}, productOrder: { productOrderId: 'P3', totalPaymentAmount: 45500 } }).pay_amount, 45500, '결제 금액');
 });
 
 test('이 기능 전에 받은 발송 전 주문은 한 번 다시 읽어 오늘출발·발송기한을 채운다', async () => {

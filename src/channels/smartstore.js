@@ -27,6 +27,8 @@ function utcIso(value) {
   return Number.isFinite(t) ? new Date(t).toISOString() : null;
 }
 
+const money = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Number(v)));
+
 function normalize(item) {
   const order = item.order || {};
   const po = item.productOrder || {};
@@ -56,6 +58,8 @@ function normalize(item) {
     ship_due: utcIso(po.shippingDueDate),
     // 판매자센터에서 '발송지연 처리' 를 하면 사유가 들어온다 (발송기한도 새 날짜로 바뀜)
     ship_delayed: po.delayedDispatchReason || null,
+    // 이 상품주문의 결제 금액 (할인 뒤, 배송비 제외)
+    pay_amount: money(po.totalPaymentAmount),
   };
 }
 

@@ -24,6 +24,8 @@ const STATUS_MAP = {
 };
 
 // 쿠팡 시각(한국 시간, 시간대 표시 없음) → 2026-10-16T10:00:00+09:00
+const money = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Number(v)));
+
 function kstIso(value) {
   if (!value) return null;
   const text = String(value).replace(' ', 'T');
@@ -63,6 +65,8 @@ function normalize(sheet) {
       channel_confirmed: map.confirmed,
       claim_type: holdCancel ? 'CANCEL' : null,
       claim_status: holdCancel && !allCanceled ? 'CANCEL_REQUEST' : null,
+      // 결제 금액 (orderPrice = 판매가 × 수량, 쿠팡이 준 값). 없으면 판매가 × 수량
+      pay_amount: money(item.orderPrice) ?? (money(item.salesPrice) !== null ? money(item.salesPrice) * quantity : null),
     };
   });
 }

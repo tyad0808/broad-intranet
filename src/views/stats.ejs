@@ -1,0 +1,142 @@
+<%- include('partials/header') %>
+<%
+  const won = n => `${Math.round(Number(n) || 0).toLocaleString('ko-KR')}원`;
+  const short = n => { const v = Math.round(Number(n) || 0); return v >= 100000000 ? `${(v / 100000000).toFixed(1)}억` : v >= 10000 ? `${Math.round(v / 10000).toLocaleString('ko-KR')}만` : v.toLocaleString('ko-KR'); };
+  const pct = r => `${(r * 100).toFixed(1)}%`;
+  const link = changes => { const p = new URLSearchParams({ tab, from: fromDay, to: toDay, ...changes }); return `/stats?${p}`; };
+  // 지난 기간과 비교: ▲ 12% / ▼ 3% / -
+  const delta = (now, before, goodWhenUp = true) => {
+    if (!before) return { text: now ? '새로 생김' : '-', cls: '' };
+    const r = (now - before) / before;
+    if (Math.abs(r) < 0.005) return { text: '변화 없음', cls: '' };
+    const up = r > 0;
+    return { text: `${up ? '▲' : '▼'} ${Math.abs(r * 100).toFixed(0)}%`, cls: up === goodWhenUp ? 'good' : 'bad' };
+  };
+  const md = k => (k.length === 7 ? `${Number(k.slice(5))}월` : `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`);
+%>
+<div class="page-head">
+  <h1 class="page-title">통계</h1>
+  <p class="muted small"><%= fromDay %> ~ <%= toDay %> · 결제일 기준 · 관리자만 볼 수 있어요</p>
+</div>
+
+<nav class="tabs">
+  <a href="<%= link({ tab: 'sales' }) %>" class="<%= tab === 'sales' ? 'on' : '' %>">매출</a>
+  <a href="<%= link({ tab: 'staff' }) %>" class="<%= tab === 'staff' ? 'on' : '' %>">직원별 현황</a>
+</nav>
+
+<%# 기간: 빠른 선택 + 직접 고르기 (한 줄) %>
+<form method="get" action="/stats" class="filters" data-autosubmit>
+  <input type="hidden" name="tab" value="<%= tab %>">
+  <div class="filters-period">
+    <span class="chips-label">기간</span>
+    <%- include('partials/period-inputs', { from: fromDay, to: toDay }) %>
+    <nav class="period-quick" aria-label="빠른 기간 선택">
+      <% quick.forEach(q => { %><a href="<%= link({ from: q.from, to: q.to }) %>" class="chip <%= q.from === fromDay && q.to === toDay ? 'on' : '' %>"><%= q.label %></a><% }) %>
+    </nav>
+  </div>
+</form>
+
+<% if (report) { const t = report.totals, p = report.prevTotals; %>
+  <%# ① 한눈에: 매출 · 주문 수 · 객단가 · 취소·반품률 (지난 같은 기간과 비교) %>
+  <section class="kpis">
+    <% [
+         ['매출', won(t.sales), delta(t.sales, p.sales)],
+         ['주문 수', `${t.orders.toLocaleString('ko-KR')}건`, delta(t.orders, p.orders)],
+         ['객단가', won(t.aov), delta(t.aov, p.aov)],
+         ['취소·반품률', pct(t.cancelRate), delta(t.cancelRate, p.cancelRate, false)],
+       ].forEach(([label, value, d]) => { %>
+      <div class="kpi">
+        <span class="kpi-label"><%= label %></span>
+        <strong class="kpi-value"><%= value %></strong>
+        <span class="kpi-delta <%= d.cls %>"><%= d.text %> <span class="muted">지난 기간 대비</span></span>
+      </div>
+    <% }) %>
+  </section>
+  <p class="muted small stats-note">
+    비교 기간 <%= report.prev.fromDay %> ~ <%= report.prev.toDay %> · 취소 <%= t.canceled %>건, 반품 <%= t.returned %>건
+    <% if (t.missing) { %> · <strong>금액을 모르는 주문 <%= t.missing %>건</strong>은 매출에서 빠졌어요 (금액 받기 전에 들어온 주문)<% } %>
+  </p>
+
+  <%# ② 일별(또는 월별) 매출 막대 %>
+  <% const pts = report.series.points; const max = Math.max(1, ...pts.map(x => x.sales)); %>
+  <section class="card chart-card">
+    <h2><%= report.series.monthly ? '월별' : '일별' %> 매출</h2>
+    <div class="bars" role="img" aria-label="<%= report.series.monthly ? '월별' : '일별' %> 매출 막대 그래프 (아래 표로 보기)">
+      <div class="bars-grid"><span><%= short(max) %></span><span><%= short(max / 2) %></span><span>0</span></div>
+      <div class="bars-plot">
+        <% pts.forEach((x, i) => { const step = Math.ceil(pts.length / 7); const lastFar = (pts.length - 1) % step >= step / 2; %>
+          <div class="bar-slot" data-tip="<%= md(x.k) %> · <%= won(x.sales) %> · <%= x.orders %>건">
+            <span class="bar" style="height: <%= (x.sales / max * 100).toFixed(2) %>%"></span>
+            <span class="bar-x"><%= i % step === 0 || (i === pts.length - 1 && lastFar) ? md(x.k) : '' %></span>
+          </div>
+        <% }) %>
+      </div>
+    </div>
+    <details class="table-view">
+      <summary>표로 보기</summary>
+      <div class="table-wrap"><table class="table">
+        <tr><th><%= report.series.monthly ? '월' : '날짜' %></th><th>매출</th><th>주문 수</th></tr>
+        <% pts.forEach(x => { %><tr><td><%= x.k %></td><td><%= won(x.sales) %></td><td><%= x.orders %>건</td></tr><% }) %>
+      </table></div>
+    </details>
+  </section>
+
+  <div class="stats-two">
+    <%# ③ 채널별 매출 %>
+    <section class="card">
+      <h2>채널별 매출</h2>
+      <% const cmax = Math.max(1, ...report.channels.map(c => c.sales)); const csum = report.channels.reduce((s, c) => s + c.sales, 0) || 1; %>
+      <% if (!report.channels.length) { %><p class="muted">이 기간 주문이 없어요.</p><% } %>
+      <ul class="hbars">
+        <% report.channels.forEach(c => { const info = channelInfo(c.ch); %>
+          <li data-tip="<%= info.name %> · <%= won(c.sales) %> · <%= c.orders %>건">
+            <span class="hbar-label"><span class="ch ch-<%= info.cls %>"><%= info.mark %></span><%= info.name %></span>
+            <span class="hbar-track"><span class="hbar" style="width: <%= (c.sales / cmax * 100).toFixed(2) %>%"></span></span>
+            <span class="hbar-value"><%= short(c.sales) %> <span class="muted"><%= Math.round(c.sales / csum * 100) %>%</span></span>
+          </li>
+        <% }) %>
+      </ul>
+    </section>
+
+    <%# ④ 잘 팔리는 상품 TOP 10 %>
+    <section class="card">
+      <h2>잘 팔리는 상품 TOP 10</h2>
+      <% if (!report.products.length) { %><p class="muted">이 기간 주문이 없어요.</p><% } %>
+      <% const pmax = Math.max(1, ...report.products.map(x => x.sales)); %>
+      <ol class="top-list">
+        <% report.products.forEach(x => { %>
+          <li data-tip="<%= x.name %> · <%= won(x.sales) %> · <%= x.qty %>개">
+            <span class="top-name"><%= x.name %></span>
+            <span class="top-bar"><span style="width: <%= (x.sales / pmax * 100).toFixed(2) %>%"></span></span>
+            <span class="top-value"><%= short(x.sales) %> <span class="muted"><%= x.qty %>개</span></span>
+          </li>
+        <% }) %>
+      </ol>
+    </section>
+  </div>
+
+  <%# ⑤ 요일 × 시간대 주문 수 (색이 진할수록 많음) %>
+  <% const hm = report.heatmap; const hmax = Math.max(1, ...hm.flat()); const RAMP = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95']; %>
+  <section class="card">
+    <h2>요일·시간대별 주문 <span class="muted small">색이 진할수록 주문이 많아요</span></h2>
+    <div class="heat" role="img" aria-label="요일과 시간대별 주문 수">
+      <span></span><% for (let h = 0; h < 24; h++) { %><span class="heat-h"><%= h % 3 === 0 ? h : '' %></span><% } %>
+      <% [1, 2, 3, 4, 5, 6, 0].forEach(wd => { %>
+        <span class="heat-wd"><%= '일월화수목금토'[wd] %></span>
+        <% for (let h = 0; h < 24; h++) { const n = hm[wd][h]; const c = n ? RAMP[Math.min(RAMP.length - 1, Math.floor(n / hmax * RAMP.length))] : '#f2f4f6'; %>
+          <span class="heat-cell" style="background: <%= c %>" data-tip="<%= '일월화수목금토'[wd] %>요일 <%= h %>시 · <%= n %>건"></span>
+        <% } %>
+      <% }) %>
+    </div>
+    <p class="heat-legend muted small">적음 <% ['#f2f4f6', ...RAMP].forEach(c => { %><span style="background: <%= c %>"></span><% }) %> 많음 (가장 많은 칸 <%= hmax %>건)</p>
+  </section>
+<% } %>
+
+<% if (staff) { %>
+  <%- include('partials/stats-staff', { staff }) %>
+<% } %>
+
+<div class="tip" id="tip" hidden></div>
+<script src="/orders.js"></script>
+<script src="/stats.js"></script>
+<%- include('partials/footer') %>

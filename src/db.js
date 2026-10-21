@@ -73,6 +73,8 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'ship_due', 'TEXT');
   // 채널에서 발송지연 처리한 주문: 사유 코드 (예: CUSTOM_BUILD). 비어 있으면 발송지연 처리 안 함
   addColumn(db, 'orders', 'ship_delayed', 'TEXT');
+  // 상품주문 한 줄의 실제 결제 금액 (할인 뒤, 배송비 제외). 채널에서 받아 온다. 수기 주문은 amount(주문 전체 금액)를 쓴다
+  addColumn(db, 'orders', 'pay_amount', 'INTEGER');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.

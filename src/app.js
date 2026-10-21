@@ -15,6 +15,7 @@ const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
 const { inboxRoutes } = require('./routes/inbox');
 const { templateRoutes } = require('./routes/templates');
+const { statsRoutes } = require('./routes/stats');
 const { replyUpload } = require('./inbox/upload');
 const { createBrand } = require('./brand');
 const { ipAllowed } = require('./inbox/talktalk');
@@ -210,6 +211,7 @@ function createApp({
   });
 
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand));
+  app.use('/stats', requireAdmin, statsRoutes(db));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
   app.use(requireActive, calendarRoutes(db, notifier));
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier, brandName: () => brand.view().name }));

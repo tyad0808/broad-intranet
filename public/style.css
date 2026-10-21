@@ -920,3 +920,63 @@ code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak)
 .cust-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cust-when { flex: none; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .customer-card h3 { margin: 14px 0 4px; }
+
+/* ───────── 통계 ───────── */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0 0 8px; }
+.kpi { display: flex; flex-direction: column; gap: 2px; padding: 16px 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); box-shadow: var(--shadow); min-width: 0; }
+.kpi-label { font-size: 13.5px; font-weight: 600; color: var(--text-2); }
+.kpi-value { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi-delta { font-size: 12.5px; font-weight: 650; color: var(--text-2); }
+.kpi-delta.good { color: var(--ok); }
+.kpi-delta.bad { color: var(--error); }
+.kpi-delta .muted { font-size: 12px; font-weight: 500; }
+.stats-note { margin: 0 0 16px; }
+.chart-card h2, .stats-two h2 { margin-bottom: 16px; }
+.stats-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.stats-two .card + .card { margin-top: 0; }
+/* 막대 그래프: 막대는 24px 이하, 위쪽 끝만 둥글게, 막대 사이 2px 띄움 */
+.bars { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; height: 220px; }
+.bars-grid { display: flex; flex-direction: column; justify-content: space-between; padding-bottom: 20px; color: var(--muted); font-size: 11.5px; text-align: right; font-variant-numeric: tabular-nums; }
+.bars-plot { position: relative; display: flex; align-items: stretch; gap: 2px; padding-bottom: 20px; border-bottom: 1px solid var(--line);
+  background: linear-gradient(var(--line-2) 1px, transparent 1px) 0 0 / 100% calc((100% - 20px) / 2) no-repeat, linear-gradient(var(--line-2) 1px, transparent 1px) 0 calc((100% - 20px) / 2) / 100% 1px no-repeat; }
+.bar-slot { position: relative; flex: 1 1 0; min-width: 0; display: flex; justify-content: center; align-items: flex-end; cursor: default; }
+.bar-slot:hover { background: var(--line-2); border-radius: 4px 4px 0 0; }
+.bar { display: block; width: min(24px, 70%); min-height: 1px; border-radius: 4px 4px 0 0; background: #2a78d6; }
+.bar-x { position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.table-view { margin-top: 14px; }
+.table-view summary { cursor: pointer; color: var(--text-2); font-size: 13px; font-weight: 600; }
+.table-view .table { min-width: 0; margin-top: 8px; }
+/* 가로 막대 (채널) */
+.hbars, .top-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.hbars li { display: grid; grid-template-columns: 120px minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 14px; }
+.hbar-label { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; white-space: nowrap; overflow: hidden; }
+.hbar-track { height: 14px; }
+.hbar { display: block; height: 100%; min-width: 2px; border-radius: 0 4px 4px 0; background: #2a78d6; }
+.hbar-value, .top-value { font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: 13.5px; }
+/* 잘 팔리는 상품 */
+.top-list { counter-reset: top; }
+.top-list li { display: grid; grid-template-columns: 22px minmax(0, 1fr) 90px auto; align-items: center; gap: 10px; font-size: 14px; counter-increment: top; }
+.top-list li::before { content: counter(top); color: var(--muted); font-weight: 650; font-size: 13px; text-align: right; }
+.top-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.top-bar { height: 8px; }
+.top-bar span { display: block; height: 100%; min-width: 2px; border-radius: 0 4px 4px 0; background: #2a78d6; }
+/* 요일×시간대 */
+.heat { display: grid; grid-template-columns: 24px repeat(24, minmax(0, 1fr)); gap: 2px; align-items: center; }
+.heat-h { font-size: 11px; color: var(--muted); text-align: left; }
+.heat-wd { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.heat-cell { height: 22px; border-radius: 4px; }
+.heat-cell:hover { outline: 2px solid var(--text); outline-offset: -1px; }
+.heat-legend { display: flex; align-items: center; gap: 3px; margin: 12px 0 0; }
+.heat-legend span { width: 14px; height: 10px; border-radius: 3px; }
+/* 값 말풍선 */
+.tip { position: fixed; z-index: 200; padding: 6px 10px; border-radius: 8px; background: var(--text); color: #fff; font-size: 12.5px; font-weight: 600; pointer-events: none; white-space: nowrap; box-shadow: var(--shadow-pop); }
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-value { font-size: 20px; }
+  .stats-two { grid-template-columns: 1fr; }
+  .hbars li { grid-template-columns: 90px minmax(0, 1fr) auto; }
+  .top-list li { grid-template-columns: 18px minmax(0, 1fr) auto; }
+  .top-bar { display: none; }
+  .heat { grid-template-columns: 18px repeat(24, minmax(0, 1fr)); gap: 1px; }
+  .heat-cell { height: 16px; border-radius: 2px; }
+}

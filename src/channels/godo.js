@@ -40,6 +40,8 @@ class GodoApiError extends Error {
 }
 
 // 긴 번호(주문번호 등)가 숫자로 오면 끝자리가 틀어질 수 있어 글자로 읽는다
+const money = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Number(v)));
+
 function parseJson(text) {
   return JSON.parse(text.replace(/"(orderNo|itemNo|goodsNo|parentGoodsNo|inquiryNo)"\s*:\s*(\d+)/g, '"$1":"$2"'));
 }
@@ -183,6 +185,8 @@ function normalize(order, now = new Date()) {
       claim_status: map.claimStatus,
       // 자사몰이 쓰는 상태 이름 그대로 (예: '고객취소요청', '상품준비중')
       channel_status_label: item.statusName || order.statusName || null,
+      // 결제 금액: (상품가 + 옵션가 + 텍스트옵션가) × 수량 − 할인
+      pay_amount: money(item.amount) !== null ? money(item.amount) - (money(item.discount) || 0) : null,
     };
   });
 }
