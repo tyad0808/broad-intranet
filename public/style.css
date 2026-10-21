@@ -974,3 +974,7 @@ body.embed .container { padding-top: 56px; }
 /* 메일 삭제 버튼은 빨간색 (되돌릴 수 없어서) */
 .bulk-bar button.danger { background: var(--error); border-color: var(--error); color: #fff; }
 .bulk-bar button.danger:hover { background: #912018; }
+.hide-note { margin: -8px 0 12px; }
+.settings-form { display: grid; gap: 10px; max-width: 460px; }
+.settings-form label { display: grid; gap: 4px; }
+.settings-form button { justify-self: start; }

@@ -5,6 +5,7 @@ const express = require('express');
 const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
 const { IMAGE_HOSTS, PARTNER_CENTER_URL } = require('../inbox/talktalk');
+const { INQUIRY_TIME, hideCutoff, hideDays, monthRange, monthsOf } = require('../retention');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
 // 위쪽 큰 탭: 쇼핑몰 문의 / 메일 / 채팅 (섞여 있으면 헷갈려서 나눈다)
@@ -74,8 +75,10 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const src = String(req.query.src || '');
     const q = String(req.query.q || '').trim().slice(0, 50);
     const terms = searchTerms(q);
-    // 검색할 때는 처음에 '전체' 탭 (이미 답한 메일도 찾을 수 있게)
-    const defaultTab = terms.length ? 'all' : 'open';
+    // 월별 보기 (month=YYYY-MM): 그달 받은 문의를 답변한 것까지 모두
+    const month = monthRange(req.query.month) ? String(req.query.month) : '';
+    // 검색·월별 보기는 처음에 '전체' 탭 (이미 답한 메일도 찾을 수 있게)
+    const defaultTab = terms.length || month ? 'all' : 'open';
     const tab = TABS[req.query.tab] ? req.query.tab : defaultTab;
     // 출처를 골랐으면 그 출처의 탭, 아니면 고른 탭 (처음엔 쇼핑몰 문의)
     // 큰 탭 순서는 직원마다 (끌어다 놓아 바꿈). 맨 앞 탭이 처음 열린다
@@ -93,6 +96,10 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const search = searchWhere(terms);
     const base = [boxSql(box), ...search.sql];
     const params = [...search.params];
+    if (month) {
+      base.push(`${INQUIRY_TIME} >= ? AND ${INQUIRY_TIME} < ?`);
+      params.push(...monthRange(month));
+    }
     // 검색할 때: 다른 큰 탭에서 찾은 건수 (메일에서 찾았는데 쇼핑몰 문의에 있는 경우 알려주기)
     const otherHits = terms.length
       ? shown.filter(b => b !== box).map(b => ({
@@ -100,11 +107,14 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
         n: db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE ${[boxSql(b), ...search.sql].join(' AND ')}`).get(...search.params).n,
       })).filter(h => h.n)
       : [];
+    // 답변한 문의는 N일(기본 14일)이 지나면 '답변완료'·'전체' 에서 숨긴다 (검색·월별 보기로는 보임)
+    const hidingOld = !terms.length && !month;
+    const recent = `${INQUIRY_TIME} >= '${hideCutoff(db)}'`;
     const tabWhere = {
       open: ["q.status = 'open'"],
       mine: ["q.status = 'open'", 'q.assignee_id = ?'],
-      done: ["q.status IN ('answered', 'closed')"],
-      all: [],
+      done: ["q.status IN ('answered', 'closed')", ...(hidingOld ? [recent] : [])],
+      all: hidingOld ? [`(q.status = 'open' OR ${recent})`] : [],
     };
     const tabParams = { mine: [req.user.id] };
     const whereSql = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
@@ -148,6 +158,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       navSection: 'inbox',
       rows, tab, defaultTab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
       hl: text => highlightParts(text, terms), otherHits,
+      month, months: monthsOf(db, 'inquiries', INQUIRY_TIME, `${boxSql(box)}`), hidingOld: hidingOld && tab !== 'open' && tab !== 'mine', hideDays: hideDays(db),
       box, BOXES: Object.fromEntries(shown.map(b => [b, BOXES[b]])), boxCounts, chipLabel, boxOrder, defaultBox: boxOrder[0],
       staff: staff(),
       canCollect: Boolean(collector),

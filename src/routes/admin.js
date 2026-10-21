@@ -5,6 +5,7 @@ const { collectFlash } = require('./orders');
 const { transaction } = require('../db');
 const { CHANNELS } = require('../channels/labels');
 const { storageInfo, humanSize } = require('../storage');
+const retention = require('../retention');
 const { intervalMinutes, MIN_MINUTES, MAX_MINUTES } = require('../schedule');
 
 const STATUS_LABELS = {
@@ -353,10 +354,47 @@ function adminRoutes(db, sessionStore, collector, notifier) {
   // ───────── 저장 공간 ─────────
   router.get('/storage', (req, res) => {
     const counts = db.prepare(`
-      SELECT (SELECT COUNT(*) FROM orders) AS orders, (SELECT COUNT(*) FROM inquiries) AS inquiries,
+      SELECT (SELECT COUNT(*) FROM orders) AS orders, (SELECT COUNT(*) FROM inquiries WHERE deleted_at IS NULL) AS inquiries,
         (SELECT COALESCE(SUM(LENGTH(body)), 0) FROM inquiries) AS inquiry_bytes
     `).get();
-    res.render('admin/storage', { title: '저장 공간', tab: 'storage', info: storageInfo(), counts, humanSize });
+    res.render('admin/storage', {
+      title: '저장 공간', tab: 'storage', info: storageInfo(), counts, humanSize,
+      hideDays: retention.hideDays(db), keepOrders: retention.keepMonths(db, 'orders'), keepInquiries: retention.keepMonths(db, 'inquiries'),
+      HIDE_CHOICES: retention.HIDE_CHOICES, KEEP_CHOICES: retention.KEEP_CHOICES,
+      preview: retention.previewCleanup(db), log: retention.cleanupLog(db),
+    });
+  });
+
+  // 목록에서 숨기는 기간, 보관 기간 (정해진 값 중에서만)
+  router.post('/storage/settings', (req, res) => {
+    const hide = Number(req.body.hide_done_days);
+    const orders = Number(req.body.keep_orders_months);
+    const inquiries = Number(req.body.keep_inquiries_months);
+    if (!retention.HIDE_CHOICES.includes(hide) || !retention.KEEP_CHOICES.includes(orders) || !retention.KEEP_CHOICES.includes(inquiries)) {
+      flash(req, 'error', '목록에서 보여줄 기간과 보관 기간을 목록에서 골라 주세요.');
+      return res.redirect('/admin/storage');
+    }
+    putSetting('hide_done_days', hide);
+    putSetting('keep_orders_months', orders);
+    putSetting('keep_inquiries_months', inquiries);
+    flash(req, 'ok', '저장했습니다.');
+    res.redirect('/admin/storage');
+  });
+
+  // 보관 기간이 지난 끝난 주문·답변한 문의 지우기 (미리보기에서 본 숫자가 그사이 바뀌었으면 다시 확인받는다)
+  router.post('/storage/cleanup', (req, res) => {
+    const preview = retention.previewCleanup(db);
+    if (Number(req.body.orders) !== preview.orders || Number(req.body.inquiries) !== preview.inquiries) {
+      flash(req, 'error', '그사이 지울 건수가 바뀌었습니다. 숫자를 다시 확인하고 눌러 주세요.');
+      return res.redirect('/admin/storage');
+    }
+    if (!preview.orders && !preview.inquiries) {
+      flash(req, 'ok', '정리할 자료가 없습니다.');
+      return res.redirect('/admin/storage');
+    }
+    const out = retention.runCleanup(db, { userId: req.user.id, userName: req.user.name });
+    flash(req, 'ok', `정리했습니다: 주문 ${out.orders.toLocaleString()}건, 문의 ${out.inquiries.toLocaleString()}건.`);
+    res.redirect('/admin/storage');
   });
 
   router.get('/collect', (req, res) => {

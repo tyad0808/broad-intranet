@@ -9,6 +9,7 @@ const { ENDED_SQL } = require('../collector');
 const { buildMonth, COLORS } = require('./calendar');
 const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
+const { ORDER_TIME, hideCutoff, hideDays, monthRange, monthsOf } = require('../retention');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
 
@@ -91,7 +92,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
     const st = SHIP_STATES[req.query.st] ? req.query.st : '';
     // 확인 필요(alert)를 누르면 탭과 상관없이 해당 주문을 모두 보여준다
     const alert = ALERTS[req.query.alert] ? req.query.alert : '';
-    const view = st || alert ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
+    // 월별 보기 (month=YYYY-MM): 그달 주문을 끝난 것까지 모두
+    const month = monthRange(req.query.month) ? String(req.query.month) : '';
+    const view = st || alert || month ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
     const stageFilter = Number(req.query.stage) || null;
     // 디자인 단계 거르기 (ds). 비어 있는 주문은 첫 번째 디자인 단계로 본다
     const designFilter = Number(req.query.ds) || null;
@@ -130,6 +133,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
       where.push(SEARCH_SQL);
       params.push(...Array(SEARCH_PARAMS).fill(`%${q}%`));
     }
+    if (month) {
+      const [from, to] = monthRange(month);
+      where.push(`${ORDER_TIME} >= ? AND ${ORDER_TIME} < ?`);
+      params.push(from, to);
+    }
     // 출처 칩 건수는 출처 필터만 빼고 센다
     const whereNoSrc = [...where];
     const paramsNoSrc = [...params];
@@ -153,6 +161,12 @@ function orderRoutes(db, notifier, actions, collector = null) {
     if (alert === 'late') having.push(lateHaving);
     if (alert === 'today') having.push(TODAY_HAVING);
     if (alert === 'shiplate') having.push(shipLateHaving());
+    // 끝난 주문은 N일(기본 14일)이 지나면 '전체'·'배송완료' 에서 숨긴다 (검색·월별 보기·확인 필요·달력 날짜로는 보임)
+    const cutoff = hideCutoff(db);
+    const doneGroup = `(${GROUP_ENDED} = 1 OR MIN(COALESCE(o.stage_id = ${Number(last)}, 0)) = 1)`;
+    const oldDone = `(${doneGroup} AND MAX(${ORDER_TIME}) < '${cutoff}')`;
+    const hidingOld = view === 'all' && !alert && !q && !due && !month;
+    if (hidingOld) having.push(`NOT ${oldDone}`);
     const havingSql = having.length ? 'HAVING ' + having.join(' AND ') : '';
 
     // 오늘출발·발송기한 모아보기는 발송기한이 이른 것부터
@@ -251,6 +265,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
           MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
           MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned,
           ${GROUP_SHIP_STATE} AS ship_state,
+          ${oldDone} AS old,
           o.channel AS ch
         FROM orders o ${countWhere}
         GROUP BY o.channel, o.channel_order_id
@@ -259,11 +274,11 @@ function orderRoutes(db, notifier, actions, collector = null) {
         COALESCE(SUM(open), 0) AS active,
         COALESCE(SUM(open AND mine), 0) AS mine,
         COALESCE(SUM(open AND unassigned), 0) AS unassigned,
-        COUNT(*) AS "all",
+        COALESCE(SUM(NOT old), 0) AS "all",
         COALESCE(SUM(ship_state = 'new' AND (? OR ch != 'manual')), 0) AS st_new,
         COALESCE(SUM(ship_state = 'ready' AND (? OR ch != 'manual')), 0) AS st_ready,
         COALESCE(SUM(ship_state = 'shipping'), 0) AS st_shipping,
-        COALESCE(SUM(ship_state = 'delivered'), 0) AS st_delivered
+        COALESCE(SUM(ship_state = 'delivered' AND NOT old), 0) AS st_delivered
       FROM grp
     `).get(last, req.user.id, ...(channel ? [channel] : []), channel ? 1 : 0, channel ? 1 : 0);
 
@@ -274,7 +289,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
         COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 0), 0) AS new,
         COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 1), 0) AS ready,
         COALESCE(SUM(o.channel_status = 'DELIVERING'), 0) AS shipping,
-        COALESCE(SUM(o.channel_status = 'DELIVERED' AND o.channel != 'manual'), 0) AS delivered
+        COALESCE(SUM(o.channel_status = 'DELIVERED' AND o.channel != 'manual' AND ${ORDER_TIME} >= '${cutoff}'), 0) AS delivered
       FROM orders o ${channel ? countWhere : "WHERE o.channel != 'manual'"}
     `).get(...(channel ? [channel] : []));
 
@@ -324,6 +339,10 @@ function orderRoutes(db, notifier, actions, collector = null) {
       channels: channelsInUse(req.user),
       sort,
       q,
+      month,
+      months: monthsOf(db, 'orders', ORDER_TIME),
+      hidingOld,
+      hideDays: hideDays(db),
       stages: stages(),
       designStages: designStages(),
       canPickStage: canPickStage(req.user),
