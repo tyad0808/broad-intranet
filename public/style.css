@@ -910,3 +910,13 @@ select[class*="staff-c"] { font-weight: 650; }
 .template-row select { flex: 1; margin: 0; height: 38px; padding-top: 0; padding-bottom: 0; font-size: 14px; color: var(--text-2); }
 .template-preview { margin-top: 6px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); color: var(--text-2); font-size: 13.5px; white-space: pre-wrap; max-height: 120px; overflow: auto; }
 code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak); color: var(--primary-dark); font-family: inherit; font-size: 12.5px; font-weight: 600; }
+
+/* 고객 이력 */
+.customer-card h2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.repeat-badge { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; border-radius: 12px; background: var(--ok-bg); color: var(--ok); font-size: 12.5px; font-weight: 650; }
+.cust-list { list-style: none; margin: 0 0 6px; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); }
+.cust-list a { display: flex; align-items: center; gap: 8px; padding: 8px 6px; border-radius: 8px; color: var(--text); font-size: 14px; text-decoration: none; }
+.cust-list a:hover { background: var(--line-2); text-decoration: none; }
+.cust-what { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cust-when { flex: none; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.customer-card h3 { margin: 14px 0 4px; }

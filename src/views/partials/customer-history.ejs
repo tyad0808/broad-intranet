@@ -1,0 +1,39 @@
+<%# 고객 이력: orders(확실) · nameOrders(이름만 같음) · inquiries · nameInquiries. 팝업·오른쪽 칸 안에서도 누르면 전체 화면으로 %>
+<%
+  const orderRow = g => {
+    const c = channelInfo(g.channel);
+    return { href: `/orders/${g.id}`, c, text: `${g.product_name}${g.items > 1 ? ` 외 ${g.items - 1}` : ''}`,
+      when: g.paid_at ? kst(g.paid_at).slice(0, 10) : '-', state: g.canceled ? '취소' : g.ended ? '끝남' : '진행 중' };
+  };
+  const STATE = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
+%>
+<% const block = (title, list, weak) => { if (!list.length) return; %>
+  <h3><%= title %><% if (weak) { %> <span class="muted small">(이름만 같아요 · 다른 분일 수 있어요)</span><% } %></h3>
+  <ul class="cust-list">
+    <% list.forEach(g => { const r = orderRow(g); %>
+      <li><a href="<%= r.href %>" target="_top"><span class="ch ch-<%= r.c.cls %>"><%= r.c.mark %></span><span class="cust-what"><%= r.text %></span><span class="cust-when"><%= r.when %></span><span class="pill light"><%= r.state %></span></a></li>
+    <% }) %>
+  </ul>
+<% } %>
+<% const iblock = (title, list, weak) => { if (!list.length) return; %>
+  <h3><%= title %><% if (weak) { %> <span class="muted small">(이름만 같아요)</span><% } %></h3>
+  <ul class="cust-list">
+    <% list.forEach(q => { %>
+      <li><a href="/inbox/<%= q.id %>" target="_top"><span class="src-tag src-<%= q.source %>"><%= /mail/.test(q.source) ? '메일' : '문의' %></span><span class="cust-what"><%= q.subject || '(제목 없음)' %></span><span class="cust-when"><%= kst(q.received_at).slice(0, 10) %></span><span class="pill <%= q.status === 'open' ? 'wait' : 'light' %>"><%= STATE[q.status] %></span></a></li>
+    <% }) %>
+  </ul>
+<% } %>
+<section class="card customer-card">
+  <h2>이 고객의 이력
+    <% if (locals.cust.total > 1) { %><span class="repeat-badge">재주문 고객 · 이번이 <%= cust.nth %>번째 주문</span><% } %>
+  </h2>
+  <% const empty = !(cust.orders || []).length && !(cust.nameOrders || []).length && !(cust.inquiries || []).length && !(cust.nameInquiries || []).length; %>
+  <% if (empty) { %>
+    <p class="muted small">다른 주문이나 문의가 없어요. <%= locals.firstNote || '처음 주문한 고객이에요.' %></p>
+  <% } %>
+  <% block('다른 주문', cust.orders || [], false); %>
+  <% if (cust.moreOrders) { %><p class="muted small">그 밖에 <%= cust.moreOrders %>건 더 있어요.</p><% } %>
+  <% iblock('문의·메일', cust.inquiries || [], false); %>
+  <% block('이름이 같은 주문', cust.nameOrders || [], true); %>
+  <% iblock('이름이 같은 문의·메일', cust.nameInquiries || [], true); %>
+</section>

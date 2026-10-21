@@ -296,6 +296,7 @@
     </dl>
     <% if (order.channel !== 'manual') { %><p class="muted">주문 정보와 배송지는 <%= channelInfo(order.channel).name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p><% } %>
   </section>
+  <%- include('../partials/customer-history', { cust: customer }) %>
   </div>
 </div>
 <script src="/confirm.js"></script>

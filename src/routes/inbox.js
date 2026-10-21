@@ -6,6 +6,7 @@ const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
 const { IMAGE_HOSTS, PARTNER_CENTER_URL } = require('../inbox/talktalk');
 const { templatesFor } = require('./templates');
+const { ordersForInquiry } = require('../customer');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
@@ -278,9 +279,11 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       주문번호: inquiry.order_no || '',
       회사명: brandName(),
     });
+    const custOrders = ordersForInquiry(db, inquiry);
     res.render('inbox/detail', {
       title: inquiry.subject || '문의',
       templates,
+      customer: { orders: custOrders.orders, nameOrders: custOrders.nameOrders, inquiries: [], nameInquiries: [], total: 1 },
       navSection: isMailSource(inquiry.source) ? 'mail' : 'inbox',
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),

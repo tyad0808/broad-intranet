@@ -7,6 +7,7 @@ const express = require('express');
 const { CHANNELS } = require('../channels/labels');
 const { ENDED_SQL } = require('../collector');
 const { buildWeek } = require('./calendar');
+const { historyForOrder } = require('../customer');
 const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
@@ -573,6 +574,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       claimItems: items.filter(i => i.claim_status),
       shipped: items.find(i => i.shipped_at) || null,
       history: history(order),
+      customer: historyForOrder(db, order),
       SHIP_METHODS,
       COURIERS,
       DEFAULT_METHOD,

@@ -58,6 +58,7 @@
   </section>
 
   <div class="detail-side">
+    <% if (!chat) { %><%- include('../partials/customer-history', { cust: customer, firstNote: '이 문의와 이어진 주문을 찾지 못했어요.' }) %><% } %>
     <section class="card process-card">
       <h2>답변</h2>
       <% if (chat) { %>
