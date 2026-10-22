@@ -161,7 +161,7 @@
   <form method="post" action="/orders/logen/slips" class="logen-bar" data-once>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="back" value="<%= currentUrl %>">
-    <span>로젠에 등록하고 송장번호를 기다리는 주문 <strong><%= logenWaiting %>건</strong><span class="muted small"> · iLOGEN 에서 출력한 뒤 눌러 주세요</span></span>
+    <span>로젠에 등록하고 송장번호를 기다리는 주문 <strong><%= logenWaiting %>건</strong><span class="muted small"> · iLOGEN 에서 출력하면 5분 안에 알아서 들어와요</span></span>
     <button type="submit" class="btn-sm">송장번호 가져오기</button>
   </form>
 <% } %>

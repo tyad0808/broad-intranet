@@ -16,7 +16,8 @@
       <dt>실제 등록</dt>
       <dd><% if (logen.env !== 'prod') { %><span class="muted">테스트 서버라 상관없음</span><% } else if (logen.writeOn) { %><strong>켜짐</strong> · 등록하면 iLOGEN 에 바로 들어가요<% } else { %><strong class="text-bad">꺼짐</strong> · <code>.env</code> 의 <code>LOGEN_WRITE=on</code> 이어야 등록돼요<% } %></dd>
       <dt>송장번호 대기</dt>
-      <dd><%= logen.waiting %>건 <span class="muted small">(등록했지만 아직 송장번호를 못 받은 주문)</span></dd>
+      <dd><%= logen.waiting %>건 <span class="muted small">(등록했지만 아직 송장번호를 못 받은 주문 · 5분마다 알아서 확인해요)</span></dd>
+      <% if (logen.lastTick) { %><dt>마지막 확인</dt><dd class="muted"><%= kst(logen.lastTick.at) %> · 송장번호 <%= logen.lastTick.found %>건 받음</dd><% } %>
     </dl>
     <p class="muted small">로젠 요청대로 한 번에 10건씩, 차례대로, 호출 사이에 3초씩 쉬면서 보내요. 그래서 많이 고르면 몇 초 걸릴 수 있어요.</p>
   </section>
@@ -65,13 +66,30 @@
   </section>
 
   <section class="card">
+    <h2>③ 자동 발송처리</h2>
+    <p>지금: <strong class="<%= logen.autoDispatch ? '' : 'muted' %>"><%= logen.autoDispatch ? '켜짐' : '꺼짐' %></strong></p>
+    <p class="muted small">
+      <% if (logen.autoDispatch) { %>송장번호가 들어오면 스마트스토어·쿠팡·자사몰에 바로 발송처리를 보내요. 고객에게 발송 알림이 가요. (수기 주문·발주확인 전 주문은 직원이 직접)
+      <% } else { %>송장번호만 주문에 채워 두고, 발송처리는 담당자가 주문을 체크해서 눌러요. 시스템이 익숙해지면 켜 주세요.<% } %>
+    </p>
+    <form method="post" action="/admin/logen/auto-dispatch" data-once
+          data-confirm="<%= logen.autoDispatch ? '자동 발송처리를 끌까요?' : '자동 발송처리를 켤까요?&#10;송장번호가 들어오면 사람 확인 없이 고객에게 발송 알림이 갑니다.' %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="on" value="<%= logen.autoDispatch ? '0' : '1' %>">
+      <button type="submit" class="btn-sm"><%= logen.autoDispatch ? '끄기' : '켜기' %></button>
+    </form>
+  </section>
+
+  <section class="card">
     <h2>쓰는 방법</h2>
     <ol class="plain-steps">
       <li><strong>주문 목록</strong>에서 주문을 체크하고 아래 막대의 <strong>[로젠 등록]</strong>을 눌러요. 주문번호가 같은 상품은 한 송장(한 박스)으로 묶여요.</li>
       <li><strong>iLOGEN</strong>(logis.ilogen.com) › '주문등록출력(복수건)' › 엑셀타입 '전체' 로 조회해서 출력해요. 출력해야 송장번호가 생겨요.</li>
-      <li>주문 목록 위 <strong>[송장번호 가져오기]</strong>를 누르면 발송처리 칸에 송장번호가 미리 채워져요. 확인하고 발송처리를 보내면 끝이에요.</li>
+      <li>5분 안에 송장번호가 <strong>알아서</strong> 주문에 들어가요. 급하면 주문 목록 위 [송장번호 가져오기]를 눌러도 돼요.</li>
+      <li>담당자가 주문을 체크하고 <strong>[송장 입력·발송처리]</strong>를 누르면 송장번호가 미리 채워져 있어요. 확인하고 보내면 끝이에요. (③ 자동 발송처리를 켜면 이 단계도 자동)</li>
     </ol>
     <% if (!logen.ready) { %><p class="warn-box">아직 정하지 않은 것: <%= logen.missing.join(', ') %></p><% } %>
   </section>
 <% } %>
+<script src="/confirm.js"></script>
 <%- include('../partials/footer') %>

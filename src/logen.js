@@ -221,6 +221,7 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
     rows = rows.slice(0, 50); // 한 번에 최대 50건 (10건씩 5번)
     let found = 0;
     let deleted = 0;
+    const foundRows = [];
     const setSlip = db.prepare("UPDATE logen_shipments SET slip_no = ?, slip_at = datetime('now') WHERE id = ?");
     const setDeleted = db.prepare("UPDATE logen_shipments SET status = 'deleted' WHERE id = ?");
     for (const part of chunk(rows, BATCH)) {
@@ -233,14 +234,39 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
         if (live.length) {
           setSlip.run(digits(live[0].slipNo), r.id);
           found += 1;
+          foundRows.push({ channel: r.channel, orderId: r.channel_order_id, slip: digits(live[0].slipNo) });
         } else if (slips.length && slips.every(x => x.delYn === 'Y')) {
           setDeleted.run(r.id);
           deleted += 1;
         }
       }
     }
-    return { checked: rows.length, found, deleted, waiting: rows.length - found - deleted };
+    return { checked: rows.length, found, deleted, waiting: rows.length - found - deleted, foundRows };
   }
+
+  // 송장번호 받으면 자동 발송처리 (관리자 › 로젠 설정, 기본 꺼짐)
+  const autoDispatch = () => getSetting(db, 'logen_auto_dispatch') === '1';
+  const setAutoDispatch = on => setSetting(db, 'logen_auto_dispatch', on ? '1' : '0');
+
+  // 5분마다: 송장번호를 기다리는 주문이 있을 때만 로젠에 묻는다
+  //   onFound(row): 받은 송장마다 (화면 새로고침용), dispatch(row): 자동 발송처리가 켜져 있을 때만
+  let ticking = false;
+  async function tick({ onFound = () => {}, dispatch = null } = {}) {
+    if (!client.hasKey || ticking || !waiting().length) return null;
+    ticking = true;
+    try {
+      const r = await fetchSlips();
+      for (const row of r.foundRows) {
+        onFound(row);
+        if (dispatch && autoDispatch()) await dispatch(row);
+      }
+      setSetting(db, 'logen_last_tick', JSON.stringify({ at: now().toISOString(), found: r.found, waiting: r.waiting }));
+      return r;
+    } finally {
+      ticking = false;
+    }
+  }
+  const lastTick = () => readJson(db, 'logen_last_tick', null);
 
   // 배송 조회 (송장번호 하나). 5분 안에 다시 누르면 저장해 둔 결과
   async function track(slipNo, { channel, orderId } = {}) {
@@ -274,7 +300,7 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
   }
 
   return {
-    env, hasKey: client.hasKey !== false, call, settings, loadContract, saveSettings, shipmentOf, waiting, canRegister, register, fetchSlips, track, lastTrack,
+    env, hasKey: client.hasKey !== false, call, settings, loadContract, saveSettings, shipmentOf, waiting, canRegister, register, fetchSlips, track, lastTrack, tick, lastTick, autoDispatch, setAutoDispatch,
     writeOn: env !== 'prod' || client.allowWrite === true,
   };
 }

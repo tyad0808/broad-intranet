@@ -121,7 +121,7 @@ test('송장번호 가져오기: 출력한 것만 채우고, iLOGEN 에서 지�
   client.slips.O1 = [{ slipNo: '38010101111', delYn: 'N' }];
   client.slips.O2 = [{ slipNo: '38010102222', delYn: 'Y' }];
   const r = await logen.fetchSlips();
-  assert.deepStrictEqual(r, { checked: 3, found: 1, deleted: 1, waiting: 1 });
+  assert.deepStrictEqual(r, { checked: 3, found: 1, deleted: 1, waiting: 1, foundRows: [{ channel: 'smartstore', orderId: 'O1', slip: '38010101111' }] });
   assert.strictEqual(logen.shipmentOf('smartstore', 'O1').slip_no, '38010101111');
   assert.strictEqual(logen.waiting().length, 1);
   const re = await logen.register(groupsFor(db, [ids[1]]), null);
@@ -212,4 +212,58 @@ test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 
   const tracked = (await kim.request(`/orders/${ids[0]}`)).text;
   assert.match(tracked, /배송 조회: 터미널입고/);
   assert.match(tracked, /class="now"><strong>터미널입고/);
+});
+
+test('5분마다: 기다리는 주문이 있을 때만 묻고, 자동 발송처리는 켰을 때만 (기본 꺼짐)', async () => {
+  const db = openDb(':memory:');
+  const client = fakeClient();
+  const logen = await ready(db, client, { gapMs: 0 });
+  const dispatched = [];
+  const found = [];
+  const opts = { onFound: r => found.push(r.slip), dispatch: async r => dispatched.push(r) };
+  client.calls.length = 0;
+  assert.strictEqual(await logen.tick(opts), null, '기다리는 주문이 없으면 로젠에 묻지 않음');
+  assert.strictEqual(client.calls.length, 0);
+
+  await logen.register(groupsFor(db, seedOrders(db, 2)), null);
+  client.slips.O1 = [{ slipNo: '38010101111', delYn: 'N' }];
+  const r = await logen.tick(opts);
+  assert.strictEqual(r.found, 1);
+  assert.deepStrictEqual(found, ['38010101111']);
+  assert.strictEqual(dispatched.length, 0, '기본은 자동 발송처리 꺼짐');
+  assert.strictEqual(logen.lastTick().found, 1);
+
+  logen.setAutoDispatch(true);
+  client.slips.O2 = [{ slipNo: '38010102222', delYn: 'N' }];
+  await logen.tick(opts);
+  assert.deepStrictEqual(dispatched, [{ channel: 'smartstore', orderId: 'O2', slip: '38010102222' }]);
+  client.calls.length = 0;
+  assert.strictEqual(await logen.tick(opts), null, '다 받았으면 더 묻지 않음');
+  assert.strictEqual(client.calls.length, 0);
+});
+
+test('자동 발송처리: 켜면 송장번호가 들어온 주문을 로젠택배·그 송장번호로 발송처리 (연습 모드면 기록만)', async t => {
+  const db = openDb(':memory:');
+  const client = fakeClient();
+  const logen = await ready(db, client, { gapMs: 0 });
+  const ctx = await startServer({ db, logen });
+  t.after(() => ctx.server.close());
+  addUser(db, { email: 'boss@broad.test', role: 'admin' });
+  const boss = await loginAs(ctx.baseUrl, 'boss@broad.test');
+  assert.match((await boss.request('/admin/logen')).text, /③ 자동 발송처리[\s\S]*꺼짐/);
+  await boss.submit('/admin/logen', '/admin/logen/auto-dispatch', { on: '1' });
+  assert.match((await boss.request('/admin/logen')).text, /자동 발송처리를 켰습니다/);
+  assert.ok(logen.autoDispatch());
+
+  const ids = seedOrders(db, 1);
+  await logen.register(groupsFor(db, ids), null);
+  client.slips.O1 = [{ slipNo: '38010101111', delYn: 'N' }];
+  // server.js 가 5분마다 부르는 것과 같은 함수
+  const { createApp } = require('../src/app');
+  const app = createApp({ db, logen, secret: 'x' });
+  await app.locals.logenTick();
+  const a = db.prepare("SELECT * FROM order_actions WHERE action = 'dispatch'").get();
+  assert.ok(a, '발송처리 기록');
+  assert.deepStrictEqual(JSON.parse(a.detail), { method: 'DELIVERY', company: 'KGB', tracking: '38010101111' });
+  assert.strictEqual(a.user_id, null);
 });

@@ -116,6 +116,8 @@ const inbox = {
 const app = createApp({ db, collector, notifier, actions, inbox, weeklyAccount: mailAccounts[0] || null });
 
 // 주간 매출 보고: 5분마다 '금요일 18시가 지났고 이번 주 아직 안 보냈는지' 확인
+// 로젠: 송장번호를 기다리는 주문이 있으면 5분마다 가져온다 (10건씩·차례대로·쉬면서)
+setInterval(() => app.locals.logenTick().catch(e => console.error(`[로젠] 송장번호 가져오기 실패: ${e.message}`)), 5 * 60 * 1000).unref();
 setInterval(() => app.locals.weekly.tick().catch(e => console.error(`[주간 보고] ${e.message}`)), 5 * 60 * 1000).unref();
 
 // 미지정 초과 알림: 1분마다 확인 (해소될 때까지 정해진 간격으로 다시 알림)

@@ -22,7 +22,7 @@ const { createWeeklyReporter } = require('./weeklyReport');
 const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier } = require('./notifier');
-const { createOrderActions } = require('./actions');
+const { createOrderActions, canDispatch } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
 
@@ -133,6 +133,17 @@ function createApp({
   app.locals.weekly = weekly;
   const logenSvc = logen || createLogen({ db });
   app.locals.logen = logenSvc;
+  // 5분마다 (server.js): 출력한 송장번호를 가져와 주문에 넣고, 자동 발송처리가 켜져 있으면 발송처리까지
+  const groupOf = (channel, orderId) => db.prepare('SELECT * FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY id').all(channel, orderId);
+  app.locals.logenTick = () => logenSvc.tick({
+    onFound: row => notifier.ordersChanged(groupOf(row.channel, row.orderId).map(i => i.id), null),
+    dispatch: async row => {
+      const target = groupOf(row.channel, row.orderId).find(canDispatch);
+      if (!target) return; // 수기 주문·발주확인 전 주문은 직원이 직접
+      const r = await actions.dispatch(target.id, null, { method: 'DELIVERY', company: 'KGB', tracking: row.slip });
+      if (r.itemIds && r.itemIds.length) notifier.ordersChanged(r.itemIds, null);
+    },
+  });
   app.get('/brand/logo', (req, res) => {
     const logo = brand.logo();
     if (!logo) return res.status(404).end();

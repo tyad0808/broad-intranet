@@ -417,7 +417,8 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
   router.get('/logen', (req, res) => {
     res.render('admin/logen', {
       title: '로젠 설정', tab: 'logen',
-      logen: logen ? { env: logen.env, hasKey: logen.hasKey, writeOn: logen.writeOn, ...logen.settings(), waiting: logen.hasKey ? logen.waiting().length : 0 } : null,
+      logen: logen ? { env: logen.env, hasKey: logen.hasKey, writeOn: logen.writeOn, ...logen.settings(), waiting: logen.hasKey ? logen.waiting().length : 0,
+        autoDispatch: logen.autoDispatch(), lastTick: logen.lastTick() } : null,
     });
   });
 
@@ -438,6 +439,14 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
     } catch (e) {
       next(e);
     }
+  });
+
+  router.post('/logen/auto-dispatch', (req, res) => {
+    if (!logen) return res.redirect('/admin/logen');
+    const on = req.body.on === '1';
+    logen.setAutoDispatch(on);
+    flash(req, 'ok', on ? '자동 발송처리를 켰습니다. 송장번호가 들어오면 바로 고객에게 발송 알림이 갑니다.' : '자동 발송처리를 껐습니다. 송장번호만 채워 두고, 발송처리는 직원이 누릅니다.');
+    res.redirect('/admin/logen');
   });
 
   router.post('/logen/settings', (req, res) => {
