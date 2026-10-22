@@ -12,6 +12,8 @@ function quickRanges(now = new Date()) {
   const [y, m] = today.split('-').map(Number);
   const first = (yy, mm) => new Date(Date.UTC(yy, mm - 1, 1)).toISOString().slice(0, 10);
   return [
+    { label: '오늘', from: today, to: today },
+    { label: '어제', from: addDays(today, -1), to: addDays(today, -1) },
     { label: '이번 달', from: first(y, m), to: today },
     { label: '지난달', from: first(y, m - 1), to: new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10) },
     { label: '최근 7일', from: addDays(today, -6), to: today },
@@ -25,9 +27,10 @@ function statsRoutes(db, { staffReport = null } = {}) {
   const router = express.Router();
   router.get('/', (req, res) => {
     const quick = quickRanges();
+    const thisMonth = quick.find(q => q.label === '이번 달');
     const picked = periodRange(req.query.from, req.query.to);
     // 기본: 이번 달. 한쪽만 고르면 그날부터 오늘까지 / 처음부터 그날까지는 너무 길어서 그달 1일부터
-    const fromDay = picked && picked.from ? picked.from : picked && picked.to ? `${picked.to.slice(0, 8)}01` : quick[0].from;
+    const fromDay = picked && picked.from ? picked.from : picked && picked.to ? `${picked.to.slice(0, 8)}01` : thisMonth.from;
     const toDay = picked && picked.to ? picked.to : kstDay();
     const tab = req.query.tab === 'staff' && staffReport ? 'staff' : 'sales';
     res.render('stats', {

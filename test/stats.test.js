@@ -100,3 +100,11 @@ test('직원별 처리 현황: 담당·디자인 단계 바뀐 기록이 남고,
   assert.match(page, /김디자/);
   assert.match(page, /네이버메일/);
 });
+
+test('빠른 기간: 오늘·어제가 맨 앞, 기본은 이번 달', () => {
+  const { quickRanges } = require('../src/routes/stats');
+  const q = quickRanges(new Date('2026-10-22T03:00:00Z')); // 한국 10/22 낮
+  assert.deepStrictEqual(q.slice(0, 3).map(x => [x.label, x.from, x.to]), [
+    ['오늘', '2026-10-22', '2026-10-22'], ['어제', '2026-10-21', '2026-10-21'], ['이번 달', '2026-10-01', '2026-10-22'],
+  ]);
+});
