@@ -65,8 +65,10 @@
           <% if (locked) { %><%- action(`/admin/users/${u.id}/unlock`, '잠금 풀기') %><% } %>
           <% if (!isMe && u.status === 'active') { %>
             <%- action(`/admin/users/${u.id}/suspend`, '정지', 'danger', `${u.name} 님의 계정을 정지할까요? 즉시 로그아웃됩니다.`) %>
-          <% } else if (!isMe && (u.status === 'suspended' || u.status === 'rejected')) { %>
-            <%- action(`/admin/users/${u.id}/reactivate`, u.status === 'rejected' ? '승인' : '정지 해제', 'primary') %>
+          <% } else if (!isMe && u.status === 'rejected') { %>
+            <%- action(`/admin/users/${u.id}/delete`, '삭제', 'danger', `${u.name} 계정을 지울까요?`) %>
+          <% } else if (!isMe && u.status === 'suspended') { %>
+            <%- action(`/admin/users/${u.id}/reactivate`, '정지 해제', 'primary') %>
           <% } %>
         </div>
       </li>

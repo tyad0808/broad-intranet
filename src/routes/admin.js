@@ -88,12 +88,36 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       flash(req, 'error', '승인 대기 중인 신청만 거절할 수 있습니다.');
       return res.redirect('/admin/users');
     }
-    db.prepare("UPDATE users SET status = 'rejected' WHERE id = ?").run(user.id);
-    sessionStore.destroyUserSessions(user.id);
-    notifier.hub.disconnectUser(user.id);
-    flash(req, 'ok', `${user.name} 님의 가입 신청을 거절했습니다.`);
+    const deleted = removeUser(user);
+    flash(req, 'ok', deleted ? `${user.name} 님의 가입 신청을 거절하고 계정을 지웠습니다.` : `${user.name} 님의 가입 신청을 거절했습니다.`);
     res.redirect('/admin/users');
   });
+
+  // 예전에 거절해 둔 계정 지우기
+  router.post('/users/:id/delete', (req, res) => {
+    const user = targetUser(req, res);
+    if (!user) return;
+    if (user.status !== 'rejected') {
+      flash(req, 'error', '거절한 계정만 지울 수 있습니다.');
+      return res.redirect('/admin/users');
+    }
+    const ok = removeUser(user);
+    flash(req, ok ? 'ok' : 'error', ok ? `${user.name} 계정을 지웠습니다.` : '이 계정은 남은 기록이 있어 지우지 못했습니다.');
+    res.redirect('/admin/users');
+  });
+
+  // 거절한 계정은 지운다 (같은 메일로 다시 신청할 수 있다). 혹시 남은 기록이 있어 못 지우면 '거절' 로만 둔다
+  function removeUser(user) {
+    sessionStore.destroyUserSessions(user.id);
+    notifier.hub.disconnectUser(user.id);
+    try {
+      db.prepare('DELETE FROM users WHERE id = ?').run(user.id);
+      return true;
+    } catch {
+      db.prepare("UPDATE users SET status = 'rejected' WHERE id = ?").run(user.id);
+      return false;
+    }
+  }
 
   router.post('/users/:id/suspend', (req, res) => {
     const user = targetUser(req, res);

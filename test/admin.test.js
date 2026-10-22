@@ -41,13 +41,24 @@ test('가입 신청이 관리자 화면과 배지에 보이고, 승인하면 직
   assert.strictEqual((await waiting.request('/')).status, 200);
 });
 
-test('거절하면 로그인할 수 없다', async t => {
-  const { db, baseUrl, admin, statusOf } = await setup(t);
+test('거절하면 계정이 지워져 로그인할 수 없고, 예전에 거절해 둔 계정은 [삭제]로 지운다', async t => {
+  const { db, baseUrl, admin } = await setup(t);
   const id = addUser(db, { email: 'no@broad.test', status: 'pending' });
+  const waiting = await loginAs(baseUrl, 'no@broad.test');
   await press(admin, `/admin/users/${id}/reject`);
-  assert.strictEqual(statusOf(id), 'rejected');
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM users WHERE id = ?').get(id).n, 0, '계정이 지워짐');
+  assert.strictEqual((await waiting.request('/')).location, '/login', '로그인해 있던 것도 끊김');
   const b = await loginAs(baseUrl, 'no@broad.test');
   assert.strictEqual((await b.request('/')).location, '/login');
+
+  const old = addUser(db, { email: 'spam@x.info', status: 'rejected', name: '스팸' });
+  const active = addUser(db, { email: 'kim@broad.test' });
+  const page = (await admin.request('/admin/users')).text;
+  assert.match(page, new RegExp(`/admin/users/${old}/delete`));
+  await press(admin, `/admin/users/${active}/delete`);
+  assert.strictEqual(db.prepare('SELECT status FROM users WHERE id = ?').get(active).status, 'active', '거절한 계정만 지울 수 있음');
+  await press(admin, `/admin/users/${old}/delete`);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM users WHERE id = ?').get(old).n, 0);
 });
 
 test('정지하면 로그인해 있던 직원의 세션이 즉시 지워진다', async t => {
