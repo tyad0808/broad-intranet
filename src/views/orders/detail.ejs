@@ -137,7 +137,7 @@
             </select>
           </label>
           <label>송장번호
-            <input type="text" name="tracking" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
+            <input type="text" name="tracking" value="<%= logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
           </label>
         </div>
         <button type="submit" class="wide">발송처리 보내기</button>
@@ -214,7 +214,7 @@
             </select>
           </label>
           <label>송장번호
-            <input type="text" name="tracking" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
+            <input type="text" name="tracking" value="<%= logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
           </label>
         </div>
         <button type="submit" class="wide secondary">발송 완료 기록</button>
@@ -256,6 +256,7 @@
     <% } %>
   </section>
   <% } %>
+  <% if (logen) { %><%- include('../partials/logen-card', { logen, order, back }) %><% } %>
 
   <section class="card">
     <h2>주문 정보</h2>

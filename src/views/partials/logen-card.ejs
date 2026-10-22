@@ -1,0 +1,45 @@
+<%# 주문 카드의 로젠 칸: 등록 → (iLOGEN 출력) → 송장번호 가져오기 → 배송 조회 %>
+<% const ls = logen.ship && logen.ship.status === 'registered' ? logen.ship : null; %>
+<section class="card logen-card">
+  <h2>로젠 송장<% if (logen.env !== 'prod') { %> <span class="muted small">테스트 서버</span><% } %></h2>
+  <ol class="steps">
+    <li class="<%= ls || logen.slip ? 'done' : '' %>">로젠 등록 <span><%= ls || logen.slip ? '완료' : logen.canRegister ? '대기' : '-' %></span></li>
+    <li class="<%= logen.slip ? 'done' : '' %>">송장번호 <span><%= logen.slip || (ls ? '출력 대기' : '-') %></span></li>
+  </ol>
+
+  <% if (logen.canRegister) { %>
+    <form method="post" action="/orders/<%= order.id %>/logen" data-once
+          data-confirm="이 주문을 로젠에 등록할까요?<%= logen.env !== 'prod' ? ' (테스트 서버)' : '' %>&#10;등록한 뒤 iLOGEN 에서 출력해 주세요.">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="back" value="<%= back %>">
+      <button type="submit" class="wide secondary">로젠에 등록</button>
+    </form>
+  <% } else if (ls && !ls.slip_no) { %>
+    <p class="muted small">iLOGEN › '주문등록출력(복수건)' 에서 출력한 뒤 눌러 주세요. (로젠 주문번호 <%= ls.take_no %>)</p>
+    <form method="post" action="/orders/<%= order.id %>/logen/slip" data-once>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="back" value="<%= back %>">
+      <button type="submit" class="wide secondary">송장번호 가져오기</button>
+    </form>
+  <% } %>
+
+  <% if (logen.slip) { %>
+    <form method="post" action="/orders/<%= order.id %>/logen/track" data-once>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="back" value="<%= back %>">
+      <button type="submit" class="btn-sm">배송 조회</button>
+    </form>
+    <% if (logen.track) { %>
+      <% if (logen.track.events.length) { %>
+        <ol class="track-list">
+          <% logen.track.events.slice().reverse().forEach((e, i) => { %>
+            <li class="<%= i === 0 ? 'now' : '' %>"><strong><%= e.stat %></strong> <span class="muted small"><%= e.at %><%= e.place ? ` · ${e.place}` : '' %><%= e.who ? ` · ${e.who}` : '' %></span></li>
+          <% }) %>
+        </ol>
+      <% } else { %>
+        <p class="muted small">아직 로젠에 배송 기록이 없어요 (집하 전).</p>
+      <% } %>
+      <p class="muted small">마지막 조회 <%= kst(logen.track.at) %></p>
+    <% } %>
+  <% } %>
+</section>

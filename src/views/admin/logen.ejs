@@ -1,0 +1,77 @@
+<%- include('../partials/header') %>
+<h1 class="page-title">관리자</h1>
+<%- include('../partials/admin-tabs') %>
+
+<% if (!logen || !logen.hasKey) { %>
+  <section class="card">
+    <h2>로젠 연결</h2>
+    <p class="error">로젠 인증키가 없습니다. 서버 <code>.env</code> 의 <code>LOGEN_SECRET_KEY</code>·<code>LOGEN_CUST_CD</code> 를 채우고 다시 시작해 주세요.</p>
+  </section>
+<% } else { const c = logen.contract; %>
+  <section class="card">
+    <h2>로젠 연결</h2>
+    <dl class="info">
+      <dt>보내는 곳</dt>
+      <dd><% if (logen.env === 'prod') { %><strong>실제 서버</strong> (우리 거래처코드)<% } else { %><strong>테스트 서버</strong> · 로젠 연습용 거래처로 보내요. 실제 택배는 생기지 않고, 고객 정보 대신 연습용 정보를 보내요.<% } %></dd>
+      <dt>실제 등록</dt>
+      <dd><% if (logen.env !== 'prod') { %><span class="muted">테스트 서버라 상관없음</span><% } else if (logen.writeOn) { %><strong>켜짐</strong> · 등록하면 iLOGEN 에 바로 들어가요<% } else { %><strong class="text-bad">꺼짐</strong> · <code>.env</code> 의 <code>LOGEN_WRITE=on</code> 이어야 등록돼요<% } %></dd>
+      <dt>송장번호 대기</dt>
+      <dd><%= logen.waiting %>건 <span class="muted small">(등록했지만 아직 송장번호를 못 받은 주문)</span></dd>
+    </dl>
+    <p class="muted small">로젠 요청대로 한 번에 10건씩, 차례대로, 호출 사이에 3초씩 쉬면서 보내요. 그래서 많이 고르면 몇 초 걸릴 수 있어요.</p>
+  </section>
+
+  <section class="card">
+    <h2>① 계약 정보</h2>
+    <% if (c) { %>
+      <dl class="info">
+        <dt>영업소</dt><dd><%= c.salesNm %> <span class="muted">· 지점 <%= c.branNm %></span></dd>
+        <dt>운임</dt><dd><%= c.fareTyNm %> (<%= c.fareTy %>)<% if (c.useYn !== 'Y') { %> <strong class="text-bad">사용 안 함</strong><% } %></dd>
+        <dt>박스</dt><dd><%= c.boxes.map(b => `${b.nm} ${b.fare.toLocaleString('ko-KR')}원`).join(' · ') || '-' %></dd>
+        <dt>불러온 때</dt><dd class="muted"><%= kst(c.at) %></dd>
+      </dl>
+    <% } else { %>
+      <p class="muted">아직 불러오지 않았어요. 아래 버튼을 눌러 로젠에서 계약 정보와 운임을 받아 오세요.</p>
+    <% } %>
+    <form method="post" action="/admin/logen/contract" data-once>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button type="submit" class="btn-sm"><%= c ? '다시 불러오기' : '계약 정보 불러오기' %></button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>② 보내는 분 · 기본 박스</h2>
+    <form method="post" action="/admin/logen/settings" class="settings-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>보내는 분 이름 (송장에 찍혀요)
+        <input type="text" name="name" value="<%= logen.sender.name %>" maxlength="50" required>
+      </label>
+      <label>보내는 분 주소
+        <input type="text" name="addr" value="<%= logen.sender.addr %>" maxlength="300" required placeholder="경기 양주시 …">
+      </label>
+      <label>보내는 분 전화번호
+        <input type="text" name="tel" value="<%= logen.sender.tel %>" inputmode="numeric" maxlength="20" required placeholder="숫자만">
+      </label>
+      <label>기본 박스
+        <select name="box" <%= c && c.boxes.length ? '' : 'disabled' %>>
+          <% (c ? c.boxes : []).forEach(b => { %>
+            <option value="<%= b.cd %>" <%= logen.box && logen.box.cd === b.cd ? 'selected' : '' %>><%= b.nm %> · <%= b.fare.toLocaleString('ko-KR') %>원</option>
+          <% }) %>
+        </select>
+        <% if (!c) { %><span class="muted small">① 계약 정보를 먼저 불러오면 고를 수 있어요.</span><% } %>
+      </label>
+      <button type="submit" class="btn-sm">저장</button>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>쓰는 방법</h2>
+    <ol class="plain-steps">
+      <li><strong>주문 목록</strong>에서 주문을 체크하고 아래 막대의 <strong>[로젠 등록]</strong>을 눌러요. 주문번호가 같은 상품은 한 송장(한 박스)으로 묶여요.</li>
+      <li><strong>iLOGEN</strong>(logis.ilogen.com) › '주문등록출력(복수건)' › 엑셀타입 '전체' 로 조회해서 출력해요. 출력해야 송장번호가 생겨요.</li>
+      <li>주문 목록 위 <strong>[송장번호 가져오기]</strong>를 누르면 발송처리 칸에 송장번호가 미리 채워져요. 확인하고 발송처리를 보내면 끝이에요.</li>
+    </ol>
+    <% if (!logen.ready) { %><p class="warn-box">아직 정하지 않은 것: <%= logen.missing.join(', ') %></p><% } %>
+  </section>
+<% } %>
+<%- include('../partials/footer') %>

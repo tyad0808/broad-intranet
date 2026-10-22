@@ -15,7 +15,7 @@ test('로젠: 테스트 서버가 기본, 헤더 secretKey, 거래처코드는 �
   assert.strictEqual(f.calls[0].url, 'https://topenapi.ilogen.com/lrm02b-edi/edi/inquirySlipNoMulti');
   assert.strictEqual(f.calls[0].headers.secretKey, 'k');
   assert.deepStrictEqual(f.calls[0].body, { userId: '20179999', data: [{ custCd: '20179999', fixTakeNo: 'A1' }] });
-  await c.request('inquiryCargoTrackingMultiLast', [{ slipNo: '38010101111' }]);
+  await c.request('inquiryCargoTrackingMulti', [{ slipNo: '38010101111' }]);
   assert.deepStrictEqual(f.calls[1].body.data, [{ slipNo: '38010101111' }], '화물추적은 송장번호만');
 });
 
@@ -28,6 +28,7 @@ test('로젠: 운영계 주문 등록은 LOGEN_WRITE 를 켠 연결만, 허용 �
   await createLogenClient({ secretKey: 'k', custCd: '1', env: 'prod', fetchFn: f.fetchFn, allowWrite: true }).request('registerOrderData', [{}]);
   assert.strictEqual(f.calls[0].url, 'https://openapi.ilogen.com/lrm02b-edi/edi/registerOrderData');
   assert.ok(isAllowed('contractTotalInfo') && !isAllowed('outSlipPrintPop'));
+  assert.ok(!isAllowed('custExtraFare') && !isAllowed('inquiryCargoTrackingMultiLast'), '로젠이 허락한 5개만');
   const bad = fake(401, { sttsMsg: 'Unauthorized' });
   await assert.rejects(createLogenClient({ secretKey: 'k', custCd: '1', fetchFn: bad.fetchFn }).request('contractTotalInfo'), /IP 가 로젠에 등록되지/);
   await assert.rejects(createLogenClient({ secretKey: '', custCd: '1', fetchFn: bad.fetchFn }).request('contractTotalInfo'), /LOGEN_SECRET_KEY/);

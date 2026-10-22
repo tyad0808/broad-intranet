@@ -19,6 +19,7 @@ const { statsRoutes } = require('./routes/stats');
 const { replyUpload } = require('./inbox/upload');
 const { createBrand } = require('./brand');
 const { createWeeklyReporter } = require('./weeklyReport');
+const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
@@ -46,6 +47,7 @@ function createApp({
   // 주간 매출 보고: 보낼 회사 메일 계정 (테스트는 weeklyTransport 로 가짜 발송)
   weeklyAccount = null,
   weeklyTransport = null,
+  logen = null, // 로젠 송장 (없으면 .env 로 만든다)
 }) {
   const app = express();
   const isProd = process.env.NODE_ENV === 'production';
@@ -129,6 +131,8 @@ function createApp({
   const brand = createBrand(db);
   const weekly = createWeeklyReporter({ db, account: weeklyAccount, transport: weeklyTransport, brandName: () => brand.view().name });
   app.locals.weekly = weekly;
+  const logenSvc = logen || createLogen({ db });
+  app.locals.logen = logenSvc;
   app.get('/brand/logo', (req, res) => {
     const logo = brand.logo();
     if (!logo) return res.status(404).end();
@@ -216,14 +220,14 @@ function createApp({
     notifier.hub.add(req, res, req.user.id);
   });
 
-  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly));
+  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc));
   app.use('/stats', requireAdmin, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
   app.use(requireActive, calendarRoutes(db, notifier));
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier, brandName: () => brand.view().name }));
   app.use(requireActive, templateRoutes(db));
   app.use(requireActive, manualRoutes(db, notifier));
-  app.use(requireActive, orderRoutes(db, notifier, actions, collector));
+  app.use(requireActive, orderRoutes(db, notifier, actions, collector, logenSvc));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });

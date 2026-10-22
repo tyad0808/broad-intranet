@@ -157,8 +157,17 @@
   <input type="hidden" name="back" value="<%= currentUrl %>">
 </form>
 
+<% if (logenOn && logenWaiting) { %>
+  <form method="post" action="/orders/logen/slips" class="logen-bar" data-once>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="back" value="<%= currentUrl %>">
+    <span>로젠에 등록하고 송장번호를 기다리는 주문 <strong><%= logenWaiting %>건</strong><span class="muted small"> · iLOGEN 에서 출력한 뒤 눌러 주세요</span></span>
+    <button type="submit" class="btn-sm">송장번호 가져오기</button>
+  </form>
+<% } %>
+
 <div id="live-list">
-<% const anyAction = groups.some(g => g.canConfirm || g.canDispatch); %>
+<% const anyAction = groups.some(g => g.canConfirm || g.canDispatch || g.canLogen); %>
 <% if (groups.length === 0) { %>
   <section class="card empty"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>
 <% } else { %>
@@ -177,9 +186,9 @@
     %>
       <li id="o<%= o.id %>" class="order-item<%= g.claim && claimLevel(g.claim.claim_status) === 'open' ? ' has-claim' : '' %>">
         <span class="oi-check">
-          <% if (g.canConfirm || g.canDispatch) { %>
+          <% if (g.canConfirm || g.canDispatch || g.canLogen) { %>
             <input type="checkbox" name="ids" value="<%= o.id %>" form="bulk-form" aria-label="선택: <%= o.product_name %>"
-                   data-can="<%= [g.canConfirm ? 'confirm' : '', g.canDispatch ? 'dispatch' : ''].join(' ').trim() %>"
+                   data-can="<%= [g.canConfirm ? 'confirm' : '', g.canDispatch ? 'dispatch' : '', g.canLogen ? 'logen' : ''].filter(Boolean).join(' ') %>"
                    data-channel-name="<%= c.name %>">
           <% } %>
         </span>
@@ -250,6 +259,7 @@
           <% if (g.shipped) { %>
             <span class="pill shipped" title="<%= kst(g.shipped.shipped_at) %>">발송 · <%= g.shipped.ship_company ? `${courierLabel(g.shipped.ship_company)} ${g.shipped.tracking_no}` : shipMethodLabel(g.shipped.ship_method) %></span>
           <% } else { %>
+            <% if (g.logen && g.logen.status === 'registered') { %><span class="pill logen" title="로젠에 등록한 주문"><%= g.logen.slip_no ? `로젠 송장 ${g.logen.slip_no}` : '로젠 등록됨 · 출력 대기' %></span><% } %>
             <span class="pill <%= o.channel === 'manual' && o.channel_status === 'PAYMENT_WAITING' ? 'wait' : 'light' %>"><% if (o.channel_status_label) { %><%= channelInfo(o.channel).name %>: <%= o.channel_status_label %><% } else { %><%= channelStatusLabel(o.channel_status, o.channel) %><%= o.channel !== "manual" && confirmed ? ' · 발주확인됨' : '' %><% } %></span>
           <% } %>
           </span>
@@ -265,6 +275,8 @@
   <span><strong data-bulk-count>0</strong>건 선택</span>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/confirm"
           data-confirm="체크한 주문을 {channels}에 발주확인할까요?{coupangNote}&#10;고객에게 발주확인 알림이 가고, 되돌릴 수 없습니다.&#10;(이미 발주확인된 주문은 건너뜁니다)" data-bulk-kind="confirm">발주확인 <span data-n>0</span>건</button>
+  <% if (logenOn) { %><button type="submit" form="bulk-form" formaction="/orders/bulk/logen" class="secondary"
+          data-confirm="체크한 주문 {n}건을 로젠에 등록할까요?<%= logenEnv !== 'prod' ? ' (테스트 서버)' : '' %>&#10;주문번호가 같은 상품은 한 송장으로 묶어요. 등록한 뒤 iLOGEN 에서 출력해 주세요." data-bulk-kind="logen">로젠 등록 <span data-n>0</span>건</button><% } %>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/dispatch-form" formtarget="order-modal-frame" data-modal class="secondary" data-bulk-kind="dispatch">송장 입력·발송처리 <span data-n>0</span>건…</button>
   <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>
 </div>

@@ -57,7 +57,7 @@ const OPEN_CLAIM_SQL = `(o.claim_status IS NOT NULL AND o.claim_status NOT LIKE 
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
 const ITEM_ORDER = "CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id";
 
-function orderRoutes(db, notifier, actions, collector = null) {
+function orderRoutes(db, notifier, actions, collector = null, logen = null) {
   const router = express.Router();
 
   // 마지막 단계(보통 '발송')에 있는 주문은 끝난 것으로 보고 '진행 중' 목록에서 뺀다
@@ -217,6 +217,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
       g.shipDue = g.items.filter(i => i.channel_status === 'PAYED' && i.ship_due && !i.ship_delayed).map(i => i.ship_due).sort()[0] || null;
       // 발송지연 처리한 상품 (판매자센터에서 새 발송 예정일을 알림)
       g.delayed = g.items.find(i => i.channel_status === 'PAYED' && i.ship_delayed) || null;
+      // 로젠: 등록 상태(송장번호)와 지금 등록할 수 있는지
+      g.logen = logen ? logen.shipmentOf(g.main.channel, g.main.channel_order_id) : null;
+      g.canLogen = Boolean(logen && logen.hasKey && logen.canRegister(g.items));
     }
 
     // 단계 버튼에 보여줄 건수: 지금 탭·검색 조건 그대로, 그 단계 필터만 빼고 센다
@@ -315,6 +318,9 @@ function orderRoutes(db, notifier, actions, collector = null) {
 
     res.render('orders/list', {
       title: '주문',
+      logenOn: Boolean(logen && logen.hasKey),
+      logenEnv: logen ? logen.env : null,
+      logenWaiting: logen && logen.hasKey ? logen.waiting().length : 0,
       groups,
       counts,
       VIEWS,
@@ -509,6 +515,102 @@ function orderRoutes(db, notifier, actions, collector = null) {
     }
   });
 
+  // ───────── 로젠 송장 (src/logen.js) ─────────
+  // 고른 주문을 로젠에 등록 → 직원이 iLOGEN 에서 출력 → [송장번호 가져오기]
+  router.post('/orders/bulk/logen', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      if (!logen || !logen.hasKey) return flashBack(req, res, back, { type: 'error', message: '로젠 인증키(LOGEN_SECRET_KEY)가 .env 에 없습니다.' });
+      const ids = pickIds(req.body.ids);
+      if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
+      flashBack(req, res, back, logenFlash(await logen.register(groupsOf(ids), req.user.id)));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/orders/logen/slips', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      if (!logen || !logen.hasKey) return flashBack(req, res, back, { type: 'error', message: '로젠 인증키(LOGEN_SECRET_KEY)가 .env 에 없습니다.' });
+      flashBack(req, res, back, slipFlash(await slipsOrError(null)));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/orders/:id/logen', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const order = findOrder(req.params.id);
+      if (!order || !logen || !logen.hasKey) return flashBack(req, res, selfUrl(req.params.id, back), { type: 'error', message: '로젠에 등록할 수 없습니다.' });
+      flashBack(req, res, selfUrl(order.id, back), logenFlash(await logen.register([groupItems(order)], req.user.id)));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/orders/:id/logen/slip', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const order = findOrder(req.params.id);
+      if (!order || !logen || !logen.hasKey) return flashBack(req, res, selfUrl(req.params.id, back), { type: 'error', message: '로젠 연결이 없습니다.' });
+      flashBack(req, res, selfUrl(order.id, back), slipFlash(await slipsOrError([[order.channel, order.channel_order_id]])));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/orders/:id/logen/track', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const order = findOrder(req.params.id);
+      const url = selfUrl(req.params.id, back);
+      const slip = order && logenSlipOf(order);
+      if (!slip || !logen || !logen.hasKey) return flashBack(req, res, url, { type: 'error', message: '조회할 로젠 송장번호가 없습니다.' });
+      try {
+        const r = await logen.track(slip, { channel: order.channel, orderId: order.channel_order_id });
+        const last = r.events[r.events.length - 1];
+        flashBack(req, res, url, { type: 'ok', message: last ? `배송 조회: ${last.stat}${r.cached ? ' (5분 안에 조회한 결과)' : ''}` : '아직 로젠에 배송 기록이 없어요 (집하 전).' });
+      } catch (e) {
+        flashBack(req, res, url, { type: 'error', message: `배송 조회 실패: ${e.message}` });
+      }
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  // 주문 번호 목록 → 주문 묶음(같은 주문번호 상품) 목록, 같은 묶음은 한 번만
+  function groupsOf(ids) {
+    const seen = new Set();
+    const out = [];
+    for (const id of ids) {
+      const order = findOrder(id);
+      if (!order) continue;
+      const key = `${order.channel}:${order.channel_order_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(groupItems(order));
+    }
+    return out;
+  }
+
+  async function slipsOrError(only) {
+    try {
+      return await logen.fetchSlips(only);
+    } catch (e) {
+      return { error: e.message };
+    }
+  }
+
+  // 이 주문의 로젠 송장번호: 로젠에서 가져온 번호, 없으면 발송처리 때 넣은 로젠택배 송장번호
+  function logenSlipOf(order) {
+    const s = logen && logen.shipmentOf(order.channel, order.channel_order_id);
+    if (s && s.slip_no) return s.slip_no;
+    const shipped = groupItems(order).find(i => i.shipped_at && i.ship_company === 'KGB' && i.tracking_no);
+    return shipped ? shipped.tracking_no : null;
+  }
+
   // 일괄 발송처리 입력 줄: 발송처리할 수 있는 주문만, 나머지는 '뺀 주문'
   function dispatchRows(ids) {
     const rows = [];
@@ -517,7 +619,8 @@ function orderRoutes(db, notifier, actions, collector = null) {
       const order = findOrder(id);
       if (!order) continue;
       const items = groupItems(order);
-      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch) });
+      const lg = logen && logen.shipmentOf(order.channel, order.channel_order_id);
+      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch), slip: (lg && lg.slip_no) || '' });
       else skipped.push(items[0].product_name);
     }
     return { rows, skipped };
@@ -584,6 +687,7 @@ function orderRoutes(db, notifier, actions, collector = null) {
       shipped: items.find(i => i.shipped_at) || null,
       history: history(order),
       customer: historyForOrder(db, order),
+      logen: logenView(order, items),
       SHIP_METHODS,
       COURIERS,
       DEFAULT_METHOD,
@@ -690,6 +794,14 @@ function orderRoutes(db, notifier, actions, collector = null) {
     `).all(order.channel, order.channel_order_id);
   }
 
+  // 주문 카드의 로젠 칸: 등록 상태·송장번호·마지막 배송 조회
+  function logenView(order, items) {
+    if (!logen || !logen.hasKey) return null;
+    const ship = logen.shipmentOf(order.channel, order.channel_order_id);
+    const slip = logenSlipOf(order);
+    return { env: logen.env, ship, slip, canRegister: logen.canRegister(items), track: slip ? logen.lastTrack(slip) : null };
+  }
+
   // 이 주문 묶음의 처리 기록 (최근 20개)
   function history(order) {
     return db.prepare(`
@@ -705,6 +817,28 @@ function orderRoutes(db, notifier, actions, collector = null) {
   }
 
   return router;
+}
+
+// 로젠 등록 결과 → 안내 문구
+function logenFlash(r) {
+  if (r.error) return { type: 'error', message: r.error };
+  const details = [
+    ...r.failed.map(f => `실패 · ${f.name}: ${f.message}`),
+    ...r.skipped.map(f => `뺀 주문 · ${f.name}: ${f.reason}`),
+  ].slice(0, 20);
+  const head = r.done
+    ? `로젠에 ${r.done}건 등록했습니다. iLOGEN '주문등록출력(복수건)'에서 출력한 뒤 [송장번호 가져오기]를 누르세요.`
+    : '로젠에 등록한 주문이 없습니다.';
+  return { type: r.failed.length ? 'warn' : r.done ? 'ok' : 'error', message: head, details };
+}
+
+function slipFlash(r) {
+  if (r.error) return { type: 'error', message: `송장번호를 가져오지 못했습니다: ${r.error}` };
+  if (!r.checked) return { type: 'ok', message: '송장번호를 기다리는 로젠 등록 주문이 없습니다.' };
+  const parts = [`송장번호 ${r.found}건 받음`];
+  if (r.waiting) parts.push(`아직 출력 전 ${r.waiting}건`);
+  if (r.deleted) parts.push(`iLOGEN 에서 지워진 주문 ${r.deleted}건 (다시 등록할 수 있음)`);
+  return { type: r.found ? 'ok' : 'warn', message: `${parts.join(' · ')}${r.found ? ' — 발송처리 칸에 송장번호를 채워 두었어요.' : ''}` };
 }
 
 // 수집 결과 안내 (여러 채널 중 일부만 실패하면 들어온 건수와 실패 이유를 함께)

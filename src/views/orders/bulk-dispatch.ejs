@@ -18,7 +18,7 @@
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="back" value="<%= back %>">
     <div class="ship-rows">
-      <% rows.forEach(({ main, items }, n) => { const id = main.id; %>
+      <% rows.forEach(({ main, items, slip }, n) => { const id = main.id; %>
         <div class="ship-row">
           <input type="hidden" name="ids" value="<%= id %>">
           <div class="ship-order">
@@ -34,10 +34,10 @@
             <span data-ship-fields class="ship-fields">
               <select name="company_<%= id %>" aria-label="택배사">
                 <% Object.entries(COURIERS).forEach(([code, label]) => { %>
-                  <option value="<%= code %>" <%= code === (values[`company_${id}`] || DEFAULT_COURIER) ? 'selected' : '' %>><%= label %></option>
+                  <option value="<%= code %>" <%= code === (values[`company_${id}`] || (slip ? 'KGB' : DEFAULT_COURIER)) ? 'selected' : '' %>><%= label %></option>
                 <% }) %>
               </select>
-              <input type="text" name="tracking_<%= id %>" value="<%= values[`tracking_${id}`] || '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="송장번호" aria-label="송장번호">
+              <input type="text" name="tracking_<%= id %>" value="<%= values[`tracking_${id}`] || slip || '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="송장번호" aria-label="송장번호">
             </span>
           </div>
         </div>

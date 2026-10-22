@@ -279,6 +279,26 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_order_events ON order_events(kind, created_at);
 
+    -- 로젠 송장: 우리가 로젠에 등록한 주문 (주문번호 묶음 하나 = 송장 하나, 같은 주문번호 상품은 한 박스로 합포장)
+    --   env: dev(테스트 서버) / prod(실제). take_no = 로젠에 보낸 주문번호(fixTakeNo)
+    --   status: registered 등록됨 · deleted iLOGEN 에서 지워짐 (다시 등록할 수 있음)
+    CREATE TABLE IF NOT EXISTS logen_shipments (
+      id               INTEGER PRIMARY KEY,
+      channel          TEXT    NOT NULL,
+      channel_order_id TEXT    NOT NULL,
+      env              TEXT    NOT NULL,
+      take_no          TEXT    NOT NULL,
+      status           TEXT    NOT NULL DEFAULT 'registered',
+      slip_no          TEXT,
+      slip_at          TEXT,
+      track_json       TEXT,
+      track_at         TEXT,
+      user_id          INTEGER REFERENCES users(id),
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      UNIQUE (env, take_no)
+    );
+    CREATE INDEX IF NOT EXISTS idx_logen_order ON logen_shipments(channel, channel_order_id);
+
     -- 자주 쓰는 답장 문구 (직원 누구나 만들고 고친다). scope: all 모두 · mail 메일만 · shop 쇼핑몰 문의만
     CREATE TABLE IF NOT EXISTS reply_templates (
       id          INTEGER PRIMARY KEY,

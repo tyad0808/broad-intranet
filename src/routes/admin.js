@@ -16,7 +16,7 @@ const STATUS_LABELS = {
   rejected: '거절',
 };
 
-function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly = null) {
+function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly = null, logen = null) {
   const router = express.Router();
   // 왼쪽 메뉴에서 '관리자' 를 켜 둔다
   router.use((req, res, next) => { res.locals.navSection = 'admin'; next(); });
@@ -411,6 +411,40 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       HIDE_CHOICES: retention.HIDE_CHOICES, KEEP_CHOICES: retention.KEEP_CHOICES,
       preview: retention.previewCleanup(db), log: retention.cleanupLog(db),
     });
+  });
+
+  // ───────── 로젠 설정 ─────────
+  router.get('/logen', (req, res) => {
+    res.render('admin/logen', {
+      title: '로젠 설정', tab: 'logen',
+      logen: logen ? { env: logen.env, hasKey: logen.hasKey, writeOn: logen.writeOn, ...logen.settings(), waiting: logen.hasKey ? logen.waiting().length : 0 } : null,
+    });
+  });
+
+  // 계약정보·계약운임 불러오기 (로젠 호출 2번)
+  router.post('/logen/contract', async (req, res, next) => {
+    try {
+      if (!logen || !logen.hasKey) {
+        flash(req, 'error', '로젠 인증키(LOGEN_SECRET_KEY)가 .env 에 없습니다.');
+        return res.redirect('/admin/logen');
+      }
+      try {
+        const c = await logen.loadContract();
+        flash(req, 'ok', `계약 정보를 불러왔습니다: ${c.salesNm} · ${c.fareTyNm} · 박스 ${c.boxes.length}종류`);
+      } catch (e) {
+        flash(req, 'error', `계약 정보를 불러오지 못했습니다: ${e.message}`);
+      }
+      res.redirect('/admin/logen');
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  router.post('/logen/settings', (req, res) => {
+    if (!logen) return res.redirect('/admin/logen');
+    const r = logen.saveSettings({ name: req.body.name, addr: req.body.addr, tel: req.body.tel, box: req.body.box });
+    flash(req, r.error ? 'error' : 'ok', r.error || '로젠 설정을 저장했습니다.');
+    res.redirect('/admin/logen');
   });
 
   // ───────── 회사 이름·로고 ─────────

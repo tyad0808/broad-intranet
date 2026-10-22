@@ -6,7 +6,8 @@
 // 코드: userId = 연동업체코드 (없으면 거래처코드), custCd = 거래처코드
 // 요청 모양: POST { userId, data: [ {...}, ... ] } → 응답 { data: [ {..., resultCd, resultMsg} ], sttsCd, sttsMsg }
 //
-// 허용 주소: 계약·운임 조회 3개 + 주문 등록 1개(write) + 송장번호 조회 1개 + 화물추적 2개
+// 허용 주소: 로젠이 메일로 허락한 5개만 — 계약·운임 조회 2개 + 주문 등록 1개(write) + 송장번호 조회 1개 + 화물추적 1개
+//   (로젠 안내: 안내 메일에 없는 API 는 절대 호출하지 말 것. 한 번에 10건 안팎, 차례대로, 사이에 몇 초씩 쉬기 → src/logen.js)
 // write: true 는 allowWrite 를 켠 연결만 (운영계는 .env 의 LOGEN_WRITE=on 일 때만, 기본은 연습 모드)
 const BASE = { dev: 'https://topenapi.ilogen.com', prod: 'https://openapi.ilogen.com' };
 const PREFIX = '/lrm02b-edi/edi/';
@@ -16,11 +17,9 @@ const TEST_CODES = { userId: '10358007', custCd: '20179999' };
 const ALLOWED = [
   { name: 'contractTotalInfo' }, // 거래처 계약정보 (영업소·운임구분·사용여부)
   { name: 'contPickFares' }, // 운임구분별 계약 운임 (박스 종류별)
-  { name: 'custExtraFare' }, // 물품금액에 따른 할증운임
   { name: 'registerOrderData', write: true }, // 주문 정보 일괄 등록 → 로젠 '주문등록출력(복수건)' 화면
   { name: 'inquirySlipNoMulti' }, // 출력한 송장번호 조회 (주문번호로)
   { name: 'inquiryCargoTrackingMulti' }, // 화물추적 전체
-  { name: 'inquiryCargoTrackingMultiLast' }, // 화물추적 최종 상태
 ];
 const isAllowed = name => ALLOWED.some(a => a.name === name);
 
@@ -69,7 +68,7 @@ function createLogenClient({
     if (!body) throw new LogenApiError('로젠 응답을 읽지 못했습니다', res.status, text.slice(0, 200));
     return body;
   }
-  return { request, env, custCd, userId };
+  return { request, env, custCd, userId, hasKey: Boolean(secretKey), allowWrite };
 }
 
 module.exports = { BASE, TEST_CODES, ALLOWED, isAllowed, createLogenClient, LogenApiError };

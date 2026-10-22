@@ -988,3 +988,16 @@ code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak)
 .encrypt-box { margin: 4px 0; padding: 12px 14px 4px; border: 1px solid var(--line); border-radius: 10px; }
 .encrypt-box legend { padding: 0 6px; font-weight: 700; font-size: 13.5px; }
 .encrypt-box .check { margin-bottom: 12px; }
+
+/* ───────── 로젠 송장 ───────── */
+.pill.logen { background: var(--primary-weak); color: var(--primary-dark); margin-right: 4px; }
+.text-bad { color: var(--error); }
+.logen-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 10px 14px; border-radius: var(--radius-sm); background: var(--primary-weak); color: var(--text); font-size: 14px; }
+.logen-card form { margin: 0 0 10px; }
+.track-list { list-style: none; margin: 12px 0 6px; padding: 0 0 0 14px; border-left: 2px solid var(--line); }
+.track-list li { position: relative; padding: 4px 0 8px 6px; font-size: 14px; color: var(--text-2); }
+.track-list li::before { content: ''; position: absolute; left: -20px; top: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+.track-list li.now { color: var(--text); }
+.track-list li.now::before { background: var(--primary); }
+.plain-steps { margin: 0 0 12px; padding-left: 20px; font-size: 14px; line-height: 1.7; }
