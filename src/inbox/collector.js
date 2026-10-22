@@ -20,6 +20,15 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
     WHERE source = ? AND external_id = ? AND status = 'open'
   `);
   const updateMeta = db.prepare("UPDATE inquiries SET meta = ?, subject = ? WHERE source = ? AND external_id = ? AND status = 'open'");
+  // 보낸 사람이 비어 있는 문의(쿠팡 문의는 고객 이름을 주지 않음): 문의에 적힌 주문번호의 주문자 이름으로 채운다
+  //   주문이 문의보다 늦게 들어올 수도 있어 받을 때마다 다시 본다
+  const fillNames = db.prepare(`
+    UPDATE inquiries SET from_name = (
+      SELECT COALESCE(NULLIF(o.buyer_name, ''), o.receiver_name) FROM orders o
+      WHERE o.channel_order_id = inquiries.order_no AND COALESCE(NULLIF(o.buyer_name, ''), o.receiver_name) IS NOT NULL ORDER BY o.id LIMIT 1)
+    WHERE (from_name IS NULL OR from_name = '') AND order_no IS NOT NULL
+      AND EXISTS (SELECT 1 FROM orders o WHERE o.channel_order_id = inquiries.order_no AND COALESCE(NULLIF(o.buyer_name, ''), o.receiver_name) IS NOT NULL)
+  `);
   let running = null;
 
   async function runOnce() {
@@ -57,6 +66,7 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
         result.errors.push(`${src.label}: ${e.message}`);
       }
     }
+    fillNames.run();
     db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
       .run('inbox_last_run', JSON.stringify({ at: now().toISOString(), ok: result.ok, errors: result.errors }));
     if (notifier && (result.created || result.answered)) notifier.inboxChanged();

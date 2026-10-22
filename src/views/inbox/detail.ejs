@@ -9,7 +9,7 @@
     <p class="detail-channel"><span class="src-tag src-<%= inquiry.source %>"><%= label %></span> <span class="pill <%= inquiry.status === 'open' ? 'wait' : 'light' %>"><%= STATUS_LABELS[inquiry.status] %></span></p>
     <h1 class="detail-title"><%= inquiry.subject %></h1>
     <dl class="info">
-      <dt>보낸 사람</dt><dd><%= inquiry.from_name || '' %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
+      <dt>보낸 사람</dt><dd><%= inquiry.from_name || '' %><% if (!inquiry.from_name && !inquiry.from_addr) { %><span class="muted">알 수 없음 (채널이 이름을 알려주지 않아요)</span><% } %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
       <% if (inquiry.reply_to) { %><dt>답장 주소</dt><dd><%= inquiry.reply_to %></dd><% } %>
       <dt>받은 시각</dt><dd><%= kst(inquiry.received_at) %></dd>
       <% if (attachments.length) { %>

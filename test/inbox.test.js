@@ -532,3 +532,18 @@ test('문의함 큰 탭(쇼핑몰 문의·채팅) 순서는 직원마다 바꿀 
   assert.ok(after.includes('[톡톡] 안녕하세요'), '채팅 탭이 처음 열림');
   assert.match(after, /href="\/inbox\?box=shop"/, '쇼핑몰 탭 링크엔 box=shop');
 });
+
+test('보낸 사람이 없는 문의(쿠팡): 주문번호가 같은 주문의 주문자 이름으로 채운다, 주문이 나중에 들어와도', async () => {
+  const db = openDb(':memory:');
+  const item = (id, orderNo) => ({ source: 'coupang_qna', external_id: id, from_name: null, from_addr: null, reply_to: null, message_id: null, references_hdr: null, subject: '[쿠팡 상품문의] 안내판', body: '1개만 왔어요',
+    attachments: '[]', received_at: '2026-10-22T04:07:00Z', order_no: orderNo });
+  let items = [item('p:1', '3100'), item('p:2', null)];
+  const c = createInboxCollector({ db, sources: [{ source: 'coupang_qna', label: '쿠팡', fetch: async () => ({ items, state: {} }) }] });
+  await c.run();
+  assert.strictEqual(db.prepare("SELECT from_name FROM inquiries WHERE external_id = 'p:1'").get().from_name, null, '주문이 아직 없으면 그대로');
+  db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, buyer_name, paid_at, channel_status) VALUES ('coupang', '3100', '3100-1', '안내판', '김고객', '2026-10-20T00:00:00Z', 'DELIVERED')").run();
+  items = [];
+  await c.run();
+  assert.strictEqual(db.prepare("SELECT from_name FROM inquiries WHERE external_id = 'p:1'").get().from_name, '김고객');
+  assert.strictEqual(db.prepare("SELECT from_name FROM inquiries WHERE external_id = 'p:2'").get().from_name, null);
+});
