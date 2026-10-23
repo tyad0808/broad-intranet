@@ -21,7 +21,7 @@ const { createBrand } = require('./brand');
 const { createWeeklyReporter } = require('./weeklyReport');
 const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
-const { createNotifier } = require('./notifier');
+const { createNotifier, notifyOff } = require('./notifier');
 const { createOrderActions, canDispatch } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
@@ -213,6 +213,8 @@ function createApp({
     const open = req.user && req.user.status === 'active' ? openCountsStmt.get() : { inquiries: 0, mails: 0 };
     res.locals.openInquiries = open.inquiries;
     res.locals.openMails = open.mails;
+    // 이 직원이 끈 알림 칸 (끈 칸은 왼쪽 메뉴 숫자를 숨긴다)
+    res.locals.notifyOff = req.user ? notifyOff(req.user) : [];
     next();
   });
 
@@ -229,6 +231,19 @@ function createApp({
   // 실시간 소식 통로 (주문 변경, 알림)
   app.get('/events', requireActive, (req, res) => {
     notifier.hub.add(req, res, req.user.id);
+  });
+
+  // 왼쪽 메뉴의 종 버튼: 메일함·문의함 알림 켜기/끄기 (직원마다 따로)
+  app.post('/me/notify/:box', requireActive, (req, res) => {
+    const box = req.params.box === 'mail' ? 'mail' : req.params.box === 'inbox' ? 'inbox' : null;
+    if (!box) return res.status(400).json({ error: '알 수 없는 칸' });
+    const off = new Set(notifyOff(req.user));
+    if (off.has(box)) off.delete(box);
+    else off.add(box);
+    db.prepare('UPDATE users SET notify_off = ? WHERE id = ?').run(JSON.stringify([...off]), req.user.id);
+    if (req.accepts(['html', 'json']) === 'json') return res.json({ box, off: off.has(box) });
+    const back = String(req.body.back || '/');
+    res.redirect(/^\/(?!\/)/.test(back) ? back : '/');
   });
 
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc));

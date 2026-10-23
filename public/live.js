@@ -135,9 +135,27 @@
     }, 400);
   }
 
+  // 왼쪽 메뉴의 종 버튼: 화면을 다시 읽지 않고 알림을 끄고 켠다
+  document.addEventListener('submit', async event => {
+    const form = event.target.closest('.nav-bell-form');
+    if (!form) return;
+    event.preventDefault();
+    try {
+      const res = await fetch(form.action, {
+        method: 'POST', credentials: 'same-origin',
+        headers: { Accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(new FormData(form)).toString(),
+      });
+      if (!res.ok) throw new Error();
+      refreshNavBadge(0);
+    } catch {
+      form.submit();
+    }
+  });
+
   // 위쪽 메뉴의 문의함 미답변 건수를 새로 고친다 (어느 화면에서든)
   let navTimer = null;
-  function refreshNavBadge() {
+  function refreshNavBadge(delay = 600) {
     const nav = document.getElementById('main-nav');
     if (!nav) return;
     clearTimeout(navTimer);
@@ -146,16 +164,27 @@
         const res = await fetch('/inbox?tab=open&src=_none_', { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
         if (!res.ok || res.redirected) return;
         const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-        // 문의함·메일함 두 칸의 미답변 숫자
+        // 문의함·메일함 두 칸의 미답변 숫자 + 종 버튼 칸까지 함께 (알림을 끄고 켠 결과도 반영). 지금 보고 있는 칸 표시(on)는 그대로
         for (const href of ['/inbox', '/inbox?box=mail']) {
           const fresh = doc.querySelector(`#main-nav a[href="${href}"]`);
           const link = nav.querySelector(`a[href="${href}"]`);
-          if (fresh && link) link.innerHTML = fresh.innerHTML;
+          if (!fresh || !link) continue;
+          link.innerHTML = fresh.innerHTML;
+          const freshRow = fresh.closest('.nav-row');
+          const row = link.closest('.nav-row');
+          if (!freshRow || !row) continue;
+          row.classList.toggle('off', freshRow.classList.contains('off'));
+          const freshForm = freshRow.querySelector('.nav-bell-form');
+          const form = row.querySelector('.nav-bell-form');
+          if (freshForm && form) {
+            form.innerHTML = freshForm.innerHTML;
+            form.querySelector('[name="back"]').value = location.pathname + location.search;
+          }
         }
       } catch {
         // 다음 소식 때 다시
       }
-    }, 600);
+    }, delay);
   }
 
   // 주문 팝업을 닫을 때 modal.js 가 부른다

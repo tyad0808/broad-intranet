@@ -1001,3 +1001,17 @@ code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak)
 .track-list li.now { color: var(--text); }
 .track-list li.now::before { background: var(--primary); }
 .plain-steps { margin: 0 0 12px; padding-left: 20px; font-size: 14px; line-height: 1.7; }
+
+/* 왼쪽 메뉴의 종 버튼: 메일함·문의함 알림 켜기/끄기 (마우스를 올리면 숫자 자리에 나타나고, 꺼 두면 늘 보인다) */
+.nav-row { position: relative; }
+.nav-bell-form { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); margin: 0; opacity: 0; transition: opacity .12s; }
+.nav-row:hover .nav-bell-form, .nav-row.off .nav-bell-form, .nav-bell-form:focus-within { opacity: 1; }
+.nav-row:hover .badge, .nav-row:focus-within .badge { visibility: hidden; }
+.nav-bell { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.nav-bell:hover { background: var(--line); color: var(--text); }
+.nav-bell svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.nav-row.off .nav-bell { color: #b0b8c1; }
+@media (max-width: 900px) {
+  .nav-row { display: contents; }
+  .nav-bell-form { display: none; }
+}

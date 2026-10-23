@@ -2,6 +2,9 @@
 // 한 출처가 실패해도 나머지는 계속 가져온다. 어디까지 읽었는지는 settings 에 출처별로 기억한다.
 const { transaction } = require('../db');
 
+// 메일 계정에서 온 것 (naver_mail, naver_mail2, gmail …)
+const isMailSource = source => /^(naver_mail|gmail)/.test(String(source || ''));
+
 function createInboxCollector({ db, sources = [], notifier = null, now = () => new Date() }) {
   const getState = source => {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(`inbox_state_${source}`);
@@ -72,12 +75,18 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
     if (notifier && (result.created || result.answered)) notifier.inboxChanged();
     // 처음 연결할 때 30일치를 한꺼번에 알리지 않도록, 알림은 최근 1시간 안에 온 것만
     const recent = createdRows.filter(r => now().getTime() - Date.parse(r.received_at) < 3600 * 1000);
-    if (notifier && recent.length) {
-      notifier.notify('new_inquiry', {
-        title: recent.length === 1 ? `새 문의 (${recent[0].label})` : `새 문의 ${recent.length}건`,
-        body: recent.length === 1 ? `${recent[0].from_name || recent[0].from_addr || ''}: ${recent[0].subject}` : recent.slice(0, 3).map(r => r.subject).join(' / '),
-        url: recent.length === 1 ? `/inbox/${recent[0].id}` : '/inbox',
-      }, () => true);
+    // 메일과 쇼핑몰 문의는 따로 알린다 (직원마다 메일함·문의함 알림을 따로 끌 수 있다)
+    for (const box of ['mail', 'inbox']) {
+      const list = recent.filter(r => isMailSource(r.source) === (box === 'mail'));
+      if (!notifier || !list.length) continue;
+      const word = box === 'mail' ? '메일' : '문의';
+      const payload = {
+        title: list.length === 1 ? `새 ${word} (${list[0].label})` : `새 ${word} ${list.length}건`,
+        body: list.length === 1 ? `${list[0].from_name || list[0].from_addr || ''}: ${list[0].subject}` : list.slice(0, 3).map(r => r.subject).join(' / '),
+        url: list.length === 1 ? `/inbox/${list[0].id}` : box === 'mail' ? '/inbox?box=mail' : '/inbox',
+      };
+      if (notifier.inboxNew) notifier.inboxNew(box, payload);
+      else notifier.notify(box === 'mail' ? 'new_mail' : 'new_inquiry', payload, () => true);
     }
     return result;
   }

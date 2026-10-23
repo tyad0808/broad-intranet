@@ -59,7 +59,7 @@ function attemptLogin(db, email, password, now = new Date()) {
 // 로그인할 때만 확인하면, 정지된 직원이 이미 열어 둔 창으로 계속 쓸 수 있기 때문이다.
 function loadUser(db) {
   const stmt = db.prepare(
-    'SELECT u.id, u.email, u.name, u.role, u.status, u.channel_order, u.inbox_order, j.name AS job_name ' +
+    'SELECT u.id, u.email, u.name, u.role, u.status, u.channel_order, u.inbox_order, u.notify_off, j.name AS job_name ' +
     'FROM users u LEFT JOIN jobs j ON j.id = u.job_id WHERE u.id = ?'
   );
   return (req, res, next) => {

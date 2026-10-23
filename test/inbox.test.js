@@ -146,7 +146,7 @@ test('문의함 수집: 새 메일만 넣고, 다시 받아도 중복 없음, �
   const rows = () => db.prepare('SELECT external_id, status FROM inquiries ORDER BY external_id').all().map(r => [r.external_id, r.status]);
   assert.deepStrictEqual(rows(), [['1:1', 'open'], ['1:2', 'open'], ['1:3', 'answered']]);
   assert.strictEqual(notes.length, 1);
-  assert.match(notes[0].title, /새 문의 \(지메일\)/, '오래된 메일·이미 답장한 메일은 알리지 않음');
+  assert.match(notes[0].title, /새 메일 \(지메일\)/, '오래된 메일·이미 답장한 메일은 알리지 않음 (메일은 새 메일로 따로)');
   assert.strictEqual(JSON.parse(db.prepare("SELECT value FROM settings WHERE key = 'inbox_state_gmail'").get().value).lastUid, 9);
 
   const r2 = await col.run();

@@ -9,8 +9,18 @@ const { EventHub } = require('./events');
 const { claimLabel } = require('./channels/labels');
 const { ENDED_SQL } = require('./collector');
 
+// 직원이 끈 알림 칸 목록
+function notifyOff(user) {
+  try {
+    const list = JSON.parse((user && user.notify_off) || '[]');
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
 function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
-  const activeUserStmt = db.prepare("SELECT id, role FROM users WHERE id = ? AND status = 'active'");
+  const activeUserStmt = db.prepare("SELECT id, role, notify_off FROM users WHERE id = ? AND status = 'active'");
   const setting = key => {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
     return row ? row.value : null;
@@ -33,9 +43,16 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
     }
   };
   const unassignedReceivers = receivers(isUnassignedRecipient);
+  // 메일함·문의함 알림을 끄지 않은 직원 (box: 'mail' / 'inbox')
+  const boxReceivers = box => receivers(u => !notifyOff(u).includes(box));
 
   function notify(type, { title, body, url }, canReceive) {
     hub.send('notify', { type, title, body, url }, canReceive);
+  }
+
+  // 새 메일·새 문의 알림: 그 칸 알림을 끈 직원에게는 보내지 않는다
+  function inboxNew(box, payload) {
+    notify(box === 'mail' ? 'new_mail' : 'new_inquiry', payload, boxReceivers(box));
   }
 
   // 주문 목록·카드를 보고 있는 화면들에게 "다시 불러오라" 고 알린다
@@ -166,7 +183,7 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
     return true;
   }
 
-  return { hub, notify, ordersChanged, inboxChanged, calendarChanged, checkUnassigned, checkStorage, afterCollect, signup, unassignedCount, unassignedBanner };
+  return { hub, notify, inboxNew, ordersChanged, inboxChanged, calendarChanged, checkUnassigned, checkStorage, afterCollect, signup, unassignedCount, unassignedBanner };
 }
 
-module.exports = { createNotifier };
+module.exports = { notifyOff, createNotifier };

@@ -35,7 +35,21 @@
              schedule: { href: '/schedule', label: '일정', count: 0 },
            };
            (brand.navOrder || Object.keys(navItems)).forEach(key => { const it = navItems[key]; if (!it) return; %>
-          <a href="<%= it.href %>" class="<%= section === key ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon(key) %></svg><span><%= it.label %><% if (it.count > 0) { %> <span class="badge"><%= it.count %></span><% } %></span></a>
+          <%# 메일함·문의함은 종 버튼으로 알림(숫자·새 소식)을 직원마다 끄고 켤 수 있다 %>
+          <% const box = key === 'mail' || key === 'inbox' ? key : null; const off = box && (locals.notifyOff || []).includes(box); %>
+          <div class="nav-row<%= off ? ' off' : '' %>">
+          <a href="<%= it.href %>" class="<%= section === key ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon(key) %></svg><span><%= it.label %><% if (it.count > 0 && !off) { %> <span class="badge"><%= it.count %></span><% } %></span></a>
+          <% if (box) { %>
+            <form method="post" action="/me/notify/<%= box %>" class="nav-bell-form">
+              <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
+              <input type="hidden" name="back" value="<%= locals.currentUrl || '/' %>">
+              <button type="submit" class="nav-bell" aria-pressed="<%= off ? 'false' : 'true' %>"
+                      title="<%= it.label %> 알림 <%= off ? '꺼짐 · 눌러서 켜기' : '켜짐 · 눌러서 끄기' %>" aria-label="<%= it.label %> 알림 <%= off ? '켜기' : '끄기' %>">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/><% if (off) { %><path d="M4 4l16 16"/><% } %></svg>
+              </button>
+            </form>
+          <% } %>
+          </div>
         <% }) %>
         <% if (user.role === 'admin') { %>
           <a href="/stats" class="<%= section === 'stats' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('stats') %></svg><span>통계</span></a>
