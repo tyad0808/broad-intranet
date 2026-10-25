@@ -207,9 +207,9 @@
           <ul class="oi-items">
             <% g.items.forEach(i => { %>
               <li class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
-                <% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %>
-                <span class="oi-name"><%= i.product_name %></span>
-                <div class="muted"><%= i.option_text || '' %><%= i.option_text ? ' · ' : '' %><%= i.quantity %>개</div>
+                <%# 상품 이름·옵션은 한 줄씩, 넘치면 … (마우스를 올리면 전체) %>
+                <div class="oi-line" title="<%= i.product_name %>"><% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %><span class="oi-name"><%= i.product_name %></span></div>
+                <div class="muted oi-opt"><% if (i.option_text) { %><span class="oi-line" title="<%= i.option_text %>"><%= i.option_text %></span><span class="oi-qty">&nbsp;· <%= i.quantity %>개</span><% } else { %><span class="oi-qty"><%= i.quantity %>개</span><% } %></div>
               </li>
             <% }) %>
           </ul>

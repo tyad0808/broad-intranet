@@ -5,11 +5,14 @@ const { applyOrders } = require('../src/collector');
 const { safeBack } = require('../src/routes/orders');
 const { startServer, addUser, loginAs } = require('./helpers');
 
+// 결제 시각: 오늘 기준 최근 (번호가 클수록 나중). 고정 날짜는 '끝난 주문 2주 뒤 숨김' 때문에 시간이 지나면 깨진다
+const recent = id => new Date(Date.now() - (100 - id) * 60 * 1000).toISOString();
+
 function order(id, extra = {}) {
   return {
     channel: 'smartstore', channel_order_id: `O${id}`, channel_item_id: `P${id}`, product_name: `상품${id}`,
     option_text: null, quantity: 1, buyer_name: '구매자', receiver_name: `수령${id}`, receiver_phone: '010-0000-0000',
-    receiver_address: '서울', paid_at: `2026-10-1${id}T01:00:00.000Z`, channel_status: 'PAYED', channel_confirmed: 0, ...extra,
+    receiver_address: '서울', paid_at: recent(id), channel_status: 'PAYED', channel_confirmed: 0, ...extra,
   };
 }
 

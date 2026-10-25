@@ -506,6 +506,11 @@ form.inline { display: inline; margin: 0; }
 .oi-name { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
 .oi-items li.addon .oi-name { font-weight: 500; font-size: 14px; }
 .oi-items .muted { font-size: 13px; }
+.oi-items li { min-width: 0; }
+.oi-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oi-opt { display: flex; min-width: 0; }
+.oi-opt .oi-line { min-width: 0; }
+.oi-qty { flex: none; white-space: nowrap; }
 .oi-title { font-weight: 600; }
 .oi-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .cell { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; }
