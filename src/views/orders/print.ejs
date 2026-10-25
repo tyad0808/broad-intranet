@@ -16,9 +16,8 @@
     <button type="button" data-close class="ghost">닫기</button>
   </div>
 
-  <% const ymd = v => (v ? kst(v).slice(0, 10) : '-'); %>
   <% sheets.forEach((s, n) => { const o = s.order; const c = channelInfo(o.channel); %>
-  <article class="sheet">
+  <article class="sheet<%= s.items.length >= 9 ? ' dense' : '' %>">
     <header class="sheet-head">
       <div class="brand"><% if (brand.logoUrl) { %><img src="<%= brand.logoUrl %>" alt=""><% } %><span><%= brand.name %></span></div>
       <h1>발주서</h1>

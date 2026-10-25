@@ -458,14 +458,14 @@ test('발주서 출력: 체크한 주문을 한 장에 하나씩 (같은 주문�
   db.prepare("UPDATE orders SET memo = '양면테이프 꼭' WHERE id = ?").run(ids[0]);
   const page = await kim.request(`/orders/print?ids=${ids.join(',')}`);
   assert.strictEqual(page.status, 200);
-  assert.strictEqual((page.text.match(/<article class="sheet">/g) || []).length, 2, '같은 주문번호(O1)는 한 장');
+  assert.strictEqual((page.text.match(/<article class="sheet[^"]*">/g) || []).length, 2, '같은 주문번호(O1)는 한 장');
   assert.ok(page.text.includes('아주 긴 옵션 '.repeat(20).trim()), '옵션 전체');
   assert.match(page.text, /양면테이프 꼭/);
   assert.match(page.text, /받는 분/);
   assert.match(page.text, /가공·재단/);
   assert.match(page.text, /src="\/print.js"/);
   const one = await kim.request(`/orders/${ids[1]}/print`);
-  assert.strictEqual((one.text.match(/<article class="sheet">/g) || []).length, 1);
+  assert.strictEqual((one.text.match(/<article class="sheet[^"]*">/g) || []).length, 1);
   assert.strictEqual((await kim.request('/orders/print?ids=')).status, 400);
   assert.match((await kim.request(`/orders/${ids[0]}`)).text, new RegExp(`href="/orders/${ids[0]}/print"`));
   assert.match((await kim.request('/')).text, /data-print-selected/);
