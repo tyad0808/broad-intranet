@@ -534,7 +534,7 @@ form.inline { display: inline; margin: 0; }
 @media (min-width: 1100px) {
   .order-head {
     display: grid;
-    grid-template-columns: 20px minmax(0, 1fr) 150px 120px 160px 140px;
+    grid-template-columns: 20px minmax(0, 1fr) 220px 120px 160px 130px;
     gap: 14px;
     align-items: center;
     margin: 0;
@@ -549,13 +549,13 @@ form.inline { display: inline; margin: 0; }
   }
   .order-head + .order-list { border-radius: 0 0 var(--radius) var(--radius); }
   .order-head .check-all-text { display: none; }
-  .order-head + .order-list > .order-item { display: grid; grid-template-columns: 20px minmax(0, 1fr) 150px 120px 160px 140px; gap: 14px; }
+  .order-head + .order-list > .order-item { display: grid; grid-template-columns: 20px minmax(0, 1fr) 220px 120px 160px 130px; gap: 14px; }
   .order-head + .order-list > .order-item > .oi-meta { display: contents; }
   .order-head + .order-list .cell { align-self: center; }
-  .order-head + .order-list .c-stage, .order-head + .order-list .c-due { flex-direction: column; align-items: flex-start; gap: 6px; }
-  /* 주문 단계 글자(발주 등)는 디자인 단계 상자 바로 위에 띄워서, 상자·담당·상태가 한 줄(가운데)에 맞게 */
-  .order-head + .order-list .c-stage { position: relative; }
-  .order-head + .order-list .c-stage > .pill.stage { position: absolute; left: 0; bottom: calc(100% + 4px); white-space: nowrap; line-height: 1.2; }
+  .order-head + .order-list .c-due { flex-direction: column; align-items: flex-start; gap: 6px; }
+  /* 주문 단계(발주 등)는 디자인 단계 상자 왼쪽에 같은 높이의 회색 꼬리표로 → 한 줄로 나란히 */
+  .order-head + .order-list .c-stage { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 6px; }
+  .order-head + .order-list .c-stage > .pill.stage { height: 30px; padding: 0 9px; border-radius: 7px; background: var(--line-2); color: var(--text-2); font-size: 13px; }
 }
 @media (max-width: 1099px) {
   .order-head:has(.check-all) { display: flex; align-items: center; margin: 0 0 8px; }
