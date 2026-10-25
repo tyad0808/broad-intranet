@@ -14,6 +14,9 @@ const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
 
+// 발주서 맨 아래 작업 확인 칸 (필요 없는 칸은 여기서 빼면 된다)
+const PRINT_STEPS = ['디자인', '시안 확인', '출력', '가공·재단', '검수', '포장'];
+
 const RESULT_WORD = { ok: '완료', partial: '일부 완료', fail: '실패', unknown: '확인 필요', practice: '연습', skip: '건너뜀' };
 
 const VIEWS = {
@@ -446,6 +449,42 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
     // 목록의 같은 위치로 돌아간다 (#o12 처럼 주문 위치로 스크롤)
     res.redirect(`${back}#o${items[0].id}`);
   });
+
+  // ───────── 발주서 출력 (A4 한 장에 주문 하나) ─────────
+  // /orders/print?ids=3,7,9 (목록에서 체크한 주문) · /orders/12/print (주문 하나)
+  router.get('/orders/print', (req, res) => {
+    const ids = pickIds(String(req.query.ids || '').split(','));
+    if (ids.error) return res.status(400).render('error', { title: '발주서', message: ids.error });
+    renderPrint(res, ids);
+  });
+  router.get('/orders/:id/print', (req, res) => renderPrint(res, [Number(req.params.id)]));
+
+  function renderPrint(res, ids) {
+    const seen = new Set();
+    const sheets = [];
+    for (const id of ids) {
+      const order = findOrder(id);
+      if (!order) continue;
+      const key = `${order.channel}:${order.channel_order_id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const items = groupItems(order);
+      const main = items[0];
+      const design = db.prepare('SELECT name FROM design_stages WHERE id = ?').get(main.design_stage_id || firstDesignId() || -1);
+      sheets.push({
+        order: main, items,
+        stageName: order.stage_name,
+        assigneeName: order.assignee_name,
+        designName: design ? design.name : null,
+        sourceName: main.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(main.source_id) || {}).name : null,
+        today: items.some(i => i.channel_status === 'PAYED' && (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY')),
+        shipDue: items.filter(i => i.channel_status === 'PAYED' && i.ship_due).map(i => i.ship_due).sort()[0] || null,
+        totalQty: items.reduce((n, i) => n + (Number(i.quantity) || 0), 0),
+      });
+    }
+    if (!sheets.length) return res.status(404).render('error', { title: '발주서', message: '주문을 찾을 수 없습니다.' });
+    res.render('orders/print', { title: `발주서 ${sheets.length}건`, sheets, printedAt: new Date().toISOString(), STEPS: PRINT_STEPS });
+  }
 
   // ───────── 2차: 스마트스토어 발주확인·발송처리 ─────────
   // ※ '/orders/bulk/...' 를 '/orders/:id' 보다 먼저 등록해야 bulk 가 주문 번호로 읽히지 않는다

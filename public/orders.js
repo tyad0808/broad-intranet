@@ -34,7 +34,7 @@ function syncBulkBar() {
   // 버튼마다 실제로 처리할 수 있는 주문 수 (발주확인 전 / 발송 가능)
   for (const button of bar.querySelectorAll('[data-bulk-kind]')) {
     const kind = button.dataset.bulkKind;
-    const n = checked.filter(box => (box.dataset.can || '').split(' ').includes(kind)).length;
+    const n = kind === 'any' ? checked.length : checked.filter(box => (box.dataset.can || '').split(' ').includes(kind)).length;
     button.querySelector('[data-n]').textContent = n;
     button.disabled = n === 0;
   }
@@ -46,6 +46,13 @@ document.addEventListener('change', event => {
   if (event.target.matches('input[name="ids"], [data-check-all]')) syncBulkBar();
 });
 document.addEventListener('click', event => {
+  // 체크한 주문의 발주서를 새 창에서 (한 장에 주문 하나)
+  const print = event.target.closest('[data-print-selected]');
+  if (print) {
+    const ids = [...document.querySelectorAll('input[name="ids"][form="bulk-form"]:checked')].map(box => box.value);
+    if (ids.length) window.open(`/orders/print?ids=${ids.join(',')}`, '_blank', 'noopener');
+    return;
+  }
   if (event.target.matches('[data-bulk-clear]')) {
     document.querySelectorAll('input[name="ids"][form="bulk-form"], [data-check-all]').forEach(box => { box.checked = false; });
     syncBulkBar();

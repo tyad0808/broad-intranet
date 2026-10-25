@@ -1023,3 +1023,7 @@ code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak)
   .nav-row { display: contents; }
   .nav-bell-form { display: none; }
 }
+
+/* 주문 상세 위쪽: 채널·주문번호 + 발주서 출력 */
+.detail-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 6px; }
+.detail-top .detail-channel { margin: 0; flex: 1; min-width: 0; }

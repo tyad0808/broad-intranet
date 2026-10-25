@@ -6,7 +6,10 @@
 <div class="detail" data-order-id="<%= order.id %>">
   <section class="card">
     <% const c = channelInfo(order.channel); %>
-    <p class="detail-channel"><span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %> · 주문번호 <%= order.channel_order_id %></p>
+    <div class="detail-top">
+      <p class="detail-channel"><span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %> · 주문번호 <%= order.channel_order_id %></p>
+      <a class="btn-sm" href="/orders/<%= order.id %>/print" target="_blank" rel="noopener">발주서 출력</a>
+    </div>
     <% claimItems.forEach(i => { const level = claimLevel(i.claim_status); if (!level) return; %>
       <p class="claim-box <%= level === 'done' ? 'done' : '' %>">
         <strong><%= claimLabel(i.claim_status) %></strong>

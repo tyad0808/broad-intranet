@@ -1,0 +1,91 @@
+<!doctype html>
+<%# 발주서: A4 한 장에 주문 하나. 흑백 프린터에서도 잘 보이게 검정·회색만 쓴다 %>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %> · <%= brand.name %></title>
+  <link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
+  <link rel="stylesheet" href="/print.css">
+</head>
+<body>
+  <div class="print-bar no-print">
+    <strong>발주서 <%= sheets.length %>건</strong>
+    <span>A4 · 한 장에 주문 하나</span>
+    <button type="button" data-print>인쇄하기</button>
+    <button type="button" data-close class="ghost">닫기</button>
+  </div>
+
+  <% const ymd = v => (v ? kst(v).slice(0, 10) : '-'); %>
+  <% sheets.forEach((s, n) => { const o = s.order; const c = channelInfo(o.channel); %>
+  <article class="sheet">
+    <header class="sheet-head">
+      <div class="brand"><% if (brand.logoUrl) { %><img src="<%= brand.logoUrl %>" alt=""><% } %><span><%= brand.name %></span></div>
+      <h1>발주서</h1>
+      <div class="printed">출력 <%= kst(printedAt) %><br><%= n + 1 %> / <%= sheets.length %></div>
+    </header>
+
+    <section class="key">
+      <div class="key-main">
+        <div class="label"><%= c.name %><%= s.sourceName ? ` · ${s.sourceName}` : '' %> 주문번호</div>
+        <div class="order-no"><%= o.source_order_no || o.channel_order_id %></div>
+        <div class="buyer"><%= o.buyer_name || o.receiver_name || '-' %> 님 · 결제 <%= kst(o.paid_at) %></div>
+      </div>
+      <div class="key-dates">
+        <div><span class="label">납기</span><strong><%= o.due_date || '-' %></strong></div>
+        <div><span class="label">발송기한</span><strong><%= s.shipDue ? kst(s.shipDue) : '-' %></strong><% if (s.today) { %> <span class="flag">오늘출발</span><% } %></div>
+      </div>
+    </section>
+
+    <h2>상품 <span class="sub"><%= s.items.length %>종 · 총 <%= s.totalQty %>개</span></h2>
+    <table class="items">
+      <thead><tr><th class="no">No</th><th>상품명 · 옵션</th><th class="qty">수량</th><th class="chk">확인</th></tr></thead>
+      <tbody>
+        <% s.items.forEach((i, k) => { %>
+          <tr class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
+            <td class="no"><%= k + 1 %></td>
+            <td>
+              <div class="name"><% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %><%= i.product_name %></div>
+              <% if (i.option_text) { %><div class="opt"><%= i.option_text %></div><% } %>
+            </td>
+            <td class="qty"><%= i.quantity %></td>
+            <td class="chk"><span class="box"></span></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+
+    <div class="two">
+      <section>
+        <h2>작업</h2>
+        <dl>
+          <dt>담당 디자이너</dt><dd><%= s.assigneeName || '미지정' %></dd>
+          <dt>주문 단계</dt><dd><%= s.stageName || '-' %></dd>
+          <dt>디자인 단계</dt><dd><%= s.designName || '-' %></dd>
+          <dt>파일 위치</dt><dd class="mono"><%= o.nas_path || '-' %></dd>
+        </dl>
+      </section>
+      <section>
+        <h2>배송</h2>
+        <dl>
+          <dt>주문자</dt><dd><%= o.buyer_name || '-' %><%= o.buyer_phone ? ` · ${o.buyer_phone}` : '' %></dd>
+          <dt>받는 분</dt><dd><%= o.receiver_name || '-' %></dd>
+          <dt>연락처</dt><dd><%= o.receiver_phone || '-' %></dd>
+          <dt>주소</dt><dd><%= o.receiver_address || '-' %></dd>
+        </dl>
+      </section>
+    </div>
+
+    <h2>메모</h2>
+    <div class="memo"><%= o.memo || '' %></div>
+
+    <footer class="steps">
+      <% STEPS.forEach(step => { %>
+        <div class="step"><span class="box"></span><span class="step-name"><%= step %></span><span class="sign">확인</span></div>
+      <% }) %>
+    </footer>
+  </article>
+  <% }) %>
+  <script src="/print.js"></script>
+</body>
+</html>

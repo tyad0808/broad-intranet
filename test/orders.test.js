@@ -449,3 +449,24 @@ test('확인 필요: 취소·반품·교환 요청 중인 주문과 납기 지�
   assert.match(late, />상품3</);
   assert.doesNotMatch(late, />상품1</);
 });
+
+test('발주서 출력: 체크한 주문을 한 장에 하나씩 (같은 주문번호는 한 장), 옵션은 줄임 없이, 고객 정보·메모·작업 확인 칸', async t => {
+  const { db, kim } = await setup(t);
+  // setup 의 주문 O1·O2·O3 + O1 에 상품 하나 더 (P4)
+  applyOrders(db, [order(4, { channel_order_id: 'O1', option_text: '아주 긴 옵션 '.repeat(20).trim() })]);
+  const ids = db.prepare("SELECT id FROM orders WHERE channel_item_id IN ('P1', 'P2', 'P4') ORDER BY id").all().map(r => r.id);
+  db.prepare("UPDATE orders SET memo = '양면테이프 꼭' WHERE id = ?").run(ids[0]);
+  const page = await kim.request(`/orders/print?ids=${ids.join(',')}`);
+  assert.strictEqual(page.status, 200);
+  assert.strictEqual((page.text.match(/<article class="sheet">/g) || []).length, 2, '같은 주문번호(O1)는 한 장');
+  assert.ok(page.text.includes('아주 긴 옵션 '.repeat(20).trim()), '옵션 전체');
+  assert.match(page.text, /양면테이프 꼭/);
+  assert.match(page.text, /받는 분/);
+  assert.match(page.text, /가공·재단/);
+  assert.match(page.text, /src="\/print.js"/);
+  const one = await kim.request(`/orders/${ids[1]}/print`);
+  assert.strictEqual((one.text.match(/<article class="sheet">/g) || []).length, 1);
+  assert.strictEqual((await kim.request('/orders/print?ids=')).status, 400);
+  assert.match((await kim.request(`/orders/${ids[0]}`)).text, new RegExp(`href="/orders/${ids[0]}/print"`));
+  assert.match((await kim.request('/')).text, /data-print-selected/);
+});
