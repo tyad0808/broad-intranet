@@ -2,10 +2,7 @@
 <% const ls = logen.ship && logen.ship.status === 'registered' ? logen.ship : null; %>
 <section class="card logen-card">
   <h2>로젠 송장<% if (logen.env !== 'prod') { %> <span class="muted small">테스트 서버</span><% } %></h2>
-  <ol class="steps">
-    <li class="<%= ls || logen.slip ? 'done' : '' %>">로젠 등록 <span><%= ls || logen.slip ? '완료' : logen.canRegister ? '대기' : '-' %></span></li>
-    <li class="<%= logen.slip ? 'done' : '' %>">송장번호 <span><%= logen.slip || (ls ? '출력 대기' : '-') %></span></li>
-  </ol>
+  <% if (logen.slip) { %><p class="logen-slip"><span class="st-badge sb-ready">송장번호</span> <strong><%= logen.slip %></strong></p><% } %>
 
   <% if (logen.canRegister) { %>
     <form method="post" action="/orders/<%= order.id %>/logen" data-once

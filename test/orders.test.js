@@ -219,7 +219,7 @@ test('주문 카드에서 저장하면 같은 주문의 상품 모두에 적용�
   const { kim, idOf, row, designId } = await groupSetup(t);
   const page = await kim.request(`/orders/${idOf('P1')}`);
   assert.match(page.text, /무료 양면테이프/);
-  assert.match(page.text, /상품 2개에 함께 저장됩니다/);
+  assert.match(page.text, /상품 2개에 함께 저장돼요/);
   await save(kim, idOf('P1'), { design_stage_id: String(designId('컨펌 후 파일전송')), due_date: '2026-10-22', memo: '같이 작업' });
   for (const p of ['P1', 'P9']) {
     const r = row(p);

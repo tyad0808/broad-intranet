@@ -1,38 +1,124 @@
 <%- include('../partials/header') %>
+<%
+  const c = channelInfo(order.channel);
+  const isManual = order.channel === 'manual';
+  const stt = order.channel_status;
+  const canceled = stt === 'CANCELED';
+  const allConfirmed = items.every(i => i.channel_confirmed);
+  const designName = (designStages.find(s => s.id === currentDesignId) || {}).name || '-';
+  const ls = logen && logen.ship && logen.ship.status === 'registered' ? logen.ship : null;
+  const isToday = items.some(i => i.channel_status === 'PAYED' && (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY'));
+  const shipDueText = (() => { const d = items.filter(i => i.channel_status === 'PAYED' && i.ship_due && !i.ship_delayed).map(i => i.ship_due).sort()[0]; return d ? shipDueInfo(d).text : ''; })();
+  const short = t => kst(t).slice(5, 16);
+  // 진행 단계 띠: 결제(등록) → 발주확인(입금) → 디자인·제작 → 로젠 송장 → 발송. 끝난 칸은 ✓, 지금 칸은 파란 밑줄
+  const steps = [
+    { k: isManual ? '등록' : '결제', v: short(order.paid_at), done: true },
+    isManual
+      ? { k: '입금', v: stt === 'PAYMENT_WAITING' ? '대기' : canceled ? '-' : '완료', done: stt !== 'PAYMENT_WAITING' && !canceled }
+      : { k: '발주확인', v: allConfirmed ? '완료' : canConfirm ? '대기' : '-', done: allConfirmed },
+    { k: '디자인·제작', v: designName, done: Boolean(shipped) },
+    ...(logen ? [{ k: '로젠 송장', v: logen.slip || (ls ? '출력 대기' : logen.canRegister ? '등록 대기' : '-'), done: Boolean(logen.slip) }] : []),
+    { k: '발송', v: shipped ? short(shipped.shipped_at) : canceled ? '취소' : shipDueText || '대기', done: Boolean(shipped) },
+  ];
+  const nowIdx = canceled ? -1 : steps.findIndex(s => !s.done);
+%>
 <% if (!locals.embed) { %>
   <p class="back-row"><a href="<%= back %>" class="btn-back">← 목록으로</a></p>
 <% } %>
 
+<%# 머리: 채널·주문번호·결제일 + 상품 이름 + 발주서 출력 %>
+<div class="detail-head">
+  <div class="detail-head-main">
+    <p class="detail-channel">
+      <span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %><% if (isManual && sourceName) { %> · <%= sourceName %><% } %> · 주문번호 <%= order.channel_order_id %> · <%= kst(order.paid_at) %> <%= isManual ? '등록' : '결제' %>
+      <% if (isToday) { %><span class="today-badge" title="스마트스토어 오늘출발 상품">오늘출발</span><% } %>
+      <% if (canceled) { %><span class="st-badge sb-cancel">취소</span><% } %>
+    </p>
+    <h1 class="detail-title"><%= items[0].product_name %><% if (items.length > 1) { %> <span class="muted">외 <%= items.length - 1 %>개</span><% } %></h1>
+  </div>
+  <div class="page-actions">
+    <a class="btn-sm" href="/orders/<%= order.id %>/print" target="_blank" rel="noopener">🖨 발주서 출력</a>
+  </div>
+</div>
+
+<ol class="progress" aria-label="진행 단계">
+  <% steps.forEach((s, i) => { %>
+    <li class="<%= s.done ? 'done' : '' %> <%= i === nowIdx ? 'now' : '' %>"><span class="pk"><%= i + 1 %>. <%= s.k %></span><strong class="pv"><%= s.v %></strong></li>
+  <% }) %>
+</ol>
+
 <div class="detail" data-order-id="<%= order.id %>">
+  <div class="detail-main">
+  <% claimItems.forEach(i => { const level = claimLevel(i.claim_status); if (!level) return; %>
+    <p class="claim-box <%= level === 'done' ? 'done' : '' %>">
+      <strong><%= claimLabel(i.claim_status) %></strong>
+      <%= i.product_name %><%= level === 'open' ? ` — ${order.channel === 'godo' ? '자사몰 관리자' : order.channel === 'coupang' ? '쿠팡 WING' : '판매자센터'}에서 먼저 처리하세요. 처리 전에는 발주확인·발송처리를 막아 둡니다.` : '' %>
+    </p>
+  <% }) %>
+
   <section class="card">
-    <% const c = channelInfo(order.channel); %>
-    <div class="detail-top">
-      <p class="detail-channel"><span class="ch ch-<%= c.cls %>"><%= c.mark %></span><%= c.name %> · 주문번호 <%= order.channel_order_id %></p>
-      <a class="btn-sm" href="/orders/<%= order.id %>/print" target="_blank" rel="noopener">발주서 출력</a>
-    </div>
-    <% claimItems.forEach(i => { const level = claimLevel(i.claim_status); if (!level) return; %>
-      <p class="claim-box <%= level === 'done' ? 'done' : '' %>">
-        <strong><%= claimLabel(i.claim_status) %></strong>
-        <%= i.product_name %><%= level === 'open' ? ` — ${order.channel === 'godo' ? '자사몰 관리자' : order.channel === 'coupang' ? '쿠팡 WING' : '판매자센터'}에서 먼저 처리하세요. 처리 전에는 발주확인·발송처리를 막아 둡니다.` : '' %>
-      </p>
-    <% }) %>
-    <ul class="oi-items detail-items">
+    <h2>상품 <span class="h2-sub"><%= items.length %>개</span></h2>
+    <ul class="item-list">
       <% items.forEach(i => { %>
         <li class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
-          <% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %>
-          <span class="oi-name <%= i.item_type === 'addon' ? '' : 'detail-title' %>"><%= i.product_name %></span>
-          <div class="muted"><%= i.option_text || '' %><%= i.option_text ? ' · ' : '' %><%= i.quantity %>개</div>
+          <div class="item-main">
+            <div class="item-name"><% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %><%= i.product_name %></div>
+            <% if (i.option_text) { %><div class="muted"><%= i.option_text %></div><% } %>
+            <div class="muted small item-status">
+              <%= isManual ? '' : `상품주문번호 ${i.channel_item_id} · ` %><%= i.channel_status_label ? `${channelInfo(i.channel).name} 상태: ${i.channel_status_label}` : channelStatusLabel(i.channel_status, i.channel) %><%= i.channel === 'manual' ? '' : i.channel_confirmed ? ' · 발주확인됨' : ' · 발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %>
+            </div>
+            <% const delayed = i.channel_status === 'PAYED' && i.ship_delayed ? delayInfo(i.ship_delayed, i.ship_due) : null; %>
+            <% const ship = i.channel_status === 'PAYED' && !delayed ? shipDueInfo(i.ship_due) : { text: '' }; %>
+            <% if (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY' || ship.text || delayed) { %>
+              <div class="ship-line">
+                <% if (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY') { %><span class="today-badge">오늘출발</span><% } %>
+                <% if (ship.text) { %><span class="pill <%= ship.cls %>"><%= ship.text %></span><% } %>
+                <% if (delayed) { %><span class="pill <%= delayed.cls %>" title="<%= delayed.title %>"><%= delayed.text %></span><% } %>
+              </div>
+            <% } %>
+          </div>
+          <div class="item-qty"><%= i.quantity %><small>개</small></div>
         </li>
       <% }) %>
     </ul>
-    <% if (items.length > 1) { %><p class="muted">아래 내용은 이 주문의 상품 <%= items.length %>개에 함께 저장됩니다.</p><% } %>
+  </section>
 
+  <section class="card">
+    <h2>작업 <span class="h2-sub"><%= items.length > 1 ? `상품 ${items.length}개에 함께 저장돼요` : '저장하면 담당자에게 알림이 가요' %></span></h2>
     <form method="post" action="/orders/<%= order.id %>" class="detail-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <input type="hidden" name="version" value="<%= order.version %>">
       <input type="hidden" name="back" value="<%= back %>">
 
       <div class="two-fields">
+        <label>디자인 단계
+          <% if (canPickStage) { %>
+            <select name="design_stage_id">
+              <% designStages.forEach(s => { if (!s.active && s.id !== currentDesignId) return; %>
+                <option value="<%= s.id %>" <%= s.id === currentDesignId ? 'selected' : '' %>><%= s.name %></option>
+              <% }) %>
+            </select>
+          <% } else { %>
+            <span class="readonly-value"><%= designName %> <span class="muted small">(디자이너만 변경)</span></span>
+          <% } %>
+        </label>
+        <label>담당 디자이너
+          <select name="assignee_id" class="<%= staffColor(order.assignee_id) %>">
+            <option value="">미지정</option>
+            <% if (order.assignee_id && !designers.some(d => d.id === order.assignee_id)) { %>
+              <option value="<%= order.assignee_id %>" selected><%= order.assignee_name %> (디자이너 아님)</option>
+            <% } %>
+            <% designers.forEach(d => { %>
+              <option value="<%= d.id %>" <%= d.id === order.assignee_id ? 'selected' : '' %>><%= d.name %><%= d.id === user.id ? ' (나)' : '' %></option>
+            <% }) %>
+          </select>
+        </label>
+      </div>
+
+      <div class="two-fields">
+        <label>납기
+          <input type="date" name="due_date" value="<%= order.due_date || '' %>">
+        </label>
         <label>주문 단계 <span class="muted small">(자동)</span>
           <% if (user.role === 'admin') { %>
             <select name="stage_id">
@@ -44,34 +130,7 @@
             <span class="readonly-value"><%= order.stage_name || '단계 없음' %></span>
           <% } %>
         </label>
-        <label>디자인 단계
-          <% if (canPickStage) { %>
-            <select name="design_stage_id">
-              <% designStages.forEach(s => { if (!s.active && s.id !== currentDesignId) return; %>
-                <option value="<%= s.id %>" <%= s.id === currentDesignId ? 'selected' : '' %>><%= s.name %></option>
-              <% }) %>
-            </select>
-          <% } else { %>
-            <span class="readonly-value"><%= (designStages.find(s => s.id === currentDesignId) || {}).name || '-' %> <span class="muted small">(디자이너만 변경)</span></span>
-          <% } %>
-        </label>
       </div>
-
-      <label>담당 디자이너
-        <select name="assignee_id" class="<%= staffColor(order.assignee_id) %>">
-          <option value="">미지정</option>
-          <% if (order.assignee_id && !designers.some(d => d.id === order.assignee_id)) { %>
-            <option value="<%= order.assignee_id %>" selected><%= order.assignee_name %> (디자이너 아님)</option>
-          <% } %>
-          <% designers.forEach(d => { %>
-            <option value="<%= d.id %>" <%= d.id === order.assignee_id ? 'selected' : '' %>><%= d.name %><%= d.id === user.id ? ' (나)' : '' %></option>
-          <% }) %>
-        </select>
-      </label>
-
-      <label>납기
-        <input type="date" name="due_date" value="<%= order.due_date || '' %>">
-      </label>
 
       <label>파일 위치 (NAS 경로)
         <input type="text" name="nas_path" value="<%= order.nas_path || '' %>" maxlength="300" placeholder="예: \\NAS\작업\2026\10\홍길동_명함">
@@ -81,14 +140,33 @@
         <textarea name="memo" rows="4" maxlength="2000" placeholder="작업 요청사항, 고객과 통화 내용 등"><%= order.memo || '' %></textarea>
       </label>
 
-      <div class="form-actions">
-        <button type="submit">저장</button>
+      <div class="form-actions end">
         <% if (isDesigner && order.assignee_id !== user.id) { %>
           <button type="submit" name="assignee_id" value="me" class="secondary">내가 맡기</button>
         <% } %>
+        <button type="submit">저장</button>
       </div>
     </form>
   </section>
+
+  <section class="card">
+    <h2>배송지 · 주문 정보</h2>
+    <dl class="info">
+      <dt>주문자</dt><dd><%= order.buyer_name || '-' %><% if (order.buyer_phone) { %> · <a href="tel:<%= order.buyer_phone %>"><%= order.buyer_phone %></a><% } %></dd>
+      <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
+      <dt>연락처</dt><dd><% if (order.receiver_phone) { %><a href="tel:<%= order.receiver_phone %>"><%= order.receiver_phone %></a><% } else { %>-<% } %></dd>
+      <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
+      <dt>채널</dt><dd><%= c.name %></dd>
+      <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
+      <% if (isManual) { %>
+        <dt>주문 출처</dt><dd><%= sourceName || '출처 미지정' %></dd>
+        <% if (order.source_order_no) { %><dt>판매처 주문번호</dt><dd><%= order.source_order_no %></dd><% } %>
+      <% } %>
+      <dt><%= isManual ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
+    </dl>
+    <% if (!isManual) { %><p class="muted small">주문 정보와 배송지는 <%= c.name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p><% } %>
+  </section>
+  </div>
 
   <div class="detail-side">
   <% if (['smartstore', 'coupang', 'godo'].includes(order.channel)) {
@@ -96,22 +174,17 @@
        // 쿠팡·자사몰의 발주확인 = 상품준비중 처리
        const isPrep = isCoupang || order.channel === 'godo'; %>
   <section class="card process-card">
-    <h2><%= channelInfo(order.channel).name %> 처리</h2>
+    <h2><%= c.name %> 처리</h2>
     <% if (order.channel === 'godo') { %>
       <p class="muted small">자사몰 관리자에서 처리한 것과 똑같이 고객에게 알림톡·SMS 가 나갑니다. 자사몰 관리자에서 직접 처리해도 5분 안에 여기 상태가 바뀝니다.</p>
     <% } %>
     <% if (actionModes[order.channel] !== 'live') { %>
       <p class="practice-note"><strong>연습 모드</strong> 버튼을 눌러도 <%= WRITE_CHANNEL_NAMES[order.channel] %> 보내지 않고 기록만 남깁니다.</p>
     <% } %>
-    <% const allConfirmed = items.every(i => i.channel_confirmed); %>
-    <ol class="steps">
-      <li class="<%= allConfirmed ? 'done' : '' %>">발주확인 <span><%= allConfirmed ? '완료' : canConfirm ? '대기' : '-' %></span></li>
-      <li class="<%= shipped ? 'done' : '' %>">발송처리 <span><%= shipped ? '완료' : canDispatch ? '대기' : '-' %></span></li>
-    </ol>
 
     <% if (canConfirm) { %>
       <form method="post" action="/orders/<%= order.id %>/confirm" data-once
-            data-confirm="'<%= items[0].product_name %>' 주문을 <%= channelInfo(order.channel).name %>에 <%= isPrep ? '상품준비중(발주확인)으로' : '발주확인' %> 처리할까요?&#10;고객에게 알림이 가고, 되돌릴 수 없습니다.">
+            data-confirm="'<%= items[0].product_name %>' 주문을 <%= c.name %>에 <%= isPrep ? '상품준비중(발주확인)으로' : '발주확인' %> 처리할까요?&#10;고객에게 알림이 가고, 되돌릴 수 없습니다.">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <button type="submit" class="wide"><%= isPrep ? '발주확인 (상품준비중) 보내기' : '발주확인 보내기' %></button>
@@ -165,6 +238,7 @@
 
     <% if (shipped) { %>
       <p class="shipped-line">
+        <span class="st-badge sb-done">발송 완료</span>
         <%= shipMethodLabel(shipped.ship_method) %><% if (shipped.ship_company) { %> · <%= courierLabel(shipped.ship_company) %> <%= shipped.tracking_no %><% } %>
         <span class="muted">(<%= kst(shipped.shipped_at) %>)</span>
       </p>
@@ -184,14 +258,10 @@
       </ul>
     <% } %>
   </section>
-  <% } else if (order.channel === 'manual') { %>
-  <% const st = order.channel_status; const editUrl = `/orders/${order.id}/manual-edit${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}`; %>
+  <% } else if (isManual) { %>
+  <% const st = stt; const editUrl = `/orders/${order.id}/manual-edit${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}`; %>
   <section class="card process-card">
     <h2>수기 주문</h2>
-    <ol class="steps">
-      <li class="<%= st !== 'PAYMENT_WAITING' && st !== 'CANCELED' ? 'done' : '' %>">입금 <span><%= st === 'PAYMENT_WAITING' ? '대기' : st === 'CANCELED' ? '-' : '완료' %></span></li>
-      <li class="<%= st === 'DELIVERED' ? 'done' : '' %>">발송 <span><%= st === 'DELIVERED' ? '완료' : st === 'CANCELED' ? '-' : '대기' %></span></li>
-    </ol>
     <% if (st === 'CANCELED') { %><p class="claim-box"><strong>취소된 주문</strong></p><% } %>
     <dl class="info manual-pay">
       <dt>결제 방법</dt><dd><%= PAY_METHODS[order.pay_method] || '-' %></dd>
@@ -221,6 +291,7 @@
 
     <% if (shipped) { %>
       <p class="shipped-line">
+        <span class="st-badge sb-done">발송 완료</span>
         <%= shipMethodLabel(shipped.ship_method) %><% if (shipped.ship_company) { %> · <%= courierLabel(shipped.ship_company) %> <%= shipped.tracking_no %><% } %>
         <span class="muted">(<%= kst(shipped.shipped_at) %>)</span>
       </p>
@@ -261,46 +332,6 @@
   </section>
   <% } %>
   <% if (logen) { %><%- include('../partials/logen-card', { logen, order, back }) %><% } %>
-
-  <section class="card">
-    <h2>주문 정보</h2>
-    <dl class="info">
-      <dt>채널</dt><dd><%= channelInfo(order.channel).name %></dd>
-      <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
-      <% if (order.channel === 'manual') { %>
-        <dt>주문 출처</dt><dd><%= sourceName || '출처 미지정' %></dd>
-        <% if (order.source_order_no) { %><dt>판매처 주문번호</dt><dd><%= order.source_order_no %></dd><% } %>
-      <% } %>
-      <dt><%= order.channel === 'manual' ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
-    </dl>
-    <h2>상품별 상태</h2>
-    <dl class="info">
-      <% items.forEach(i => { %>
-        <dt><%= i.item_type === 'addon' ? '추가상품' : '상품' %></dt>
-        <dd>
-          <%= i.product_name %>
-          <div class="muted">상품주문번호 <%= i.channel_item_id %> · <%= i.channel_status_label ? `${channelInfo(i.channel).name} 상태: ${i.channel_status_label}` : channelStatusLabel(i.channel_status, i.channel) %><%= i.channel === 'manual' ? '' : i.channel_confirmed ? ' · 발주확인됨' : ' · 발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %></div>
-          <% const delayed = i.channel_status === 'PAYED' && i.ship_delayed ? delayInfo(i.ship_delayed, i.ship_due) : null; %>
-          <% const ship = i.channel_status === 'PAYED' && !delayed ? shipDueInfo(i.ship_due) : { text: '' }; %>
-          <% if (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY' || ship.text || delayed) { %>
-            <div class="ship-line">
-              <% if (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY') { %><span class="today-badge">오늘출발</span><% } %>
-              <% if (ship.text) { %><span class="pill <%= ship.cls %>"><%= ship.text %></span><% } %>
-              <% if (delayed) { %><span class="pill <%= delayed.cls %>" title="<%= delayed.title %>"><%= delayed.text %></span><% } %>
-            </div>
-          <% } %>
-        </dd>
-      <% }) %>
-    </dl>
-    <h2>배송지</h2>
-    <dl class="info">
-      <dt>주문자</dt><dd><%= order.buyer_name || '-' %><% if (order.buyer_phone) { %> · <a href="tel:<%= order.buyer_phone %>"><%= order.buyer_phone %></a><% } %></dd>
-      <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
-      <dt>연락처</dt><dd><% if (order.receiver_phone) { %><a href="tel:<%= order.receiver_phone %>"><%= order.receiver_phone %></a><% } else { %>-<% } %></dd>
-      <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
-    </dl>
-    <% if (order.channel !== 'manual') { %><p class="muted">주문 정보와 배송지는 <%= channelInfo(order.channel).name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p><% } %>
-  </section>
   <%- include('../partials/customer-history', { cust: customer }) %>
   </div>
 </div>
