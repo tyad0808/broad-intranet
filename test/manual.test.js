@@ -103,7 +103,7 @@ test('입금 확인 → 발송 완료 기록: 상태가 바뀌고 진행 중에�
   assert.ok(rows.every(r => r.channel_status === 'DELIVERED' && r.tracking_no === '123456789012'));
   const list = (await ctx.kim.request('/')).text;
   assert.doesNotMatch(list, />현수막 3000x900</, '진행 중에서 빠진다');
-  assert.match((await ctx.kim.request('/?view=all')).text, /발송 · 로젠택배 123456789012/);
+  assert.match((await ctx.kim.request('/?view=all')).text, /발송 완료[\s\S]*로젠택배 123456789012/);
   assert.deepStrictEqual(ctx.logs().map(l => [l.action, l.mode]), [['create', 'local'], ['paid', 'local'], ['dispatch', 'local']]);
 });
 

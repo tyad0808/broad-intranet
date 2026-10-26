@@ -35,16 +35,18 @@
 
   // 두 번 눌러 같은 요청이 두 번 가지 않도록, 확인 후에는 버튼을 잠근다
   const sent = new WeakSet();
+  let lastSubmitter = null; // 방금 누른 버튼에만 회전 표시를 붙인다
 
   // data-once: 한 번 제출하면 버튼을 잠근다 (form.elements 에는 form="..." 로 연결된 바깥 버튼도 들어 있다)
   function lock(form) {
     sent.add(form);
-    setTimeout(() => [...form.elements].forEach(el => { if (el.tagName === 'BUTTON') el.disabled = true; }), 0);
+    setTimeout(() => [...form.elements].forEach(el => { if (el.tagName === 'BUTTON') { el.disabled = true; if (el === lastSubmitter) el.classList.add('busy'); } }), 0);
   }
 
   document.addEventListener('submit', event => {
     const form = event.target;
     const button = event.submitter;
+    lastSubmitter = button || null;
     if (sent.has(form)) {
       event.preventDefault();
       return;
