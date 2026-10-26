@@ -14,15 +14,16 @@
   };
   const md = k => (k.length === 7 ? `${Number(k.slice(5))}월` : `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`);
 %>
-<div class="page-head">
-  <h1 class="page-title">통계</h1>
-  <p class="muted small"><%= fromDay %> ~ <%= toDay %> · 결제일 기준 · 관리자만 볼 수 있어요</p>
+<div class="page-head sticky-glass">
+  <div class="title-row">
+    <h1 class="page-title">통계</h1>
+    <nav class="view-seg" aria-label="통계 종류">
+      <a href="<%= link({ tab: 'sales' }) %>" class="<%= tab === 'sales' ? 'on' : '' %>">매출</a>
+      <a href="<%= link({ tab: 'staff' }) %>" class="<%= tab === 'staff' ? 'on' : '' %>">직원별 현황</a>
+    </nav>
+    <p class="page-sub"><%= fromDay %> ~ <%= toDay %> · 결제일 기준 · 관리자만 볼 수 있어요</p>
+  </div>
 </div>
-
-<nav class="tabs">
-  <a href="<%= link({ tab: 'sales' }) %>" class="<%= tab === 'sales' ? 'on' : '' %>">매출</a>
-  <a href="<%= link({ tab: 'staff' }) %>" class="<%= tab === 'staff' ? 'on' : '' %>">직원별 현황</a>
-</nav>
 
 <%# 기간: 빠른 선택 + 직접 고르기 (한 줄) %>
 <form method="get" action="/stats" class="filters" data-autosubmit>

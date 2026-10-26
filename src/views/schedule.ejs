@@ -1,7 +1,6 @@
 <%- include('partials/header') %>
-<div class="page-head">
-  <h1 class="page-title">일정</h1>
-  <p class="muted small">날짜 빈 곳을 누르면 일정을 넣을 수 있어요. '출고 N건' 을 누르면 그날 납기 주문을 봐요.</p>
+<div class="page-head sticky-glass">
+  <div class="title-row"><h1 class="page-title">일정</h1><p class="page-sub">날짜 빈 곳을 누르면 일정을 넣을 수 있어요. '출고 N건' 을 누르면 그날 납기 주문을 봐요.</p></div>
 </div>
 <section id="calendar-panel" class="card cal-page" aria-label="회사 일정">
   <%- include('partials/calendar', { cal }) %>

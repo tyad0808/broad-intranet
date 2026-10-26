@@ -1,12 +1,16 @@
-<nav class="tabs">
-  <a href="/admin/users" class="<%= tab === 'users' ? 'on' : '' %>">직원 관리<% if (pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
-  <a href="/admin/stages" class="<%= tab === 'stages' ? 'on' : '' %>">작업 단계</a>
-  <a href="/admin/sources" class="<%= tab === 'sources' ? 'on' : '' %>">주문 출처</a>
-  <a href="/admin/jobs" class="<%= tab === 'jobs' ? 'on' : '' %>">직무</a>
-  <a href="/admin/notify" class="<%= tab === 'notify' ? 'on' : '' %>">알림 설정</a>
-  <a href="/admin/collect" class="<%= tab === 'collect' ? 'on' : '' %>">주문 수집</a>
-  <a href="/admin/logen" class="<%= tab === 'logen' ? 'on' : '' %>">로젠 설정</a>
-  <a href="/admin/actions" class="<%= tab === 'actions' ? 'on' : '' %>">처리 기록</a>
-  <a href="/admin/storage" class="<%= tab === 'storage' ? 'on' : '' %>">저장 공간</a>
-  <a href="/admin/brand" class="<%= tab === 'brand' ? 'on' : '' %>">회사·로고</a>
+<%# 관리자 화면 공통 머리: 제목 + 알약 탭 (스크롤해도 위에 붙는다) %>
+<div class="page-head sticky-glass admin-head">
+  <h1 class="page-title">관리자</h1>
+<nav class="channel-chips admin-chips" aria-label="관리자 메뉴">
+  <a href="/admin/users" class="chip <%= tab === 'users' ? 'on' : '' %>">직원 관리<% if (pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
+  <a href="/admin/stages" class="chip <%= tab === 'stages' ? 'on' : '' %>">작업 단계</a>
+  <a href="/admin/sources" class="chip <%= tab === 'sources' ? 'on' : '' %>">주문 출처</a>
+  <a href="/admin/jobs" class="chip <%= tab === 'jobs' ? 'on' : '' %>">직무</a>
+  <a href="/admin/notify" class="chip <%= tab === 'notify' ? 'on' : '' %>">알림 설정</a>
+  <a href="/admin/collect" class="chip <%= tab === 'collect' ? 'on' : '' %>">주문 수집</a>
+  <a href="/admin/logen" class="chip <%= tab === 'logen' ? 'on' : '' %>">로젠 설정</a>
+  <a href="/admin/actions" class="chip <%= tab === 'actions' ? 'on' : '' %>">처리 기록</a>
+  <a href="/admin/storage" class="chip <%= tab === 'storage' ? 'on' : '' %>">저장 공간</a>
+  <a href="/admin/brand" class="chip <%= tab === 'brand' ? 'on' : '' %>">회사·로고</a>
 </nav>
+</div>
