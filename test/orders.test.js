@@ -470,3 +470,12 @@ test('발주서 출력: 체크한 주문을 한 장에 하나씩 (같은 주문�
   assert.match((await kim.request(`/orders/${ids[0]}`)).text, new RegExp(`href="/orders/${ids[0]}/print"`));
   assert.match((await kim.request('/')).text, /data-print-selected/);
 });
+
+test('최근 주문순: 채널마다 시각 모양이 달라도(+09:00 / Z) 실제 시각으로 정렬 (수기 주문이 아래로 밀리지 않게)', async t => {
+  const { db, kim } = await setup(t);
+  // (setup 의 주문보다 늦은 시각) 네이버: 한국 시간 15:42 (= 06:42Z) / 수기: 06:51Z (= 한국 15:51, 더 나중)
+  applyOrders(db, [order(9, { paid_at: '2099-10-26T15:42:00.000+09:00', product_name: '네이버주문' })]);
+  db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, paid_at, channel_status, channel_confirmed) VALUES ('manual', 'M1', 'M1-1', '수기주문', '2099-10-26T06:51:00.000Z', 'PAYED', 1)").run();
+  const text = (await kim.request('/?view=all')).text;
+  assert.ok(text.indexOf('수기주문') < text.indexOf('네이버주문'), '나중에 들어온 수기 주문이 위');
+});

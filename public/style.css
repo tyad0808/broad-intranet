@@ -1027,3 +1027,13 @@ code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak)
 /* 주문 상세 위쪽: 채널·주문번호 + 발주서 출력 */
 .detail-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 6px; }
 .detail-top .detail-channel { margin: 0; flex: 1; min-width: 0; }
+
+/* 수기 주문: 배송지 주소 검색 */
+.addr-field { margin: 0 0 12px; }
+.addr-field > label { display: block; margin: 0 0 6px; }
+.addr-row { display: flex; gap: 8px; align-items: center; }
+.addr-row input { flex: 1; min-width: 0; margin: 0; }
+.addr-row .btn-sm { flex: none; height: 40px; }
+.addr-layer { margin-top: 8px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--card); }
+.addr-layer-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.addr-box { height: 440px; }

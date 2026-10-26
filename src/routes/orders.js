@@ -184,7 +184,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
     // ① 조건에 맞는 주문 묶음을 고르고(최대 300개) ② 그 묶음에 든 상품을 모두 가져온다
     const rows = db.prepare(`
       WITH g AS (
-        SELECT o.channel AS ch, o.channel_order_id AS oid, MAX(o.paid_at) AS g_paid, MIN(o.due_date) AS g_due,
+        SELECT o.channel AS ch, o.channel_order_id AS oid, MAX(${ORDER_TIME}) AS g_paid, MIN(o.due_date) AS g_due,
           MIN(CASE WHEN o.channel_status = 'PAYED' THEN o.ship_due END) AS g_ship
         FROM orders o ${whereSql}
         GROUP BY o.channel, o.channel_order_id

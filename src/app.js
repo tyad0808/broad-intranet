@@ -118,6 +118,9 @@ function createApp({
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
+        // 주소 검색(카카오 우편번호 서비스, 수기 주문 화면): 그 스크립트와 검색 창만 허용
+        scriptSrc: ["'self'", 'https://*.daumcdn.net', 'https://*.kakaocdn.net'],
+        frameSrc: ["'self'", 'https://*.daum.net', 'https://*.kakao.com'],
         // 운영(HTTPS)에서만 http 요청을 https 로 올린다. 개발(http://localhost)에서 켜 두면 팝업 안 저장이 막힌다
         upgradeInsecureRequests: isProd ? [] : null,
       },

@@ -36,11 +36,17 @@ async function create(ctx, fields = {}) {
 }
 
 test('목록에 수기 주문 버튼이 있고, 등록 화면이 열린다', async t => {
-  const { kim } = await setup(t);
+  const { kim, baseUrl } = await setup(t);
   assert.match((await kim.request('/')).text, /＋ 수기 주문/);
   const page = await kim.request('/orders/new');
   assert.strictEqual(page.status, 200);
   assert.match(page.text, /수기 주문 등록/);
+  // 배송지 주소는 카카오 우편번호 서비스로 검색 (그 스크립트·검색 창만 보안 설정에서 허용)
+  assert.match(page.text, /data-addr-search/);
+  assert.match(page.text, /src="https:\/\/t1\.daumcdn\.net\/mapjsapi\/bundle\/postcode\/prod\/postcode\.v2\.js"/);
+  const csp = (await fetch(`${baseUrl}/login`)).headers.get('content-security-policy');
+  assert.match(csp, /script-src 'self' https:\/\/\*\.daumcdn\.net https:\/\/\*\.kakaocdn\.net/);
+  assert.match(csp, /frame-src 'self' https:\/\/\*\.daum\.net https:\/\/\*\.kakao\.com/);
 });
 
 test('수기 주문을 등록하면 상품마다 한 줄씩, 한 주문번호로 묶여 들어가고 기록이 남는다', async t => {
