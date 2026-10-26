@@ -79,6 +79,8 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'pay_amount', 'INTEGER');
   // 판매자센터·WING 에서 직접 발송한 주문: 수집 중 '배송중' 으로 바뀐 걸 처음 본 시각 (인트라넷 발송은 shipped_at)
   addColumn(db, 'orders', 'channel_shipped_at', 'TEXT');
+  // 수기 주문의 상세주소(동·호수). receiver_address 에는 '기본주소 상세주소' 한 줄로 저장하고, 고칠 때 다시 나누려고 따로 기억한다
+  addColumn(db, 'orders', 'receiver_address_detail', 'TEXT');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.

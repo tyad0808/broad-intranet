@@ -248,3 +248,17 @@ test('수기 주문 등록은 목록 위 팝업으로 열린다: 버튼에 팝�
   assert.match(full, /← 목록으로/);
   assert.ok(!full.includes('data-close-modal'));
 });
+
+test('배송지: 기본주소(검색) + 상세주소를 한 줄로 저장하고, 고칠 때는 다시 두 칸으로', async t => {
+  const ctx = await setup(t);
+  await create(ctx, { receiver_address: '(11407) 경기 양주시 평화로 1552-7 (옥정센트럴)', receiver_address_detail: '101동 1004호' });
+  const row = ctx.rows()[0];
+  assert.strictEqual(row.receiver_address, '(11407) 경기 양주시 평화로 1552-7 (옥정센트럴) 101동 1004호');
+  assert.strictEqual(row.receiver_address_detail, '101동 1004호');
+  const page = (await ctx.kim.request(`/orders/${row.id}/manual-edit`)).text;
+  assert.match(page, /name="receiver_address" value="\(11407\) 경기 양주시 평화로 1552-7 \(옥정센트럴\)"/);
+  assert.match(page, /name="receiver_address_detail" value="101동 1004호"/);
+  // 상세주소 없이(단독주택)도 저장된다
+  await create(ctx, { receiver_address: '(11407) 경기 양주시 평화로 1', receiver_address_detail: '' });
+  assert.strictEqual(ctx.rows().find(r => r.receiver_address === '(11407) 경기 양주시 평화로 1').receiver_address_detail, null);
+});

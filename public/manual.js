@@ -17,7 +17,23 @@
   const layer = document.querySelector('[data-addr-layer]');
   const box = document.querySelector('[data-addr-box]');
   const input = document.getElementById('receiver_address');
+  const detail = document.getElementById('receiver_address_detail');
   if (!button || !layer || !box || !input) return;
+  // 기본주소는 있는데 상세주소가 비어 있으면 저장 전에 한 번 물어본다 (단독주택처럼 없을 수도 있어서 막지는 않는다)
+  const form = input.form;
+  if (form && detail) {
+    form.addEventListener('submit', event => {
+      if (input.value.trim() && !detail.value.trim() && !form.dataset.noDetailOk) {
+        if (!window.confirm('상세주소(동·호수)를 안 적었어요. 이대로 저장할까요?')) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+          detail.focus();
+          return;
+        }
+        form.dataset.noDetailOk = '1';
+      }
+    }, true);
+  }
   const close = () => { layer.hidden = true; box.innerHTML = ''; };
   document.querySelector('[data-addr-close]').addEventListener('click', close);
   button.addEventListener('click', () => {
@@ -34,10 +50,9 @@
         // 도로명 주소 우선, 아파트·건물 이름이 있으면 괄호로
         const addr = data.roadAddress || data.jibunAddress || data.address;
         const building = data.buildingName && data.apartment === 'Y' ? ` (${data.buildingName})` : '';
-        input.value = `(${data.zonecode}) ${addr}${building} `;
+        input.value = `(${data.zonecode}) ${addr}${building}`;
         close();
-        input.focus();
-        input.setSelectionRange(input.value.length, input.value.length);
+        if (detail) detail.focus();
       },
     }).embed(box);
   });

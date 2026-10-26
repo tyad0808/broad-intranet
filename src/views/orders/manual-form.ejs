@@ -47,13 +47,15 @@
       <label>주문자 연락처<input type="tel" name="buyer_phone" value="<%= v.buyer_phone || '' %>" maxlength="30" placeholder="010-0000-0000"></label>
       <label>받는 분 <span class="muted small">(비우면 주문자와 같음)</span><input type="text" name="receiver_name" value="<%= v.receiver_name || '' %>" maxlength="50"></label>
       <label>받는 분 연락처<input type="tel" name="receiver_phone" value="<%= v.receiver_phone || '' %>" maxlength="30"></label>
-      <%# 주소 검색(카카오 우편번호 서비스): 고르면 '(우편번호) 도로명주소 ' 가 들어가고, 뒤에 동·호수를 이어서 적는다 %>
+      <%# 주소 검색(카카오 우편번호 서비스): 고르면 기본주소 '(우편번호) 도로명주소 (건물명)' 이 들어가고 상세주소 칸으로 넘어간다 %>
       <div class="wide addr-field">
-        <label for="receiver_address">배송지 주소 <span class="muted small">([주소 검색]으로 찾은 뒤 동·호수를 이어서 적어 주세요)</span></label>
+        <label for="receiver_address">배송지 주소 <span class="muted small">([주소 검색]으로 찾아 주세요)</span></label>
         <div class="addr-row">
-          <input type="text" id="receiver_address" name="receiver_address" value="<%= v.receiver_address || '' %>" maxlength="300" placeholder="(우편번호) 주소 상세주소">
+          <input type="text" id="receiver_address" name="receiver_address" value="<%= v.receiver_address || '' %>" maxlength="250" placeholder="(우편번호) 도로명 주소">
           <button type="button" class="btn-sm" data-addr-search>주소 검색</button>
         </div>
+        <label for="receiver_address_detail" class="addr-detail-label">상세주소 <span class="muted small">(동·호수 등, 없으면 비워 두세요)</span></label>
+        <input type="text" id="receiver_address_detail" name="receiver_address_detail" value="<%= v.receiver_address_detail || '' %>" maxlength="50" placeholder="예: 101동 1004호">
         <div class="addr-layer" data-addr-layer hidden>
           <div class="addr-layer-head"><strong>주소 검색</strong><button type="button" class="btn-sm" data-addr-close>닫기</button></div>
           <div class="addr-box" data-addr-box></div>
