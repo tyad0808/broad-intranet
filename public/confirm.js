@@ -3,12 +3,11 @@
 (() => {
   // 발송처리 확인창에 들어갈 배송 정보 요약: "로젠택배 123456789" / "퀵서비스"
   function shipSummary(form) {
-    const method = form.querySelector('[data-ship-method]');
-    if (!method) return '';
-    if (method.value !== 'DELIVERY') return method.selectedOptions[0].text;
-    const company = form.querySelector('select[name="company"]');
+    const pick = form.querySelector('[data-ship-pick]');
+    if (!pick) return '';
+    if (!pick.value.startsWith('DELIVERY:')) return pick.selectedOptions[0].text;
     const tracking = form.querySelector('input[name="tracking"]');
-    return `${company ? company.selectedOptions[0].text : ''} ${tracking ? tracking.value.trim() : ''}`.trim();
+    return `${pick.selectedOptions[0].text} ${tracking ? tracking.value.trim() : ''}`.trim();
   }
 
   // 일괄 발주확인 확인창: 체크한 주문의 채널 이름 ("스마트스토어 · 쿠팡")

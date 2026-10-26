@@ -123,26 +123,7 @@
             data-confirm="{ship} 로 발송처리할까요?&#10;고객에게 발송 알림이 가고, 되돌리기 어렵습니다.">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
-        <label>배송 방법
-          <select name="method" data-ship-method>
-            <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { if (isCoupang && code !== 'DELIVERY') return; %>
-              <option value="<%= code %>" <%= code === DEFAULT_METHOD ? 'selected' : '' %>><%= label %></option>
-            <% }) %>
-          </select>
-          <% if (isCoupang) { %><span class="muted small">쿠팡은 택배(송장번호)로만 발송처리됩니다.</span><% } %>
-        </label>
-        <div data-ship-fields>
-          <label>택배사
-            <select name="company">
-              <% Object.entries(COURIERS).forEach(([code, label]) => { %>
-                <option value="<%= code %>" <%= code === DEFAULT_COURIER ? 'selected' : '' %>><%= label %></option>
-              <% }) %>
-            </select>
-          </label>
-          <label>송장번호
-            <input type="text" name="tracking" value="<%= logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
-          </label>
-        </div>
+        <%- include('../partials/ship-pick', { onlyDelivery: isCoupang, tracking: logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' }) %>
         <button type="submit" class="wide">발송처리 보내기</button>
       </form>
     <% } else if (canConfirm) { %>
@@ -232,25 +213,7 @@
             data-confirm="{ship} 로 발송 완료 기록할까요?<%= st === 'PAYMENT_WAITING' ? '&#10;※ 아직 입금대기 상태입니다.' : '' %>">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
-        <label>배송 방법
-          <select name="method" data-ship-method>
-            <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { %>
-              <option value="<%= code %>" <%= code === DEFAULT_METHOD ? 'selected' : '' %>><%= label %></option>
-            <% }) %>
-          </select>
-        </label>
-        <div data-ship-fields>
-          <label>택배사
-            <select name="company">
-              <% Object.entries(COURIERS).forEach(([code, label]) => { %>
-                <option value="<%= code %>" <%= code === DEFAULT_COURIER ? 'selected' : '' %>><%= label %></option>
-              <% }) %>
-            </select>
-          </label>
-          <label>송장번호
-            <input type="text" name="tracking" value="<%= logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="숫자만 (- 는 빼도 됨)">
-          </label>
-        </div>
+        <%- include('../partials/ship-pick', { tracking: logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' }) %>
         <button type="submit" class="wide secondary">발송 완료 기록</button>
       </form>
       <p class="muted small">수기 주문은 인트라넷에만 기록됩니다. 고객 안내(문자 등)는 따로 해 주세요.</p>

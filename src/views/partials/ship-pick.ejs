@@ -1,0 +1,28 @@
+<%# 배송 고르기 한 칸: 로젠택배·경동택배·퀵서비스·직접전달 (택배를 고르면 송장번호 칸이 나온다)
+    서버에는 예전처럼 method(배송 방법)·company(택배사)·tracking(송장번호)으로 나뉘어 간다 — 보이는 칸은 하나, 숨은 칸 둘
+    넘기는 값: suffix(이름 뒤에 붙일 것, 예 '_12'), method, company, tracking, onlyDelivery(쿠팡: 택배만), inline(한 줄 모양) %>
+<% const sfx = locals.suffix || '';
+   const curM = locals.method || DEFAULT_METHOD;
+   const curC = locals.company || DEFAULT_COURIER;
+   const picks = [];
+   Object.entries(COURIERS).forEach(([code, label]) => picks.push({ v: `DELIVERY:${code}`, label, on: curM === 'DELIVERY' && curC === code }));
+   if (!locals.onlyDelivery) Object.entries(SHIP_METHODS).forEach(([code, label]) => { if (code !== 'DELIVERY') picks.push({ v: `${code}:`, label, on: curM === code }); });
+   const select = `<select data-ship-pick aria-label="배송">${picks.map(p => `<option value="${p.v}"${p.on ? ' selected' : ''}>${p.label}</option>`).join('')}</select>`;
+   const tracking = `<input type="text" name="tracking${sfx}" value="${String(locals.tracking || '').replace(/"/g, '&quot;')}" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="${locals.inline ? '송장번호' : '숫자만 (- 는 빼도 됨)'}" aria-label="송장번호"${curM === 'DELIVERY' ? '' : ' disabled'}>`;
+%>
+<% if (locals.inline) { %>
+  <%- select %>
+  <input type="hidden" name="method<%= sfx %>" value="<%= curM %>" data-ship-m>
+  <input type="hidden" name="company<%= sfx %>" value="<%= curM === 'DELIVERY' ? curC : '' %>" data-ship-c>
+  <span data-ship-fields class="ship-fields" <%= curM === 'DELIVERY' ? '' : 'hidden' %>><%- tracking %></span>
+<% } else { %>
+  <label>배송
+    <%- select %>
+    <% if (locals.onlyDelivery) { %><span class="muted small">쿠팡은 택배(송장번호)로만 발송처리됩니다.</span><% } %>
+  </label>
+  <input type="hidden" name="method<%= sfx %>" value="<%= curM %>" data-ship-m>
+  <input type="hidden" name="company<%= sfx %>" value="<%= curM === 'DELIVERY' ? curC : '' %>" data-ship-c>
+  <div data-ship-fields <%= curM === 'DELIVERY' ? '' : 'hidden' %>>
+    <label>송장번호 <%- tracking %></label>
+  </div>
+<% } %>

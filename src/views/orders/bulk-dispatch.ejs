@@ -26,19 +26,8 @@
             <div class="muted small"><%= main.receiver_name || '-' %> · <%= main.receiver_address || '' %></div>
           </div>
           <div class="ship-inputs">
-            <select name="method_<%= id %>" data-ship-method aria-label="배송 방법">
-              <% Object.entries(SHIP_METHODS).forEach(([code, label]) => { if (main.channel === 'coupang' && code !== 'DELIVERY') return; %>
-                <option value="<%= code %>" <%= code === (values[`method_${id}`] || DEFAULT_METHOD) ? 'selected' : '' %>><%= label %></option>
-              <% }) %>
-            </select>
-            <span data-ship-fields class="ship-fields">
-              <select name="company_<%= id %>" aria-label="택배사">
-                <% Object.entries(COURIERS).forEach(([code, label]) => { %>
-                  <option value="<%= code %>" <%= code === (values[`company_${id}`] || (slip ? 'KGB' : DEFAULT_COURIER)) ? 'selected' : '' %>><%= label %></option>
-                <% }) %>
-              </select>
-              <input type="text" name="tracking_<%= id %>" value="<%= values[`tracking_${id}`] || slip || '' %>" inputmode="numeric" autocomplete="off" maxlength="40" placeholder="송장번호" aria-label="송장번호">
-            </span>
+            <%- include('../partials/ship-pick', { inline: true, suffix: `_${id}`, onlyDelivery: main.channel === 'coupang',
+                 method: values[`method_${id}`], company: values[`company_${id}`] || (slip ? 'KGB' : undefined), tracking: values[`tracking_${id}`] || slip || '' }) %>
           </div>
         </div>
       <% }) %>

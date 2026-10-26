@@ -10,18 +10,24 @@ document.addEventListener('change', event => {
   }
 });
 
-// 발송처리: 배송 방법이 택배일 때만 택배사·송장번호 칸을 보여준다
-function syncShipFields(select) {
-  const box = select.closest('form, tr, .ship-row');
-  const fields = box && box.querySelector('[data-ship-fields]');
+// 발송처리: 배송 한 칸(로젠·경동·퀵·직접전달)에서 고른 값을 숨은 method·company 칸에 나눠 넣고, 택배일 때만 송장번호 칸을 보여준다
+function syncShipPick(select) {
+  const box = select.closest('.ship-row, form');
+  if (!box) return;
+  const [method, company] = select.value.split(':');
+  const m = box.querySelector('[data-ship-m]');
+  const c = box.querySelector('[data-ship-c]');
+  if (m) m.value = method;
+  if (c) c.value = company || '';
+  const fields = box.querySelector('[data-ship-fields]');
   if (!fields) return;
-  const show = select.value === 'DELIVERY';
+  const show = method === 'DELIVERY';
   fields.hidden = !show;
   fields.querySelectorAll('input, select').forEach(el => { el.disabled = !show; });
 }
-document.querySelectorAll('[data-ship-method]').forEach(syncShipFields);
+document.querySelectorAll('[data-ship-pick]').forEach(syncShipPick);
 document.addEventListener('change', event => {
-  if (event.target.matches('[data-ship-method]')) syncShipFields(event.target);
+  if (event.target.matches('[data-ship-pick]')) syncShipPick(event.target);
 });
 
 // 주문 목록 일괄 처리: 체크한 주문 수를 아래 막대에 보여주고, 전체 선택

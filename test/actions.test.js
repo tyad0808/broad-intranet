@@ -368,7 +368,7 @@ test('일괄 발송처리: 틀린 줄이 있으면 입력값을 그대로 둔 �
   assert.strictEqual(bad.status, 400);
   assert.match(bad.text, /아무것도 보내지 않았습니다/);
   assert.match(bad.text, /value="111122223333"/, '입력한 송장번호는 그대로 남는다');
-  assert.match(bad.text, /value="KDEXP" selected/);
+  assert.match(bad.text, /value="DELIVERY:KDEXP" selected/, "고른 택배사(경동)도 그대로 남는다");
   assert.strictEqual(row('P1').shipped_at, null);
 
   const ok = await kim.request('/orders/bulk/dispatch?embed=1', { method: 'POST', form: {
