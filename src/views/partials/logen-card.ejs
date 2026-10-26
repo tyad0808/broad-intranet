@@ -15,7 +15,8 @@
       <button type="submit" class="wide secondary">로젠에 등록</button>
     </form>
   <% } else if (ls && !ls.slip_no) { %>
-    <p class="muted small">iLOGEN › '주문등록출력(복수건)' 에서 출력한 뒤 눌러 주세요. (로젠 주문번호 <%= ls.take_no %>)</p>
+    <p class="muted small">iLOGEN › '주문등록출력(복수건)' › 엑셀타입 '전체' › 조회 › 출력하면 5분 안에 송장번호가 들어와요. (로젠 주문번호 <%= ls.take_no %>)</p>
+    <p class="logen-open"><a class="btn-sm" href="https://logis.ilogen.com" target="_blank" rel="noopener">iLOGEN 출력 화면 열기 ↗</a></p>
     <form method="post" action="/orders/<%= order.id %>/logen/slip" data-once>
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <input type="hidden" name="back" value="<%= back %>">
