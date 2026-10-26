@@ -103,6 +103,31 @@ function createCoupangSource(options = {}) {
       // 매번 최근 주문 전체를 다시 읽으므로, 상태가 그대로인 주문은 '바뀐 주문' 으로 세지 않는다 (refreshOnly)
       return all.flatMap(normalize).filter(o => o.channel_order_id && o.channel_item_id).map(o => ({ ...o, refreshOnly: true }));
     },
+    // 인트라넷에선 진행 중인데 이번 목록 어디에도 없는 주문 (collector 가 부른다)
+    //   쿠팡 발주서 목록에는 '취소' 상태가 없어서, 취소된 주문은 목록에서 그냥 사라진다.
+    //   단, 7일보다 오래된 주문은 배송중·배송완료로 넘어갔을 수도 있어 그 상태들을 30일치로 한 번 더 본다.
+    //   그래도 없으면 취소된 것으로 본다. 30일보다 오래된 주문은 알 수 없어 그대로 둔다.
+    async verifyOpen(rows) {
+      const since = now().getTime() - (OPEN_DAYS - 1) * 24 * 3600 * 1000;
+      const recent = rows.filter(r => r.paid_at && Date.parse(r.paid_at) >= since);
+      if (!recent.length) return [];
+      const found = new Map();
+      try {
+        for (const status of DONE_STATUSES) {
+          for (const o of (await sheets(status, OPEN_DAYS)).flatMap(normalize)) found.set(o.channel_item_id, o);
+        }
+      } catch {
+        return []; // 잠깐 연결이 안 되는 등: 다음 수집 때 다시 확인 (모르는데 취소로 바꾸지 않는다)
+      }
+      return recent.map(r => found.get(r.channel_item_id) || {
+        channel: CHANNEL, channel_order_id: r.channel_order_id, channel_item_id: r.channel_item_id,
+        product_name: r.product_name, item_type: r.item_type, option_text: r.option_text, quantity: r.quantity,
+        buyer_name: r.buyer_name, receiver_name: r.receiver_name, receiver_phone: r.receiver_phone,
+        receiver_address: r.receiver_address, paid_at: r.paid_at,
+        channel_status: 'CANCELED', channel_confirmed: r.channel_confirmed,
+        claim_type: null, claim_status: null, channel_status_label: '쿠팡에서 취소됨',
+      });
+    },
   };
 }
 

@@ -234,3 +234,38 @@ test('쿠팡 응답 → 공통 모양: 배송번호별 성공을 상품 번호�
     data: { successProductOrderIds: ['11-1', '11-2'], failProductOrderInfos: [{ productOrderId: '22', message: '안 됨' }] },
   });
 });
+
+test('쿠팡에서 취소돼 목록에서 사라진 주문은 취소로, 7일 지나 배송완료된 주문은 30일치로 다시 찾아 배송완료로', async () => {
+  const db = openDb(':memory:');
+  const state = { ACCEPT: [[sheet(1), sheet(2)]] };
+  const { fetchFn } = fakeCoupang(state);
+  // 결제 10/16, 지금 10/26: 배송중·배송완료를 7일치로 볼 때는 안 나오고 30일치로 볼 때만 나오게
+  const datedFetch = async (url, init) => {
+    const u = new URL(url);
+    if (['DELIVERING', 'FINAL_DELIVERY', 'NONE_TRACKING'].includes(u.searchParams.get('status')) && u.searchParams.get('createdAtFrom') > '2026-10-16') {
+      return new Response(JSON.stringify({ code: 200, data: [], nextToken: '' }), { status: 200 });
+    }
+    return fetchFn(url, init);
+  };
+  const now = () => new Date('2026-10-26T03:00:00Z');
+  const collector = createCollector({ db, now, source: createCoupangSource({ ...KEYS, fetchFn: datedFetch, minGapMs: 0, now }) });
+  await collector.run();
+  assert.deepStrictEqual(db.prepare("SELECT channel_status FROM orders WHERE channel = 'coupang' ORDER BY id").all().map(r => r.channel_status), ['PAYED', 'PAYED']);
+
+  // 1번은 쿠팡에서 취소(목록에서 사라짐), 2번은 배송완료
+  state.ACCEPT = [[]];
+  state.FINAL_DELIVERY = [[sheet(2, 'FINAL_DELIVERY')]];
+  await collector.run();
+  const rows = db.prepare("SELECT channel_order_id, channel_status, channel_status_label FROM orders WHERE channel = 'coupang' ORDER BY id").all();
+  assert.deepStrictEqual(rows.map(r => [r.channel_status, r.channel_status_label]), [['CANCELED', '쿠팡에서 취소됨'], ['DELIVERED', null]]);
+
+  // 쿠팡에 잠깐 연결이 안 되면 취소로 바꾸지 않는다
+  db.prepare("UPDATE orders SET channel_status = 'PAYED', channel_status_label = NULL WHERE channel = 'coupang'").run();
+  let fail = false;
+  const flaky = async (url, init) => (fail && ['DELIVERING', 'FINAL_DELIVERY', 'NONE_TRACKING'].includes(new URL(url).searchParams.get('status')) && new URL(url).searchParams.get('createdAtFrom') < '2026-10-16'
+    ? new Response('oops', { status: 500 }) : datedFetch(url, init));
+  state.FINAL_DELIVERY = [[]];
+  fail = true;
+  await createCollector({ db, now, source: createCoupangSource({ ...KEYS, fetchFn: flaky, minGapMs: 0, now }) }).run();
+  assert.deepStrictEqual(db.prepare("SELECT channel_status FROM orders WHERE channel = 'coupang'").all().map(r => r.channel_status), ['PAYED', 'PAYED']);
+});
