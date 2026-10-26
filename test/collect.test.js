@@ -88,21 +88,26 @@ test('소스 코드 어디에도 허용 목록 밖의 네이버 API 주소가 �
       const coupangPathAllNum = p.replace(/\$\{[^}]+\}/g, '123'); // 업체코드 없이 번호만 들어가는 주소 (상품 조회)
       const coupangOk = require('../src/channels/coupangClient').ALLOWED.some(a => a.pattern.test(coupangPath) || a.pattern.test(coupangPathNum) || a.pattern.test(coupangPathAllNum))
         || coupangPath === '/v2/providers/openapi/apis/api/v4/vendors/A00012345'; // 쿠팡 주소 앞부분 (뒤에 허용된 주소가 붙는다)
-      assert.ok(allowed.has(p) || coupangOk, `${path.basename(file)} 에 허용되지 않은 주소: ${p}`);
+      // 네이버 주소 중 번호가 들어가는 것(발송지연 등)은 네이버 허용 목록(정규식)으로 검사한다
+      const naverOk = ALLOWED.some(a => a.pattern && a.pattern.test(p.replace(/\$\{[^}]+\}/g, '123')));
+      assert.ok(allowed.has(p) || coupangOk || naverOk, `${path.basename(file)} 에 허용되지 않은 주소: ${p}`);
     }
   }
 });
 
-test('허용 목록: 주문 조회 2개 + 주문 변경 2개(발주확인·발송처리) + 상품문의 조회 2개·답변 1개뿐이다', () => {
+test('허용 목록: 주문 조회 2개 + 주문 변경 3개(발주확인·발송처리·발송지연) + 상품문의 조회 2개·답변 1개뿐이다', () => {
   assert.ok(isAllowed('GET', '/v1/pay-order/seller/product-orders/last-changed-statuses'));
   assert.ok(isAllowed('POST', '/v1/pay-order/seller/product-orders/query'));
   assert.deepStrictEqual(ALLOWED.filter(a => a.write).map(a => a.path || String(a.pattern)).sort(), [
     '/^\\/v1\\/contents\\/qnas\\/\\d+$/',
+    '/^\\/v1\\/pay-order\\/seller\\/product-orders\\/\\d+\\/delay$/',
     '/v1/pay-order/seller/product-orders/confirm',
     '/v1/pay-order/seller/product-orders/dispatch',
   ]);
-  assert.strictEqual(ALLOWED.find(a => a.pattern).flag, 'NAVER_ANSWER', '상품문의 답변은 따로 켠다');
-  assert.strictEqual(ALLOWED.length, 7);
+  assert.strictEqual(ALLOWED.find(a => a.pattern && a.pattern.test('/v1/contents/qnas/1')).flag, 'NAVER_ANSWER', '상품문의 답변은 따로 켠다');
+  assert.ok(isAllowed('POST', '/v1/pay-order/seller/product-orders/2026102612345/delay'));
+  assert.ok(!isAllowed('POST', '/v1/pay-order/seller/product-orders/x/delay'));
+  assert.strictEqual(ALLOWED.length, 8);
 });
 
 // ───────── 스마트스토어 응답 처리 ─────────

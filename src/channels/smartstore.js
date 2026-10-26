@@ -132,6 +132,27 @@ function createSmartstoreWriter(options = {}) {
     dispatch(dispatchProductOrders) {
       return client.request('POST', '/v1/pay-order/seller/product-orders/dispatch', { json: { dispatchProductOrders } });
     },
+    // 발송지연 처리: 상품주문마다 따로 보낸다. { dispatchDueDate, delayedDispatchReason, dispatchDelayedDetailedReason }
+    //   결과는 발주확인·발송처리와 같은 모양({ data: { successProductOrderIds, failProductOrderInfos } })으로 모아 돌려준다
+    async delay(productOrderIds, { dueDate, reason, detail }) {
+      const success = [];
+      const fails = [];
+      for (const id of productOrderIds) {
+        try {
+          const body = await client.request('POST', `/v1/pay-order/seller/product-orders/${id}/delay`, {
+            json: { dispatchDueDate: dueDate, delayedDispatchReason: reason, dispatchDelayedDetailedReason: detail },
+          });
+          const fail = ((body && body.data && body.data.failProductOrderInfos) || []).find(f => String(f.productOrderId) === String(id));
+          if (fail) fails.push(fail);
+          else success.push(String(id));
+        } catch (e) {
+          // 첫 상품부터 실패하면 그대로 알린다 (보내기 전에 막힘·응답 없음을 구분하려고)
+          if (success.length === 0 && fails.length === 0) throw e;
+          fails.push({ productOrderId: id, message: e.message });
+        }
+      }
+      return { data: { successProductOrderIds: success, failProductOrderInfos: fails } };
+    },
   };
 }
 

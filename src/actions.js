@@ -1,4 +1,4 @@
-// 주문 처리: 발주확인, 발송처리 (2차 스마트스토어, 3차 쿠팡·자사몰)
+// 주문 처리: 발주확인, 발송처리 (2차 스마트스토어, 3차 쿠팡·자사몰), 발송지연 처리 (스마트스토어만)
 //
 // 흐름: ① 주문 묶음(본상품 + 추가상품)에서 처리할 수 있는 상품만 고른다
 //       ② 네이버로 보낸다 (연습 모드면 보내지 않는다)
@@ -35,6 +35,28 @@ function canConfirm(item) {
 // 발송처리할 수 있는 상품: 결제완료 + 발주확인 됨 (발주확인 전에는 발송처리 버튼을 막는다)
 function canDispatch(item) {
   return WRITE_CHANNELS.includes(item.channel) && item.channel_status === 'PAYED' && Boolean(item.channel_confirmed) && !hasOpenClaim(item);
+}
+
+// 발송지연 처리할 수 있는 상품: 스마트스토어 + 발송 가능(발주확인 됨) + 아직 발송지연 처리 전 (네이버는 주문마다 한 번만)
+function canDelay(item) {
+  return item.channel === 'smartstore' && canDispatch(item) && !item.ship_delayed;
+}
+
+// 발송지연 사유 (네이버 코드 → 이름). 주문 제작이 기본
+const DELAY_REASONS = { CUSTOM_BUILD: '주문 제작', PRODUCT_PREPARE: '상품 준비 중', CUSTOMER_REQUEST: '고객 요청', RESERVED_DISPATCH: '예약 발송', OVERSEA_DELIVERY: '해외 배송', ETC: '기타' };
+const DELAY_DEFAULT_TEXT = '주문 제작 상품으로 제작 기간이 필요하여 발송이 늦어집니다. 양해 부탁드립니다.';
+
+// 화면에서 받은 발송지연 정보 검사. 새 발송기한은 내일 이후 (한국 날짜), 그날 23:59 까지
+function checkDelayInput({ date, reason, detail } = {}, now = new Date()) {
+  date = String(date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00+09:00`))) return { error: '새 발송기한(날짜)을 골라 주세요.' };
+  const today = new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  if (date <= today) return { error: '새 발송기한은 내일 이후 날짜로 골라 주세요.' };
+  reason = String(reason || '');
+  if (!DELAY_REASONS[reason]) return { error: '발송지연 사유를 골라 주세요.' };
+  detail = String(detail || '').trim().slice(0, 300);
+  if (!detail) return { error: '고객에게 보일 상세 사유를 적어 주세요.' };
+  return { date, reason, detail, dueDate: `${date}T23:59:59.000+09:00` };
 }
 
 // 화면에서 받은 배송 정보 검사
@@ -239,10 +261,29 @@ function createOrderActions({ db, writer = null, writers = {}, now = () => new D
     });
   }
 
-  return { mode, modes, modeOf, confirm, dispatch };
+  // 발송지연 처리 (input: checkDelayInput 을 통과한 값). 성공하면 발송기한을 새 날짜로 바꾼다
+  function delay(orderId, userId, input) {
+    return run({
+      action: 'delay',
+      orderId,
+      userId,
+      detail: { date: input.date, reason: input.reason, detail: input.detail },
+      eligible: canDelay,
+      emptyMessage: '발송지연 처리할 상품이 없습니다 (스마트스토어 발주확인 뒤에만, 주문마다 한 번만 할 수 있어요).',
+      send: (targets, w) => w.delay(targets.map(t => t.channel_item_id), input),
+      apply(successIds, order) {
+        const marks = successIds.map(() => '?').join(',');
+        db.prepare(`UPDATE orders SET ship_due = ?, ship_delayed = ? WHERE channel = ? AND channel_item_id IN (${marks})`)
+          .run(new Date(input.dueDate).toISOString(), input.reason, order.channel, ...successIds);
+      },
+    });
+  }
+
+  return { mode, modes, modeOf, confirm, dispatch, delay };
 }
 
 module.exports = {
   WRITE_CHANNELS,
-  createOrderActions, canConfirm, canDispatch, checkDispatchInput, describeShipping, parseResult, hasOpenClaim,
+  DELAY_REASONS, DELAY_DEFAULT_TEXT,
+  createOrderActions, canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, describeShipping, parseResult, hasOpenClaim,
 };

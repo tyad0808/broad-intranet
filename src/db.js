@@ -83,11 +83,11 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'receiver_address_detail', 'TEXT');
 }
 
-// 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)도 받을 수 있게 넓힌다.
+// 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)과 발송지연(delay)도 받을 수 있게 넓힌다.
 // SQLite 는 CHECK 조건을 바로 고칠 수 없어서, 새 표를 만들어 옮겨 담는다 (기존 기록은 그대로).
 function widenOrderActions(db) {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'order_actions'").get();
-  if (!row || row.sql.includes("'create'")) return;
+  if (!row || row.sql.includes("'delay'")) return;
   transaction(db, () => {
     db.exec('ALTER TABLE order_actions RENAME TO order_actions_old');
     db.exec('DROP INDEX IF EXISTS idx_order_actions_order');
@@ -192,7 +192,7 @@ function migrate(db) {
       id               INTEGER PRIMARY KEY,
       created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
       user_id          INTEGER REFERENCES users(id),
-      action           TEXT    NOT NULL CHECK (action IN ('confirm', 'dispatch', 'create', 'paid', 'edit', 'cancel')),
+      action           TEXT    NOT NULL CHECK (action IN ('confirm', 'dispatch', 'delay', 'create', 'paid', 'edit', 'cancel')),
       channel          TEXT    NOT NULL,
       channel_order_id TEXT    NOT NULL,
       item_ids         TEXT    NOT NULL,          -- 대상 상품주문번호 목록 (JSON)

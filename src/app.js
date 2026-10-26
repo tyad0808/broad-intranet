@@ -22,7 +22,7 @@ const { createWeeklyReporter } = require('./weeklyReport');
 const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier, notifyOff } = require('./notifier');
-const { createOrderActions, canDispatch } = require('./actions');
+const { createOrderActions, canDispatch, DELAY_REASONS } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
 
@@ -67,7 +67,7 @@ function createApp({
   app.locals.WRITE_CHANNEL_NAMES = { smartstore: '네이버로', coupang: '쿠팡으로', godo: '자사몰로' };
   app.locals.PAY_METHODS = PAY_METHODS;
   // 처리 기록에 보여줄 이름
-  app.locals.ACTION_LABELS = { confirm: '발주확인', dispatch: '발송처리', create: '수기 등록', paid: '입금확인', edit: '수정', cancel: '취소' };
+  app.locals.ACTION_LABELS = { confirm: '발주확인', dispatch: '발송처리', delay: '발송지연', create: '수기 등록', paid: '입금확인', edit: '수정', cancel: '취소' };
   app.locals.RESULT_LABELS = { ok: '완료', partial: '일부', fail: '실패', unknown: '확인 필요', practice: '연습' };
   // 납기 표시: 지났으면 빨강, 오늘·내일이면 연한 빨강 (today 는 한국 날짜 YYYY-MM-DD)
   app.locals.dueInfo = (due, today) => {
@@ -80,11 +80,10 @@ function createApp({
   };
   // 채널 발송기한 표시: 지났으면 빨강, 오늘이면 연한 빨강 (예: '오늘 15:00까지', '10/22 15:00까지')
   // 발송지연 처리 표시: '발송지연 처리됨 · 10/24까지' (남색). 미룬 새 기한마저 지났으면 '발송지연 기한도 지남' (빨강). 사유는 마우스를 올리면
-  const DELAY_REASONS = { PRODUCT_PREPARE: '상품 준비 중', CUSTOMER_REQUEST: '고객 요청', CUSTOM_BUILD: '주문 제작', RESERVED_DISPATCH: '예약 발송', OVERSEA_DELIVERY: '해외 배송', ETC: '기타' };
   app.locals.delayInfo = (reason, shipDue, now = new Date()) => {
     const t = shipDue ? Date.parse(shipDue) : NaN;
     const kst = Number.isFinite(t) ? new Date(t + 9 * 3600 * 1000) : null;
-    const title = `판매자센터에서 발송지연 처리 (사유: ${DELAY_REASONS[reason] || reason})`;
+    const title = `발송지연 처리됨 (사유: ${DELAY_REASONS[reason] || reason})`;
     const md = kst ? `${kst.getUTCMonth() + 1}/${kst.getUTCDate()}` : '';
     if (kst && t <= now.getTime()) return { text: `발송지연 기한도 지남 (${md})`, cls: 'due-over', title };
     return { text: `발송지연 처리됨${md ? ` · ${md}까지` : ''}`, cls: 'delayed', title };

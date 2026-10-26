@@ -625,6 +625,11 @@ form.inline { display: inline; margin: 0; }
 .steps li span { float: right; }
 .steps li.done { background: var(--ok-bg); color: var(--ok); font-weight: 650; }
 .shipped-line { margin: 0 0 8px; font-weight: 650; }
+.delay-line { margin: 4px 0 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.delay-box { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
+.delay-box > summary { cursor: pointer; font-size: 14px; color: var(--muted); font-weight: 600; }
+.delay-box[open] > summary { margin-bottom: 10px; color: inherit; }
+.delay-box textarea { width: 100%; }
 .ship-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
 .history { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13.5px; }
 .history li { padding: 8px 0; border-top: 1px solid var(--line-2); }

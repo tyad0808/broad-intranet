@@ -151,6 +151,37 @@
       <p class="muted">지금은 처리할 수 있는 상품이 없습니다 (결제완료가 아니거나 취소·반품 요청 중).</p>
     <% } %>
 
+    <% if (delayed && !shipped) { const d = delayInfo(delayed.ship_delayed, delayed.ship_due); %>
+      <p class="delay-line"><span class="pill <%= d.cls %>"><%= d.text %></span> <span class="muted small">사유: <%= DELAY_REASONS[delayed.ship_delayed] || delayed.ship_delayed %></span></p>
+    <% } %>
+
+    <% if (canDelay) { %>
+      <%# 발송지연 처리: 네이버에 새 발송기한을 알리고 고객에게 안내가 간다. 주문마다 한 번만 %>
+      <details class="delay-box">
+        <summary>발송지연 처리…</summary>
+        <form method="post" action="/orders/<%= order.id %>/delay" data-once
+              data-confirm="네이버에 발송지연 처리할까요?&#10;고객에게 지연 사유와 새 발송기한이 안내되고, 이 주문은 다시 지연 처리할 수 없습니다.">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="back" value="<%= back %>">
+          <label>새 발송기한
+            <input type="date" name="date" value="<%= delayDefault %>" min="<%= delayMin %>" required>
+          </label>
+          <label>사유
+            <select name="reason">
+              <% Object.entries(DELAY_REASONS).forEach(([code, label]) => { %>
+                <option value="<%= code %>"><%= label %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label>상세 사유 <span class="muted small">(고객에게 보여요)</span>
+            <textarea name="detail" rows="3" maxlength="300" required><%= DELAY_DEFAULT_TEXT %></textarea>
+          </label>
+          <p class="muted small">주문마다 한 번만 할 수 있어요. 새 발송기한까지 꼭 발송해 주세요.</p>
+          <button type="submit" class="wide secondary">발송지연 보내기</button>
+        </form>
+      </details>
+    <% } %>
+
     <% if (shipped) { %>
       <p class="shipped-line">
         <%= shipMethodLabel(shipped.ship_method) %><% if (shipped.ship_company) { %> · <%= courierLabel(shipped.ship_company) %> <%= shipped.tracking_no %><% } %>

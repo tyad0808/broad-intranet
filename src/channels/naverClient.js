@@ -13,11 +13,13 @@ const ALLOWED = [
   { method: 'GET', path: '/v1/pay-order/seller/product-orders/last-changed-statuses' },
   // 상품 주문 상세 내역 조회 (방식은 POST 지만 조회만 한다)
   { method: 'POST', path: '/v1/pay-order/seller/product-orders/query' },
-  // ── 2차: 상태를 바꾸는 주소는 이 2개뿐 ──
+  // ── 2차: 상태를 바꾸는 주소 ──
   // 발주확인
   { method: 'POST', path: '/v1/pay-order/seller/product-orders/confirm', write: true },
   // 발송처리 (송장 입력)
   { method: 'POST', path: '/v1/pay-order/seller/product-orders/dispatch', write: true },
+  // 발송지연 처리 (상품주문 하나씩, 주문마다 한 번만)
+  { method: 'POST', pattern: /^\/v1\/pay-order\/seller\/product-orders\/\d+\/delay$/, write: true },
   // ── 4차: 상품문의(Q&A) ── 조회 2개 + 답변 등록 1개 (답변은 .env 의 NAVER_ANSWER=on 일 때만)
   { method: 'GET', path: '/v1/contents/qnas' },
   { method: 'GET', path: '/v1/contents/qnas/templates' },

@@ -8,7 +8,7 @@ const { CHANNELS } = require('../channels/labels');
 const { ENDED_SQL } = require('../collector');
 const { buildWeek } = require('./calendar');
 const { historyForOrder } = require('../customer');
-const { canConfirm, canDispatch, checkDispatchInput, describeShipping, hasOpenClaim } = require('../actions');
+const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, describeShipping, hasOpenClaim, DELAY_REASONS, DELAY_DEFAULT_TEXT } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
@@ -709,6 +709,24 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
     }
   });
 
+  // 주문 하나 발송지연 처리 (스마트스토어만, 주문마다 한 번)
+  router.post('/orders/:id/delay', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const input = checkDelayInput({ date: req.body.date, reason: req.body.reason, detail: req.body.detail });
+      if (input.error) {
+        return flashBack(req, res, selfUrl(req.params.id, back), { type: 'error', message: input.error });
+      }
+      const result = await actions.delay(req.params.id, req.user.id, input);
+      if (result.result === 'ok' || result.result === 'partial') result.message += ` (새 발송기한 ${input.date})`;
+      afterActions([result], req.user.id);
+      req.session.flash = single('발송지연', result);
+      res.redirect(selfUrl(req.params.id, back));
+    } catch (e) {
+      next(e);
+    }
+  });
+
   router.get('/orders/:id', (req, res) => {
     const order = findOrder(req.params.id);
     if (!order) {
@@ -722,6 +740,12 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
       items,
       canConfirm: items.some(canConfirm),
       canDispatch: items.some(canDispatch),
+      canDelay: items.some(canDelay),
+      delayed: items.find(i => i.channel_status === 'PAYED' && i.ship_delayed) || null,
+      DELAY_REASONS,
+      DELAY_DEFAULT_TEXT,
+      delayMin: kstDay(1),
+      delayDefault: kstDay(3),
       claimItems: items.filter(i => i.claim_status),
       shipped: items.find(i => i.shipped_at) || null,
       history: history(order),
@@ -936,7 +960,12 @@ function safeBack(value) {
 
 // 오늘 날짜 (한국 시간) YYYY-MM-DD
 function kstToday() {
-  return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return kstDay(0);
+}
+
+// 오늘부터 offset 일 뒤의 한국 날짜 'YYYY-MM-DD'
+function kstDay(offset) {
+  return new Date(Date.now() + 9 * 3600 * 1000 + offset * 86400000).toISOString().slice(0, 10);
 }
 
 module.exports = { orderRoutes, safeBack, collectFlash };

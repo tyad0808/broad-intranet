@@ -381,3 +381,61 @@ test('일괄 발송처리: 틀린 줄이 있으면 입력값을 그대로 둔 �
   assert.match(ok.text, /data-close-modal/);
   assert.ok(row('P1').shipped_at);
 });
+
+// ───────── 발송지연 처리 ─────────
+
+test('발송지연: 입력 검사 (내일 이후 날짜, 사유, 상세 사유)', () => {
+  const { checkDelayInput } = require('../src/actions');
+  const now = new Date('2026-10-26T03:00:00Z'); // 한국 10/26 낮
+  assert.match(checkDelayInput({ date: '2026-10-26', reason: 'CUSTOM_BUILD', detail: 'x' }, now).error, /내일 이후/);
+  assert.match(checkDelayInput({ date: '2026-10-30', reason: 'NOPE', detail: 'x' }, now).error, /사유/);
+  assert.match(checkDelayInput({ date: '2026-10-30', reason: 'CUSTOM_BUILD', detail: '  ' }, now).error, /상세 사유/);
+  assert.deepStrictEqual(checkDelayInput({ date: '2026-10-30', reason: 'CUSTOM_BUILD', detail: ' 제작 중 ' }, now),
+    { date: '2026-10-30', reason: 'CUSTOM_BUILD', detail: '제작 중', dueDate: '2026-10-30T23:59:59.000+09:00' });
+});
+
+test('발송지연: 실제 writer 는 상품주문마다 delay 주소로 보낸다', async () => {
+  const calls = [];
+  const fetchFn = async (url, init) => {
+    const path = new URL(url).pathname.replace('/external', '');
+    calls.push({ path, method: init.method, body: init.body });
+    if (path === '/v1/oauth2/token') return Response.json({ access_token: 'tok', expires_in: 10800 });
+    return Response.json({ timestamp: 'x', data: {} });
+  };
+  const writer = createSmartstoreWriter({ clientId: 'id', clientSecret: '$2a$04$abcdefghijklmnopqrstuu', fetchFn });
+  const body = await writer.delay(['101', '102'], { dueDate: '2026-10-30T23:59:59.000+09:00', reason: 'CUSTOM_BUILD', detail: '제작 중' });
+  assert.deepStrictEqual(body.data.successProductOrderIds, ['101', '102']);
+  const sent = calls.filter(c => c.path !== '/v1/oauth2/token');
+  assert.deepStrictEqual(sent.map(c => [c.method, c.path, JSON.parse(c.body)]), [101, 102].map(id => [
+    'POST', `/v1/pay-order/seller/product-orders/${id}/delay`,
+    { dispatchDueDate: '2026-10-30T23:59:59.000+09:00', delayedDispatchReason: 'CUSTOM_BUILD', dispatchDelayedDetailedReason: '제작 중' },
+  ]));
+});
+
+test('발송지연: 발주확인 뒤에만, 성공하면 발송기한·사유를 바꾸고 다시는 못 한다', async t => {
+  const calls = [];
+  const writer = { ...fakeWriter(), async delay(ids, input) { calls.push({ ids, input }); return { data: { successProductOrderIds: ids, failProductOrderInfos: [] } }; } };
+  const { db, kim, idOf, row, logs } = await setupServer(t, { writer });
+  const id = idOf('P1');
+  assert.doesNotMatch((await kim.request(`/orders/${id}`)).text, /발송지연 보내기/, '발주확인 전에는 없다');
+  applyOrders(db, [order(1, { channel_confirmed: 1 }), order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '양면테이프', channel_confirmed: 1 })]);
+  const page = (await kim.request(`/orders/${id}`)).text;
+  assert.match(page, new RegExp(`action="/orders/${id}/delay"`));
+  assert.match(page, /<option value="CUSTOM_BUILD">주문 제작/);
+
+  const bad = await kim.submit(`/orders/${id}`, `/orders/${id}/delay`, { date: '2000-01-01', reason: 'CUSTOM_BUILD', detail: 'x' });
+  assert.strictEqual(bad.status, 302);
+  assert.strictEqual(calls.length, 0);
+
+  const date = new Date(Date.now() + 9 * 3600 * 1000 + 3 * 86400000).toISOString().slice(0, 10);
+  await kim.submit(`/orders/${id}`, `/orders/${id}/delay`, { date, reason: 'CUSTOM_BUILD', detail: '제작 중입니다' });
+  assert.deepStrictEqual(calls[0].ids, ['P1', 'P9']);
+  assert.strictEqual(row('P1').ship_delayed, 'CUSTOM_BUILD');
+  assert.strictEqual(row('P1').ship_due, new Date(`${date}T23:59:59+09:00`).toISOString());
+  const log = logs().at(-1);
+  assert.deepStrictEqual([log.action, log.result], ['delay', 'ok']);
+  const after = (await kim.request(`/orders/${id}`)).text;
+  assert.doesNotMatch(after, /발송지연 보내기/, '한 번만');
+  assert.match(after, /발송지연 처리됨/);
+  assert.match(after, /사유: 주문 제작/);
+});
