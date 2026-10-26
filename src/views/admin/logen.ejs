@@ -27,7 +27,7 @@
     <% if (c) { %>
       <dl class="info">
         <dt>영업소</dt><dd><%= c.salesNm %> <span class="muted">· 지점 <%= c.branNm %></span></dd>
-        <dt>운임</dt><dd><%= c.fareTyNm %> (<%= c.fareTy %>)<% if (c.useYn !== 'Y') { %> <strong class="text-bad">사용 안 함</strong><% } %></dd>
+        <dt>운임</dt><dd><%= c.fareTyNm %> (<%= c.fareTy %>)<% if (c.useYn === 'N') { %> <strong class="text-bad">사용 안 함</strong><% } else if (c.useYn && c.useYn !== 'Y') { %> <span class="muted small">(사용 상태 <%= c.useYn %>)</span><% } %></dd>
         <dt>박스</dt><dd><%= c.boxes.map(b => `${b.nm} ${b.fare.toLocaleString('ko-KR')}원`).join(' · ') || '-' %></dd>
         <dt>불러온 때</dt><dd class="muted"><%= kst(c.at) %></dd>
       </dl>
