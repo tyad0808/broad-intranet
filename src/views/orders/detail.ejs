@@ -242,6 +242,13 @@
           <button type="submit" class="btn-sm danger">주문 취소</button>
         </form>
       <% } %>
+      <%# 잘못 넣었거나 필요 없는 수기 주문은 통째로 지운다 (되돌릴 수 없음) %>
+      <form method="post" action="/orders/<%= order.id %>/manual/delete" class="inline" data-once
+            data-confirm="이 수기 주문(<%= order.channel_order_id %>)을 지울까요?&#10;상품·메모·처리 기록까지 모두 지워지고 되돌릴 수 없습니다.">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <button type="submit" class="btn-sm danger">주문 삭제</button>
+      </form>
     </div>
 
     <% if (history.length) { %>

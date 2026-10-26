@@ -262,3 +262,23 @@ test('배송지: 기본주소(검색) + 상세주소를 한 줄로 저장하고,
   await create(ctx, { receiver_address: '(11407) 경기 양주시 평화로 1', receiver_address_detail: '' });
   assert.strictEqual(ctx.rows().find(r => r.receiver_address === '(11407) 경기 양주시 평화로 1').receiver_address_detail, null);
 });
+
+test('수기 주문 삭제: 상품·처리 기록·알림까지 통째로 지우고, 채널 주문은 못 지운다', async t => {
+  const ctx = await setup(t);
+  await create(ctx);
+  const rows = ctx.rows();
+  const orderNo = rows[0].channel_order_id;
+  const page = (await ctx.kim.request(`/orders/${rows[0].id}`)).text;
+  assert.match(page, new RegExp(`/orders/${rows[0].id}/manual/delete`));
+  const res = await ctx.kim.submit(`/orders/${rows[0].id}`, `/orders/${rows[0].id}/manual/delete`, { back: '/?ch=manual' });
+  assert.strictEqual(res.location, '/?ch=manual');
+  const { db } = ctx;
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders WHERE channel_order_id = ?').get(orderNo).n, 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM order_actions WHERE channel_order_id = ?').get(orderNo).n, 0);
+  assert.match((await ctx.kim.request('/?ch=manual')).text, new RegExp(`수기 주문 ${orderNo} 을\\(를\\) 지웠습니다`));
+  // 스마트스토어 주문은 이 주소로 못 지운다
+  const s = Number(db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, paid_at, channel_status) VALUES ('smartstore', 'S1', 'S1-1', 'x', '2026-10-26T00:00:00Z', 'PAYED')").run().lastInsertRowid);
+  const no = await ctx.kim.submit(`/orders/${s}`, `/orders/${s}/manual/delete`, { back: '/' });
+  assert.strictEqual(no.status, 404);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders WHERE id = ?').get(s).n, 1);
+});

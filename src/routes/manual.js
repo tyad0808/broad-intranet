@@ -233,6 +233,31 @@ function manualRoutes(db, notifier) {
     },
   }));
 
+  // 수기 주문 삭제: 잘못 넣었거나 필요 없는 주문을 통째로 (상품·알림·처리 기록·로젠 기록까지). 되돌릴 수 없다
+  //   채널(스마트스토어 등)에서 들어온 주문은 지울 수 없다 — 다음 수집 때 다시 들어오기 때문
+  router.post('/orders/:id/manual/delete', (req, res) => {
+    const order = findOrder(req.params.id);
+    if (!order || order.channel !== CHANNEL) return notFound(res);
+    const back = safeBack(req.body.back);
+    const items = groupItems(order);
+    transaction(db, () => {
+      const delNotes = db.prepare('DELETE FROM notifications WHERE order_id = ?');
+      for (const i of items) delNotes.run(i.id);
+      for (const table of ['order_actions', 'order_events', 'logen_shipments']) {
+        db.prepare(`DELETE FROM ${table} WHERE channel = ? AND channel_order_id = ?`).run(CHANNEL, order.channel_order_id);
+      }
+      db.prepare('DELETE FROM orders WHERE channel = ? AND channel_order_id = ?').run(CHANNEL, order.channel_order_id);
+    });
+    console.log(`[수기 주문 삭제] ${order.channel_order_id} '${items[0].product_name}' · 직원 ${req.user.id}`);
+    notifier.ordersChanged(items.map(i => i.id), req.user.id);
+    notifier.checkUnassigned();
+    const result = { type: 'ok', message: `수기 주문 ${order.channel_order_id} 을(를) 지웠습니다.` };
+    // 주문 목록 위 팝업에서 지웠으면 팝업 안에 결과만 (닫으면 목록이 새로 그려진다)
+    if (res.locals.embed) return res.render('orders/bulk-done', { title: '삭제', result });
+    req.session.flash = result;
+    res.redirect(back);
+  });
+
   // 수기 주문번호: M + 한국 날짜(YYMMDD) + 순번. 예) M261016-001
   function nextOrderId() {
     const day = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(2, 10).replace(/-/g, '');
