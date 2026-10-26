@@ -626,9 +626,18 @@ form.inline { display: inline; margin: 0; }
 .steps li.done { background: var(--ok-bg); color: var(--ok); font-weight: 650; }
 .shipped-line { margin: 0 0 8px; font-weight: 650; }
 .delay-line { margin: 4px 0 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.delay-box { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 10px; }
-.delay-box > summary { cursor: pointer; font-size: 14px; color: var(--muted); font-weight: 600; }
-.delay-box[open] > summary { margin-bottom: 10px; color: inherit; }
+/* 발송지연 처리: 접혀 있어도 버튼처럼 보이게 (테두리 있는 흰 버튼, 펼치면 아래로 입력 칸) */
+.delay-box { margin-top: 10px; }
+.delay-box > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 48px; padding: 10px 14px; border: 1px solid #c9cfd6; border-radius: var(--radius-sm);
+  background: #fff; color: var(--text); font-size: 15px; font-weight: 650;
+}
+.delay-box > summary::-webkit-details-marker { display: none; }
+.delay-box > summary::after { content: '▾'; font-size: 12px; color: var(--text-2); }
+.delay-box > summary:hover { background: var(--surface-2); border-color: #b0b8c1; }
+.delay-box[open] > summary { margin-bottom: 12px; background: var(--surface-2); }
+.delay-box[open] > summary::after { content: '▴'; }
 .delay-box textarea { width: 100%; }
 .ship-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
 .history { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 13.5px; }

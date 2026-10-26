@@ -158,7 +158,7 @@
     <% if (canDelay) { %>
       <%# 발송지연 처리: 네이버에 새 발송기한을 알리고 고객에게 안내가 간다. 주문마다 한 번만 %>
       <details class="delay-box">
-        <summary>발송지연 처리…</summary>
+        <summary>발송지연 처리</summary>
         <form method="post" action="/orders/<%= order.id %>/delay" data-once
               data-confirm="네이버에 발송지연 처리할까요?&#10;고객에게 지연 사유와 새 발송기한이 안내되고, 이 주문은 다시 지연 처리할 수 없습니다.">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
