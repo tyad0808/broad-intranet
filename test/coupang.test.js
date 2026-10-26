@@ -88,6 +88,11 @@ test('쿠팡 발주서 → 인트라넷 주문 (상태는 공통 상태로)', ()
   const hold = sheet(1, 'ACCEPT');
   hold.orderItems[0].holdCountForCancel = 1;
   assert.strictEqual(normalize(hold)[0].claim_status, 'CANCEL_REQUEST');
+  // 취소가 끝나 출고 수량이 0 이면 (목록에 남아 있어도) 취소
+  const zero = sheet(1, 'ACCEPT');
+  zero.orderItems[0].shippingCount = 0;
+  zero.orderItems[0].cancelCount = 2;
+  assert.deepStrictEqual([normalize(zero)[0].channel_status, normalize(zero)[0].quantity], ['CANCELED', 2]);
 });
 
 test('쿠팡 수집: 상태별로 최근 주문을 읽고(다음 페이지 포함), 서명·업체코드가 붙는다', async () => {

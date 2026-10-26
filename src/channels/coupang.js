@@ -44,10 +44,13 @@ function normalize(sheet) {
   const receiver = sheet.receiver || {};
   const address = [receiver.postCode ? `(${receiver.postCode})` : null, receiver.addr1, receiver.addr2].filter(Boolean).join(' ') || null;
   return (sheet.orderItems || []).map(item => {
-    const quantity = Number(item.shippingCount) || 1;
+    // 취소가 끝나면 쿠팡이 출고 수량(shippingCount)을 0 으로 준다 (WING 주문상세의 '수량 0') → 취소된 상품
+    const shipping = Number(item.shippingCount);
+    const zeroLeft = item.shippingCount !== undefined && item.shippingCount !== null && shipping === 0;
+    const quantity = shipping || Number(item.cancelCount) || 1;
     // 고객이 취소를 요청해 출고를 멈춘 수량이 있으면 취소 요청으로 표시
     const holdCancel = Number(item.holdCountForCancel) > 0;
-    const allCanceled = Number(item.cancelCount) >= quantity && Number(item.cancelCount) > 0;
+    const allCanceled = zeroLeft || (Number(item.cancelCount) >= quantity && Number(item.cancelCount) > 0);
     return {
       channel: CHANNEL,
       channel_order_id: String(sheet.orderId || ''),

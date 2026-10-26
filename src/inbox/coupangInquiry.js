@@ -104,12 +104,15 @@ function createCoupangInquirySource({ client = createCoupangClient(), now = () =
   return {
     source: SOURCE,
     label: LABEL,
-    async fetch({ state = {}, openIds = [] } = {}) {
+    async fetch({ state = {}, openIds = [], openSince = null } = {}) {
       const end = now();
       const last = state.lastRun ? Date.parse(state.lastRun) : NaN;
-      const start = Number.isFinite(last)
-        ? new Date(Math.max(last - 24 * 3600 * 1000, end.getTime() - firstDays * 24 * 3600 * 1000))
-        : new Date(end.getTime() - firstDays * 24 * 3600 * 1000);
+      const oldest = end.getTime() - firstDays * 24 * 3600 * 1000;
+      // 문의 목록은 '쓴 날짜'로만 걸러져서, 미답변 문의가 남아 있으면 가장 오래된 것(최대 30일 전)부터 다시 읽는다
+      //   → 판매자센터에서 나중에 단 답변도 알아채 '답변완료' 로 맞춘다
+      let from = Number.isFinite(last) ? last - 24 * 3600 * 1000 : oldest;
+      if (openSince && Number.isFinite(openSince.getTime())) from = Math.min(from, openSince.getTime() - 3600 * 1000);
+      const start = new Date(Math.max(from, oldest));
       const items = [];
       // 7일씩 끊어서 (쿠팡 조회 기간 한도)
       for (let from = start; from < end; from = new Date(from.getTime() + WINDOW_DAYS * 24 * 3600 * 1000)) {

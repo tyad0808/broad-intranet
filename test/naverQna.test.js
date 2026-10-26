@@ -39,6 +39,13 @@ test('상품문의 받기: 처음 30일, 다음부터는 지난번 하루 전부
   assert.strictEqual(calls[1][2].fromDate, '2026-10-18T11:00:00.000+09:00', '지난번 하루 전부터');
   assert.deepStrictEqual(second.answeredIds, ['123456']);
 
+  // 미답변 문의가 사흘 전 것이면 그때부터 다시 읽는다 (판매자센터에서 나중에 단 답변을 알아채기 위해)
+  await src.fetch({ state: { lastRun: '2026-10-19T02:00:00.000Z' }, openIds: ['123456'], openSince: new Date('2026-10-16T03:00:00Z') });
+  assert.strictEqual(calls[2][2].fromDate, '2026-10-16T11:00:00.000+09:00');
+  // 아주 오래된 미답변이 있어도 30일 전까지만
+  await src.fetch({ state: { lastRun: '2026-10-19T02:00:00.000Z' }, openIds: ['123456'], openSince: new Date('2026-08-01T00:00:00Z') });
+  assert.strictEqual(calls[3][2].fromDate, '2026-09-19T12:00:00.000+09:00');
+
   reply = { weird: [] };
   await assert.rejects(src.fetch({ state: {} }), /응답 모양을 알 수 없습니다 \(항목: weird\)/);
 });
