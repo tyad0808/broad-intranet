@@ -8,11 +8,41 @@
     const s = p.toString();
     return s ? `/?${s}` : '/';
   };
+  const practiceChannels = Object.keys(actionModes).filter(ch => actionModes[ch] !== 'live' && (ch === 'smartstore' || channels.includes(ch)));
+  // 주문 묶음의 상태를 색 배지 하나로: 신규(파랑) → 작업 중(주황) → 발송 준비(보라) → 완료(초록) / 입금대기(회색) / 취소(빨강)
+  const statusOf = (g, o, confirmed) => {
+    const chLabel = o.channel_status_label ? `${channelInfo(o.channel).name}: ${o.channel_status_label}` : channelStatusLabel(o.channel_status, o.channel);
+    if (g.shipped) {
+      const how = g.shipped.ship_company ? `${courierLabel(g.shipped.ship_company)} ${g.shipped.tracking_no}` : shipMethodLabel(g.shipped.ship_method);
+      return { cls: 'sb-done', text: '발송 완료', sub: how, title: kst(g.shipped.shipped_at) };
+    }
+    if (o.channel_status === 'CANCELED') return { cls: 'sb-cancel', text: '취소', sub: chLabel };
+    if (o.channel === 'manual' && o.channel_status === 'PAYMENT_WAITING') return { cls: 'sb-wait', text: '입금대기', sub: '' };
+    if (g.logen && g.logen.status === 'registered') return { cls: 'sb-ready', text: '발송 준비', sub: g.logen.slip_no ? `로젠 송장 ${g.logen.slip_no}` : '로젠 등록 · 출력 대기' };
+    if (o.channel !== 'manual' && confirmed) return { cls: 'sb-work', text: '작업 중', sub: `${chLabel} · 발주확인됨` };
+    if (o.channel === 'manual') return { cls: 'sb-work', text: '작업 중', sub: chLabel };
+    return { cls: 'sb-new', text: '신규', sub: `${chLabel} · 발주확인 전` };
+  };
 %>
 
-<div class="page-head">
-  <h1 class="page-title">주문</h1>
+<%# 머리: 제목 · 오늘 할 일 칩 · 버튼 — 스크롤해도 위에 붙어 있다 %>
+<div class="page-head sticky-glass">
+  <div class="title-row">
+    <h1 class="page-title">주문</h1>
+    <%# 확인 필요: 오늘출발·취소·반품·교환 요청·납기 지남·발송기한 지남 (0건이면 흐리게). 실시간 새로고침 때 건수가 바뀐다 %>
+    <nav class="alert-tabs" id="live-head" aria-label="확인 필요">
+      <% Object.entries(ALERTS).forEach(([key, label]) => { const n = alertCounts[key] || 0; %>
+        <a href="<%= alert === key ? link({ alert: '', stage: '' }) : link({ alert: key, st: '', view: '', stage: '' }) %>"
+           class="alert-tab alert-<%= key %> <%= alert === key ? 'on' : '' %> <%= n ? '' : 'zero' %>">
+          <%= label %> <span class="count"><%= n %></span>
+        </a>
+      <% }) %>
+    </nav>
+  </div>
   <div class="page-actions">
+    <% if (practiceChannels.length) { %>
+      <span class="practice-pill" title="연습 모드: <%= practiceChannels.map(ch => channelInfo(ch).name).join(' · ') %> 발주확인·발송처리 버튼을 눌러도 보내지 않고 기록만 남깁니다.">연습 모드 <span class="muted"><%= practiceChannels.map(ch => channelInfo(ch).name).join(' · ') %></span></span>
+    <% } %>
     <% if (canCollect) { %>
       <form method="post" action="/orders/collect" class="collect-form" data-once>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -36,20 +66,8 @@
   </nav>
 <% } %>
 
-<%# 실시간 새로고침 때 이 칸 전체(이번 주 출고·상태 칸·탭·확인 필요)를 새 건수로 바꾼다 %>
+<%# 실시간 새로고침 때 이 칸 전체(출처·상태 칸·이번 주 출고·안내)를 새 건수로 바꾼다 %>
 <div id="live-tabs">
-  <%# 이번 주 출고: 오늘부터 7일, 날짜를 누르면 그날 납기 주문만 (전체 달력은 왼쪽 '일정') %>
-  <nav class="week-strip" aria-label="이번 주 출고">
-    <% week.forEach(d => { %>
-      <a href="<%= due === d.date ? link({ due: '' }) : link({ due: d.date }) %>" class="week-day <%= d.isToday ? 'today' : '' %> <%= due === d.date ? 'on' : '' %> <%= d.weekday === 0 ? 'sun' : d.weekday === 6 ? 'sat' : '' %>" title="<%= d.date %> 납기 주문 보기">
-        <span class="wd"><%= d.isToday ? '오늘' : '일월화수목금토'[d.weekday] %> <span class="dd"><%= Number(d.date.slice(5, 7)) %>/<%= Number(d.date.slice(8)) %></span></span>
-        <strong class="<%= d.due ? '' : 'zero' %>">출고 <%= d.due %></strong>
-        <% if (d.events.length) { %><span class="wk-ev" title="<%= d.events.map(e => e.title).join(', ') %>"><span class="dot ev-<%= d.events[0].color %>"></span><%= d.events[0].title %><%= d.events.length > 1 ? ` 외 ${d.events.length - 1}` : '' %></span><% } %>
-      </a>
-    <% }) %>
-    <a href="/schedule" class="week-more" title="달력 전체 보기">달력 ›</a>
-  </nav>
-
   <% if (channel === 'manual' && sources.length) { %>
     <%# 수기 주문 출처 칩 (관리자 → 주문 출처 에서 이름·순서를 바꾼다) %>
     <nav class="stage-chips source-chips" aria-label="주문 출처">
@@ -65,34 +83,31 @@
       <% } %>
     </nav>
   <% } %>
-  <nav class="ship-board" aria-label="채널 주문 상태" title="큰 숫자는 판매자센터와 같은 상품주문 단위, 작은 숫자는 주문번호 단위입니다">
-    <% Object.entries(SHIP_STATES).forEach(([key, label], n) => { %>
-      <a href="<%= st === key ? link({ st: '', stage: '' }) : link({ st: key, view: '', stage: '' }) %>" class="ship-tile st-<%= key %> <%= st === key ? 'on' : '' %>">
-        <span class="ship-label"><%= label %><% if (key === 'delivered' && hideDays) { %><span class="ship-recent"> · 최근 <%= hideDays %>일</span><% } %></span>
-        <strong class="ship-count"><%= itemCounts[key] || 0 %><small>건</small></strong>
-        <span class="ship-sub">주문 <%= counts['st_' + key] || 0 %>건</span>
-      </a>
-    <% }) %>
-  </nav>
 
-  <div class="panel-top">
-    <nav class="tabs">
-      <% Object.entries(VIEWS).forEach(([key, label]) => { %>
-        <a href="<%= link({ view: key === 'active' ? '' : key, st: '', alert: '', stage: '', from: '', to: '' }) %>" class="<%= !st && !alert && !periodText && view === key ? 'on' : '' %>">
-          <%= label %> <span class="count"><%= counts[key] || 0 %></span>
+  <%# 한눈에 보기: 채널 상태 4칸 (판매자센터처럼) + 이번 주 출고 7일 — 한 판에 %>
+  <section class="overview" aria-label="한눈에 보기">
+    <nav class="ship-board" aria-label="채널 주문 상태" title="큰 숫자는 판매자센터와 같은 상품주문 단위, 작은 숫자는 주문번호 단위입니다">
+      <% Object.entries(SHIP_STATES).forEach(([key, label]) => { %>
+        <a href="<%= st === key ? link({ st: '', stage: '' }) : link({ st: key, view: '', stage: '' }) %>" class="ship-tile st-<%= key %> <%= st === key ? 'on' : '' %>">
+          <span class="ship-label"><%= label %><% if (key === 'delivered' && hideDays) { %><span class="ship-recent"> · 최근 <%= hideDays %>일</span><% } %></span>
+          <strong class="ship-count"><%= itemCounts[key] || 0 %><small>건</small></strong>
+          <span class="ship-sub">주문 <%= counts['st_' + key] || 0 %>건</span>
         </a>
       <% }) %>
     </nav>
-    <%# 확인 필요: 오늘출발·취소·반품·교환 요청·납기 지남·발송기한 지남 (0건이면 흐리게) %>
-    <nav class="alert-tabs" aria-label="확인 필요">
-      <% Object.entries(ALERTS).forEach(([key, label]) => { const n = alertCounts[key] || 0; %>
-        <a href="<%= alert === key ? link({ alert: '', stage: '' }) : link({ alert: key, st: '', view: '', stage: '' }) %>"
-           class="alert-tab alert-<%= key %> <%= alert === key ? 'on' : '' %> <%= n ? '' : 'zero' %>">
-          <%= label %> <span class="count"><%= n %></span>
+    <%# 오늘부터 7일, 날짜를 누르면 그날 납기 주문만 (전체 달력은 왼쪽 '일정') %>
+    <nav class="week-strip" aria-label="이번 주 출고 (납기 기준)">
+      <% week.forEach(d => { %>
+        <a href="<%= due === d.date ? link({ due: '' }) : link({ due: d.date }) %>" class="week-day <%= d.isToday ? 'today' : '' %> <%= due === d.date ? 'on' : '' %> <%= d.weekday === 0 ? 'sun' : d.weekday === 6 ? 'sat' : '' %>" title="<%= d.date %> 납기 주문 <%= d.due %>건 보기<%= d.events.length ? ` · ${d.events.map(e => e.title).join(', ')}` : '' %>">
+          <span class="wd"><%= d.isToday ? '오늘' : '일월화수목금토'[d.weekday] %> <span class="dd"><%= Number(d.date.slice(5, 7)) %>/<%= Number(d.date.slice(8)) %></span></span>
+          <strong class="<%= d.due ? '' : 'zero' %>"><%= d.due %><span class="wd-unit">건</span></strong>
+          <% if (d.events.length) { %><span class="wk-ev"><span class="dot ev-<%= d.events[0].color %>"></span><%= d.events[0].title %><%= d.events.length > 1 ? ` 외 ${d.events.length - 1}` : '' %></span><% } %>
         </a>
       <% }) %>
+      <a href="/schedule" class="week-more" title="달력 전체 보기">출고 달력 ›</a>
     </nav>
-  </div>
+  </section>
+
   <% if (alert) { %>
     <p class="muted small st-note"><strong><%= ALERTS[alert] %></strong> 주문만 모아 보는 중입니다 (탭과 상관없이). <a href="<%= link({ alert: '' }) %>">해제</a></p>
   <% } %>
@@ -107,48 +122,54 @@
   <% } %>
 </div>
 
-<%# 거르기: 주문 단계·디자인 단계·기간·검색·정렬을 한 줄에 (고르면 바로 조회) %>
+<%# 거르기: 보기(진행 중·내 담당·미지정·전체)·검색·단계·정렬·기간을 한 줄에 (고르면 바로 조회). 휴대폰에서는 [필터] 를 눌러 펼친다 %>
 <form method="get" action="/" class="filters" data-autosubmit>
   <% if (alert) { %><input type="hidden" name="alert" value="<%= alert %>"><% } %>
   <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active' && !periodText) { %><input type="hidden" name="view" value="<%= view %>"><% } %>
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
   <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
   <% if (due) { %><input type="hidden" name="due" value="<%= due %>"><% } %>
-  <select name="stage" aria-label="주문 단계" class="<%= stageFilter ? 'picked' : '' %>">
-    <option value="">주문 단계 · 전체 <%= stageTotal %></option>
-    <% stages.forEach(s => {
-         const shipped = s.id === lastStage && shippedCount !== null; // 진행 중 탭에서 본 발송(끝난 주문) → 전체 탭에서
-         const n = shipped ? shippedCount : stageCounts[s.id] || 0;
-         if (!s.active && !n && stageFilter !== s.id) return; %>
-      <option value="<%= s.id %>" <%= stageFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %> <%= n %></option>
+  <nav class="view-seg" id="live-views" aria-label="보기">
+    <% Object.entries(VIEWS).forEach(([key, label]) => { %>
+      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', alert: '', stage: '', from: '', to: '' }) %>" class="<%= !st && !alert && !periodText && view === key ? 'on' : '' %>">
+        <%= label %> <span class="count"><%= counts[key] || 0 %></span>
+      </a>
     <% }) %>
-  </select>
-  <select name="ds" aria-label="디자인 단계" class="<%= designFilter ? 'picked' : '' %>">
-    <option value="">디자인 · 전체 <%= designTotal %></option>
-    <% designStages.forEach(s => { const n = designCounts[s.id] || 0; if (!s.active && !n && designFilter !== s.id) return; %>
-      <option value="<%= s.id %>" <%= designFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %> <%= n %></option>
-    <% }) %>
-  </select>
+  </nav>
   <input type="search" name="q" value="<%= q %>" placeholder="상품, 고객, 주문번호, 메모 검색" aria-label="검색">
-  <select name="sort" aria-label="정렬">
-    <option value="">최근 주문순</option>
-    <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>
-  </select>
-  <button type="submit" class="btn-sm">검색</button>
-  <% if (q || periodText || stageFilter || designFilter) { %><a href="<%= link({ q: '', from: '', to: '', stage: '', ds: '' }) %>" class="btn-sm ghost" title="거르기 모두 지우기">✕ 지우기</a><% } %>
-  <div class="filters-period">
-    <span class="chips-label">기간</span>
-    <%- include('../partials/period-inputs', { from, to }) %>
-    <%- include('../partials/period-quick', { quick, from, to, link }) %>
+  <button type="submit" class="btn-sm search-btn">검색</button>
+  <input type="checkbox" id="more-filters" class="visually-hidden" <%= stageFilter || designFilter || periodText || sort === 'due' ? 'checked' : '' %>>
+  <label for="more-filters" class="btn-sm filters-more-toggle">필터<%= [stageFilter, designFilter, periodText].filter(Boolean).length ? ` · ${[stageFilter, designFilter, periodText].filter(Boolean).length}` : '' %> ▾</label>
+  <div class="filters-more">
+    <select name="stage" aria-label="주문 단계" class="<%= stageFilter ? 'picked' : '' %>">
+      <option value="">주문 단계 · 전체 <%= stageTotal %></option>
+      <% stages.forEach(s => {
+           const shipped = s.id === lastStage && shippedCount !== null; // 진행 중 탭에서 본 발송(끝난 주문) → 전체 탭에서
+           const n = shipped ? shippedCount : stageCounts[s.id] || 0;
+           if (!s.active && !n && stageFilter !== s.id) return; %>
+        <option value="<%= s.id %>" <%= stageFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %> <%= n %></option>
+      <% }) %>
+    </select>
+    <select name="ds" aria-label="디자인 단계" class="<%= designFilter ? 'picked' : '' %>">
+      <option value="">디자인 · 전체 <%= designTotal %></option>
+      <% designStages.forEach(s => { const n = designCounts[s.id] || 0; if (!s.active && !n && designFilter !== s.id) return; %>
+        <option value="<%= s.id %>" <%= designFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %> <%= n %></option>
+      <% }) %>
+    </select>
+    <select name="sort" aria-label="정렬">
+      <option value="">최근 주문순</option>
+      <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>
+    </select>
+    <% if (q || periodText || stageFilter || designFilter) { %><a href="<%= link({ q: '', from: '', to: '', stage: '', ds: '' }) %>" class="btn-sm ghost" title="거르기 모두 지우기">✕ 지우기</a><% } %>
+    <div class="filters-period">
+      <span class="chips-label">기간</span>
+      <%- include('../partials/period-inputs', { from, to }) %>
+      <%- include('../partials/period-quick', { quick, from, to, link }) %>
+    </div>
   </div>
 </form>
 <% if (hidingOld) { %>
   <p class="muted small hide-note">끝난 주문은 <%= hideDays %>일이 지나면 여기서 숨겨요. 지난 주문은 <strong>기간</strong>이나 <strong>검색</strong>으로 찾으세요.</p>
-<% } %>
-
-<% const practiceChannels = Object.keys(actionModes).filter(ch => actionModes[ch] !== 'live' && (ch === 'smartstore' || channels.includes(ch))); %>
-<% if (practiceChannels.length) { %>
-  <p class="practice-note"><strong>연습 모드</strong> <%= practiceChannels.map(ch => channelInfo(ch).name).join(' · ') %> 발주확인·발송처리 버튼을 눌러도 보내지 않고 기록만 남깁니다.</p>
 <% } %>
 
 <%# 일괄 처리용 폼: 체크박스는 목록 안에 있고 form="bulk-form" 으로 이 폼에 연결된다 %>
@@ -161,7 +182,7 @@
   <form method="post" action="/orders/logen/slips" class="logen-bar" data-once>
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="back" value="<%= currentUrl %>">
-    <span>로젠에 등록하고 송장번호를 기다리는 주문 <strong><%= logenWaiting %>건</strong><span class="muted small"> · iLOGEN '주문등록출력(복수건)' › 엑셀타입 '전체' › 조회 › 출력하면 5분 안에 알아서 들어와요</span></span>
+    <span><span>로젠 송장번호를 기다리는 주문 <strong><%= logenWaiting %>건</strong></span><span class="muted small">iLOGEN '주문등록출력(복수건)' › 엑셀타입 '전체' › 조회 › 출력하면 5분 안에 알아서 들어와요</span></span>
     <span class="logen-bar-actions">
       <a class="btn-sm" href="https://logis.ilogen.com" target="_blank" rel="noopener">iLOGEN 출력 화면 열기 ↗</a>
       <button type="submit" class="btn-sm">송장번호 가져오기</button>
@@ -172,7 +193,17 @@
 <div id="live-list">
 <% const anyAction = groups.some(g => g.canConfirm || g.canDispatch || g.canLogen); %>
 <% if (groups.length === 0) { %>
-  <section class="card empty"><p class="muted">조건에 맞는 주문이 없습니다.</p></section>
+  <%# 빈 화면: 왜 비었는지와 다음에 할 일을 알려 준다 %>
+  <% const filtered = q || periodText || stageFilter || designFilter || alert || st || due || channel || src; %>
+  <section class="card empty">
+    <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16l-1.5 12h-13z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><path d="M9.5 12h5"/></svg></div>
+    <p class="empty-title"><%= filtered ? '조건에 맞는 주문이 없어요' : '아직 들어온 주문이 없어요' %></p>
+    <p class="empty-text"><%= filtered ? '거르기를 바꾸거나 기간을 넓혀 보세요.' : '새 주문이 들어오면 여기에 바로 나타나요.' %><% if (hideDays) { %> 끝난 주문은 <%= hideDays %>일이 지나면 숨겨져요.<% } %></p>
+    <div class="empty-actions">
+      <% if (filtered) { %><a href="/" class="btn-sm">전체 주문 보기</a><% } %>
+      <% if (canCollect) { %><button type="submit" form="collect-now" class="btn-sm <%= filtered ? 'ghost' : 'primary' %>">↻ 지금 수집</button><% } %>
+    </div>
+  </section>
 <% } else { %>
   <%# 표 머리 (넓은 화면에서만 보임). 체크박스는 처리할 수 있는 주문 모두 선택 %>
   <div class="order-head">
@@ -186,6 +217,7 @@
          const due = dueInfo(o.due_date, today);
          const keepCurrent = o.assignee_id && !designers.some(d => d.id === o.assignee_id);
          const confirmed = g.items.every(i => i.channel_confirmed);
+         const status = statusOf(g, o, confirmed);
     %>
       <li id="o<%= o.id %>" class="order-item<%= g.claim && claimLevel(g.claim.claim_status) === 'open' ? ' has-claim' : '' %>">
         <span class="oi-check">
@@ -204,7 +236,7 @@
             <% if (g.claim && claimLevel(g.claim.claim_status)) { %>
               <span class="claim-badge <%= claimLevel(g.claim.claim_status) %>"><%= claimLabel(g.claim.claim_status) %></span>
             <% } %>
-            <span class="muted"><strong class="buyer"><%= o.buyer_name || o.receiver_name || '-' %></strong><% if (o.receiver_name && o.buyer_name && o.receiver_name !== o.buyer_name) { %> (받는 분 <%= o.receiver_name %>)<% } %> · <%= kst(o.paid_at) %> <%= o.channel === 'manual' ? '등록' : '결제' %><% if (o.source_order_no) { %> · 주문번호 <%= o.source_order_no %><% } %><% if (g.items.length > 1) { %> · 상품 <%= g.items.length %>개<% } %></span>
+            <span class="muted"><strong class="buyer"><%= o.buyer_name || o.receiver_name || '-' %></strong><% if (o.receiver_name && o.buyer_name && o.receiver_name !== o.buyer_name) { %> (받는 분 <%= o.receiver_name %>)<% } %> · <span title="<%= kst(o.paid_at) %>"><%= kst(o.paid_at).slice(5) %></span> <%= o.channel === 'manual' ? '등록' : '결제' %><% if (o.source_order_no) { %> · 주문번호 <%= o.source_order_no %><% } %><% if (g.items.length > 1) { %> · 상품 <%= g.items.length %>개<% } %></span>
           </div>
           <ul class="oi-items">
             <% g.items.forEach(i => { %>
@@ -217,6 +249,11 @@
           </ul>
         </a>
         <div class="oi-meta">
+          <%# 상태 배지 (휴대폰에서는 맨 위에) + 채널 상태·송장 한 줄 %>
+          <span class="cell c-status">
+            <span class="st-badge <%= status.cls %>" <% if (status.title) { %>title="<%= status.title %>"<% } %>><%= status.text %></span>
+            <% if (status.sub) { %><span class="st-sub" title="<%= status.sub %>"><%= status.sub %></span><% } %>
+          </span>
           <%# 주문 단계: 채널 처리에 따라 자동 (발주·발주확인·발송) %>
           <span class="cell c-stage"><span class="pill stage" title="주문 단계 (자동)"><%= o.stage_name || '단계 없음' %></span>
           <%# 디자인 단계: 디자이너·관리자가 고른다 (비어 있으면 첫 단계) %>
@@ -257,14 +294,6 @@
           <% if (g.delayed) { const d = delayInfo(g.delayed.ship_delayed, g.delayed.ship_due); %><span class="pill <%= d.cls %>" title="<%= d.title %>"><%= d.text %></span><% } %>
           <% if (!due.text && !(ship.text && (g.today || ship.cls)) && !g.delayed) { %><span class="muted small">-</span><% } %>
           </span>
-          <span class="cell c-status">
-          <% if (g.shipped) { %>
-            <span class="pill shipped" title="<%= kst(g.shipped.shipped_at) %>">발송 · <%= g.shipped.ship_company ? `${courierLabel(g.shipped.ship_company)} ${g.shipped.tracking_no}` : shipMethodLabel(g.shipped.ship_method) %></span>
-          <% } else { %>
-            <% if (g.logen && g.logen.status === 'registered') { %><span class="pill logen" title="로젠에 등록한 주문"><%= g.logen.slip_no ? `로젠 송장 ${g.logen.slip_no}` : '로젠 등록됨 · 출력 대기' %></span><% } %>
-            <span class="pill <%= o.channel === 'manual' && o.channel_status === 'PAYMENT_WAITING' ? 'wait' : 'light' %>"><% if (o.channel_status_label) { %><%= channelInfo(o.channel).name %>: <%= o.channel_status_label %><% } else { %><%= channelStatusLabel(o.channel_status, o.channel) %><%= o.channel !== "manual" && confirmed ? ' · 발주확인됨' : '' %><% } %></span>
-          <% } %>
-          </span>
         </div>
       </li>
     <% }) %>
@@ -272,7 +301,15 @@
   <% if (groups.length >= 300) { %><p class="muted">최근 300건까지만 보입니다. 검색이나 필터로 좁혀 보세요.</p><% } %>
 <% } %>
 </div>
+<% if (canCollect) { %>
+  <%# 빈 화면의 [지금 수집] 버튼이 쓰는 폼 (머리의 수집 폼과 같은 일) %>
+  <form id="collect-now" method="post" action="/orders/collect" class="visually-hidden" data-once>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <input type="hidden" name="back" value="<%= currentUrl %>">
+  </form>
+<% } %>
 
+<%# 일괄 처리 막대: 처리 순서대로 (발주확인 → 로젠 등록 → 송장·발송처리 → 발주서 출력), 삭제는 구분선 뒤에 %>
 <div id="bulk-bar" class="bulk-bar" hidden>
   <span><strong data-bulk-count>0</strong>건 선택</span>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/confirm"
@@ -281,6 +318,7 @@
           data-confirm="체크한 주문 {n}건을 로젠에 등록할까요?<%= logenEnv !== 'prod' ? ' (테스트 서버)' : '' %>&#10;주문번호가 같은 상품은 한 송장으로 묶어요. 등록한 뒤 iLOGEN 에서 출력해 주세요." data-bulk-kind="logen">로젠 등록 <span data-n>0</span>건</button><% } %>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/dispatch-form" formtarget="order-modal-frame" data-modal class="secondary" data-bulk-kind="dispatch">송장 입력·발송처리 <span data-n>0</span>건…</button>
   <button type="button" class="secondary" data-bulk-kind="any" data-print-selected>발주서 출력 <span data-n>0</span>건</button>
+  <span class="bulk-sep" aria-hidden="true"></span>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/manual-delete" class="danger" data-bulk-kind="delete"
           data-confirm="체크한 직접 등록 주문 {n}건을 지울까요?&#10;상품·메모·처리 기록까지 모두 지워지고 되돌릴 수 없습니다.&#10;(스마트스토어·쿠팡·자사몰 주문은 지우지 않고 건너뜁니다)">삭제 <span data-n>0</span>건</button>
   <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>

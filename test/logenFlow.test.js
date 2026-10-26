@@ -194,7 +194,7 @@ test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 
   await kim.submit('/', '/orders/bulk/logen', { ids: ids.map(String), back: '/' });
   const after = (await kim.request('/')).text;
   assert.match(after, /로젠에 2건 등록했습니다/);
-  assert.match(after, /로젠 등록됨 · 출력 대기/);
+  assert.match(after, /로젠 등록 · 출력 대기/);
   assert.match(after, /송장번호를 기다리는 주문 <strong>2건/);
   assert.match(after, /href="https:\/\/logis\.ilogen\.com" target="_blank"/);
 
