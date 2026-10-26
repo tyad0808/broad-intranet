@@ -1237,3 +1237,24 @@ body.in-pane .progress { margin: 0 0 16px; }
 body.in-pane .detail-main { gap: 0; }
 body.in-pane .detail-main .card + .card { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line-2); }
 body.in-pane .item-list { border-color: var(--line); }
+
+/* ───────── 문의함·메일함 (리뉴얼) ───────── */
+.page-head .box-tabs { margin-left: 4px; }
+.src-chips .chip .count { font-size: 14px; }
+.src-chips .chip.on .count { color: rgba(255, 255, 255, 0.75); }
+.inbox-item .st-badge { height: 28px; font-size: 14px; }
+.inbox-item .oi-name { font-size: 15px; }
+.inbox-item.unread .oi-name { font-weight: 700; }
+.inbox-item .inbox-preview { font-size: 14px; }
+.inbox-item .oi-meta { gap: 8px; }
+.inbox-split .list-toolbar { min-height: 44px; }
+@media (min-width: 1100px) {
+  .inbox-split #live-list, .inbox-pane { height: calc(100vh - 230px); }
+}
+@media (max-width: 900px) {
+  .inbox-item .assign-select { height: 44px; }
+  .inbox-item .st-badge { height: 34px; }
+}
+body.in-pane .detail-head { margin-bottom: 10px; }
+body.in-pane .detail-head .detail-title { font-size: 19px; }
+@media (max-width: 900px) { .detail[data-inquiry-id] .detail-side { order: 0; } } /* 문의는 내용을 먼저 읽고 답한다 */

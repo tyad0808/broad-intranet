@@ -4,10 +4,16 @@
 <% } %>
 <% const backQs = back !== '/inbox' ? `?back=${encodeURIComponent(back)}` : ''; %>
 
+<%# 머리: 출처·상태 + 제목 %>
+<div class="detail-head">
+  <div class="detail-head-main">
+    <p class="detail-channel"><span class="src-tag src-<%= inquiry.source %>"><%= label %></span> <span class="st-badge <%= inquiry.status === 'open' ? 'sb-new' : inquiry.status === 'answered' ? 'sb-done' : 'sb-wait' %>"><%= STATUS_LABELS[inquiry.status] %></span> <span class="muted"><%= kst(inquiry.received_at) %></span></p>
+    <h1 class="detail-title"><%= inquiry.subject || '(제목 없음)' %></h1>
+  </div>
+</div>
+
 <div class="detail" data-inquiry-id="<%= inquiry.id %>">
   <section class="card">
-    <p class="detail-channel"><span class="src-tag src-<%= inquiry.source %>"><%= label %></span> <span class="pill <%= inquiry.status === 'open' ? 'wait' : 'light' %>"><%= STATUS_LABELS[inquiry.status] %></span></p>
-    <h1 class="detail-title"><%= inquiry.subject %></h1>
     <dl class="info">
       <dt>보낸 사람</dt><dd><%= inquiry.from_name || '' %><% if (!inquiry.from_name && !inquiry.from_addr) { %><span class="muted">알 수 없음 (채널이 이름을 알려주지 않아요)</span><% } %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
       <% if (inquiry.reply_to) { %><dt>답장 주소</dt><dd><%= inquiry.reply_to %></dd><% } %>
@@ -58,7 +64,6 @@
   </section>
 
   <div class="detail-side">
-    <% if (!chat) { %><%- include('../partials/customer-history', { cust: customer, firstNote: '이 문의와 이어진 주문을 찾지 못했어요.' }) %><% } %>
     <section class="card process-card">
       <h2>답변</h2>
       <% if (chat) { %>
@@ -162,6 +167,7 @@
         </ul>
       <% } %>
     </section>
+    <% if (!chat) { %><%- include('../partials/customer-history', { cust: customer, firstNote: '이 문의와 이어진 주문을 찾지 못했어요.' }) %><% } %>
   </div>
 </div>
 <script src="/confirm.js"></script>

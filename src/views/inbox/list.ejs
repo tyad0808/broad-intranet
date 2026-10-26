@@ -9,7 +9,8 @@
     return s ? `/inbox?${s}` : '/inbox';
   };
 %>
-<div class="page-head">
+<% const practice = Object.entries(modes).filter(([, m]) => m !== 'live').map(([s]) => labelOf(s)); %>
+<div class="page-head sticky-glass">
   <div class="title-row">
     <h1 class="page-title"><%= box === 'mail' ? '메일함' : '문의함' %></h1>
     <%# 문의함의 큰 탭: 쇼핑몰 문의 / 채팅 (숫자는 미답변). 메일은 왼쪽 메뉴 '메일함' 으로 따로 %>
@@ -25,6 +26,9 @@
     <% } %>
   </div>
   <div class="page-actions">
+    <% if (practice.length) { %>
+      <span class="practice-pill" title="연습 모드: <%= practice.join(' · ') %> 답변을 보내도 실제로 나가지 않고 기록만 남깁니다.">연습 모드 <span class="muted"><%= practice.join(' · ') %></span></span>
+    <% } %>
     <a href="/templates" class="btn-sm ghost">답장 문구</a>
     <% if (canCollect) { %>
       <form method="post" action="/inbox/collect" class="collect-form" data-once>
@@ -42,21 +46,11 @@
     ? '아직 연결된 메일이 없습니다. 서버의 .env 에 네이버메일·지메일 계정(앱 비밀번호)을 넣으면 여기로 모입니다.'
     : '아직 연결된 쇼핑몰 문의가 없습니다. 스마트스토어(ORDER_SOURCE=naver)를 쓰면 상품문의가 여기로 모입니다.' %></p></section>
 <% } %>
-<% const practice = Object.entries(modes).filter(([, m]) => m !== 'live').map(([s]) => labelOf(s)); %>
-<% if (practice.length) { %>
-  <p class="practice-note"><strong>연습 모드</strong> <%= practice.join(' · ') %> 답변을 보내도 실제로 나가지 않고 기록만 남깁니다.</p>
-<% } %>
-
 <div id="live-tabs">
-  <nav class="tabs">
-    <% Object.entries(TABS).forEach(([key, label]) => { %>
-      <a href="<%= link({ tab: key === defaultTab ? '' : key }) %>" class="<%= tab === key ? 'on' : '' %>"><%= label %> <span class="count"><%= tabCounts[key] %></span></a>
-    <% }) %>
-  </nav>
+  <%# 출처(메일 계정·쇼핑몰) 알약 탭 %>
   <% if (sources.length > 1) { %>
-    <nav class="stage-chips" aria-label="출처">
-      <span class="chips-label">출처</span>
-      <a href="<%= link({ src: '' }) %>" class="chip <%= src ? '' : 'on' %>">전체</a>
+    <nav class="channel-chips src-chips" aria-label="출처">
+      <a href="<%= link({ src: '' }) %>" class="chip <%= src ? '' : 'on' %>">전체 출처</a>
       <% sources.forEach(s => { const n = sourceCounts[s] || 0; %>
         <a href="<%= link({ src: s }) %>" class="chip <%= src === s ? 'on' : '' %> <%= n ? '' : 'zero' %>"><span class="src-mark src-<%= s %>"></span><%= chipLabel(s) %> <span class="count"><%= n %></span></a>
       <% }) %>
@@ -64,17 +58,26 @@
   <% } %>
 </div>
 
-<%# 새로 검색하면 '전체' 탭에서 찾는다 (탭은 넘기지 않음) %>
+<%# 거르기: 보기(미답변·내 담당·답변완료·전체)·검색·기간. 새로 검색하면 '전체' 탭에서 찾는다 (탭은 넘기지 않음) %>
 <form method="get" action="/inbox" class="filters" data-autosubmit>
   <% if (box !== defaultBox) { %><input type="hidden" name="box" value="<%= box %>"><% } %>
   <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
-  <input type="search" name="q" value="<%= q %>" placeholder="<%= box === 'mail' ? '제목, 내용, 보낸 사람, 메일 주소 검색 (띄어쓰기로 여러 단어)' : '상품명, 문의 내용, 작성자, 주문번호 검색' %>" aria-label="검색">
-  <button type="submit" class="btn-sm">검색</button>
-  <% if (q || periodText) { %><a href="<%= link({ q: '', from: '', to: '', tab: '' }) %>" class="btn-sm ghost" title="검색·기간 지우기">✕ 지우기</a><% } %>
-  <div class="filters-period">
-    <span class="chips-label">기간</span>
-    <%- include('../partials/period-inputs', { from, to }) %>
-    <%- include('../partials/period-quick', { quick, from, to, link: changes => link({ tab: '', ...changes }) }) %>
+  <nav class="view-seg" id="live-views" aria-label="보기">
+    <% Object.entries(TABS).forEach(([key, label]) => { %>
+      <a href="<%= link({ tab: key === defaultTab ? '' : key }) %>" class="<%= tab === key ? 'on' : '' %>"><%= label %> <span class="count"><%= tabCounts[key] %></span></a>
+    <% }) %>
+  </nav>
+  <input type="search" name="q" value="<%= q %>" placeholder="<%= box === 'mail' ? '제목, 내용, 보낸 사람, 메일 주소 검색' : '상품명, 문의 내용, 작성자, 주문번호 검색' %>" aria-label="검색">
+  <button type="submit" class="btn-sm search-btn">검색</button>
+  <input type="checkbox" id="more-filters" class="visually-hidden" <%= periodText ? 'checked' : '' %>>
+  <label for="more-filters" class="btn-sm filters-more-toggle">기간<%= periodText ? ' · 1' : '' %> ▾</label>
+  <div class="filters-more">
+    <% if (q || periodText) { %><a href="<%= link({ q: '', from: '', to: '', tab: '' }) %>" class="btn-sm ghost" title="검색·기간 지우기">✕ 지우기</a><% } %>
+    <div class="filters-period">
+      <span class="chips-label">기간</span>
+      <%- include('../partials/period-inputs', { from, to }) %>
+      <%- include('../partials/period-quick', { quick, from, to, link: changes => link({ tab: '', ...changes }) }) %>
+    </div>
   </div>
 </form>
 <% if (periodText) { %>
@@ -103,7 +106,15 @@
   <div class="list-toolbar"><label class="check-all"><input type="checkbox" data-check-all> <%= canDelete ? '모두 선택' : '미답변 모두 선택' %></label></div>
 <% } %>
 <% if (rows.length === 0) { %>
-  <section class="card empty"><p class="muted">조건에 맞는 문의가 없습니다.</p></section>
+  <% const filtered = q || periodText || src || tab !== defaultTab; %>
+  <section class="card empty">
+    <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8.5L4 20z"/><path d="M8 9h8M8 12.5h5"/></svg></div>
+    <p class="empty-title"><%= filtered ? (box === 'mail' ? '조건에 맞는 메일이 없어요' : '조건에 맞는 문의가 없어요') : (box === 'mail' ? '새 메일이 없어요' : '미답변 문의가 없어요') %></p>
+    <p class="empty-text"><%= filtered ? '검색어나 기간을 바꿔 보세요.' : '새로 오면 여기에 바로 나타나요.' %><% if (hideDays && !periodText) { %> 답변한 <%= box === 'mail' ? '메일' : '문의' %>은 <%= hideDays %>일이 지나면 숨겨져요.<% } %></p>
+    <div class="empty-actions">
+      <% if (filtered) { %><a href="<%= link({ q: '', from: '', to: '', src: '', tab: 'all' }) %>" class="btn-sm">전체 보기</a><% } %>
+    </div>
+  </section>
 <% } else { %>
   <ul class="order-list inbox-list">
     <% rows.forEach(r => { let files = []; try { files = JSON.parse(r.attachments || '[]'); } catch { files = []; } %>
@@ -131,7 +142,7 @@
             </select>
             <noscript><button type="submit" class="btn-sm">지정</button></noscript>
           </form>
-          <span class="pill <%= r.status === 'open' ? 'wait' : 'light' %>"><%= STATUS_LABELS[r.status] %></span>
+          <span class="st-badge <%= r.status === 'open' ? 'sb-new' : r.status === 'answered' ? 'sb-done' : 'sb-wait' %>"><%= STATUS_LABELS[r.status] %></span>
         </div>
       </li>
     <% }) %>
@@ -153,6 +164,7 @@
   <button type="submit" form="bulk-form" data-bulk-kind="close"
           data-confirm="체크한 문의를 '처리 완료'(답변 필요 없음)로 바꿀까요?&#10;메일로는 아무것도 보내지 않습니다.">처리 완료 <span data-n>0</span>건</button>
   <% if (box === 'mail') { %>
+    <span class="bulk-sep" aria-hidden="true"></span>
     <button type="submit" form="bulk-form" formaction="/inbox/bulk/delete" class="danger" data-bulk-kind="delete"
             data-confirm="체크한 메일 {n}통을 인트라넷에서 삭제할까요?&#10;되돌릴 수 없습니다. (네이버메일·지메일의 원본은 그대로 남아요)">🗑 삭제 <span data-n>0</span>통</button>
   <% } %>
