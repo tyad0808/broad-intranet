@@ -4,6 +4,7 @@
 // 실행: cd /opt/broad-intranet/app && sudo -u intranet npm run logen-check
 require('dotenv').config({ quiet: true });
 const { createLogenClient } = require('../src/channels/logen');
+const { openDb } = require('../src/db');
 
 const keysOf = obj => Object.keys(obj || {}).join(', ') || '없음';
 const first = body => (body && Array.isArray(body.data) ? body.data[0] : null);
@@ -31,14 +32,16 @@ async function contract(client, label) {
     fareTy = c.fareTy;
   });
   if (!ok || !fareTy) return null;
+  let box = null;
   await step(`${label} 계약 운임 조회`, async () => {
     const body = await client.request('contPickFares', [{ fareTy }]);
     const c = first(body);
     const boxes = (c && (c.data1 || c.data)) || [];
     console.log(`  응답: ${body.sttsCd} · 박스 종류 ${boxes.length}개`);
     for (const b of boxes.slice(0, 15)) console.log(`    - ${b.boxTyNm}(${b.boxTyCd}) ${Number(b.dlvFare).toLocaleString()}원`);
+    box = boxes[0] || null;
   });
-  return fareTy;
+  return { fareTy, box };
 }
 
 (async () => {
@@ -47,15 +50,24 @@ async function contract(client, label) {
   console.log(`\n▶ 1) 테스트 서버 (우리 거래처코드 ${process.env.LOGEN_CUST_CD || '없음 ✗'})`);
   // 테스트 서버도 우리 거래처코드(.env 의 LOGEN_CUST_CD)로 보낸다 — 로젠이 전송 내역에서 우리 코드를 확인한다
   const dev = createLogenClient({ env: 'dev' });
-  const fareTy = await contract(dev, '테스트');
-  if (fareTy) {
+  const got = await contract(dev, '테스트');
+  // 보내는 분: 인트라넷 관리자 › 로젠 설정에 저장한 값 (실제 주소여야 로젠이 주소를 읽는다)
+  let sender = null;
+  try { sender = JSON.parse((openDb().prepare("SELECT value FROM settings WHERE key = 'logen_sender'").get() || {}).value || 'null'); } catch { sender = null; }
+  if (got && !(sender && sender.name && sender.addr && sender.tel)) {
+    console.log('  ✗ 보내는 분 정보가 없습니다. 인트라넷 관리자 › 로젠 설정 ② 에서 이름·주소·전화번호를 저장한 뒤 다시 실행하세요.');
+  } else if (got) {
+    console.log(`  보내는 분: ${sender.name} · 주소 ${sender.addr.length}자 · 전화 ${sender.tel.length}자리`);
+  }
+  if (got && sender && sender.name && sender.addr && sender.tel) {
+    const { fareTy, box } = got;
     const fixTakeNo = `BROADTEST${Date.now()}`;
     const registered = await step('테스트 주문 등록', async () => {
       const body = await dev.request('registerOrderData', [{
         takeDt: kstDate(), slipNo: '', fixTakeNo,
-        sndCustNm: '브로드 테스트', sndCustAddr: '서울시 강남구 테헤란로 1', sndTelNo: '0212345678',
+        sndCustNm: sender.name, sndCustAddr: sender.addr, sndTelNo: sender.tel,
         rcvCustNm: '테스트고객', rcvCustAddr: '충남 부여군 은산면 내지리 123-1', rcvTelNo: '01012345678', rcvCellNo: '01012345678',
-        fareTy, qty: 1, dlvFare: 3000, goodsNm: '테스트 상품', sndMsg: '문 앞',
+        fareTy, ...(box ? { boxTyCd: box.boxTyCd } : {}), qty: 1, dlvFare: box ? Number(box.dlvFare) : 3000, goodsNm: '테스트 상품', sndMsg: '문 앞',
       }]);
       const c = first(body);
       console.log(`  응답: ${body.sttsCd} (${body.sttsMsg || ''}) · 항목: ${keysOf(c)}`);
