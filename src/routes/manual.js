@@ -239,17 +239,8 @@ function manualRoutes(db, notifier) {
     const order = findOrder(req.params.id);
     if (!order || order.channel !== CHANNEL) return notFound(res);
     const back = safeBack(req.body.back);
-    const items = groupItems(order);
-    transaction(db, () => {
-      const delNotes = db.prepare('DELETE FROM notifications WHERE order_id = ?');
-      for (const i of items) delNotes.run(i.id);
-      for (const table of ['order_actions', 'order_events', 'logen_shipments']) {
-        db.prepare(`DELETE FROM ${table} WHERE channel = ? AND channel_order_id = ?`).run(CHANNEL, order.channel_order_id);
-      }
-      db.prepare('DELETE FROM orders WHERE channel = ? AND channel_order_id = ?').run(CHANNEL, order.channel_order_id);
-    });
-    console.log(`[수기 주문 삭제] ${order.channel_order_id} '${items[0].product_name}' · 직원 ${req.user.id}`);
-    notifier.ordersChanged(items.map(i => i.id), req.user.id);
+    const ids = deleteOrders([order], req.user.id);
+    notifier.ordersChanged(ids, req.user.id);
     notifier.checkUnassigned();
     const result = { type: 'ok', message: `수기 주문 ${order.channel_order_id} 을(를) 지웠습니다.` };
     // 주문 목록 위 팝업에서 지웠으면 팝업 안에 결과만 (닫으면 목록이 새로 그려진다)
@@ -257,6 +248,49 @@ function manualRoutes(db, notifier) {
     req.session.flash = result;
     res.redirect(back);
   });
+
+  // 주문 목록에서 체크한 주문 중 수기 주문만 한꺼번에 지운다 (다른 채널 주문은 건너뛴다)
+  router.post('/orders/bulk/manual-delete', (req, res) => {
+    const back = safeBack(req.body.back);
+    const raw = Array.isArray(req.body.ids) ? req.body.ids : req.body.ids ? [req.body.ids] : [];
+    const picked = [...new Set(raw.map(Number).filter(n => Number.isInteger(n) && n > 0))].slice(0, 300).map(findOrder).filter(Boolean);
+    const orders = picked.filter(o => o.channel === CHANNEL);
+    const skipped = picked.length - orders.length;
+    if (!orders.length) {
+      req.session.flash = { type: 'error', message: '지울 수 있는 주문이 없습니다. 직접 등록한 주문만 지울 수 있어요.' };
+      return res.redirect(back);
+    }
+    const ids = deleteOrders(orders, req.user.id);
+    notifier.ordersChanged(ids, req.user.id);
+    notifier.checkUnassigned();
+    const groups = new Set(orders.map(o => o.channel_order_id)).size;
+    req.session.flash = {
+      type: 'ok',
+      message: `수기 주문 ${groups}건을 지웠습니다.${skipped ? ` (쇼핑몰 주문 ${skipped}건은 지울 수 없어 건너뛰었어요)` : ''}`,
+    };
+    res.redirect(back);
+  });
+
+  // 주문 묶음(주문번호)째로 상품·알림·처리 기록·로젠 기록까지 지운다. 지운 주문 줄 id 를 돌려준다
+  function deleteOrders(orders, userId) {
+    const ids = [];
+    transaction(db, () => {
+      const delNotes = db.prepare('DELETE FROM notifications WHERE order_id = ?');
+      const done = new Set();
+      for (const order of orders) {
+        if (done.has(order.channel_order_id)) continue;
+        done.add(order.channel_order_id);
+        const items = groupItems(order);
+        for (const i of items) { delNotes.run(i.id); ids.push(i.id); }
+        for (const table of ['order_actions', 'order_events', 'logen_shipments']) {
+          db.prepare(`DELETE FROM ${table} WHERE channel = ? AND channel_order_id = ?`).run(CHANNEL, order.channel_order_id);
+        }
+        db.prepare('DELETE FROM orders WHERE channel = ? AND channel_order_id = ?').run(CHANNEL, order.channel_order_id);
+        console.log(`[수기 주문 삭제] ${order.channel_order_id} '${items[0].product_name}' · 직원 ${userId}`);
+      }
+    });
+    return ids;
+  }
 
   // 수기 주문번호: M + 한국 날짜(YYMMDD) + 순번. 예) M261016-001
   function nextOrderId() {

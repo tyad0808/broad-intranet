@@ -282,3 +282,22 @@ test('수기 주문 삭제: 상품·처리 기록·알림까지 통째로 지우
   assert.strictEqual(no.status, 404);
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders WHERE id = ?').get(s).n, 1);
 });
+
+test('주문 목록에서 체크해서 삭제: 수기 주문만 지우고 채널 주문은 건너뛴다', async t => {
+  const ctx = await setup(t);
+  await create(ctx);
+  await create(ctx);
+  const { db } = ctx;
+  const rows = ctx.rows();
+  const a = rows[0];
+  const b = rows.find(r => r.channel_order_id !== a.channel_order_id);
+  const s = Number(db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, paid_at, channel_status) VALUES ('smartstore', 'S1', 'S1-1', 'x', '2026-10-26T00:00:00Z', 'DELIVERED')").run().lastInsertRowid);
+  const page = (await ctx.kim.request('/?ch=manual')).text;
+  assert.match(page, /formaction="\/orders\/bulk\/manual-delete"/);
+  assert.match(page, new RegExp(`value="${a.id}"[^>]*data-can="[^"]*delete`));
+  const res = await ctx.kim.submit('/?ch=manual', '/orders/bulk/manual-delete', { ids: [a.id, b.id, s], back: '/?ch=manual' });
+  assert.strictEqual(res.location, '/?ch=manual');
+  assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM orders WHERE channel = 'manual'").get().n, 0);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM orders WHERE id = ?').get(s).n, 1);
+  assert.match((await ctx.kim.request('/?ch=manual')).text, /수기 주문 2건을 지웠습니다\. \(쇼핑몰 주문 1건은/);
+});

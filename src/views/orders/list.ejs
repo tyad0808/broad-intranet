@@ -189,11 +189,10 @@
     %>
       <li id="o<%= o.id %>" class="order-item<%= g.claim && claimLevel(g.claim.claim_status) === 'open' ? ' has-claim' : '' %>">
         <span class="oi-check">
-          <% if (g.canConfirm || g.canDispatch || g.canLogen) { %>
+          <%# 체크박스는 모든 주문에 (발주서 출력은 어떤 주문이든, 삭제는 직접 등록한 주문만) %>
             <input type="checkbox" name="ids" value="<%= o.id %>" form="bulk-form" aria-label="선택: <%= o.product_name %>"
-                   data-can="<%= [g.canConfirm ? 'confirm' : '', g.canDispatch ? 'dispatch' : '', g.canLogen ? 'logen' : ''].filter(Boolean).join(' ') %>"
+                   data-can="<%= [g.canConfirm ? 'confirm' : '', g.canDispatch ? 'dispatch' : '', g.canLogen ? 'logen' : '', o.channel === 'manual' ? 'delete' : ''].filter(Boolean).join(' ') %>"
                    data-channel-name="<%= c.name %>">
-          <% } %>
         </span>
         <a class="oi-main" href="/orders/<%= o.id %>?back=<%= encodeURIComponent(currentUrl) %>">
           <div class="oi-head">
@@ -282,6 +281,8 @@
           data-confirm="체크한 주문 {n}건을 로젠에 등록할까요?<%= logenEnv !== 'prod' ? ' (테스트 서버)' : '' %>&#10;주문번호가 같은 상품은 한 송장으로 묶어요. 등록한 뒤 iLOGEN 에서 출력해 주세요." data-bulk-kind="logen">로젠 등록 <span data-n>0</span>건</button><% } %>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/dispatch-form" formtarget="order-modal-frame" data-modal class="secondary" data-bulk-kind="dispatch">송장 입력·발송처리 <span data-n>0</span>건…</button>
   <button type="button" class="secondary" data-bulk-kind="any" data-print-selected>발주서 출력 <span data-n>0</span>건</button>
+  <button type="submit" form="bulk-form" formaction="/orders/bulk/manual-delete" class="danger" data-bulk-kind="delete"
+          data-confirm="체크한 직접 등록 주문 {n}건을 지울까요?&#10;상품·메모·처리 기록까지 모두 지워지고 되돌릴 수 없습니다.&#10;(스마트스토어·쿠팡·자사몰 주문은 지우지 않고 건너뜁니다)">삭제 <span data-n>0</span>건</button>
   <button type="button" class="btn-sm" data-bulk-clear>선택 해제</button>
 </div>
 
