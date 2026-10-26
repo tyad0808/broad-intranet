@@ -1,9 +1,9 @@
 // 로젠택배 API 점검: 인증키·IP 등록이 됐는지와 응답 모양을 확인한다 (키 값은 출력하지 않음)
-//   1) 테스트 서버(개발계): 로젠 문서의 테스트 코드로 계약 조회 → 운임 조회 → 가짜 주문 1건 등록 → 송장번호 조회
+//   1) 테스트 서버(개발계): 우리 거래처코드로 계약 조회 → 운임 조회 → 가짜 주문 1건 등록 → 송장번호 조회
 //   2) 실제 서버(운영계): 우리 거래처코드로 계약·운임 '조회만' (주문은 보내지 않음)
 // 실행: cd /opt/broad-intranet/app && sudo -u intranet npm run logen-check
 require('dotenv').config({ quiet: true });
-const { createLogenClient, TEST_CODES } = require('../src/channels/logen');
+const { createLogenClient } = require('../src/channels/logen');
 
 const keysOf = obj => Object.keys(obj || {}).join(', ') || '없음';
 const first = body => (body && Array.isArray(body.data) ? body.data[0] : null);
@@ -44,8 +44,9 @@ async function contract(client, label) {
 (async () => {
   console.log(`인증키(LOGEN_SECRET_KEY) ${process.env.LOGEN_SECRET_KEY ? '있음' : '없음 ✗'} · 거래처코드(LOGEN_CUST_CD) ${process.env.LOGEN_CUST_CD ? '있음' : '없음 ✗'} · 연동업체코드(LOGEN_USER_ID) ${process.env.LOGEN_USER_ID ? '있음' : '없음 (거래처코드로 대신)'}`);
 
-  console.log('\n▶ 1) 테스트 서버 (로젠 문서의 테스트 코드)');
-  const dev = createLogenClient({ env: 'dev', ...TEST_CODES });
+  console.log(`\n▶ 1) 테스트 서버 (우리 거래처코드 ${process.env.LOGEN_CUST_CD || '없음 ✗'})`);
+  // 테스트 서버도 우리 거래처코드(.env 의 LOGEN_CUST_CD)로 보낸다 — 로젠이 전송 내역에서 우리 코드를 확인한다
+  const dev = createLogenClient({ env: 'dev' });
   const fareTy = await contract(dev, '테스트');
   if (fareTy) {
     const fixTakeNo = `BROADTEST${Date.now()}`;

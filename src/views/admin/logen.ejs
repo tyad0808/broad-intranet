@@ -12,7 +12,7 @@
     <h2>로젠 연결</h2>
     <dl class="info">
       <dt>보내는 곳</dt>
-      <dd><% if (logen.env === 'prod') { %><strong>실제 서버</strong> (우리 거래처코드)<% } else { %><strong>테스트 서버</strong> · 로젠 연습용 거래처로 보내요. 실제 택배는 생기지 않고, 고객 정보 대신 연습용 정보를 보내요.<% } %></dd>
+      <dd><% if (logen.env === 'prod') { %><strong>실제 서버</strong> (우리 거래처코드)<% } else { %><strong>테스트 서버</strong> · 우리 거래처코드로 보내지만 실제 택배는 생기지 않아요. 고객 정보 대신 연습용 정보를 보내요.<% } %></dd>
       <dt>실제 등록</dt>
       <dd><% if (logen.env !== 'prod') { %><span class="muted">테스트 서버라 상관없음</span><% } else if (logen.writeOn) { %><strong>켜짐</strong> · 등록하면 iLOGEN 에 바로 들어가요<% } else { %><strong class="text-bad">꺼짐</strong> · <code>.env</code> 의 <code>LOGEN_WRITE=on</code> 이어야 등록돼요<% } %></dd>
       <dt>송장번호 대기</dt>

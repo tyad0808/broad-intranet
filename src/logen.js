@@ -7,8 +7,8 @@
 //
 // 로젠 요청: 한 번에 10건 안팎, 차례대로(동시에 여러 개 X), 호출 사이 몇 초씩 쉬기
 //   → 모든 로젠 호출은 call() 한 줄로 줄 세워 보내고, 호출 사이에 GAP_MS 를 쉰다
-// 테스트 서버(LOGEN_ENV 가 prod 가 아님)는 로젠 문서의 연습용 거래처 코드로 보내고, 고객 정보 대신 연습용 정보를 보낸다
-const { createLogenClient, TEST_CODES } = require('./channels/logen');
+// 테스트 서버(LOGEN_ENV 가 prod 가 아님)도 우리 거래처코드(LOGEN_CUST_CD)로 보내고(로젠이 전송 내역에서 확인), 고객 정보 대신 연습용 정보를 보낸다
+const { createLogenClient } = require('./channels/logen');
 const { getSetting, setSetting } = require('./collector');
 const { claimLevel } = require('./channels/labels');
 
@@ -34,7 +34,6 @@ function clientFromEnv() {
   return createLogenClient({
     env,
     secretKey,
-    ...(env === 'dev' ? TEST_CODES : {}),
     allowWrite: process.env.LOGEN_WRITE === 'on',
   });
 }
