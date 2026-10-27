@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { openDb } = require('../src/db');
-const { ipAllowed, messageOf, createTalktalkHandler, createTalktalkClient, createTalktalkSender, createTalkImages, imageKind } = require('../src/inbox/talktalk');
+const { ipAllowed, messageOf, createTalktalkHandler, createTalktalkClient, createTalktalkSender, createTalkImages, imageKind, linkSaidOrders } = require('../src/inbox/talktalk');
 const { startServer, addUser, loginAs } = require('./helpers');
 
 const TOKEN = 'a'.repeat(48);
@@ -325,4 +325,29 @@ test('톡톡 답장 연습 모드: 손님에게 안 나가고 기록만 (대화 
   assert.strictEqual(db.prepare("SELECT result FROM inquiry_replies WHERE inquiry_id = ?").get(id).result, 'practice');
   assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE inquiry_id = ? AND direction = 'out'").get(id).n, 0);
   assert.match((await kim.request(`/inbox/${id}`)).text, /TALKTALK_ANSWER=on/);
+});
+
+test('손님이 말한 주문번호가 아직 인트라넷에 없으면 기억해 두고, 주문이 수집되면 연결한다 (휴대폰 번호는 무시)', async t => {
+  let handle;
+  const ctx = await startServer({ inbox: { sourceLabels: { talktalk: '톡톡' }, talktalk: { token: TOKEN, handle: ev => handle(ev) } } });
+  t.after(() => ctx.server.close());
+  const { db } = ctx;
+  handle = createTalktalkHandler({ db });
+  handle(send('u1', '010-1234-5678 로 연락주세요'));
+  const row = () => db.prepare("SELECT id, order_no, meta FROM inquiries WHERE external_id = 'u1'").get();
+  assert.strictEqual(row().meta, null, '휴대폰 번호는 주문번호로 보지 않음');
+  handle(send('u1', '2026102737583121이거'));
+  assert.strictEqual(JSON.parse(row().meta).saidNo, '2026102737583121');
+  addUser(db, { email: 'kim@broad.test', name: '김직원' });
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  const page = (await kim.request(`/inbox/${row().id}`)).text;
+  assert.match(page, /손님이 말한 번호 <strong>2026102737583121<\/strong> 와 맞는 주문이 아직 인트라넷에 없어요/);
+  assert.match(page, /name="order_no" maxlength="40" inputmode="numeric" value="2026102737583121"/, '연결 칸에 미리 채움');
+  assert.strictEqual(linkSaidOrders(db), 0);
+  db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, paid_at, channel_status)
+    VALUES ('smartstore', '2026102737583121', 'P1', '현수막', '2026-10-27T06:00:00Z', 'PAYED')`).run();
+  await kim.request('/inbox?box=chat'); // 목록을 열면 연결
+  assert.strictEqual(row().order_no, '2026102737583121');
+  assert.strictEqual(JSON.parse(row().meta).saidNo, undefined);
+  assert.doesNotMatch((await kim.request(`/inbox/${row().id}`)).text, /손님이 말한 번호/);
 });

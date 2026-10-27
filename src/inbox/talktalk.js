@@ -52,16 +52,45 @@ function productOf(ev) {
 
 // 고객이 대화에 쓴 주문번호 찾기: 숫자 10~20자리 (사이에 - 나 빈칸이 있어도 됨)
 //   인트라넷에 그 주문(주문번호 또는 상품주문번호)이 있을 때만 그 주문번호를 돌려준다. 여러 개면 마지막에 쓴 것
+function numbersIn(text) {
+  return [...String(text || '').matchAll(/\d[\d -]{8,30}\d/g)]
+    .map(m => m[0].replace(/\D/g, ''))
+    .filter(d => d.length >= 10 && d.length <= 20 && !/^01\d{8,9}$/.test(d)); // 휴대폰 번호는 빼고
+}
 function orderNoIn(db, text) {
   const find = db.prepare('SELECT channel_order_id FROM orders WHERE channel_order_id = ? OR channel_item_id = ? ORDER BY id LIMIT 1');
   const found = [];
-  for (const m of String(text || '').matchAll(/\d[\d -]{8,30}\d/g)) {
-    const digits = m[0].replace(/\D/g, '');
-    if (digits.length < 10 || digits.length > 20) continue;
+  for (const digits of numbersIn(text)) {
     const row = find.get(digits, digits);
     if (row) found.push(String(row.channel_order_id));
   }
   return found.length ? found[found.length - 1] : null;
+}
+
+// 손님이 말한 번호인데 아직 인트라넷에 없는 주문 (주문 수집 전일 수 있다) → meta.saidNo 에 기억해 두고, 들어오면 연결
+function rememberSaid(db, inquiryId, text) {
+  const nums = numbersIn(text);
+  if (!nums.length) return;
+  const row = db.prepare('SELECT meta FROM inquiries WHERE id = ?').get(inquiryId);
+  let meta = {};
+  try { meta = JSON.parse((row && row.meta) || '{}') || {}; } catch { meta = {}; }
+  db.prepare('UPDATE inquiries SET meta = ? WHERE id = ?').run(JSON.stringify({ ...meta, saidNo: nums[nums.length - 1] }), inquiryId);
+}
+
+// 기억해 둔 번호의 주문이 그사이 들어왔으면 연결한다 (톡톡 목록·대화를 열 때)
+function linkSaidOrders(db) {
+  const rows = db.prepare("SELECT id, meta FROM inquiries WHERE source = 'talktalk' AND order_no IS NULL AND meta LIKE '%\"saidNo\"%'").all();
+  let linked = 0;
+  for (const r of rows) {
+    let meta = {};
+    try { meta = JSON.parse(r.meta || '{}') || {}; } catch { continue; }
+    const found = meta.saidNo ? orderNoIn(db, meta.saidNo) : null;
+    if (!found) continue;
+    delete meta.saidNo;
+    db.prepare('UPDATE inquiries SET order_no = ?, meta = ? WHERE id = ?').run(found, JSON.stringify(meta), r.id);
+    linked += 1;
+  }
+  return linked;
 }
 
 const previewOf = m => (m.kind === 'image' ? '(사진)' : String(m.text || '').replace(/\s+/g, ' ').trim()).slice(0, 60) || '(내용 없음)';
@@ -207,8 +236,10 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
         db.prepare('UPDATE inquiries SET meta = ? WHERE id = ?').run(JSON.stringify({ ...meta, product }), thread.id);
       }
       // 고객이 주문번호를 말하면 그 주문과 연결한다
-      const orderNo = m.kind === 'text' || m.kind === 'card' ? orderNoIn(db, m.text) : null;
+      const said = m.kind === 'text' || m.kind === 'card' ? m.text : '';
+      const orderNo = said ? orderNoIn(db, said) : null;
       if (orderNo) db.prepare('UPDATE inquiries SET order_no = ? WHERE id = ?').run(orderNo, thread.id);
+      else if (said) rememberSaid(db, thread.id, said);
     }
     return { id: thread.id, created, preview };
   }
@@ -248,4 +279,4 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
   };
 }
 
-module.exports = { SOURCE, LABEL, PARTNER_CENTER_URL, IMAGE_HOSTS, MAX_IMAGE, ipAllowed, messageOf, productOf, orderNoIn, imageKind, createTalkImages, createTalktalkSender, createTalktalkClient, createTalktalkHandler };
+module.exports = { SOURCE, LABEL, PARTNER_CENTER_URL, IMAGE_HOSTS, MAX_IMAGE, ipAllowed, messageOf, productOf, orderNoIn, linkSaidOrders, imageKind, createTalkImages, createTalktalkSender, createTalktalkClient, createTalktalkHandler };

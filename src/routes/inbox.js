@@ -4,7 +4,7 @@
 const express = require('express');
 const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
-const { IMAGE_HOSTS, PARTNER_CENTER_URL, MAX_IMAGE, orderNoIn, imageKind } = require('../inbox/talktalk');
+const { IMAGE_HOSTS, PARTNER_CENTER_URL, MAX_IMAGE, orderNoIn, linkSaidOrders, imageKind } = require('../inbox/talktalk');
 const { templatesFor } = require('./templates');
 const { ordersForInquiry } = require('../customer');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
@@ -208,6 +208,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
   // ───────── 톡톡 목록 (네이버 톡톡 파트너센터와 비슷한 모양) ─────────
   //   탭: 전체·대기·진행중·보류 / 거르기: 담당(who)·기간(days)·읽음(read)·정렬(sort) / 검색: 대화 내용·이름·고객 메모·상품·주문번호
   function chatList(req, res) {
+    linkSaidOrders(db); // 손님이 말한 주문번호의 주문이 그사이 수집됐으면 연결
     const q = String(req.query.q || '').trim().slice(0, 50);
     const terms = searchTerms(q);
     const tab = CHAT_TABS[req.query.tab] ? req.query.tab : 'all';
@@ -355,8 +356,11 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
         const said = chat.filter(m => m.direction === 'in' && m.text).map(m => m.text).join('\n');
         const found = orderNoIn(db, said);
         if (found) {
-          db.prepare('UPDATE inquiries SET order_no = ? WHERE id = ?').run(found, inquiry.id);
+          const meta = metaOf(inquiry);
+          delete meta.saidNo;
+          db.prepare('UPDATE inquiries SET order_no = ?, meta = ? WHERE id = ?').run(found, JSON.stringify(meta), inquiry.id);
           inquiry.order_no = found;
+          inquiry.meta = JSON.stringify(meta);
         }
       }
     }
@@ -385,6 +389,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       isMail: isMailSource(inquiry.source),
       chat, PARTNER_CENTER_URL, CHAT_STATUS,
       chatProduct: chat ? metaOf(inquiry).product || null : null,
+      saidNo: chat && !inquiry.order_no ? metaOf(inquiry).saidNo || null : null,
       linkedOrder: chat && inquiry.order_no
         ? db.prepare("SELECT id, channel, channel_order_id, product_name FROM orders WHERE channel_order_id = ? ORDER BY item_type = 'addon', id LIMIT 1").get(String(inquiry.order_no)) || null
         : null,
@@ -568,7 +573,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const digits = raw.replace(/\D/g, '');
     const row = find.get(raw, raw) || (digits ? find.get(digits, digits) : null);
     if (!row) return flashTo(req, res, ctx.url, 'error', `주문번호 ${raw} 인 주문을 인트라넷에서 찾지 못했어요. 번호를 다시 확인해 주세요.`);
-    db.prepare('UPDATE inquiries SET order_no = ? WHERE id = ?').run(String(row.channel_order_id), ctx.inquiry.id);
+    const meta = metaOf(ctx.inquiry);
+    delete meta.saidNo;
+    db.prepare('UPDATE inquiries SET order_no = ?, meta = ? WHERE id = ?').run(String(row.channel_order_id), JSON.stringify(meta), ctx.inquiry.id);
     chatDone(req, res, ctx, `주문 ${row.channel_order_id} 와 연결했습니다.`);
   });
   router.post('/inbox/:id/unlink-order', (req, res) => {

@@ -226,9 +226,42 @@
   // 문의함 화면이면 문의함 소식에, 주문 목록이면 주문 소식에 새로 그린다
   const feed = liveList ? liveList.dataset.feed || 'orders' : null;
 
+  // ───────── 톡톡 대화 실시간 ─────────
+  // 열려 있는 대화(이 화면, 또는 톡톡 목록 오른쪽 칸 안의 화면)의 말풍선·상태를 새로 그린다.
+  // 쓰고 있던 답장 칸·메모 칸은 건드리지 않는다
+  let chatTimer = null;
+  async function refreshChat(doc) {
+    const thread = doc && doc.querySelector('.chat-thread');
+    if (!thread) return;
+    try {
+      const res = await fetch(doc.location.href, { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
+      if (!res.ok || res.redirected) return;
+      const fresh = new DOMParser().parseFromString(await res.text(), 'text/html');
+      const nearBottom = thread.scrollHeight - thread.scrollTop - thread.clientHeight < 80;
+      for (const sel of ['.chat-thread', '.detail-head', '.talk-cust-card', '.customer-card']) {
+        const now = doc.querySelector(sel);
+        const next = fresh.querySelector(sel);
+        if (!now || !next || now.contains(doc.activeElement)) continue;
+        now.innerHTML = next.innerHTML;
+      }
+      if (nearBottom) thread.scrollTop = thread.scrollHeight;
+    } catch {
+      // 다음 소식 때 다시
+    }
+  }
+  function refreshChats() {
+    clearTimeout(chatTimer);
+    chatTimer = setTimeout(() => {
+      refreshChat(document);
+      const pane = document.querySelector('.inbox-pane iframe:not([hidden])');
+      try { if (pane && pane.contentDocument) refreshChat(pane.contentDocument); } catch { /* 다른 주소면 건너뜀 */ }
+    }, 400);
+  }
+
   source.addEventListener('inbox-changed', () => {
     if (feed === 'inbox') refreshList();
     refreshNavBadge();
+    refreshChats();
   });
 
   source.addEventListener('orders-changed', e => {

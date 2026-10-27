@@ -217,8 +217,11 @@
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= back %>">
             <label for="link-order">주문 연결 <span class="muted small">(손님이 대화에 주문번호를 쓰면 자동으로 연결돼요)</span></label>
+            <% if (saidNo) { %>
+              <p class="talk-said-note">손님이 말한 번호 <strong><%= saidNo %></strong> 와 맞는 주문이 아직 인트라넷에 없어요. 방금 한 주문이면 수집되는 대로(몇 분 안) <strong>자동으로 연결</strong>돼요. 번호가 틀렸거나 다른 판매처 주문일 수도 있어요.</p>
+            <% } %>
             <div class="talk-inline-row">
-              <input type="text" id="link-order" name="order_no" maxlength="40" inputmode="numeric" placeholder="주문번호 또는 상품주문번호">
+              <input type="text" id="link-order" name="order_no" maxlength="40" inputmode="numeric" value="<%= saidNo || '' %>" placeholder="주문번호 또는 상품주문번호">
               <button type="submit" class="btn-sm">연결</button>
             </div>
           </form>
