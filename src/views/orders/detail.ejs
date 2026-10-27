@@ -84,6 +84,25 @@
   </section>
 
   <section class="card">
+    <h2>배송지 · 주문 정보</h2>
+    <dl class="info">
+      <dt>주문자</dt><dd><%= order.buyer_name || '-' %><% if (order.buyer_phone) { %> · <%= order.buyer_phone %><% } %></dd>
+      <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
+      <dt>연락처</dt><dd><%= order.receiver_phone || '-' %></dd>
+      <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
+      <dt>배송 메시지</dt><dd><% if (order.ship_memo) { %><span class="ship-memo">💬 <%= order.ship_memo %></span><% } else { %><span class="muted">없음</span><% } %></dd>
+      <dt>채널</dt><dd><%= c.name %></dd>
+      <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
+      <% if (isManual) { %>
+        <dt>주문 출처</dt><dd><%= sourceName || '출처 미지정' %></dd>
+        <% if (order.source_order_no) { %><dt>판매처 주문번호</dt><dd><%= order.source_order_no %></dd><% } %>
+      <% } %>
+      <dt><%= isManual ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
+    </dl>
+    <% if (!isManual) { %><p class="muted small">주문 정보와 배송지는 <%= c.name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p><% } %>
+  </section>
+
+  <section class="card">
     <h2>작업 <span class="h2-sub"><%= items.length > 1 ? `상품 ${items.length}개에 함께 저장돼요` : '저장하면 담당자에게 알림이 가요' %></span></h2>
     <form method="post" action="/orders/<%= order.id %>" class="detail-form">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -147,25 +166,6 @@
         <button type="submit">저장</button>
       </div>
     </form>
-  </section>
-
-  <section class="card">
-    <h2>배송지 · 주문 정보</h2>
-    <dl class="info">
-      <dt>주문자</dt><dd><%= order.buyer_name || '-' %><% if (order.buyer_phone) { %> · <a href="tel:<%= order.buyer_phone %>"><%= order.buyer_phone %></a><% } %></dd>
-      <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
-      <dt>연락처</dt><dd><% if (order.receiver_phone) { %><a href="tel:<%= order.receiver_phone %>"><%= order.receiver_phone %></a><% } else { %>-<% } %></dd>
-      <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
-      <dt>배송 메시지</dt><dd><% if (order.ship_memo) { %><span class="ship-memo">💬 <%= order.ship_memo %></span><% } else { %><span class="muted">없음</span><% } %></dd>
-      <dt>채널</dt><dd><%= c.name %></dd>
-      <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
-      <% if (isManual) { %>
-        <dt>주문 출처</dt><dd><%= sourceName || '출처 미지정' %></dd>
-        <% if (order.source_order_no) { %><dt>판매처 주문번호</dt><dd><%= order.source_order_no %></dd><% } %>
-      <% } %>
-      <dt><%= isManual ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
-    </dl>
-    <% if (!isManual) { %><p class="muted small">주문 정보와 배송지는 <%= c.name %>에서 가져온 값이라 여기서 바꿀 수 없습니다.</p><% } %>
   </section>
   </div>
 
