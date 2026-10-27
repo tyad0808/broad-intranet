@@ -18,6 +18,7 @@ const { templateRoutes } = require('./routes/templates');
 const { statsRoutes } = require('./routes/stats');
 const { replyUpload } = require('./inbox/upload');
 const { createBrand } = require('./brand');
+const { createSounds } = require('./sounds');
 const { createWeeklyReporter } = require('./weeklyReport');
 const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
@@ -122,6 +123,8 @@ function createApp({
         frameSrc: ["'self'", 'https://*.daum.net', 'https://*.kakao.com'],
         // blob: = 톡톡 답장에 붙인 사진을 보내기 전에 화면에서 미리 보기
         imgSrc: ["'self'", 'data:', 'blob:'],
+        // blob: = 관리자가 알림 소리를 올리기 전에 들어보기
+        mediaSrc: ["'self'", 'blob:'],
         // 운영(HTTPS)에서만 http 요청을 https 로 올린다. 개발(http://localhost)에서 켜 두면 팝업 안 저장이 막힌다
         upgradeInsecureRequests: isProd ? [] : null,
       },
@@ -133,6 +136,8 @@ function createApp({
 
   // 회사 로고 (로그인 화면에도 보여야 해서 로그인 검사 전에). 주소에 그림 지문(v)이 들어 있어 오래 저장해 둬도 된다
   const brand = createBrand(db);
+  // 알림 소리 (관리자 › 알림 에서 종류마다 바꾼다)
+  const sounds = createSounds(db);
   const weekly = createWeeklyReporter({ db, account: weeklyAccount, transport: weeklyTransport, brandName: () => brand.view().name });
   app.locals.weekly = weekly;
   const logenSvc = logen || createLogen({ db });
@@ -235,12 +240,15 @@ function createApp({
     res.locals.chatOn = Boolean(inbox.talktalk);
     // 이 직원이 끈 알림 칸 (끈 칸은 왼쪽 메뉴 숫자를 숨긴다)
     res.locals.notifyOff = req.user ? notifyOff(req.user) : [];
+    // 관리자가 바꾼 알림 소리 (화면이 알림 종류마다 이 소리를 낸다)
+    res.locals.soundMap = req.user ? sounds.clientMap() : {};
     next();
   });
 
   // 문의 답장에 붙인 파일: 보안 검사가 폼 값을 읽을 수 있도록 그 전에 읽는다 (로그인한 직원만)
   app.use('/inbox/:id/reply', replyUpload);
   app.use('/admin/brand/logo', replyUpload);
+  app.use('/admin/sounds', replyUpload);
   app.use(csrf);
 
   app.get('/health', (req, res) => res.json({ ok: true }));
@@ -249,6 +257,14 @@ function createApp({
 
   // 여기부터는 로그인 + 승인된 계정만 접근
   // 실시간 소식 통로 (주문 변경, 알림)
+  // 관리자가 올린 알림 소리 파일 (주소 끝의 v 가 같으면 브라우저가 오래 저장해 둔다)
+  app.get('/sounds/:kind', requireActive, (req, res) => {
+    const file = sounds.file(req.params.kind);
+    if (!file) return res.status(404).end();
+    res.set('Cache-Control', req.query.v === file.v ? 'private, max-age=31536000, immutable' : 'no-cache');
+    res.type(file.type).send(file.data);
+  });
+
   app.get('/events', requireActive, (req, res) => {
     notifier.hub.add(req, res, req.user.id);
   });
@@ -266,7 +282,7 @@ function createApp({
     res.redirect(/^\/(?!\/)/.test(back) ? back : '/');
   });
 
-  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc));
+  app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));
   app.use('/stats', requireAdmin, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
   app.use(requireActive, calendarRoutes(db, notifier));

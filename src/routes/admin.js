@@ -16,7 +16,7 @@ const STATUS_LABELS = {
   rejected: '거절',
 };
 
-function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly = null, logen = null) {
+function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly = null, logen = null, sounds = null) {
   const router = express.Router();
   // 왼쪽 메뉴에서 '관리자' 를 켜 둔다
   router.use((req, res, next) => { res.locals.navSection = 'admin'; next(); });
@@ -356,7 +356,23 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       unassigned: notifier.unassignedCount(),
       weekly: { ...weeklySettings(db), ready: Boolean(weekly && weekly.ready), sender: weekly ? weekly.sender : null },
       DAYS, DEFAULT_SUBJECT, SAFE_SUBJECT, MIN_PASSWORD,
+      soundList: sounds ? sounds.list() : [],
     });
+  });
+
+  // 알림 소리: 종류(kind)마다 파일 올리기(upload) / 기본 소리(default) / 소리 없음(off). 파일은 app.js 에서 미리 읽어 둔다 (req.files)
+  router.post('/sounds', (req, res) => {
+    if (!sounds) return res.redirect('/admin/notify');
+    const kind = String(req.body.kind || '');
+    const action = String(req.body.action || '');
+    const label = (sounds.KINDS[kind] || '').replace(/^\S+\s/, '');
+    let error;
+    if (action === 'upload') error = req.uploadError ? '소리 파일은 1MB 까지 올릴 수 있어요.' : sounds.setFile(kind, (req.files || [])[0]);
+    else if (action === 'default' || action === 'off') error = sounds.setMode(kind, action);
+    else error = '알 수 없는 요청입니다.';
+    const done = { upload: '새 소리로 바꿨습니다', default: '기본 소리로 되돌렸습니다', off: '소리 없이 알리게 했습니다' }[action];
+    flash(req, error ? 'error' : 'ok', error || `${label} 알림: ${done}. 직원들 화면은 새로고침하면 바로 바뀌어요.`);
+    res.redirect('/admin/notify#sounds');
   });
 
   // 주간 매출 보고 메일: 받는 주소·켜기

@@ -9,7 +9,7 @@
   <link rel="stylesheet" href="/style.css">
   <% if (brand.logoUrl) { %><link rel="icon" href="<%= brand.logoUrl %>" type="<%= brand.logoType %>"><% } else { %><link rel="icon" href="/favicon.svg" type="image/svg+xml"><% } %>
 </head>
-<body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% } %> class="<%= locals.embed ? 'embed' : locals.user && user.status === 'active' ? 'with-sidebar' : 'no-sidebar' %>">
+<body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% if (Object.keys(locals.soundMap || {}).length) { %> data-sounds="<%= JSON.stringify(soundMap) %>"<% } %><% } %> class="<%= locals.embed ? 'embed' : locals.user && user.status === 'active' ? 'with-sidebar' : 'no-sidebar' %>">
   <% if (!locals.embed) { %>
   <%# 왼쪽 메뉴 (휴대폰에서는 위쪽 줄 + 아래쪽 탭) %>
   <%

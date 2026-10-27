@@ -23,7 +23,23 @@
     new_mail: { wave: 'sine', notes: [[523, 0, 0.7]] },
     new_inquiry: { wave: 'sine', notes: [[660, 0, 0.3], [880, 0.16, 0.35]] },
   };
+  // 관리자가 바꾼 소리: { new_chat: '/sounds/new_chat?v=…', new_mail: 'off' } (없는 종류는 기본 소리)
+  let custom = {};
+  try { custom = JSON.parse(document.body.dataset.sounds || '{}') || {}; } catch { custom = {}; }
+  const players = {};
   function beep(type) {
+    const pick = custom[type] || (SOUNDS[type] ? null : custom.new_order);
+    if (pick === 'off') return;
+    if (pick) {
+      // 올린 소리 파일. 못 틀면(파일 문제 등) 기본 소리로
+      players[type] = players[type] || new Audio(pick);
+      players[type].currentTime = 0;
+      players[type].play().catch(() => synth(type));
+      return;
+    }
+    synth(type);
+  }
+  function synth(type) {
     if (!audio || audio.state !== 'running') return;
     const sound = SOUNDS[type] || SOUNDS.new_order;
     sound.notes.forEach(([freq, delay, len]) => {
@@ -40,6 +56,15 @@
       osc.stop(t + len + 0.05);
     });
   }
+
+  // 관리자 › 알림 의 [▶ 들어보기]: 'file' 은 고른 파일·올린 파일 주소, 없으면 기본 소리
+  window.playNotifySound = (type, url) => {
+    wakeAudio();
+    if (url) { new Audio(url).play().catch(() => synth(type)); return; }
+    // 처음 누를 때는 소리 장치가 깨어나는 중일 수 있어 기다렸다가
+    if (audio && audio.state !== 'running') audio.resume().then(() => synth(type)).catch(() => {});
+    else synth(type);
+  };
 
   // ───────── 화면 알림 (오른쪽 위 토스트) ─────────
   const stack = document.createElement('div');

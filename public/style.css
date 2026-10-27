@@ -1388,3 +1388,14 @@ body.no-sidebar .card.narrow .muted { margin: 16px 0 0; text-align: center; }
 .enter-hint { margin: -4px 0 4px; font-size: 14px; }
 .enter-hint kbd { padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface-2); font: inherit; font-size: 14px; }
 .talk-said-note { margin: 0 0 4px; padding: 10px 12px; border-radius: 8px; background: var(--notice-bg); color: var(--text-2); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+
+/* 관리자 › 알림 소리 */
+.sound-list { list-style: none; margin: 0; padding: 0; }
+.sound-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 12px 0; border-top: 1px solid var(--line); }
+.sound-row:first-child { border-top: 0; }
+.sound-name { display: grid; gap: 2px; min-width: 160px; }
+.sound-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sound-upload { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; }
+.sound-upload input[type=file] { width: auto; max-width: 230px; margin: 0; font-size: 14px; }
+.sound-row .btn-sm { min-height: 38px; }
+.sound-upload [hidden] { display: none; }

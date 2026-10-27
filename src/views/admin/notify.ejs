@@ -37,6 +37,43 @@
   </section>
 </form>
 
+<section class="card" id="sounds">
+  <h2>알림 소리</h2>
+  <p class="muted">알림 종류마다 소리를 바꿀 수 있어요. <strong>MP3·WAV·OGG</strong> 파일, 1MB 까지. 저장하면 모든 직원 화면에서 그 소리가 나요 (직원 화면은 새로고침하면 바로 바뀜).</p>
+  <ul class="sound-list">
+    <% soundList.forEach(s => { %>
+      <li class="sound-row">
+        <div class="sound-name">
+          <strong><%= s.label %></strong>
+          <span class="muted small"><%= s.mode === 'file' ? `올린 소리: ${s.name}` : s.mode === 'off' ? '소리 없음' : '기본 소리' %></span>
+        </div>
+        <div class="sound-actions">
+          <% if (s.mode !== 'off') { %>
+            <button type="button" class="btn-sm" data-play-sound="<%= s.kind %>" <% if (s.mode === 'file') { %>data-url="/sounds/<%= s.kind %>?v=<%= s.v %>"<% } %>>▶ 들어보기</button>
+          <% } %>
+          <form method="post" action="/admin/sounds" enctype="multipart/form-data" class="sound-upload" data-once>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="kind" value="<%= s.kind %>">
+            <input type="hidden" name="action" value="upload">
+            <input type="file" name="file" accept="audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" required aria-label="<%= s.label %> 소리 파일" data-sound-file="<%= s.kind %>">
+            <button type="button" class="btn-sm ghost" data-preview-file hidden>▶ 고른 파일</button>
+            <button type="submit" class="btn-sm primary">올리기</button>
+          </form>
+          <% [['default', '기본으로', s.mode !== 'default'], ['off', '소리 없음', s.mode !== 'off']].forEach(([action, text, show]) => { if (!show) return; %>
+            <form method="post" action="/admin/sounds" class="inline" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="kind" value="<%= s.kind %>">
+              <input type="hidden" name="action" value="<%= action %>">
+              <button type="submit" class="btn-sm ghost"><%= text %></button>
+            </form>
+          <% }) %>
+        </div>
+      </li>
+    <% }) %>
+  </ul>
+</section>
+<script src="/admin-sound.js"></script>
+
 <section class="card">
   <h2>다른 알림</h2>
   <ul class="plain">
