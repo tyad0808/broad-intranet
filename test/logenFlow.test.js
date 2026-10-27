@@ -223,6 +223,14 @@ test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 
 
   const form = (await kim.submit('/', '/orders/bulk/dispatch-form', { ids: ids.map(String), back: '/' })).text;
   assert.match(form, /name="tracking_\d+" value="38010101111"/);
+  // 아직 출력 전인 주문은 '출력 대기' 로 알려 주고, 출력한 뒤 그 자리에서 송장번호를 가져와 채운다
+  assert.match(form, /출력 대기 1건<\/strong>은 아직 송장번호가 없어요/);
+  assert.strictEqual((form.match(/로젠 출력 대기 · 송장번호 없음/g) || []).length, 1);
+  client.slips.O2 = [{ slipNo: '38010102222', delYn: 'N' }];
+  const refreshed = (await kim.submit('/', '/orders/bulk/dispatch-form', { ids: ids.map(String), back: '/', refresh_slips: '1' })).text;
+  assert.match(refreshed, /송장번호 1건 받음/);
+  assert.match(refreshed, /name="tracking_\d+" value="38010102222"/);
+  assert.doesNotMatch(refreshed, /로젠 출력 대기 · 송장번호 없음/);
   const detail = (await kim.request(`/orders/${ids[0]}`)).text;
   assert.match(detail, /name="tracking" value="38010101111"/);
   assert.match(detail, /로젠 송장/);

@@ -506,18 +506,28 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
   });
 
   // 여러 주문 일괄 발송처리 ① 송장 입력 화면 (아직 아무것도 보내지 않음)
-  router.post('/orders/bulk/dispatch-form', (req, res) => {
-    const back = safeBack(req.body.back);
-    const ids = pickIds(req.body.ids);
-    if (ids.error) return finish(req, res, back, { type: 'error', message: ids.error });
-    const { rows, skipped } = dispatchRows(ids);
-    if (rows.length === 0) {
-      return finish(req, res, back, {
-        type: 'error',
-        message: '고른 주문 중 발송처리할 수 있는 주문이 없습니다 (발주확인 전이거나 이미 발송된 주문).',
-      });
+  //   [송장번호 가져오기](refresh_slips=1): iLOGEN 에서 출력한 뒤 이 주문들의 송장번호를 로젠에서 가져와 다시 그린다
+  router.post('/orders/bulk/dispatch-form', async (req, res, next) => {
+    try {
+      const back = safeBack(req.body.back);
+      const ids = pickIds(req.body.ids);
+      if (ids.error) return finish(req, res, back, { type: 'error', message: ids.error });
+      let notice = null;
+      if (req.body.refresh_slips === '1' && logen && logen.hasKey) {
+        const pairs = ids.map(id => findOrder(id)).filter(Boolean).map(o => [o.channel, o.channel_order_id]);
+        notice = slipFlash(await slipsOrError(pairs));
+      }
+      const { rows, skipped } = dispatchRows(ids);
+      if (rows.length === 0) {
+        return finish(req, res, back, {
+          type: 'error',
+          message: '고른 주문 중 발송처리할 수 있는 주문이 없습니다 (발주확인 전이거나 이미 발송된 주문).',
+        });
+      }
+      renderBulkDispatch(res, { rows, skipped, back, notice });
+    } catch (e) {
+      next(e);
     }
-    renderBulkDispatch(res, { rows, skipped, back });
   });
 
   // 여러 주문 일괄 발송처리 ② 보내기
@@ -659,15 +669,16 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
       if (!order) continue;
       const items = groupItems(order);
       const lg = logen && logen.shipmentOf(order.channel, order.channel_order_id);
-      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch), slip: (lg && lg.slip_no) || '' });
+      // waiting: 로젠에 등록했지만 아직 iLOGEN 에서 출력하지 않아 송장번호가 없는 주문
+      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch), slip: (lg && lg.slip_no) || '', waiting: Boolean(lg && lg.status === 'registered' && !lg.slip_no) });
       else skipped.push(items[0].product_name);
     }
     return { rows, skipped };
   }
 
-  function renderBulkDispatch(res, { status = 200, rows, skipped, back, values = {}, error = null }) {
+  function renderBulkDispatch(res, { status = 200, rows, skipped, back, values = {}, error = null, notice = null }) {
     res.status(status).render('orders/bulk-dispatch', {
-      title: '일괄 발송처리', rows, skipped, back, values, error, SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER,
+      title: '일괄 발송처리', rows, skipped, back, values, error, notice, SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER,
     });
   }
 

@@ -9,6 +9,22 @@
   <% } %>
   <p class="muted">주문마다 배송 방법과 송장번호를 넣고 맨 아래 <strong>발송처리 보내기</strong>를 누르세요. 한 줄이라도 틀리면 아무것도 보내지 않습니다.</p>
   <% if (error) { %><p class="error"><%= error %></p><% } %>
+  <% if (notice) { %><p class="<%= notice.type === 'error' ? 'error' : notice.type === 'ok' ? 'notice' : 'warn-box' %>"><%= notice.message %></p><% } %>
+  <%# 로젠에 등록만 하고 아직 출력 전인 주문: 송장번호가 없다 → iLOGEN 에서 출력한 뒤 여기서 가져오기 %>
+  <% const waiting = rows.filter(r => r.waiting); %>
+  <% if (waiting.length) { %>
+    <form method="post" action="/orders/bulk/dispatch-form" class="logen-bar">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="back" value="<%= back %>">
+      <input type="hidden" name="refresh_slips" value="1">
+      <% rows.forEach(r => { %><input type="hidden" name="ids" value="<%= r.main.id %>"><% }) %>
+      <span class="logen-bar-text"><span>로젠 <strong>출력 대기 <%= waiting.length %>건</strong>은 아직 송장번호가 없어요</span><span class="muted small">송장번호는 iLOGEN '주문등록출력(복수건)'에서 <strong>출력할 때</strong> 생겨요. 출력한 뒤 [송장번호 가져오기]를 누르면 아래 칸에 채워져요.</span></span>
+      <span class="logen-bar-actions">
+        <a class="btn-sm" href="https://logis.ilogen.com" target="_blank" rel="noopener">iLOGEN 출력 화면 열기 ↗</a>
+        <button type="submit" class="btn-sm">송장번호 가져오기</button>
+      </span>
+    </form>
+  <% } %>
   <% if (skipped.length) { %>
     <p class="warn-box">발송처리할 수 없어 뺀 주문 <%= skipped.length %>건: <%= skipped.slice(0, 5).join(', ') %><%= skipped.length > 5 ? ' 외' : '' %> (발주확인 전이거나 이미 발송됨)</p>
   <% } %>
@@ -18,12 +34,13 @@
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
     <input type="hidden" name="back" value="<%= back %>">
     <div class="ship-rows">
-      <% rows.forEach(({ main, items, slip }, n) => { const id = main.id; %>
+      <% rows.forEach(({ main, items, slip, waiting }, n) => { const id = main.id; %>
         <div class="ship-row">
           <input type="hidden" name="ids" value="<%= id %>">
           <div class="ship-order">
             <strong><%= n + 1 %>. <span class="ch ch-<%= channelInfo(main.channel).cls %>"><%= channelInfo(main.channel).mark %></span> <%= main.product_name %></strong><% if (items.length > 1) { %> <span class="muted">외 <%= items.length - 1 %>개</span><% } %>
             <div class="muted small"><%= main.receiver_name || '-' %> · <%= main.receiver_address || '' %></div>
+            <% if (waiting) { %><span class="st-badge sb-ready ship-wait">🖨 로젠 출력 대기 · 송장번호 없음</span><% } %>
           </div>
           <div class="ship-inputs">
             <%- include('../partials/ship-pick', { inline: true, suffix: `_${id}`, onlyDelivery: main.channel === 'coupang',
