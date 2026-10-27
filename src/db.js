@@ -83,6 +83,9 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'receiver_address_detail', 'TEXT');
   // 고객이 남긴 배송 메시지 (예: '문 앞에 놓아 주세요'). 채널에서 받아 오고, 수기 주문은 직접 적는다. 로젠 송장의 배송메세지(sndMsg)로도 보낸다
   addColumn(db, 'orders', 'ship_memo', 'TEXT');
+  // 톡톡: 직원이 붙이는 고객 메모(예: '실사-김대성'), 직원이 어디까지 읽었는지(chat_messages.id)
+  addColumn(db, 'inquiries', 'cust_memo', 'TEXT');
+  addColumn(db, 'inquiries', 'chat_read_id', 'INTEGER');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)과 발송지연(delay)도 받을 수 있게 넓힌다.

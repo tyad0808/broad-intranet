@@ -4,7 +4,7 @@
 const express = require('express');
 const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
-const { IMAGE_HOSTS, PARTNER_CENTER_URL } = require('../inbox/talktalk');
+const { IMAGE_HOSTS, PARTNER_CENTER_URL, orderNoIn } = require('../inbox/talktalk');
 const { templatesFor } = require('./templates');
 const { ordersForInquiry } = require('../customer');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
@@ -23,6 +23,32 @@ const CHAT_SQL = "(q.source = 'talktalk')";
 const LIVE_SQL = 'q.deleted_at IS NULL';
 const BOX_SQL = { mail: `(${MAIL_SQL} AND ${LIVE_SQL})`, chat: CHAT_SQL, shop: `(NOT ${MAIL_SQL} AND NOT ${CHAT_SQL})` };
 const STATUS_LABELS = { open: '미답변', answered: '답변완료', closed: '처리 완료' };
+// 톡톡은 네이버 톡톡 파트너센터와 같은 이름으로: 대기(손님 말에 아직 답 안 함) · 진행중(답함) · 보류
+const CHAT_STATUS = { open: '대기', answered: '진행중', closed: '보류' };
+const CHAT_TABS = { all: '전체', wait: '대기', ing: '진행중', hold: '보류' };
+const CHAT_TAB_SQL = { all: null, wait: "q.status = 'open'", ing: "q.status = 'answered'", hold: "q.status = 'closed'" };
+const CHAT_DAYS = { 7: '최근 1주일', 30: '최근 1개월', 90: '최근 3개월' };
+// 마지막 말·우리 마지막 답·안 읽은 손님 말 수 (우리 답 또는 직원이 읽은 곳 뒤에 온 손님 말)
+const LAST_OUT_SQL = "(SELECT MAX(id) FROM chat_messages WHERE inquiry_id = q.id AND direction = 'out')";
+const UNREAD_SQL = `(SELECT COUNT(*) FROM chat_messages m WHERE m.inquiry_id = q.id AND m.direction = 'in'
+  AND m.id > MAX(COALESCE(q.chat_read_id, 0), COALESCE(${LAST_OUT_SQL}, 0)))`;
+const LAST_AT_SQL = 'COALESCE(lm.created_at, q.received_at)';
+
+// 톡톡 목록의 시각: 오늘이면 '오후 12:41', 올해면 '10.21', 그 전이면 '25.10.21'
+function talkTime(value, now = new Date()) {
+  const t = Date.parse(value || '');
+  if (!Number.isFinite(t)) return '';
+  const k = new Date(t + 9 * 3600 * 1000);
+  const n = new Date(now.getTime() + 9 * 3600 * 1000);
+  const pad = v => String(v).padStart(2, '0');
+  if (k.toISOString().slice(0, 10) === n.toISOString().slice(0, 10)) {
+    const h = k.getUTCHours();
+    return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${pad(k.getUTCMinutes())}`;
+  }
+  const md = `${pad(k.getUTCMonth() + 1)}.${pad(k.getUTCDate())}`;
+  return k.getUTCFullYear() === n.getUTCFullYear() ? md : `${String(k.getUTCFullYear()).slice(2)}.${md}`;
+}
+const metaOf = row => { try { return JSON.parse((row && row.meta) || '{}') || {}; } catch { return {}; } };
 const MAX_REPLY = 10_000;
 
 // 검색어 → 단어들 (띄어쓰기로 나눔, 최대 5개). 단어가 모두 들어 있는 문의를 찾는다
@@ -76,6 +102,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
 
   // ───────── 목록 ─────────
   router.get('/inbox', (req, res) => {
+    if (req.query.box === 'chat' && !req.query.src) return chatList(req, res);
     const src = String(req.query.src || '');
     const q = String(req.query.q || '').trim().slice(0, 50);
     const terms = searchTerms(q);
@@ -178,6 +205,51 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     });
   });
 
+  // ───────── 톡톡 목록 (네이버 톡톡 파트너센터와 비슷한 모양) ─────────
+  //   탭: 전체·대기·진행중·보류 / 거르기: 담당(who)·기간(days)·읽음(read)·정렬(sort) / 검색: 대화 내용·이름·고객 메모·상품·주문번호
+  function chatList(req, res) {
+    const q = String(req.query.q || '').trim().slice(0, 50);
+    const terms = searchTerms(q);
+    const tab = CHAT_TABS[req.query.tab] ? req.query.tab : 'all';
+    const who = String(req.query.who || '');
+    const days = CHAT_DAYS[req.query.days] ? String(req.query.days) : '';
+    const read = ['unread', 'read'].includes(req.query.read) ? req.query.read : '';
+    const sort = req.query.sort === 'old' ? 'old' : '';
+
+    const where = [CHAT_SQL];
+    const params = [];
+    for (const t of terms) {
+      const fields = ['q.from_name', 'q.cust_memo', 'q.order_no', 'q.meta'].map(f => `${f} LIKE ? ESCAPE '\\'`);
+      where.push(`(${fields.join(' OR ')} OR EXISTS (SELECT 1 FROM chat_messages s WHERE s.inquiry_id = q.id AND s.text LIKE ? ESCAPE '\\'))`);
+      params.push(...Array(5).fill(likeOf(t)));
+    }
+    if (who === 'mine') { where.push('q.assignee_id = ?'); params.push(req.user.id); }
+    else if (who === 'none') where.push('q.assignee_id IS NULL');
+    else if (/^\d+$/.test(who)) { where.push('q.assignee_id = ?'); params.push(Number(who)); }
+    if (days) { where.push(`${LAST_AT_SQL} >= ?`); params.push(new Date(Date.now() - Number(days) * 24 * 3600 * 1000).toISOString()); }
+    if (read) where.push(`${UNREAD_SQL} ${read === 'unread' ? '> 0' : '= 0'}`);
+
+    const from = `FROM inquiries q
+      LEFT JOIN chat_messages lm ON lm.id = (SELECT MAX(id) FROM chat_messages WHERE inquiry_id = q.id)`;
+    const sql = list => `WHERE ${list.filter(Boolean).join(' AND ')}`;
+    const tabCounts = Object.fromEntries(Object.keys(CHAT_TABS).map(k => [k,
+      db.prepare(`SELECT COUNT(*) AS n ${from} ${sql([...where, CHAT_TAB_SQL[k]])}`).get(...params).n]));
+    const rows = db.prepare(`
+      SELECT q.id, q.from_name, q.cust_memo, q.status, q.assignee_id, q.order_no, q.meta, q.received_at,
+        lm.direction AS last_dir, lm.kind AS last_kind, COALESCE(lm.text, q.body) AS last_text, ${LAST_AT_SQL} AS last_at, ${UNREAD_SQL} AS unread,
+        (SELECT o.product_name FROM orders o WHERE o.channel_order_id = q.order_no ORDER BY o.item_type = 'addon', o.id LIMIT 1) AS order_product
+      ${from} ${sql([...where, CHAT_TAB_SQL[tab]])}
+      ORDER BY ${LAST_AT_SQL} ${sort === 'old' ? 'ASC' : 'DESC'}, q.id DESC LIMIT 300
+    `).all(...params).map(r => ({ ...r, product: metaOf(r).product || null }));
+
+    res.render('inbox/chat-list', {
+      title: '톡톡', navSection: 'chat',
+      rows, tab, tabCounts, CHAT_TABS, CHAT_DAYS, CHAT_STATUS, q, who, days, read, sort, terms,
+      hl: text => highlightParts(text, terms),
+      talkTime, staff: staff(), brandName: brandName() || '우리', currentUrl: req.originalUrl, PARTNER_CENTER_URL,
+    });
+  }
+
   // 문의함 큰 탭 순서 저장 (끌어다 놓기). 내 계정에만 적용된다
   router.post('/me/inbox-order', (req, res) => {
     const order = [...new Set(String(req.body.order || '').split(',').map(x => x.trim()).filter(b => BOXES[b]))];
@@ -268,6 +340,22 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const chat = isChatSource(inquiry.source)
       ? db.prepare('SELECT * FROM (SELECT * FROM chat_messages WHERE inquiry_id = ? ORDER BY id DESC LIMIT 500) ORDER BY id').all(inquiry.id)
       : null;
+    if (chat && chat.length) {
+      // 직원이 열어 봤으니 지금까지 온 말은 읽음 (목록의 빨간 숫자가 사라진다)
+      const lastId = chat[chat.length - 1].id;
+      if (db.prepare('UPDATE inquiries SET chat_read_id = ? WHERE id = ? AND COALESCE(chat_read_id, 0) < ?').run(lastId, inquiry.id, lastId).changes) {
+        notifier.inboxChanged([inquiry.id], req.user.id);
+      }
+      // 아직 주문과 연결 안 됐으면, 손님이 예전에 말한 주문번호를 다시 찾아본다 (주문이 나중에 들어온 경우)
+      if (!inquiry.order_no) {
+        const said = chat.filter(m => m.direction === 'in' && m.text).map(m => m.text).join('\n');
+        const found = orderNoIn(db, said);
+        if (found) {
+          db.prepare('UPDATE inquiries SET order_no = ? WHERE id = ?').run(found, inquiry.id);
+          inquiry.order_no = found;
+        }
+      }
+    }
     const replies = db.prepare(`
       SELECT r.*, u.name AS user_name FROM inquiry_replies r LEFT JOIN users u ON u.id = r.user_id
       WHERE r.inquiry_id = ? ORDER BY r.id
@@ -291,7 +379,11 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),
       isMail: isMailSource(inquiry.source),
-      chat, PARTNER_CENTER_URL,
+      chat, PARTNER_CENTER_URL, CHAT_STATUS,
+      chatProduct: chat ? metaOf(inquiry).product || null : null,
+      linkedOrder: chat && inquiry.order_no
+        ? db.prepare("SELECT id, channel, channel_order_id, product_name FROM orders WHERE channel_order_id = ? ORDER BY item_type = 'addon', id LIMIT 1").get(String(inquiry.order_no)) || null
+        : null,
       withRo,
       previewType,
       label: labelOf(inquiry.source),
@@ -402,6 +494,67 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       }, userId => userId === assignee);
     }
     res.redirect(req.body.from === 'detail' ? selfUrl(inquiry.id, b) : b);
+  });
+
+  // ───────── 톡톡 전용: 보류 · 고객 메모 · 주문 연결 ─────────
+  const chatOnly = (req, res) => {
+    const b = back(req);
+    const inquiry = findInquiry(req.params.id);
+    if (!inquiry || !isChatSource(inquiry.source)) {
+      flashTo(req, res, b, 'error', '톡톡 대화를 찾을 수 없습니다.');
+      return null;
+    }
+    return { inquiry, b, url: selfUrl(inquiry.id, b) };
+  };
+  const chatDone = (req, res, ctx, message) => {
+    bump(ctx.inquiry.id);
+    notifier.inboxChanged([ctx.inquiry.id], req.user.id);
+    flashTo(req, res, ctx.url, 'ok', message);
+  };
+
+  // 보류: 나중에 볼 대화. 손님이 새로 말하면 다시 '대기' 로 온다
+  router.post('/inbox/:id/hold', (req, res) => {
+    const ctx = chatOnly(req, res);
+    if (!ctx) return;
+    db.prepare("UPDATE inquiries SET status = 'closed', handled_by = ?, handled_at = datetime('now') WHERE id = ?").run(req.user.id, ctx.inquiry.id);
+    chatDone(req, res, ctx, '보류로 옮겼습니다. 손님이 새로 말하면 다시 대기로 와요.');
+  });
+  // 보류 풀기: 우리가 답한 적이 있으면 진행중, 없으면 대기
+  router.post('/inbox/:id/unhold', (req, res) => {
+    const ctx = chatOnly(req, res);
+    if (!ctx) return;
+    const answered = db.prepare("SELECT 1 FROM chat_messages WHERE inquiry_id = ? AND direction = 'out' LIMIT 1").get(ctx.inquiry.id);
+    db.prepare('UPDATE inquiries SET status = ?, handled_by = NULL, handled_at = NULL WHERE id = ?').run(answered ? 'answered' : 'open', ctx.inquiry.id);
+    chatDone(req, res, ctx, `보류를 풀었습니다 (${answered ? '진행중' : '대기'}).`);
+  });
+
+  // 고객 메모: 목록에서 이름 옆에 회색으로 (예: 실사-김대성)
+  router.post('/inbox/:id/memo', (req, res) => {
+    const ctx = chatOnly(req, res);
+    if (!ctx) return;
+    const memo = String(req.body.cust_memo || '').replace(/\s+/g, ' ').trim().slice(0, 30) || null;
+    db.prepare('UPDATE inquiries SET cust_memo = ? WHERE id = ?').run(memo, ctx.inquiry.id);
+    chatDone(req, res, ctx, memo ? '고객 메모를 저장했습니다.' : '고객 메모를 지웠습니다.');
+  });
+
+  // 주문 연결: 주문번호(또는 상품주문번호)로 인트라넷 주문을 찾아 이 대화에 붙인다. 손님이 대화에 주문번호를 쓰면 자동으로 붙는다
+  router.post('/inbox/:id/link-order', (req, res) => {
+    const ctx = chatOnly(req, res);
+    if (!ctx) return;
+    const raw = String(req.body.order_no || '').trim().slice(0, 40);
+    if (!raw) return flashTo(req, res, ctx.url, 'error', '주문번호를 적어 주세요.');
+    const find = db.prepare('SELECT channel_order_id FROM orders WHERE channel_order_id = ? OR channel_item_id = ? ORDER BY id LIMIT 1');
+    const digits = raw.replace(/\D/g, '');
+    const row = find.get(raw, raw) || (digits ? find.get(digits, digits) : null);
+    if (!row) return flashTo(req, res, ctx.url, 'error', `주문번호 ${raw} 인 주문을 인트라넷에서 찾지 못했어요. 번호를 다시 확인해 주세요.`);
+    db.prepare('UPDATE inquiries SET order_no = ? WHERE id = ?').run(String(row.channel_order_id), ctx.inquiry.id);
+    chatDone(req, res, ctx, `주문 ${row.channel_order_id} 와 연결했습니다.`);
+  });
+  router.post('/inbox/:id/unlink-order', (req, res) => {
+    const ctx = chatOnly(req, res);
+    if (!ctx) return;
+    db.prepare('UPDATE inquiries SET order_no = NULL WHERE id = ?').run(ctx.inquiry.id);
+    chatDone(req, res, ctx, '주문 연결을 풀었습니다. (손님이 주문번호를 다시 말하면 또 자동으로 연결돼요)');
   });
 
   // 처리 완료 (답변 필요 없음) / 다시 열기

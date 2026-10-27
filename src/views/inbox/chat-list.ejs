@@ -1,0 +1,132 @@
+<%- include('../partials/header') %>
+<%
+  // 지금 걸린 조건을 유지한 채 하나만 바꾼 주소
+  const link = changes => {
+    const p = new URLSearchParams({ box: 'chat' });
+    const merged = { tab: tab === 'all' ? '' : tab, q, who, days, read, sort, ...changes };
+    for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
+    return `/inbox?${p.toString()}`;
+  };
+  // 탭 아이콘 (네이버 톡톡 파트너센터처럼 말풍선 + 작은 표시)
+  const TAB_ICONS = {
+    all: '<path d="M12 4c4.97 0 9 3.13 9 7s-4.03 7-9 7c-.9 0-1.77-.1-2.6-.3L5 20l1.1-3.7C4.2 15 3 13.1 3 11c0-3.87 4.03-7 9-7z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/>',
+    wait: '<path d="M11 4.1C6.5 4.6 3 7.5 3 11c0 2.1 1.2 4 3.1 5.3L5 20l4.4-1.3"/><circle cx="16.5" cy="15.5" r="4.5"/><path d="M16.5 13.3v2.4l1.6 1"/>',
+    ing: '<path d="M12 4c4.97 0 9 3.13 9 7s-4.03 7-9 7c-.9 0-1.77-.1-2.6-.3L5 20l1.1-3.7C4.2 15 3 13.1 3 11c0-3.87 4.03-7 9-7z"/><path d="M8 11h8"/>',
+    hold: '<path d="M11 4.1C6.5 4.6 3 7.5 3 11c0 2.1 1.2 4 3.1 5.3L5 20l4.4-1.3"/><circle cx="16.5" cy="15.5" r="4.5"/><path d="M15.3 13.6v3.8M17.7 13.6v3.8"/>',
+  };
+  const filtered = q || who || days || read || tab !== 'all';
+%>
+<div class="page-head sticky-glass">
+  <div class="title-row">
+    <h1 class="page-title">톡톡</h1>
+  </div>
+  <div class="page-actions">
+    <a class="btn-sm ghost" href="<%= PARTNER_CENTER_URL %>" target="_blank" rel="noopener">톡톡 파트너센터 열기 ↗</a>
+  </div>
+</div>
+
+<%# 넓은 화면: 왼쪽(검색·탭·거르기·목록) + 오른쪽 대화. 좁은 화면은 왼쪽만 (누르면 대화 화면으로) %>
+<div class="inbox-split talk-split" data-inbox-split>
+  <div class="talk-side">
+    <form method="get" action="/inbox" class="talk-search" role="search">
+      <input type="hidden" name="box" value="chat">
+      <% [['tab', tab === 'all' ? '' : tab], ['who', who], ['days', days], ['read', read], ['sort', sort]].forEach(([k, v]) => { if (v) { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% } }) %>
+      <input type="search" name="q" value="<%= q %>" placeholder="대화내용, 이름, 메모, 주문번호 검색" aria-label="톡톡 검색">
+      <% if (q) { %><a href="<%= link({ q: '' }) %>" class="talk-search-clear" aria-label="검색어 지우기">✕</a><% } %>
+      <button type="submit" class="talk-search-btn" aria-label="검색"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+    </form>
+
+    <nav class="talk-tabs" id="live-views" aria-label="상담 상태">
+      <% Object.entries(CHAT_TABS).forEach(([key, label]) => { %>
+        <a href="<%= link({ tab: key === 'all' ? '' : key }) %>" class="<%= tab === key ? 'on' : '' %>">
+          <span class="talk-tab-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><%- TAB_ICONS[key] %></svg><% if (key === 'wait' && tabCounts.wait > 0) { %><i class="talk-dot" aria-hidden="true"></i><% } %></span>
+          <span class="talk-tab-label"><%= label %> <b><%= tabCounts[key] %></b></span>
+        </a>
+      <% }) %>
+    </nav>
+
+    <form method="get" action="/inbox" class="talk-filters" data-autosubmit>
+      <input type="hidden" name="box" value="chat">
+      <% if (tab !== 'all') { %><input type="hidden" name="tab" value="<%= tab %>"><% } %>
+      <% if (q) { %><input type="hidden" name="q" value="<%= q %>"><% } %>
+      <select name="who" aria-label="담당" class="<%= who ? 'picked' : '' %>">
+        <option value="">담당 전체</option>
+        <option value="mine" <%= who === 'mine' ? 'selected' : '' %>>내 담당</option>
+        <option value="none" <%= who === 'none' ? 'selected' : '' %>>담당 없음</option>
+        <% staff.forEach(s => { %><option value="<%= s.id %>" <%= who === String(s.id) ? 'selected' : '' %>><%= s.name %></option><% }) %>
+      </select>
+      <select name="days" aria-label="기간" class="<%= days ? 'picked' : '' %>">
+        <option value="">기간 전체</option>
+        <% Object.entries(CHAT_DAYS).forEach(([d, label]) => { %><option value="<%= d %>" <%= days === d ? 'selected' : '' %>><%= label %></option><% }) %>
+      </select>
+      <select name="read" aria-label="읽음 여부" class="<%= read ? 'picked' : '' %>">
+        <option value="">읽음여부</option>
+        <option value="unread" <%= read === 'unread' ? 'selected' : '' %>>안 읽음</option>
+        <option value="read" <%= read === 'read' ? 'selected' : '' %>>읽음</option>
+      </select>
+      <select name="sort" aria-label="정렬">
+        <option value="">최근 대화순</option>
+        <option value="old" <%= sort === 'old' ? 'selected' : '' %>>오래된 대화순</option>
+      </select>
+      <noscript><button type="submit" class="btn-sm">보기</button></noscript>
+    </form>
+
+    <div id="live-list" data-feed="inbox">
+    <% if (rows.length === 0) { %>
+      <div class="card empty talk-empty">
+        <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><%- TAB_ICONS.all %></svg></div>
+        <p class="empty-title"><%= filtered ? '조건에 맞는 대화가 없어요' : '아직 톡톡 대화가 없어요' %></p>
+        <p class="empty-text"><%= filtered ? '검색어나 거르기를 바꿔 보세요.' : '손님이 톡톡을 보내면 여기에 바로 나타나요.' %></p>
+        <% if (filtered) { %><div class="empty-actions"><a href="/inbox?box=chat" class="btn-sm">전체 보기</a></div><% } %>
+      </div>
+    <% } else { %>
+      <ul class="talk-list">
+        <% rows.forEach(r => {
+             const last = r.last_kind === 'image' ? '(사진)' : String(r.last_text || '').replace(/\s+/g, ' ').trim() || '(내용 없음)';
+             const avatar = (r.cust_memo || '').trim().charAt(0); %>
+          <li class="talk-item inbox-item <%= r.unread > 0 ? 'unread' : '' %>">
+            <a class="oi-main talk-row" data-id="<%= r.id %>" href="/inbox/<%= r.id %>?back=<%= encodeURIComponent(currentUrl) %>">
+              <span class="talk-avatar av-<%= r.id % 4 %>" aria-hidden="true"><% if (avatar) { %><%= avatar %><% } else { %><svg viewBox="0 0 24 24"><circle cx="12" cy="9" r="3.6"/><path d="M5.5 19.5c1.2-3.3 3.6-5 6.5-5s5.3 1.7 6.5 5"/></svg><% } %></span>
+              <span class="talk-body">
+                <span class="talk-top">
+                  <strong class="talk-name"><% hl(String(r.from_name || '톡톡 고객').replace(/^톡톡\s+/, '')).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></strong>
+                  <% if (r.cust_memo) { %><span class="talk-memo"><% hl(r.cust_memo).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></span><% } %>
+                  <% if (r.product) { %><span class="talk-tag">상품정보 문의</span><% } %>
+                  <% if (r.order_no) { %><span class="talk-tag linked" title="주문 <%= r.order_no %> 와 연결됨">주문 연결</span><% } %>
+                  <% if (tab === 'all' && r.status === 'closed') { %><span class="talk-tag">보류</span><% } %>
+                  <span class="talk-time" title="<%= kst(r.last_at) %>"><%= talkTime(r.last_at) %></span>
+                </span>
+                <span class="talk-last">
+                  <span class="talk-text"><% if (r.last_dir === 'out') { %><span class="talk-who"><%= brandName %></span><% } %><% hl(last).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></span>
+                  <% if (r.unread > 0) { %><span class="talk-unread" aria-label="안 읽은 메시지 <%= r.unread %>개"><%= r.unread > 99 ? '99+' : r.unread %></span><% } %>
+                </span>
+                <% if (!r.product && r.order_product) { %><span class="talk-product">📦 <%= r.order_product %></span><% } %>
+              </span>
+            </a>
+            <% if (r.product) { %>
+              <% if (r.product.url) { %>
+                <a class="talk-product talk-product-link" href="<%= r.product.url %>" target="_blank" rel="noopener noreferrer" title="상품 페이지 열기"><span><%= r.product.name %></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4"/></svg></a>
+              <% } else { %>
+                <span class="talk-product talk-product-link"><span><%= r.product.name %></span></span>
+              <% } %>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+      <% if (rows.length >= 300) { %><p class="muted small talk-more">최근 300개까지만 보여요. 검색이나 거르기로 좁혀 보세요.</p><% } %>
+    <% } %>
+    </div>
+  </div>
+
+  <aside class="inbox-pane" aria-label="대화 내용">
+    <iframe name="inbox-pane" title="대화 내용" hidden></iframe>
+    <div class="pane-empty" data-pane-empty>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><%- TAB_ICONS.all %></svg>
+      <p>왼쪽에서 대화를 고르면 여기에서 볼 수 있어요.</p>
+    </div>
+  </aside>
+</div>
+
+<script src="/orders.js"></script>
+<script src="/inbox-pane.js"></script>
+<%- include('../partials/footer') %>

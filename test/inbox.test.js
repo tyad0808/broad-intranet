@@ -527,7 +527,7 @@ test('톡톡은 문의함 안의 탭이 아니라 따로 (/inbox?box=chat), 톡�
   assert.doesNotMatch(first, /\[톡톡\] 안녕하세요/);
   assert.doesNotMatch(first, /href="\/inbox\?box=chat"/, '연결 전에는 메뉴 없음');
   const chat = (await kim.request('/inbox?box=chat')).text;
-  assert.ok(chat.includes('[톡톡] 안녕하세요'), '주소로 들어가면 예전 대화는 볼 수 있다');
+  assert.match(chat, /class="talk-item inbox-item/, '주소로 들어가면 예전 대화는 볼 수 있다');
 });
 
 test('보낸 사람이 없는 문의(쿠팡): 주문번호가 같은 주문의 주문자 이름으로 채운다, 주문이 나중에 들어와도', async () => {

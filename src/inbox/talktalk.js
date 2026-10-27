@@ -37,6 +37,28 @@ function messageOf(ev) {
   }
   return { kind: 'other', text: '(지원하지 않는 메시지)', image_url: null };
 }
+// 상품 페이지에서 '톡톡문의' 로 들어오면 네이버가 상품 정보를 함께 준다 (options.product)
+function productOf(ev) {
+  const p = ev && ev.options && ev.options.product;
+  if (!p || !p.name) return null;
+  const safe = u => (/^https:\/\//.test(String(u || '')) ? String(u).slice(0, 500) : null);
+  return { name: String(p.name).slice(0, 200), url: safe(p.url || p.mobileUrl) };
+}
+
+// 고객이 대화에 쓴 주문번호 찾기: 숫자 10~20자리 (사이에 - 나 빈칸이 있어도 됨)
+//   인트라넷에 그 주문(주문번호 또는 상품주문번호)이 있을 때만 그 주문번호를 돌려준다. 여러 개면 마지막에 쓴 것
+function orderNoIn(db, text) {
+  const find = db.prepare('SELECT channel_order_id FROM orders WHERE channel_order_id = ? OR channel_item_id = ? ORDER BY id LIMIT 1');
+  const found = [];
+  for (const m of String(text || '').matchAll(/\d[\d -]{8,30}\d/g)) {
+    const digits = m[0].replace(/\D/g, '');
+    if (digits.length < 10 || digits.length > 20) continue;
+    const row = find.get(digits, digits);
+    if (row) found.push(String(row.channel_order_id));
+  }
+  return found.length ? found[found.length - 1] : null;
+}
+
 const previewOf = m => (m.kind === 'image' ? '(사진)' : String(m.text || '').replace(/\s+/g, ' ').trim()).slice(0, 60) || '(내용 없음)';
 
 function createTalktalkClient({ authKey = process.env.TALKTALK_SEND_KEY, fetchFn = fetch } = {}) {
@@ -68,7 +90,7 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
   const insertMessage = db.prepare('INSERT INTO chat_messages (inquiry_id, direction, kind, text, image_url, sender, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
 
   // 고객 쪽 말이 오면 미답변으로, 우리 쪽 말이 나가면 답변완료로
-  function record(user, direction, m, sender) {
+  function record(user, direction, m, sender, product = null) {
     const at = now().toISOString();
     const preview = previewOf(m);
     let thread = findThread.get(SOURCE, user);
@@ -85,6 +107,18 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
         updated_at = datetime('now') WHERE id = ?`).run(thread.id);
     }
     insertMessage.run(thread.id, direction, m.kind, m.text, m.image_url, sender, at);
+    if (direction === 'in') {
+      // 상품 문의면 상품을 기억해 둔다 (목록의 '상품정보 문의' 태그·상품 줄)
+      if (product) {
+        const row = db.prepare('SELECT meta FROM inquiries WHERE id = ?').get(thread.id);
+        let meta = {};
+        try { meta = JSON.parse((row && row.meta) || '{}') || {}; } catch { meta = {}; }
+        db.prepare('UPDATE inquiries SET meta = ? WHERE id = ?').run(JSON.stringify({ ...meta, product }), thread.id);
+      }
+      // 고객이 주문번호를 말하면 그 주문과 연결한다
+      const orderNo = m.kind === 'text' || m.kind === 'card' ? orderNoIn(db, m.text) : null;
+      if (orderNo) db.prepare('UPDATE inquiries SET order_no = ? WHERE id = ?').run(orderNo, thread.id);
+    }
     return { id: thread.id, created, preview };
   }
 
@@ -93,7 +127,7 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
     if (!ev || !ev.user) return { ignored: true };
     const user = String(ev.user);
     if (ev.event === 'send') {
-      const r = record(user, 'in', messageOf(ev), 'customer');
+      const r = record(user, 'in', messageOf(ev), 'customer', productOf(ev));
       if (notifier) {
         notifier.inboxChanged();
         notifier.inboxNew('chat', { title: '새 톡톡', body: r.preview, url: `/inbox/${r.id}` });
@@ -115,4 +149,4 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
   };
 }
 
-module.exports = { SOURCE, LABEL, PARTNER_CENTER_URL, IMAGE_HOSTS, ipAllowed, messageOf, createTalktalkClient, createTalktalkHandler };
+module.exports = { SOURCE, LABEL, PARTNER_CENTER_URL, IMAGE_HOSTS, ipAllowed, messageOf, productOf, orderNoIn, createTalktalkClient, createTalktalkHandler };
