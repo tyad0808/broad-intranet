@@ -39,7 +39,7 @@
 
 <section class="card" id="sounds">
   <h2>알림 소리</h2>
-  <p class="muted">알림 종류마다 소리를 바꿀 수 있어요. <strong>MP3·WAV·OGG</strong> 파일, 1MB 까지. 저장하면 모든 직원 화면에서 그 소리가 나요 (직원 화면은 새로고침하면 바로 바뀜).</p>
+  <p class="muted">알림 종류마다 소리를 바꿀 수 있어요. <strong>MP3·WAV·OGG·M4A</strong>(휴대폰 녹음) 파일, 1MB 까지. 저장하면 모든 직원 화면에서 그 소리가 나요 (직원 화면은 새로고침하면 바로 바뀜).</p>
   <ul class="sound-list">
     <% soundList.forEach(s => { %>
       <li class="sound-row">
@@ -55,7 +55,7 @@
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="kind" value="<%= s.kind %>">
             <input type="hidden" name="action" value="upload">
-            <input type="file" name="file" accept="audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" required aria-label="<%= s.label %> 소리 파일" data-sound-file="<%= s.kind %>">
+            <input type="file" name="file" accept="audio/mpeg,audio/wav,audio/ogg,audio/mp4,audio/x-m4a,.mp3,.wav,.ogg,.m4a" required aria-label="<%= s.label %> 소리 파일" data-sound-file="<%= s.kind %>">
             <button type="button" class="btn-sm ghost" data-preview-file hidden>▶ 고른 파일</button>
             <button type="submit" class="btn-sm primary">올리기</button>
           </form>

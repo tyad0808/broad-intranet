@@ -1,6 +1,6 @@
 // 알림 소리: 관리자가 종류마다(주문·톡톡·메일·문의) 소리 파일을 올리거나, 기본 소리 / 소리 없음 으로 정한다
 // 소리 파일은 로고처럼 DB(settings)에 넣어 둔다 → 매일 백업에 함께 들어간다
-// 파일은 MP3·WAV·OGG 만, 1MB 까지. 파일 앞부분으로 진짜 종류를 확인한다
+// 파일은 MP3·WAV·OGG·M4A(휴대폰 녹음) 만, 1MB 까지. 파일 앞부분으로 진짜 종류를 확인한다
 const crypto = require('crypto');
 
 const KINDS = { new_order: '🛒 주문', new_chat: '💬 톡톡', new_mail: '✉️ 메일', new_inquiry: '❓ 문의' };
@@ -12,6 +12,8 @@ function soundType(buf) {
   if (buf.slice(0, 3).toString('latin1') === 'ID3' || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0)) return 'audio/mpeg';
   if (buf.slice(0, 4).toString('latin1') === 'RIFF' && buf.slice(8, 12).toString('latin1') === 'WAVE') return 'audio/wav';
   if (buf.slice(0, 4).toString('latin1') === 'OggS') return 'audio/ogg';
+  // M4A: 휴대폰 음성 녹음(아이폰·갤럭시)이 이 모양 — 'ftyp' 다음이 M4A·mp4 계열
+  if (buf.slice(4, 8).toString('latin1') === 'ftyp' && /^(M4A |M4B |mp41|mp42|isom|iso[2-6]|dash)/.test(buf.slice(8, 12).toString('latin1'))) return 'audio/mp4';
   return null;
 }
 
@@ -60,7 +62,7 @@ function createSounds(db) {
       if (!file || !file.content || !file.content.length) return '소리 파일을 골라 주세요.';
       if (file.content.length > MAX_SOUND) return `소리 파일은 ${MAX_SOUND / 1024 / 1024}MB 까지 올릴 수 있어요.`;
       const type = soundType(file.content);
-      if (!type) return 'MP3·WAV·OGG 소리 파일만 올릴 수 있어요.';
+      if (!type) return 'MP3·WAV·OGG·M4A 소리 파일만 올릴 수 있어요.';
       const v = crypto.createHash('sha256').update(file.content).digest('hex').slice(0, 12);
       const name = String(file.name || '소리').slice(0, 80);
       putStmt.run(keyOf(kind), JSON.stringify({ mode: 'file', type, name, data: file.content.toString('base64'), v }));
