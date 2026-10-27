@@ -86,6 +86,8 @@ function addMissingColumns(db) {
   // 톡톡: 직원이 붙이는 고객 메모(예: '실사-김대성'), 직원이 어디까지 읽었는지(chat_messages.id)
   addColumn(db, 'inquiries', 'cust_memo', 'TEXT');
   addColumn(db, 'inquiries', 'chat_read_id', 'INTEGER');
+  // 인트라넷에서 보낸 톡톡 말: 0 = 보냄, 1 = 네이버가 되돌려 준 것(echo)까지 확인. 손님·파트너센터 말은 비어 있음
+  addColumn(db, 'chat_messages', 'echoed', 'INTEGER');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)과 발송지연(delay)도 받을 수 있게 넓힌다.

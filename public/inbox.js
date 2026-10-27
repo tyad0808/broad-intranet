@@ -11,7 +11,11 @@
   const list = zone.querySelector('[data-drop-list]');
   const form = zone.closest('form');
   const max = Number(input.dataset.maxTotal);
+  // 톡톡 답장(data-images): 사진만, 10장까지, 작은 그림으로 미리 보기
+  const imagesOnly = zone.hasAttribute('data-images');
+  const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
   let files = [];
+  let previews = [];
 
   const size = n => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
 
@@ -21,9 +25,19 @@
     files.forEach(f => dt.items.add(f));
     input.files = dt.files;
     list.innerHTML = '';
+    previews.forEach(url => URL.revokeObjectURL(url));
+    previews = [];
     files.forEach((f, i) => {
       const li = document.createElement('li');
-      li.textContent = `${f.name} (${size(f.size)}) `;
+      if (imagesOnly) {
+        const url = URL.createObjectURL(f);
+        previews.push(url);
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = f.name;
+        li.appendChild(img);
+      }
+      li.appendChild(document.createTextNode(`${f.name} (${size(f.size)}) `));
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'drop-remove';
@@ -37,12 +51,19 @@
   }
 
   function add(newFiles) {
+    if (imagesOnly) {
+      const skipped = newFiles.filter(f => !IMAGE_TYPES.includes(f.type));
+      if (skipped.length) alert(`톡톡에는 사진(JPG·PNG·GIF)만 보낼 수 있어요.\n빼고 넣었어요: ${skipped.map(f => f.name).join(', ')}`);
+      newFiles = newFiles.filter(f => IMAGE_TYPES.includes(f.type));
+    }
     const next = [...files];
     for (const f of newFiles) {
       if (!next.some(x => x.name === f.name && x.size === f.size)) next.push(f); // 같은 파일 두 번 넣기 방지
     }
     const total = next.reduce((sum, f) => sum + f.size, 0);
-    if (total > max) {
+    if (imagesOnly && next.length > 10) {
+      alert('사진은 한 번에 10장까지 보낼 수 있어요.');
+    } else if (total > max) {
       alert(`첨부파일 합계가 ${size(total)} 입니다. ${Math.round(max / 1024 / 1024)}MB 까지 보낼 수 있어요.\n큰 파일은 웹하드에 올리고 링크를 답장에 적어 주세요.`);
     } else {
       files = next;
@@ -63,6 +84,17 @@
     zone.classList.remove('dragging');
     add([...e.dataTransfer.files]);
   });
+
+  // 톡톡: 캡처한 그림을 답장 칸에 붙여넣기(Ctrl+V) 하면 사진으로 붙는다 (글자 붙여넣기는 그대로)
+  if (imagesOnly) {
+    form.addEventListener('paste', e => {
+      const pasted = [...((e.clipboardData && e.clipboardData.files) || [])];
+      if (!pasted.length) return;
+      e.preventDefault();
+      // 붙여넣은 그림은 이름이 모두 image.png 라서 시각을 붙여 구분한다
+      add(pasted.map((f, i) => new File([f], f.name === 'image.png' ? `붙여넣은사진_${Date.now()}_${i + 1}.png` : f.name, { type: f.type })));
+    });
+  }
 })();
 
 // 채팅: 처음 열면 가장 최근 말이 보이게 맨 아래로

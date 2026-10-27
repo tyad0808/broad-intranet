@@ -4,7 +4,7 @@
 const express = require('express');
 const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
-const { IMAGE_HOSTS, PARTNER_CENTER_URL, orderNoIn } = require('../inbox/talktalk');
+const { IMAGE_HOSTS, PARTNER_CENTER_URL, MAX_IMAGE, orderNoIn, imageKind } = require('../inbox/talktalk');
 const { templatesFor } = require('./templates');
 const { ordersForInquiry } = require('../customer');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
@@ -340,6 +340,10 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const chat = isChatSource(inquiry.source)
       ? db.prepare('SELECT * FROM (SELECT * FROM chat_messages WHERE inquiry_id = ? ORDER BY id DESC LIMIT 500) ORDER BY id').all(inquiry.id)
       : null;
+    if (chat) {
+      const names = new Map(staff().map(s => [`staff:${s.id}`, s.name]));
+      chat.forEach(m => { m.who = names.get(m.sender) || ''; });
+    }
     if (chat && chat.length) {
       // 직원이 열어 봤으니 지금까지 온 말은 읽음 (목록의 빨간 숫자가 사라진다)
       const lastId = chat[chat.length - 1].id;
@@ -400,20 +404,30 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     if (!inquiry) return flashTo(req, res, b, 'error', '문의를 찾을 수 없습니다.');
     const url = selfUrl(inquiry.id, b);
     const body = String(req.body.body || '').replace(/\r\n/g, '\n').trim();
-    if (!body) return flashTo(req, res, url, 'error', '답변 내용을 적어 주세요.');
+    const isChat = isChatSource(inquiry.source);
+    const attached = req.files || [];
+    // 톡톡은 사진만 보내도 된다
+    if (!body && !(isChat && attached.length)) return flashTo(req, res, url, 'error', isChat ? '보낼 말을 적거나 사진을 붙여 주세요.' : '답변 내용을 적어 주세요.');
     if (body.length > MAX_REPLY) return flashTo(req, res, url, 'error', `답변은 ${MAX_REPLY.toLocaleString()}자까지 쓸 수 있습니다.`);
-    if (Number(req.body.version) !== inquiry.version) {
+    // 톡톡은 손님 말이 올 때마다 바뀌어서(대화가 이어지는 중) '먼저 바꾼 사람' 검사를 하지 않는다
+    if (!isChat && Number(req.body.version) !== inquiry.version) {
       return flashTo(req, res, url, 'error', '그사이 다른 직원이 이 문의를 바꿨습니다. 바뀐 내용을 확인하고 다시 보내 주세요.');
     }
     if (req.uploadError) return flashTo(req, res, url, 'error', req.uploadError);
-    const attached = req.files || [];
+    if (isChat) {
+      // 톡톡 사진: JPG·PNG·GIF, 한 장 20MB 까지 (네이버 한도)
+      const bad = attached.find(f => !imageKind(f.content));
+      if (bad) return flashTo(req, res, url, 'error', `${bad.name}: 톡톡에는 사진(JPG·PNG·GIF)만 보낼 수 있어요.`);
+      const big = attached.find(f => f.content.length > MAX_IMAGE);
+      if (big) return flashTo(req, res, url, 'error', `${big.name}: 사진은 한 장에 20MB 까지 보낼 수 있어요.`);
+    }
     if (busy.has(inquiry.id)) return flashTo(req, res, url, 'error', '이미 보내는 중입니다. 잠시 후 새로고침해 보세요.');
     busy.add(inquiry.id);
     try {
       const sender = senders[inquiry.source];
       const out = sender
         ? await sender.reply(inquiry, body, attached)
-        : { result: 'practice', message: `연습 모드라 ${withRo(labelOf(inquiry.source))} 보내지 않았습니다.` };
+        : { result: 'practice', message: `연습 모드라 ${withRo(labelOf(inquiry.source))} 보내지 않았습니다.${isChat ? ' (실제로 보내려면 서버 .env 에 TALKTALK_ANSWER=on)' : ''}` };
       // 기록에는 파일 이름·크기만 (파일 자체는 저장하지 않음)
       const fileList = attached.length ? JSON.stringify(attached.map(f => ({ name: f.name, size: f.content.length }))) : null;
       transaction(db, () => {
@@ -422,6 +436,13 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
         if (out.result === 'ok') {
           db.prepare("UPDATE inquiries SET status = 'answered', handled_by = ?, handled_at = datetime('now') WHERE id = ?")
             .run(req.user.id, inquiry.id);
+        }
+        // 톡톡: 실제로 나간 말·사진은 대화에 '우리' 말풍선으로 (네이버가 되돌려 주는 echo 와는 하나로 합친다)
+        if (isChat && out.sent && out.sent.length) {
+          const add = db.prepare(`INSERT INTO chat_messages (inquiry_id, direction, kind, text, image_url, sender, created_at, echoed)
+            VALUES (?, 'out', ?, ?, NULL, ?, ?, 0)`);
+          const at = new Date().toISOString();
+          for (const m of out.sent) add.run(inquiry.id, m.kind, m.kind === 'image' ? `📷 ${m.name}` : m.text, `staff:${req.user.id}`, at);
         }
         bump(inquiry.id);
       });

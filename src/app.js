@@ -120,6 +120,8 @@ function createApp({
         // 주소 검색(카카오 우편번호 서비스, 수기 주문 화면): 그 스크립트와 검색 창만 허용
         scriptSrc: ["'self'", 'https://*.daumcdn.net', 'https://*.kakaocdn.net'],
         frameSrc: ["'self'", 'https://*.daum.net', 'https://*.kakao.com'],
+        // blob: = 톡톡 답장에 붙인 사진을 보내기 전에 화면에서 미리 보기
+        imgSrc: ["'self'", 'data:', 'blob:'],
         // 운영(HTTPS)에서만 http 요청을 https 로 올린다. 개발(http://localhost)에서 켜 두면 팝업 안 저장이 막힌다
         upgradeInsecureRequests: isProd ? [] : null,
       },
@@ -170,6 +172,14 @@ function createApp({
       }
       res.status(200).json({ success: true });
     });
+    // 톡톡 답장 사진: 네이버가 가져가는 1분 동안만 있는 주소 (로그인 없이 — 주소가 추측할 수 없는 긴 글자)
+    if (inbox.talktalk.images) {
+      app.get('/talk-img/:token', (req, res) => {
+        const img = /^[0-9a-f]{48}$/.test(req.params.token) ? inbox.talktalk.images.get(req.params.token) : null;
+        if (!img) return res.status(404).end();
+        res.set({ 'Content-Type': img.type, 'Cache-Control': 'no-store' }).send(img.content);
+      });
+    }
   }
   app.use(express.urlencoded({ extended: false }));
 
