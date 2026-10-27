@@ -8,6 +8,7 @@ const { CHANNELS } = require('../channels/labels');
 const { ENDED_SQL } = require('../collector');
 const { buildWeek } = require('./calendar');
 const { historyForOrder } = require('../customer');
+const { fileLabel } = require('../fileLabel');
 const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, describeShipping, hasOpenClaim, DELAY_REASONS, DELAY_DEFAULT_TEXT } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
@@ -744,10 +745,14 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
       return res.status(404).render('error', { title: '없는 주문', message: '주문을 찾을 수 없습니다.' });
     }
     const items = groupItems(order);
+    const sourceName = order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null;
+    // 작업 파일 이름 한 줄: 관리자 › 주문 수집 에서 정한 모양으로
+    const pattern = (db.prepare("SELECT value FROM settings WHERE key = 'file_label_pattern'").get() || {}).value;
     res.render('orders/detail', {
       title: items[0].product_name,
       order,
-      sourceName: order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null,
+      sourceName,
+      fileLabel: fileLabel(pattern, { order, items, sourceName, channelName: res.locals.channelInfo(order.channel).name, kst: res.app.locals.kst }),
       items,
       canConfirm: items.some(canConfirm),
       canDispatch: items.some(canDispatch),

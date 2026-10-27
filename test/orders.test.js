@@ -519,3 +519,31 @@ test('주문 상세: 작업 파일 이름용 한 줄 (채널_날짜_구매자(�
   assert.deepStrictEqual((await label(b))[0], '쿠팡_20261027_문일식', '한국 시간 날짜, 받는 분이 같으면 괄호 없음');
   assert.deepStrictEqual((await label(c))[0], '자사몰_20261027_김 대 성', '파일 이름에 못 쓰는 글자는 뺀다');
 });
+
+test('관리자 › 작업 파일 이름 모양: 이름표로 바꾸면 주문 상세 한 줄이 그 모양으로 (담당자 포함), 미리 보기, 틀린 모양은 막고 처음 모양으로', async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  addUser(db, { email: 'boss@broad.test', role: 'admin' });
+  const kimId = addUser(db, { email: 'kim@broad.test', name: '김디자' });
+  const id = Number(db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, quantity, buyer_name, receiver_name, receiver_phone, paid_at, channel_status, assignee_id)
+    VALUES ('smartstore', '2026102741469741', 'P1', '글자스티커 시트컷팅', 13, '홍서연', '중랑아트센터', '010-2653-2381', '2026-10-27T09:02:00Z', 'PAYED', ?)`).run(kimId).lastInsertRowid);
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  const label = async () => /<p class="file-label"><code[^>]*>([^<]+)<\/code>/.exec((await boss.request(`/orders/${id}`)).text)[1];
+  assert.strictEqual(await label(), '스마트스토어_20261027_홍서연(중랑아트센터)', '처음 모양');
+
+  const page = (await boss.request('/admin/collect')).text;
+  assert.match(page, /data-token="\{담당자\}"/);
+  assert.match(page, /미리 보기 <strong data-file-preview>스마트스토어_20261027_홍서연\(중랑아트센터\)<\/strong>/);
+  const preview = JSON.parse((await boss.request(`/admin/file-label/preview?pattern=${encodeURIComponent('{날짜6}_{담당자}_{구매자}_{전화뒷4}')}`)).text);
+  assert.deepStrictEqual(preview, { text: '261027_김디자_홍서연_2381' });
+  assert.match(JSON.parse((await boss.request(`/admin/file-label/preview?pattern=${encodeURIComponent('{모름}')}`)).text).error, /모르는 이름표/);
+
+  await boss.submit('/admin/collect', '/admin/file-label', { pattern: '{담당자}_{날짜4}_{구매자}({받는분})_{수량}개' });
+  assert.strictEqual(await label(), '김디자_1027_홍서연(중랑아트센터)_13개');
+  await boss.submit('/admin/collect', '/admin/file-label', { pattern: '그냥 글자' });
+  assert.strictEqual(await label(), '김디자_1027_홍서연(중랑아트센터)_13개', '이름표 없는 모양은 저장 안 함');
+  db.prepare('UPDATE orders SET assignee_id = NULL').run();
+  assert.strictEqual(await label(), '1027_홍서연(중랑아트센터)_13개', '담당자가 없으면 그 칸과 구분자가 빠짐');
+  await boss.submit('/admin/collect', '/admin/file-label', { action: 'reset' });
+  assert.strictEqual(await label(), '스마트스토어_20261027_홍서연(중랑아트센터)');
+});

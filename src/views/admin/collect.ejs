@@ -35,6 +35,30 @@
   </form>
 </section>
 
+<section class="card" id="file-label">
+  <h2>작업 파일 이름 모양</h2>
+  <p class="muted">주문 상세 창 제목 아래 <strong>[📋 복사]</strong> 한 줄의 모양이에요. 이름표 버튼을 누르면 커서 자리에 들어가고, 사이에는 <code>_</code> <code>-</code> 괄호 빈칸 같은 글자를 자유롭게 넣으면 돼요.
+    값이 비면 빈 괄호와 겹친 구분자는 알아서 지워요.</p>
+  <form method="post" action="/admin/file-label" class="file-label-form" data-file-label>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label for="file-pattern">모양</label>
+    <input type="text" id="file-pattern" name="pattern" value="<%= filePattern %>" maxlength="100" required autocomplete="off" spellcheck="false">
+    <div class="token-chips" aria-label="이름표 넣기">
+      <% TOKENS.forEach(([name, help]) => { %><button type="button" class="btn-sm" data-token="{<%= name %>}" title="<%= help %>">{<%= name %>}</button><% }) %>
+    </div>
+    <p class="file-preview">미리 보기 <strong data-file-preview><%= filePreview %></strong> <span class="muted small" data-file-preview-note>(가장 최근 주문으로)</span></p>
+    <div class="form-actions">
+      <button type="submit" class="btn-sm primary">저장</button>
+      <button type="submit" name="action" value="reset" class="btn-sm ghost" formnovalidate>처음 모양으로 (<%= DEFAULT_PATTERN %>)</button>
+    </div>
+  </form>
+  <details class="token-help">
+    <summary>이름표 설명</summary>
+    <ul class="plain"><% TOKENS.forEach(([name, help]) => { %><li><code>{<%= name %>}</code> <%= help %></li><% }) %></ul>
+  </details>
+</section>
+<script src="/admin-file-label.js"></script>
+
 <section class="card">
   <h2>스마트스토어 주소</h2>
   <p class="muted">주문 상세에서 상품 이름을 누르면 손님이 보는 상품 페이지가 열려요. 스마트스토어는 우리 가게 주소가 있어야 정확히 열립니다. (쿠팡·자사몰은 따로 필요 없어요)</p>

@@ -8,6 +8,7 @@ const { storageInfo, humanSize } = require('../storage');
 const retention = require('../retention');
 const { parseRecipients, settingsOf: weeklySettings, DAYS, DEFAULT_SUBJECT, SAFE_SUBJECT, MIN_PASSWORD } = require('../weeklyReport');
 const { intervalMinutes, MIN_MINUTES, MAX_MINUTES } = require('../schedule');
+const { fileLabel, checkPattern, DEFAULT_PATTERN, TOKENS } = require('../fileLabel');
 
 const STATUS_LABELS = {
   pending: '승인 대기',
@@ -573,6 +574,8 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       inboxInterval: intervalMinutes(db, 'inbox_interval_minutes'),
       MIN_MINUTES, MAX_MINUTES,
       smartstoreUrl: (db.prepare("SELECT value FROM settings WHERE key = 'smartstore_url'").get() || {}).value || '',
+      filePattern: getSetting('file_label_pattern') || DEFAULT_PATTERN, DEFAULT_PATTERN, TOKENS,
+      filePreview: labelPreview(getSetting('file_label_pattern') || DEFAULT_PATTERN, res),
       runs,
       recent,
       total,
@@ -601,6 +604,39 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       try { a.detailObj = a.detail ? JSON.parse(a.detail) : null; } catch { a.detailObj = null; }
     }
     res.render('admin/actions', { title: '처리 기록', tab: 'actions', actions, filter });
+  });
+
+  // 작업 파일 이름 모양: 미리 보기는 가장 최근 주문으로 (주문이 없으면 예시 주문)
+  const SAMPLE_ORDER = { channel: 'smartstore', channel_order_id: '2026102741469741', buyer_name: '홍서연', receiver_name: '중랑아트센터',
+    receiver_phone: '010-2653-2381', paid_at: '2026-10-27T09:02:00Z', assignee_name: '김디자', product_name: '글자스티커 시트컷팅 레터링', quantity: 13 };
+  function labelPreview(pattern, res) {
+    const latest = db.prepare(`SELECT o.*, u.name AS assignee_name FROM orders o LEFT JOIN users u ON u.id = o.assignee_id
+      WHERE o.buyer_name IS NOT NULL ORDER BY o.id DESC LIMIT 1`).get();
+    const order = latest || SAMPLE_ORDER;
+    const items = latest ? db.prepare('SELECT * FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY id').all(order.channel, order.channel_order_id) : [order];
+    const sourceName = order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null;
+    return fileLabel(pattern, { order, items, sourceName, channelName: res.locals.channelInfo(order.channel).name, kst: res.app.locals.kst });
+  }
+  router.get('/file-label/preview', (req, res) => {
+    const pattern = String(req.query.pattern || '').slice(0, 200);
+    const error = checkPattern(pattern);
+    res.json(error ? { error } : { text: labelPreview(pattern, res) });
+  });
+  router.post('/file-label', (req, res) => {
+    if (req.body.action === 'reset') {
+      db.prepare("DELETE FROM settings WHERE key = 'file_label_pattern'").run();
+      flash(req, 'ok', `파일 이름 모양을 처음 모양(${DEFAULT_PATTERN})으로 되돌렸습니다.`);
+      return res.redirect('/admin/collect#file-label');
+    }
+    const pattern = String(req.body.pattern || '').trim();
+    const error = checkPattern(pattern);
+    if (error) {
+      flash(req, 'error', error);
+      return res.redirect('/admin/collect#file-label');
+    }
+    putSetting('file_label_pattern', pattern);
+    flash(req, 'ok', `파일 이름 모양을 저장했습니다. 예: ${labelPreview(pattern, res)}`);
+    res.redirect('/admin/collect#file-label');
   });
 
   // 스마트스토어 가게 주소 (주문 상세의 상품 링크용). 비우면 지운다
