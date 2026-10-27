@@ -87,10 +87,10 @@
 
       <% const confirmText = isMail
            ? `${inquiry.reply_to || inquiry.from_addr} 에게 답변을 보낼까요?\n보낸 메일은 되돌릴 수 없습니다.`
-           : chat ? '톡톡으로 손님에게 보낼까요?\n보낸 말은 되돌릴 수 없습니다.'
            : `${label}에 이 답변을 등록할까요?\n고객에게 바로 보입니다.`; %>
+      <%# 톡톡은 메신저처럼 Enter 로 바로 보낸다 (확인창 없음). 메일·쇼핑몰 문의는 보내기 전에 확인 %>
       <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form" enctype="multipart/form-data" data-once
-            data-confirm="<%= confirmText %>">
+            <% if (!chat) { %>data-confirm="<%= confirmText %>"<% } %>>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="version" value="<%= inquiry.version %>">
@@ -104,8 +104,9 @@
         </div>
         <% if (chat) { %>
           <label>톡톡 답장 <span class="muted small">(손님에게 바로 보입니다)</span>
-            <textarea name="body" rows="4" maxlength="10000" placeholder="손님에게 보낼 말을 적어 주세요. 사진만 보내도 돼요."></textarea>
+            <textarea name="body" rows="4" maxlength="10000" data-enter-send placeholder="손님에게 보낼 말을 적어 주세요. 사진만 보내도 돼요."></textarea>
           </label>
+          <p class="muted small enter-hint"><kbd>Enter</kbd> 보내기 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 줄바꿈</p>
         <% } else if (isMail) { %>
           <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
             <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>

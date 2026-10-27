@@ -273,6 +273,8 @@ test('인트라넷 톡톡 답장: 글·사진(끌어다 놓기·첨부) 보내�
   assert.match(page, /action="\/inbox\/\d+\/reply"/, '인트라넷 답장 칸이 있다');
   assert.match(page, /data-drop-zone data-images/);
   assert.match(page, /accept="image\/jpeg,image\/png,image\/gif"/);
+  assert.match(page, /data-enter-send/, 'Enter 로 보내기');
+  assert.doesNotMatch(page.slice(page.indexOf('class="reply-form"') - 200, page.indexOf('class="reply-form"') + 300), /data-confirm/, '톡톡은 확인창 없이 바로');
   const csrf = /name="_csrf" value="([^"]+)"/.exec(page)[1];
   const reply = (body, files) => {
     const form = new FormData();

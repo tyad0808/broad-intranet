@@ -120,3 +120,15 @@ document.querySelectorAll('select[data-template]').forEach(select => {
     select.value = '';
   });
 });
+
+// 톡톡 답장: Enter 로 보내기, Shift+Enter 는 줄바꿈 (한글 입력 중 Enter 는 글자 확정이라 보내지 않음)
+document.querySelectorAll('textarea[data-enter-send]').forEach(textarea => {
+  textarea.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing || e.keyCode === 229) return;
+    e.preventDefault();
+    const form = textarea.closest('form');
+    const files = form.querySelector('input[type="file"]');
+    if (!textarea.value.trim() && !(files && files.files.length)) return; // 빈 칸이면 안 보냄
+    form.requestSubmit(form.querySelector('button[type="submit"]'));
+  });
+});

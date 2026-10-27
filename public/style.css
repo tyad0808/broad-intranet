@@ -1378,3 +1378,5 @@ body.no-sidebar .card.narrow .muted { margin: 16px 0 0; text-align: center; }
 .drop-thumbs li img { flex: none; width: 48px; height: 48px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line); }
 .drop-thumbs li { justify-content: flex-start; font-size: 14px; }
 .drop-thumbs .drop-remove { margin-left: auto; }
+.enter-hint { margin: -4px 0 4px; font-size: 14px; }
+.enter-hint kbd { padding: 1px 5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; background: var(--surface-2); font: inherit; font-size: 14px; }
