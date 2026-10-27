@@ -1282,6 +1282,9 @@ button.secondary.busy::after, .btn-sm.busy::after { border-color: rgba(37, 99, 2
 .item-list li.addon { background: var(--surface-2); }
 .item-main { flex: 1; min-width: 0; display: grid; gap: 3px; }
 .item-name { font-size: 15px; font-weight: 650; letter-spacing: -0.02em; }
+.item-name .product-link { color: inherit; text-decoration: none; }
+.item-name .product-link:hover { color: var(--primary); text-decoration: underline; }
+.item-name .product-link span { color: var(--primary); font-size: 14px; }
 .item-list li.addon .item-name { font-weight: 550; }
 .item-status { word-break: break-all; }
 .item-qty { flex: none; font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; }

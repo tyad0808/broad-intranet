@@ -62,7 +62,9 @@
       <% items.forEach(i => { %>
         <li class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
           <div class="item-main">
-            <div class="item-name"><% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %><%= i.product_name %></div>
+            <%# 상품 이름을 누르면 손님이 보는 상품 페이지 (새 탭) %>
+            <% const pUrl = productUrl(i); %>
+            <div class="item-name"><% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %><% if (pUrl) { %><a href="<%= pUrl %>" target="_blank" rel="noopener noreferrer" class="product-link" title="<%= channelInfo(i.channel).name %> 상품 페이지 열기"><%= i.product_name %> <span aria-hidden="true">↗</span></a><% } else { %><%= i.product_name %><% } %></div>
             <% if (i.option_text) { %><div class="muted"><%= i.option_text %></div><% } %>
             <div class="muted small item-status">
               <%= isManual ? '' : `상품주문번호 ${i.channel_item_id} · ` %><%= i.channel_status_label ? `${channelInfo(i.channel).name} 상태: ${i.channel_status_label}` : channelStatusLabel(i.channel_status, i.channel) %><%= i.channel === 'manual' ? '' : i.channel_confirmed ? ' · 발주확인됨' : ' · 발주확인 전' %><%= i.claim_status ? ` · ${claimLabel(i.claim_status)}` : '' %>

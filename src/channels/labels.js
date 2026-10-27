@@ -87,4 +87,23 @@ function claimLevel(code) {
   return 'open';
 }
 
-module.exports = { CHANNELS, channelInfo, channelInfoWith, channelStatusLabel, claimLabel, claimLevel };
+// 손님이 보는 상품 페이지 주소 (주문의 product_no 로). 모르면 null
+//   스마트스토어는 가게 주소가 필요하다 (관리자 › 주문 수집 에서 저장). 없으면 /main/ 으로 (네이버가 해당 가게로 넘겨 줌)
+const GODO_SHOP_URL = 'https://broadstore.co.kr';
+const SMARTSTORE_DEFAULT = 'https://smartstore.naver.com/main';
+function productUrl(order, { smartstoreUrl } = {}) {
+  const no = order && order.product_no ? encodeURIComponent(String(order.product_no)) : null;
+  if (!no) return null;
+  if (order.channel === 'smartstore') return `${(smartstoreUrl || SMARTSTORE_DEFAULT).replace(/\/$/, '')}/products/${no}`;
+  if (order.channel === 'coupang') return `https://www.coupang.com/vp/products/${no}`;
+  if (order.channel === 'godo') return `${GODO_SHOP_URL}/goods/goods_view.php?goodsNo=${no}`;
+  return null;
+}
+
+// 관리자가 적은 스마트스토어 주소 → 'https://smartstore.naver.com/가게주소' (틀리면 null)
+function normalizeSmartstoreUrl(text) {
+  const m = String(text || '').trim().match(/^(?:https?:\/\/)?(?:m\.)?smartstore\.naver\.com\/([A-Za-z0-9_-]{2,50})\/?$/);
+  return m ? `https://smartstore.naver.com/${m[1]}` : null;
+}
+
+module.exports = { CHANNELS, channelInfo, channelInfoWith, channelStatusLabel, claimLabel, claimLevel, productUrl, normalizeSmartstoreUrl };

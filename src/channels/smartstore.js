@@ -65,6 +65,8 @@ function normalize(item) {
     pay_amount: money(po.totalPaymentAmount),
     // 고객이 주문할 때 남긴 배송 메모 (예: 부재 시 문 앞)
     ship_memo: memo(po.shippingMemo),
+    // 상품 번호 (상품 페이지 링크: 스마트스토어주소/products/번호)
+    product_no: po.productId ? String(po.productId) : null,
   };
 }
 

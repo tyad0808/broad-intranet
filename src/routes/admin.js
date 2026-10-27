@@ -556,6 +556,7 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       orderInterval: intervalMinutes(db, 'order_interval_minutes'),
       inboxInterval: intervalMinutes(db, 'inbox_interval_minutes'),
       MIN_MINUTES, MAX_MINUTES,
+      smartstoreUrl: (db.prepare("SELECT value FROM settings WHERE key = 'smartstore_url'").get() || {}).value || '',
       runs,
       recent,
       total,
@@ -584,6 +585,25 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       try { a.detailObj = a.detail ? JSON.parse(a.detail) : null; } catch { a.detailObj = null; }
     }
     res.render('admin/actions', { title: '처리 기록', tab: 'actions', actions, filter });
+  });
+
+  // 스마트스토어 가게 주소 (주문 상세의 상품 링크용). 비우면 지운다
+  router.post('/store-url', (req, res) => {
+    const { normalizeSmartstoreUrl } = require('../channels/labels');
+    const raw = String(req.body.smartstore_url || '').trim();
+    if (!raw) {
+      db.prepare("DELETE FROM settings WHERE key = 'smartstore_url'").run();
+      flash(req, 'ok', '스마트스토어 주소를 지웠습니다.');
+      return res.redirect('/admin/collect');
+    }
+    const url = normalizeSmartstoreUrl(raw);
+    if (!url) {
+      flash(req, 'error', '스마트스토어 주소는 https://smartstore.naver.com/가게주소 모양으로 적어 주세요.');
+      return res.redirect('/admin/collect');
+    }
+    db.prepare("INSERT INTO settings (key, value) VALUES ('smartstore_url', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(url);
+    flash(req, 'ok', `스마트스토어 주소를 저장했습니다: ${url}`);
+    res.redirect('/admin/collect');
   });
 
   // 자동 수집 간격 (분). 다음 회차부터 바로 적용

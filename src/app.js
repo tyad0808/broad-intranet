@@ -23,7 +23,7 @@ const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier, notifyOff } = require('./notifier');
 const { createOrderActions, canDispatch, DELAY_REASONS } = require('./actions');
-const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel } = require('./channels/labels');
+const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel, productUrl } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
 
 function sessionSecret() {
@@ -203,6 +203,7 @@ function createApp({
   const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
   const currentChannelInfo = channelInfoWith(db);
   // 왼쪽 메뉴의 미답변 건수: 문의함(쇼핑몰 문의·채팅)과 메일함을 따로
+  const smartstoreUrlStmt = db.prepare("SELECT value FROM settings WHERE key = 'smartstore_url'");
   const openCountsStmt = db.prepare(`
     SELECT COALESCE(SUM(NOT (source GLOB 'naver_mail*' OR source GLOB 'gmail*') AND source != 'talktalk'), 0) AS inquiries,
       COALESCE(SUM(source GLOB 'naver_mail*' OR source GLOB 'gmail*'), 0) AS mails,
@@ -217,6 +218,9 @@ function createApp({
     res.locals.tab = null;
     // 관리자가 바꾼 수기 주문 채널 이름을 반영 (화면은 이 channelInfo 를 쓴다)
     res.locals.channelInfo = currentChannelInfo();
+    // 상품 페이지 링크 (스마트스토어는 관리자가 저장한 가게 주소로)
+    const storeRow = smartstoreUrlStmt.get();
+    res.locals.productUrl = order => productUrl(order, { smartstoreUrl: storeRow ? storeRow.value : null });
     // 주문 목록 위 팝업(iframe) 안에서 열린 화면이면 위쪽 메뉴 없이 내용만 보여준다
     res.locals.embed = req.get('sec-fetch-dest') === 'iframe' || req.query.embed === '1';
     res.locals.pendingCount =

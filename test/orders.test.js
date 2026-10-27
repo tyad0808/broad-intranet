@@ -479,3 +479,27 @@ test('최근 주문순: 채널마다 시각 모양이 달라도(+09:00 / Z) 실�
   const text = (await kim.request('/?view=all')).text;
   assert.ok(text.indexOf('수기주문') < text.indexOf('네이버주문'), '나중에 들어온 수기 주문이 위');
 });
+
+test('주문 상세: 상품 이름을 누르면 손님이 보는 상품 페이지(새 탭), 스마트스토어는 관리자가 저장한 가게 주소로', async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  const ins = db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, paid_at, channel_status, product_no)
+    VALUES (?, ?, ?, ?, '2026-10-27T01:00:00Z', 'PAYED', ?)`);
+  const ss = Number(ins.run('smartstore', 'S1', 'S1-1', '명함', '5551234567').lastInsertRowid);
+  const cp = Number(ins.run('coupang', 'C1', 'C1-1', '포맥스 출입금지 안내판', '7012345678').lastInsertRowid);
+  const gd = Number(ins.run('godo', 'G1', 'G1-1', '아크릴 명패', '1000701702').lastInsertRowid);
+  const none = Number(ins.run('coupang', 'C2', 'C2-1', '예전 주문', null).lastInsertRowid);
+  addUser(db, { email: 'boss@broad.test', role: 'admin' });
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  const page = async id => (await boss.request(`/orders/${id}`)).text;
+  assert.match(await page(cp), /href="https:\/\/www\.coupang\.com\/vp\/products\/7012345678" target="_blank" rel="noopener noreferrer" class="product-link"/);
+  assert.match(await page(gd), /href="https:\/\/broadstore\.co\.kr\/goods\/goods_view\.php\?goodsNo=1000701702"/);
+  assert.match(await page(ss), /href="https:\/\/smartstore\.naver\.com\/main\/products\/5551234567"/, '가게 주소를 저장하기 전');
+  assert.doesNotMatch(await page(none), /class="product-link"/, '상품 번호를 모르면 링크 없음');
+
+  await boss.submit('/admin/collect', '/admin/store-url', { smartstore_url: 'smartstore.naver.com/broad/' });
+  assert.match(await page(ss), /href="https:\/\/smartstore\.naver\.com\/broad\/products\/5551234567"/);
+  assert.match((await boss.request('/admin/collect')).text, /value="https:\/\/smartstore\.naver\.com\/broad"/);
+  await boss.submit('/admin/collect', '/admin/store-url', { smartstore_url: 'https://evil.example.com/x' });
+  assert.match(await page(ss), /smartstore\.naver\.com\/broad\/products/, '이상한 주소는 저장하지 않음');
+});

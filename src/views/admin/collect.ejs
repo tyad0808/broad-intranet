@@ -36,6 +36,16 @@
 </section>
 
 <section class="card">
+  <h2>스마트스토어 주소</h2>
+  <p class="muted">주문 상세에서 상품 이름을 누르면 손님이 보는 상품 페이지가 열려요. 스마트스토어는 우리 가게 주소가 있어야 정확히 열립니다. (쿠팡·자사몰은 따로 필요 없어요)</p>
+  <form method="post" action="/admin/store-url" class="row-edit">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>가게 주소 <input type="text" name="smartstore_url" value="<%= smartstoreUrl %>" placeholder="https://smartstore.naver.com/가게주소" maxlength="120"></label>
+    <button type="submit" class="btn-sm primary">저장</button>
+  </form>
+</section>
+
+<section class="card">
   <h2>최근 수집 기록</h2>
   <% if (runs.length === 0) { %>
     <p class="muted">아직 수집 기록이 없습니다.</p>

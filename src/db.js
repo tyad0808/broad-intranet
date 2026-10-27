@@ -83,6 +83,8 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'receiver_address_detail', 'TEXT');
   // 고객이 남긴 배송 메시지 (예: '문 앞에 놓아 주세요'). 채널에서 받아 오고, 수기 주문은 직접 적는다. 로젠 송장의 배송메세지(sndMsg)로도 보낸다
   addColumn(db, 'orders', 'ship_memo', 'TEXT');
+  // 채널의 상품 번호 (상품 페이지 링크용): 스마트스토어 productId, 쿠팡 productId, 자사몰 goodsNo
+  addColumn(db, 'orders', 'product_no', 'TEXT');
   // 톡톡: 직원이 붙이는 고객 메모(예: '실사-김대성'), 직원이 어디까지 읽었는지(chat_messages.id)
   addColumn(db, 'inquiries', 'cust_memo', 'TEXT');
   addColumn(db, 'inquiries', 'chat_read_id', 'INTEGER');

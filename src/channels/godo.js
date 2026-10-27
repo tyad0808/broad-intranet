@@ -190,6 +190,8 @@ function normalize(order, now = new Date()) {
       // 결제 금액: (상품가 + 옵션가 + 텍스트옵션가) × 수량 − 할인
       pay_amount: money(item.amount) !== null ? money(item.amount) - (money(item.discount) || 0) : null,
       ship_memo: shipMemo,
+      // 자사몰 상품 번호 (상품 페이지 링크: goods_view.php?goodsNo=번호)
+      product_no: item.goodsNo ? String(item.goodsNo) : null,
     };
   });
 }

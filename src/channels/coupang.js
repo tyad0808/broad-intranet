@@ -73,6 +73,8 @@ function normalize(sheet) {
       // 결제 금액 (orderPrice = 판매가 × 수량, 쿠팡이 준 값). 없으면 판매가 × 수량
       pay_amount: money(item.orderPrice) ?? (money(item.salesPrice) !== null ? money(item.salesPrice) * quantity : null),
       ship_memo: shipMemo,
+      // 쿠팡 상품 번호 (상품 페이지 링크: coupang.com/vp/products/번호)
+      product_no: item.productId ? String(item.productId) : null,
     };
   });
 }
