@@ -42,6 +42,8 @@ function normalize(sheet) {
   const map = STATUS_MAP[sheet.status] || { status: sheet.status || null, confirmed: 0 };
   const orderer = sheet.orderer || {};
   const receiver = sheet.receiver || {};
+  // 고객이 남긴 배송 메시지 (쿠팡 이름: parcelPrintMessage)
+  const shipMemo = String(sheet.parcelPrintMessage || '').trim().slice(0, 500) || null;
   const address = [receiver.postCode ? `(${receiver.postCode})` : null, receiver.addr1, receiver.addr2].filter(Boolean).join(' ') || null;
   return (sheet.orderItems || []).map(item => {
     // 취소가 끝나면 쿠팡이 출고 수량(shippingCount)을 0 으로 준다 (WING 주문상세의 '수량 0') → 취소된 상품
@@ -70,6 +72,7 @@ function normalize(sheet) {
       claim_status: holdCancel && !allCanceled ? 'CANCEL_REQUEST' : null,
       // 결제 금액 (orderPrice = 판매가 × 수량, 쿠팡이 준 값). 없으면 판매가 × 수량
       pay_amount: money(item.orderPrice) ?? (money(item.salesPrice) !== null ? money(item.salesPrice) * quantity : null),
+      ship_memo: shipMemo,
     };
   });
 }

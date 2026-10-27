@@ -162,6 +162,8 @@ function normalize(order, now = new Date()) {
   const receiver = order.receiver || {};
   const address = [receiver.zipcode ? `(${receiver.zipcode})` : null, receiver.address, receiver.addressDetail]
     .filter(Boolean).join(' ') || null;
+  // 배송 메시지: 자사몰 API 의 칸 이름을 아직 확인하지 못해 흔히 쓰는 이름을 차례로 본다 (없으면 비워 둠)
+  const shipMemo = String(receiver.memo || receiver.message || order.orderMemo || order.shippingMemo || order.memo || '').trim().slice(0, 500) || null;
   return (order.items || []).map(item => {
     const map = mapStatus(item.status || order.status, Boolean(item.shippedAt), { stale });
     const size = item.sizeW && item.sizeH ? `${item.sizeW}x${item.sizeH}mm` : null;
@@ -187,6 +189,7 @@ function normalize(order, now = new Date()) {
       channel_status_label: item.statusName || order.statusName || null,
       // 결제 금액: (상품가 + 옵션가 + 텍스트옵션가) × 수량 − 할인
       pay_amount: money(item.amount) !== null ? money(item.amount) - (money(item.discount) || 0) : null,
+      ship_memo: shipMemo,
     };
   });
 }

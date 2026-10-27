@@ -150,6 +150,23 @@ test('실제 서버: LOGEN_WRITE 가 꺼져 있으면 등록을 하나도 보내
   assert.strictEqual(row.rcvCustNm, '고객1');
   assert.strictEqual(row.rcvTelNo, '01011112222');
   assert.strictEqual(row.rcvCellNo, '01011112222');
+  assert.strictEqual(row.sndMsg, '', '배송 메시지가 없으면 빈칸');
+
+  // 배송 메시지: 실제 서버에는 그대로, 개발 서버에는 연습 문구로
+  const on4 = fakeClient('prod');
+  const db4 = openDb(':memory:');
+  const live4 = await ready(db4, on4, { gapMs: 0 });
+  const [id4] = seedOrders(db4, 1);
+  db4.prepare("UPDATE orders SET ship_memo = '공동현관 1234# 문 앞'").run();
+  await live4.register(groupsFor(db4, [id4]), null);
+  assert.strictEqual(on4.calls.find(c => c.name === 'registerOrderData').rows[0].sndMsg, '공동현관 1234# 문 앞');
+  const dev = fakeClient();
+  const db3 = openDb(':memory:');
+  const devLogen = await ready(db3, dev, { gapMs: 0 });
+  const [devId] = seedOrders(db3, 1);
+  db3.prepare("UPDATE orders SET ship_memo = '공동현관 1234# 문 앞'").run();
+  await devLogen.register(groupsFor(db3, [devId]), null);
+  assert.strictEqual(dev.calls.find(c => c.name === 'registerOrderData').rows[0].sndMsg, '문 앞 (연습)');
 });
 
 test('배송 조회: 단계를 시간 순으로 저장하고, 5분 안에 다시 누르면 로젠에 다시 묻지 않는다', async () => {

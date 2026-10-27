@@ -69,8 +69,8 @@ function manualRoutes(db, notifier) {
     const insert = db.prepare(`
       INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
         buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-        stage_id, assignee_id, due_date, memo, pay_method, amount, depositor, source_id, source_order_no, receiver_address_detail)
-      VALUES (?, ?, ?, 'main', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        stage_id, assignee_id, due_date, memo, pay_method, amount, depositor, source_id, source_order_no, receiver_address_detail, ship_memo)
+      VALUES (?, ?, ?, 'main', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const ids = transaction(db, () => {
       const created = input.items.map((it, n) => Number(insert.run(
@@ -78,7 +78,7 @@ function manualRoutes(db, notifier) {
         input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address,
         nowIso, input.pay_status === 'paid' ? 'PAYED' : 'PAYMENT_WAITING',
         stageNew, input.assignee_id, input.due_date, input.memo, input.pay_method, input.amount, input.depositor,
-        input.source_id, input.source_order_no, input.receiver_address_detail
+        input.source_id, input.source_order_no, input.receiver_address_detail, input.ship_memo
       ).lastInsertRowid));
       const order = { channel_order_id: orderId };
       const items = created.map(id => findOrder(id));
@@ -131,12 +131,12 @@ function manualRoutes(db, notifier) {
     }
     transaction(db, () => {
       db.prepare(`
-        UPDATE orders SET buyer_name = ?, buyer_phone = ?, receiver_name = ?, receiver_phone = ?, receiver_address = ?, receiver_address_detail = ?,
+        UPDATE orders SET buyer_name = ?, buyer_phone = ?, receiver_name = ?, receiver_phone = ?, receiver_address = ?, receiver_address_detail = ?, ship_memo = ?,
           pay_method = ?, amount = ?, depositor = ?, assignee_id = ?, due_date = ?, memo = ?,
           source_id = ?, source_order_no = ?,
           version = version + 1, updated_at = datetime('now')
         WHERE channel = ? AND channel_order_id = ?
-      `).run(input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address, input.receiver_address_detail,
+      `).run(input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address, input.receiver_address_detail, input.ship_memo,
         input.pay_method, input.amount, input.depositor, input.assignee_id, input.due_date, input.memo,
         input.source_id, input.source_order_no,
         CHANNEL, order.channel_order_id);
@@ -147,10 +147,10 @@ function manualRoutes(db, notifier) {
         INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
           buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
           stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id,
-          source_id, source_order_no, receiver_address_detail)
+          source_id, source_order_no, receiver_address_detail, ship_memo)
         SELECT channel, channel_order_id, ?, 'main', ?, ?, ?, buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address,
           paid_at, channel_status, 1, stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id,
-          source_id, source_order_no, receiver_address_detail
+          source_id, source_order_no, receiver_address_detail, ship_memo
         FROM orders WHERE id = ?
       `);
       let seq = Math.max(0, ...items.map(i => Number(String(i.channel_item_id).split('-').pop()) || 0));
@@ -358,6 +358,7 @@ function parseInput(body, { designerIds, sourceIds = new Set(), isNew, itemIds =
     // 주소 = 기본주소(검색) + 상세주소(동·호수), 한 줄로
     receiver_address: [text(body.receiver_address, 250), text(body.receiver_address_detail, 50)].filter(Boolean).join(' ').slice(0, 300) || null,
     receiver_address_detail: text(body.receiver_address_detail, 50) || null,
+    ship_memo: text(body.ship_memo, 500),
     pay_method: payMethod,
     pay_status: body.pay_status === 'paid' ? 'paid' : 'waiting',
     amount: amountText ? Number(amountText) : null,

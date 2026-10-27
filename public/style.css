@@ -333,6 +333,9 @@ form.inline { display: inline; margin: 0; }
 .claim-badge { background: var(--error); color: #fff; }
 .claim-badge.done { background: var(--muted); }
 .today-badge { background: var(--primary-weak); color: var(--primary-dark); }
+/* 배송 메시지: 목록에서는 짧게(전체는 마우스를 올리면), 상세에서는 그대로 */
+.memo-chip { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-height: 28px; padding: 2px 9px; border-radius: 7px; background: var(--notice-bg); color: var(--text-2); font-size: 14px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.ship-memo { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
 .clip { color: var(--muted); font-size: 14px; font-weight: 500; }
 
 /* 채널 표시: 색 네모 + 한 글자 */

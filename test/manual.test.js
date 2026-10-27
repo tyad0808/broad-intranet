@@ -263,6 +263,24 @@ test('배송지: 기본주소(검색) + 상세주소를 한 줄로 저장하고,
   assert.strictEqual(ctx.rows().find(r => r.receiver_address === '(11407) 경기 양주시 평화로 1').receiver_address_detail, null);
 });
 
+test('배송 메시지: 수기 주문에 적으면 저장되고, 상세·목록·발주서에 보이고, 고칠 수 있다', async t => {
+  const ctx = await setup(t);
+  await create(ctx, { ship_memo: '  부재 시 경비실에 맡겨 주세요 ' });
+  const row = ctx.rows()[0];
+  assert.strictEqual(row.ship_memo, '부재 시 경비실에 맡겨 주세요');
+  assert.ok(ctx.rows().every(r => r.ship_memo === row.ship_memo), '같은 주문의 상품 모두');
+  assert.match((await ctx.kim.request(`/orders/${row.id}`)).text, /배송 메시지<\/dt><dd><span class="ship-memo">💬 부재 시 경비실에 맡겨 주세요/);
+  assert.match((await ctx.kim.request('/?view=all')).text, /class="memo-chip" title="배송 메시지: 부재 시 경비실에 맡겨 주세요"/);
+  assert.match((await ctx.kim.request(`/orders/${row.id}/print`)).text, /배송 메시지<\/dt><dd><strong>부재 시 경비실에 맡겨 주세요/);
+  const page = (await ctx.kim.request(`/orders/${row.id}/manual-edit`)).text;
+  assert.match(page, /name="ship_memo" value="부재 시 경비실에 맡겨 주세요"/);
+  const version = Number(page.match(/name="version" value="(\d+)"/)[1]);
+  await ctx.kim.submit(`/orders/${row.id}/manual-edit`, `/orders/${row.id}/manual-edit`, {
+    ...FORM, item_id: ctx.rows().map(r => String(r.id)).concat(''), item_name: ['현수막 3000x900', '거치대', ''], ship_memo: '', version: String(version),
+  });
+  assert.ok(ctx.rows().every(r => r.ship_memo === null), '비우면 지워진다');
+});
+
 test('수기 주문 삭제: 상품·처리 기록·알림까지 통째로 지우고, 채널 주문은 못 지운다', async t => {
   const ctx = await setup(t);
   await create(ctx);

@@ -71,6 +71,7 @@
           <dt>받는 분</dt><dd><%= o.receiver_name || '-' %></dd>
           <dt>연락처</dt><dd><%= o.receiver_phone || '-' %></dd>
           <dt>주소</dt><dd><%= o.receiver_address || '-' %></dd>
+          <% if (o.ship_memo) { %><dt>배송 메시지</dt><dd><strong><%= o.ship_memo %></strong></dd><% } %>
         </dl>
       </section>
     </div>

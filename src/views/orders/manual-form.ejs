@@ -56,6 +56,8 @@
         </div>
         <label for="receiver_address_detail" class="addr-detail-label">상세주소 <span class="muted small">(동·호수 등, 없으면 비워 두세요)</span></label>
         <input type="text" id="receiver_address_detail" name="receiver_address_detail" value="<%= v.receiver_address_detail || '' %>" maxlength="50" placeholder="예: 101동 1004호">
+        <label for="ship_memo" class="addr-detail-label">배송 메시지 <span class="muted small">(로젠 송장에도 찍혀요, 없으면 비워 두세요)</span></label>
+        <input type="text" id="ship_memo" name="ship_memo" value="<%= v.ship_memo || '' %>" maxlength="500" placeholder="예: 부재 시 문 앞에 놓아 주세요">
         <div class="addr-layer" data-addr-layer hidden>
           <div class="addr-layer-head"><strong>주소 검색</strong><button type="button" class="btn-sm" data-addr-close>닫기</button></div>
           <div class="addr-box" data-addr-box></div>

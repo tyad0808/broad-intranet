@@ -29,6 +29,9 @@ function utcIso(value) {
 
 const money = v => (v === null || v === undefined || v === '' || !Number.isFinite(Number(v)) ? null : Math.round(Number(v)));
 
+// 배송 메시지: 앞뒤 빈칸을 지우고 500자까지 (로젠 배송메세지 칸 길이)
+const memo = v => String(v || '').trim().slice(0, 500) || null;
+
 function normalize(item) {
   const order = item.order || {};
   const po = item.productOrder || {};
@@ -60,6 +63,8 @@ function normalize(item) {
     ship_delayed: po.delayedDispatchReason || null,
     // 이 상품주문의 결제 금액 (할인 뒤, 배송비 제외)
     pay_amount: money(po.totalPaymentAmount),
+    // 고객이 주문할 때 남긴 배송 메모 (예: 부재 시 문 앞)
+    ship_memo: memo(po.shippingMemo),
   };
 }
 

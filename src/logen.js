@@ -153,6 +153,8 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
       dlvFare: s.box.fare,
       goodsNm: clip(`${main.product_name}${items.length > 1 ? ` 외 ${items.length - 1}건` : ''}`, 200),
       goodsOpt: clip(main.option_text, 200),
+      // 배송메세지 (송장에 찍힘). 개발 서버에는 실제 메시지 대신 연습 문구
+      sndMsg: practice ? (main.ship_memo ? '문 앞 (연습)' : '') : clip(main.ship_memo, 500),
       inQty: Math.min(qty, 999),
     };
   }

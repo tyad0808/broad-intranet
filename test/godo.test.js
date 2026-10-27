@@ -43,8 +43,10 @@ test('자사몰 주문 → 인트라넷 주문: 추가상품은 묶음 안 추�
     buyer_name: '홍길동', receiver_name: '김수령', receiver_phone: '010-3333-4444',
     receiver_address: '(06236) 서울 강남구 테헤란로 1 2층', paid_at: '2026-10-17T10:01:00+09:00',
     channel_status: 'PAYED', channel_confirmed: 0, claim_type: null, claim_status: null, channel_status_label: '결제완료',
-    pay_amount: 23000,
+    pay_amount: 23000, ship_memo: null,
   });
+  // 배송 메시지가 있으면 받아 온다 (자사몰 칸 이름은 몇 가지를 차례로 본다)
+  assert.strictEqual(normalize(mallOrder(1, 'p1', { orderMemo: '빠른 배송 부탁드려요' }))[0].ship_memo, '빠른 배송 부탁드려요');
   assert.strictEqual(addon.item_type, 'addon');
   assert.strictEqual(addon.channel_order_id, main.channel_order_id);
 });

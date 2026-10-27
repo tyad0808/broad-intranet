@@ -156,6 +156,7 @@
       <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
       <dt>연락처</dt><dd><% if (order.receiver_phone) { %><a href="tel:<%= order.receiver_phone %>"><%= order.receiver_phone %></a><% } else { %>-<% } %></dd>
       <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
+      <dt>배송 메시지</dt><dd><% if (order.ship_memo) { %><span class="ship-memo">💬 <%= order.ship_memo %></span><% } else { %><span class="muted">없음</span><% } %></dd>
       <dt>채널</dt><dd><%= c.name %></dd>
       <dt>주문번호</dt><dd><%= order.channel_order_id %></dd>
       <% if (isManual) { %>
