@@ -1399,3 +1399,9 @@ body.no-sidebar .card.narrow .muted { margin: 16px 0 0; text-align: center; }
 .sound-upload input[type=file] { width: auto; max-width: 230px; margin: 0; font-size: 14px; }
 .sound-row .btn-sm { min-height: 38px; }
 .sound-upload [hidden] { display: none; }
+
+/* 주문 상세: 작업 파일 이름 한 줄 + 복사 */
+.file-label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0 0; }
+.file-label code { padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--text); font-family: inherit; font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; user-select: all; }
+.file-label .btn-sm { min-height: 34px; }
+.file-label .btn-sm.copied { border-color: var(--ok); color: var(--ok); }

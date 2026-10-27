@@ -21,6 +21,12 @@
     { k: '발송', v: shipped ? short(shipped.shipped_at) : canceled ? '취소' : shipDueText || '대기', done: Boolean(shipped) },
   ];
   const nowIdx = canceled ? -1 : steps.findIndex(s => !s.done);
+  // 작업 파일 이름용 요약: 채널_날짜_구매자(받는 분). 받는 분이 같으면 괄호는 뺀다. 파일 이름에 못 쓰는 글자는 지운다
+  const clean = t => String(t || '').replace(/[\\/:*?"<>|_\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const buyer = clean(order.buyer_name || order.receiver_name) || '이름없음';
+  const receiver = clean(order.receiver_name);
+  const fileLabel = [clean(isManual && sourceName ? sourceName : c.name), kst(order.paid_at).slice(0, 10).replace(/-/g, ''),
+    `${buyer}${receiver && receiver !== buyer ? `(${receiver})` : ''}`].join('_');
 %>
 <% if (!locals.embed) { %>
   <p class="back-row"><a href="<%= back %>" class="btn-back">← 목록으로</a></p>
@@ -35,6 +41,8 @@
       <% if (canceled) { %><span class="st-badge sb-cancel">취소</span><% } %>
     </p>
     <h1 class="detail-title"><%= items[0].product_name %><% if (items.length > 1) { %> <span class="muted">외 <%= items.length - 1 %>개</span><% } %></h1>
+    <%# 작업 파일 이름 만들 때 그대로 붙여 넣는 한 줄 %>
+    <p class="file-label"><code title="작업 파일 이름용"><%= fileLabel %></code><button type="button" class="btn-sm" data-copy="<%= fileLabel %>">📋 복사</button></p>
   </div>
   <div class="page-actions">
     <a class="btn-sm" href="/orders/<%= order.id %>/print" target="_blank" rel="noopener">🖨 발주서 출력</a>

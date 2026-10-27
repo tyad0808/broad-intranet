@@ -65,3 +65,31 @@ document.addEventListener('click', event => {
   }
 });
 syncBulkBar();
+
+// [📋 복사]: data-copy 의 글자를 클립보드로 (작업 파일 이름 등). 잠깐 '복사됨 ✓' 으로 바뀐다
+document.addEventListener('click', async event => {
+  const button = event.target.closest('[data-copy]');
+  if (!button) return;
+  const text = button.dataset.copy;
+  let ok = false;
+  try {
+    await navigator.clipboard.writeText(text);
+    ok = true;
+  } catch {
+    // 클립보드를 못 쓰는 환경: 잠깐 글상자를 만들어 복사
+    const box = document.createElement('textarea');
+    box.value = text;
+    box.setAttribute('readonly', '');
+    box.style.position = 'fixed';
+    box.style.opacity = '0';
+    document.body.appendChild(box);
+    box.select();
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    box.remove();
+  }
+  const before = button.dataset.label || button.textContent;
+  button.dataset.label = before;
+  button.textContent = ok ? '복사됨 ✓' : '복사 실패';
+  button.classList.toggle('copied', ok);
+  setTimeout(() => { button.textContent = before; button.classList.remove('copied'); }, 1500);
+});

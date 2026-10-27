@@ -503,3 +503,19 @@ test('주문 상세: 상품 이름을 누르면 손님이 보는 상품 페이�
   await boss.submit('/admin/collect', '/admin/store-url', { smartstore_url: 'https://evil.example.com/x' });
   assert.match(await page(ss), /smartstore\.naver\.com\/broad\/products/, '이상한 주소는 저장하지 않음');
 });
+
+test('주문 상세: 작업 파일 이름용 한 줄 (채널_날짜_구매자(받는 분)) + 복사 버튼', async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  const ins = db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, buyer_name, receiver_name, paid_at, channel_status)
+    VALUES (?, ?, ?, '스티커', ?, ?, ?, 'PAYED')`);
+  const a = Number(ins.run('smartstore', 'S1', 'S1-1', '홍서연', '중랑아트센터', '2026-10-27T09:02:00Z').lastInsertRowid);
+  const b = Number(ins.run('coupang', 'C1', 'C1-1', '문일식', '문일식', '2026-10-26T16:30:00Z').lastInsertRowid);
+  const c = Number(ins.run('godo', 'G1', 'G1-1', '김/대:성', null, '2026-10-27T01:00:00Z').lastInsertRowid);
+  addUser(db, { email: 'kim@broad.test' });
+  const kim = await loginAs(baseUrl, 'kim@broad.test');
+  const label = async id => /<p class="file-label"><code[^>]*>([^<]+)<\/code><button type="button" class="btn-sm" data-copy="([^"]+)"/.exec((await kim.request(`/orders/${id}`)).text).slice(1);
+  assert.deepStrictEqual(await label(a), ['스마트스토어_20261027_홍서연(중랑아트센터)', '스마트스토어_20261027_홍서연(중랑아트센터)']);
+  assert.deepStrictEqual((await label(b))[0], '쿠팡_20261027_문일식', '한국 시간 날짜, 받는 분이 같으면 괄호 없음');
+  assert.deepStrictEqual((await label(c))[0], '자사몰_20261027_김 대 성', '파일 이름에 못 쓰는 글자는 뺀다');
+});
