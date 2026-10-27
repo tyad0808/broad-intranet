@@ -1007,6 +1007,16 @@ body.in-pane .detail .detail-side { order: 0; }
 .toast strong { display: block; margin-bottom: 2px; }
 .toast-unassigned_over { box-shadow: inset 4px 0 0 #9cc3ff, var(--shadow-pop); }
 .toast-signup { box-shadow: inset 4px 0 0 #34c77b, var(--shadow-pop); }
+/* 알림 종류마다 왼쪽 색 띠 + 이름표: 주문 파랑 · 톡톡 초록 · 메일 보라 · 문의 하늘 */
+.toast-new_order { box-shadow: inset 5px 0 0 #4b8bff, var(--shadow-pop); }
+.toast-new_chat { box-shadow: inset 5px 0 0 #2fc76e, var(--shadow-pop); }
+.toast-new_mail { box-shadow: inset 5px 0 0 #a58bff, var(--shadow-pop); }
+.toast-new_inquiry { box-shadow: inset 5px 0 0 #5fc3e4, var(--shadow-pop); }
+.toast-kind { display: inline-block; margin-right: 6px; padding: 0 7px; border-radius: 5px; background: rgba(255, 255, 255, 0.14); font-size: 14px; font-weight: 600; line-height: 22px; }
+.toast-new_order .toast-kind { background: rgba(75, 139, 255, 0.3); }
+.toast-new_chat .toast-kind { background: rgba(47, 199, 110, 0.3); }
+.toast-new_mail .toast-kind { background: rgba(165, 139, 255, 0.3); }
+.toast-new_inquiry .toast-kind { background: rgba(95, 195, 228, 0.3); }
 .toast-close { position: absolute; top: 8px; right: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; color: rgba(255, 255, 255, 0.6); font-size: 18px; line-height: 28px; }
 .toast-close:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
 @keyframes toast-in { from { transform: translateY(-8px); opacity: 0; } to { transform: none; opacity: 1; } }

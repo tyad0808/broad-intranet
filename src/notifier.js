@@ -52,7 +52,7 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
 
   // 새 메일·새 문의 알림: 그 칸 알림을 끈 직원에게는 보내지 않는다
   function inboxNew(box, payload) {
-    notify(box === 'mail' ? 'new_mail' : 'new_inquiry', payload, boxReceivers(box));
+    notify(box === 'mail' ? 'new_mail' : box === 'chat' ? 'new_chat' : 'new_inquiry', payload, boxReceivers(box));
   }
 
   // 주문 목록·카드를 보고 있는 화면들에게 "다시 불러오라" 고 알린다

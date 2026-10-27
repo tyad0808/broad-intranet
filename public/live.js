@@ -15,21 +15,29 @@
   document.addEventListener('pointerdown', wakeAudio, { once: false });
   document.addEventListener('keydown', wakeAudio, { once: false });
 
-  function beep() {
+  // 알림 종류마다 소리가 다르다: [높이(Hz), 시작(초), 길이(초)] 들 + 음색
+  //   주문 '딩-동' · 톡톡 '톡톡'(짧게 두 번) · 메일 '띵~'(한 번 길게) · 쇼핑몰 문의 '동-딩'(올라감)
+  const SOUNDS = {
+    new_order: { wave: 'sine', notes: [[880, 0, 0.35], [660, 0.18, 0.35]] },
+    new_chat: { wave: 'triangle', notes: [[1320, 0, 0.09], [1320, 0.13, 0.09]] },
+    new_mail: { wave: 'sine', notes: [[523, 0, 0.7]] },
+    new_inquiry: { wave: 'sine', notes: [[660, 0, 0.3], [880, 0.16, 0.35]] },
+  };
+  function beep(type) {
     if (!audio || audio.state !== 'running') return;
-    // '딩-동' 두 음
-    [[880, 0], [660, 0.18]].forEach(([freq, delay]) => {
+    const sound = SOUNDS[type] || SOUNDS.new_order;
+    sound.notes.forEach(([freq, delay, len]) => {
       const osc = audio.createOscillator();
       const gain = audio.createGain();
       osc.frequency.value = freq;
-      osc.type = 'sine';
+      osc.type = sound.wave;
       const t = audio.currentTime + delay;
       gain.gain.setValueAtTime(0.0001, t);
       gain.gain.exponentialRampToValueAtTime(0.25, t + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + len);
       osc.connect(gain).connect(audio.destination);
       osc.start(t);
-      osc.stop(t + 0.4);
+      osc.stop(t + len + 0.05);
     });
   }
 
@@ -39,12 +47,21 @@
   stack.setAttribute('aria-live', 'polite');
   document.body.appendChild(stack);
 
+  const TOAST_KINDS = { new_order: '🛒 주문', new_chat: '💬 톡톡', new_mail: '✉️ 메일', new_inquiry: '❓ 문의' };
   function toast({ type, title, body, url }) {
     const el = document.createElement(url ? 'a' : 'div');
     el.className = `toast toast-${type}`;
     if (url) el.href = url;
     const strong = document.createElement('strong');
-    strong.textContent = title;
+    // 종류 표시 (주문·톡톡·메일·문의): 색 띠와 함께 한눈에 구분
+    const kind = TOAST_KINDS[type];
+    if (kind) {
+      const tag = document.createElement('span');
+      tag.className = 'toast-kind';
+      tag.textContent = kind;
+      strong.append(tag);
+    }
+    strong.append(title);
     const p = document.createElement('div');
     p.textContent = body || '';
     const close = document.createElement('button');
@@ -86,7 +103,9 @@
     if (document.visibilityState === 'visible' && document.hasFocus()) return;
     const icon = document.querySelector('link[rel="icon"]');
     // 인트라넷 탭을 여러 개 열어 두어도 같은 소식은 한 번만 (같은 tag 는 하나로 합쳐진다)
-    const n = new Notification(title, { body, tag: `${type}:${title}:${body}`.slice(0, 200), icon: icon ? icon.href : undefined });
+    // 윈도우 알림 제목 앞에도 종류 그림 (🛒·💬·✉️·❓)
+    const kind = TOAST_KINDS[type];
+    const n = new Notification(kind ? `${kind.split(' ')[0]} ${title}` : title, { body, tag: `${type}:${title}:${body}`.slice(0, 200), icon: icon ? icon.href : undefined });
     n.onclick = () => {
       window.focus();
       if (url) location.href = url;
@@ -214,7 +233,7 @@
   source.addEventListener('notify', e => {
     const data = JSON.parse(e.data);
     toast(data);
-    beep();
+    beep(data.type);
     systemNotify(data);
   });
 

@@ -53,3 +53,18 @@ test('새 메일·새 문의 알림은 따로, 그 칸을 끈 직원에게는 �
   const notes = sent.filter(s => s.type);
   assert.deepStrictEqual(notes, [{ type: 'new_mail', to: [all] }, { type: 'new_inquiry', to: [all, noMail] }]);
 });
+
+test('새 톡톡은 주문·메일·문의와 다른 종류(new_chat)로 알리고, 톡톡 알림을 끈 직원에게는 보내지 않는다', () => {
+  const db = openDb(':memory:');
+  const add = (email, off) => {
+    const id = addUser(db, { email });
+    db.prepare('UPDATE users SET notify_off = ? WHERE id = ?').run(off, id);
+    return id;
+  };
+  const all = add('all@broad.test', '[]');
+  const noChat = add('nochat@broad.test', '["chat"]');
+  const sent = [];
+  const hub = { send: (event, data, canReceive) => sent.push({ type: data.type, to: [all, noChat].filter(id => canReceive(id)) }), add() {} };
+  createNotifier({ db, hub }).inboxNew('chat', { title: '새 톡톡', body: '안녕하세요' });
+  assert.deepStrictEqual(sent, [{ type: 'new_chat', to: [all] }]);
+});
