@@ -12,6 +12,8 @@ const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPerio
 const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
 // 위쪽 큰 탭: 쇼핑몰 문의 / 메일 / 채팅 (섞여 있으면 헷갈려서 나눈다)
 const BOXES = { shop: '쇼핑몰 문의', mail: '메일', chat: '채팅' };
+// 화면 제목 = 왼쪽 메뉴 이름
+const PAGE_TITLES = { shop: '문의함', mail: '메일함', chat: '톡톡' };
 const isChatSource = source => source === 'talktalk';
 const boxOf = source => (isMailSource(source) ? 'mail' : isChatSource(source) ? 'chat' : 'shop');
 // 메일 출처: naver_mail, naver_mail2, gmail … (계정을 늘려도 그대로)
@@ -88,8 +90,8 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const shown = Object.keys(BOXES).filter(b => b !== 'chat' || Object.keys(sourceLabels).some(isChatSource)
       || db.prepare(`SELECT 1 FROM inquiries q WHERE ${CHAT_SQL} LIMIT 1`).get());
     const boxOrder = userBoxOrder(req.user).filter(b => shown.includes(b));
-    // 왼쪽 메뉴가 '문의함'(쇼핑몰 문의·채팅)과 '메일함'(/inbox?box=mail)으로 나뉜다. 그냥 /inbox 는 문의함의 첫 탭
-    const inquiryBoxes = boxOrder.filter(b => b !== 'mail');
+    // 왼쪽 메뉴가 '문의함'(쇼핑몰 문의), '톡톡'(/inbox?box=chat), '메일함'(/inbox?box=mail)으로 나뉜다. 그냥 /inbox 는 문의함
+    const inquiryBoxes = boxOrder.filter(b => b !== 'mail' && b !== 'chat');
     const box = src ? boxOf(src) : shown.includes(req.query.box) ? req.query.box : inquiryBoxes[0];
     const boxSql = b => BOX_SQL[b];
 
@@ -158,8 +160,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     try { lastRun = JSON.parse((db.prepare("SELECT value FROM settings WHERE key = 'inbox_last_run'").get() || {}).value || 'null'); } catch { lastRun = null; }
 
     res.render('inbox/list', {
-      title: box === 'mail' ? '메일함' : '문의함',
-      navSection: box === 'mail' ? 'mail' : 'inbox',
+      title: PAGE_TITLES[box] || '문의함',
+      navSection: box === 'mail' || box === 'chat' ? box : 'inbox',
+      pageTitle: PAGE_TITLES[box] || '문의함',
       inquiryBoxes,
       rows, tab, defaultTab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
       hl: text => highlightParts(text, terms), otherHits,
@@ -284,7 +287,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       title: inquiry.subject || '문의',
       templates,
       customer: { orders: custOrders.orders, nameOrders: custOrders.nameOrders, inquiries: [], nameInquiries: [], total: 1 },
-      navSection: isMailSource(inquiry.source) ? 'mail' : 'inbox',
+      navSection: boxOf(inquiry.source) === 'shop' ? 'inbox' : boxOf(inquiry.source),
       inquiry, attachments, replies, staff: staff(),
       canOpenFiles: Boolean(files[inquiry.source]),
       isMail: isMailSource(inquiry.source),
@@ -294,7 +297,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       label: labelOf(inquiry.source),
       mode: modeOf(inquiry.source),
       STATUS_LABELS,
-      back: safeBack(req.query.back),
+      back: safeBack(req.query.back, boxOf(inquiry.source) === 'shop' ? '/inbox' : `/inbox?box=${boxOf(inquiry.source)}`),
     });
   });
 
@@ -430,9 +433,9 @@ function userBoxOrder(user) {
 }
 
 // 돌아갈 주소는 문의함 목록만 허용
-function safeBack(value) {
+function safeBack(value, fallback = '/inbox') {
   const v = String(value || '');
-  return /^\/inbox(\?[^\s]*)?$/.test(v) ? v : '/inbox';
+  return /^\/inbox(\?[^\s]*)?$/.test(v) ? v : fallback;
 }
 
 module.exports = { inboxRoutes, TABS, withRo };

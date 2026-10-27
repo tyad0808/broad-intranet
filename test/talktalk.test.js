@@ -22,7 +22,7 @@ test('고객 말 → 미답변 대화방 + 주도권 넘기기, 파트너센터 
   const passed = [];
   const client = { passThread: async (user, partner) => { passed.push([user, partner]); } };
   const notes = [];
-  const notifier = { inboxChanged: () => notes.push('changed'), notify: (type, n) => notes.push(n.title) };
+  const notifier = { inboxChanged: () => notes.push('changed'), notify: (type, n) => notes.push(n.title), inboxNew: (box, n) => notes.push(n.title) };
   const handle = createTalktalkHandler({ db, notifier, client, partnerId: 'wc1234', now: () => new Date('2026-10-20T01:00:00Z') });
   handle(send('userAbcd1234', '명함 오늘 출발 되나요?'));
   const row = () => ({ ...db.prepare("SELECT id, status, subject, from_name FROM inquiries WHERE source = 'talktalk'").get() });
@@ -50,7 +50,7 @@ test('톡톡 보내기 API: 주도권 넘기기 요청 모양, 키 없으면 보
   await assert.rejects(createTalktalkClient({ authKey: 'k', fetchFn: bad }).passThread('u1'), /코드 01/);
 });
 
-test('비밀 주소로 받은 톡톡이 💬 채팅 탭에 말풍선으로, 답장은 파트너센터 안내, 다른 주소의 사진은 열지 않음', async t => {
+test('비밀 주소로 받은 톡톡이 왼쪽 메뉴 톡톡에 말풍선으로, 답장은 파트너센터 안내, 다른 주소의 사진은 열지 않음', async t => {
   let handle;
   const ctx = await startServer({ inbox: { sourceLabels: { talktalk: '톡톡' }, talktalk: { token: TOKEN, handle: ev => handle(ev) } } });
   t.after(() => ctx.server.close());
@@ -62,14 +62,19 @@ test('비밀 주소로 받은 톡톡이 💬 채팅 탭에 말풍선으로, 답�
   addUser(ctx.db, { email: 'kim@broad.test' });
   const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   const list = (await kim.request('/inbox?box=chat')).text;
-  assert.match(list, /data-key="chat"[^>]*>\s*채팅/);
+  assert.match(list, /<h1 class="page-title">톡톡<\/h1>/);
+  assert.match(list, /href="\/inbox\?box=chat" class="on">.*<span>톡톡 <span class="badge">1<\/span>/, '왼쪽 메뉴 톡톡 칸 + 미답변 숫자');
+  assert.doesNotMatch(list, /data-key="chat"/, '문의함 안의 채팅 탭은 없다');
   assert.match(list, /톡톡 고객 9999/);
   const id = ctx.db.prepare("SELECT id FROM inquiries WHERE source = 'talktalk'").get().id;
   const detail = (await kim.request(`/inbox/${id}`)).text;
   assert.match(detail, /class="chat-msg in">\s*<div class="chat-text">현수막 문의요/);
   assert.match(detail, /톡톡 파트너센터 열기/);
+  assert.match(detail, /href="\/inbox\?box=chat" class="btn-back">← 톡톡으로/);
   assert.doesNotMatch(detail, /action="\/inbox\/\d+\/reply"/, '1단계에서는 인트라넷 답장 칸이 없다');
   const mid = ctx.db.prepare("SELECT id FROM chat_messages WHERE kind = 'image'").get().id;
   assert.strictEqual((await kim.request(`/inbox/${id}/chat-image/${mid}`)).status, 404);
-  assert.doesNotMatch((await kim.request('/inbox?box=shop')).text, /톡톡 고객/, '쇼핑몰 문의 탭에는 안 나옴');
+  const shop = (await kim.request('/inbox')).text;
+  assert.doesNotMatch(shop, /톡톡 고객/, '문의함에는 안 나옴');
+  assert.match(shop, /<span>문의함<\/span>/, '문의함 숫자에 톡톡은 세지 않음');
 });

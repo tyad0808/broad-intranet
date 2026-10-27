@@ -35,7 +35,7 @@
     <% brand.navOrder.forEach((key, i) => { %>
       <li class="row">
         <span class="order"><%= i + 1 %></span>
-        <span class="row-main"><strong><%= NAV_ITEMS[key] %></strong></span>
+        <span class="row-main"><strong><%= NAV_ITEMS[key] %></strong><% if (key === 'chat' && !chatOn) { %> <span class="muted small">(톡톡을 연결하면 보여요)</span><% } %></span>
         <span class="row-actions">
           <% [['up', '↑ 위로', i === 0], ['down', '↓ 아래로', i === brand.navOrder.length - 1]].forEach(([dir, label, off]) => { %>
             <form method="post" action="/admin/brand/nav" class="inline">

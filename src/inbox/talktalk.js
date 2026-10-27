@@ -96,7 +96,7 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
       const r = record(user, 'in', messageOf(ev), 'customer');
       if (notifier) {
         notifier.inboxChanged();
-        notifier.notify('new_inquiry', { title: '새 톡톡', body: r.preview, url: `/inbox/${r.id}` }, () => true);
+        notifier.inboxNew('chat', { title: '새 톡톡', body: r.preview, url: `/inbox/${r.id}` });
       }
       // 주도권이 아직 챗봇(인트라넷)에 있으면 파트너센터로 넘긴다 (standby 면 이미 파트너센터에 있음)
       if (client && !(ev.options && ev.options.standby)) {

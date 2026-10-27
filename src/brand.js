@@ -6,10 +6,18 @@ const { getSetting, setSetting } = require('./collector');
 
 const DEFAULT_NAME = '통합 어드민(브로애드)';
 // 왼쪽 메뉴 (관리자는 늘 맨 아래). 순서는 관리자 > 회사·로고 에서 바꾼다
-const NAV_ITEMS = { orders: '주문', mail: '메일함', inbox: '문의함', schedule: '일정' };
-const DEFAULT_NAV = ['orders', 'mail', 'inbox', 'schedule'];
-// 저장된 순서에 빠진 메뉴(나중에 생긴 메뉴)는 기본 순서대로 뒤에 붙인다
-const navOrderOf = saved => [...new Set([...(Array.isArray(saved) ? saved : []).filter(k => NAV_ITEMS[k]), ...DEFAULT_NAV])];
+const NAV_ITEMS = { orders: '주문', mail: '메일함', chat: '톡톡', inbox: '문의함', schedule: '일정' };
+const DEFAULT_NAV = ['orders', 'mail', 'chat', 'inbox', 'schedule'];
+// 저장된 순서에 빠진 메뉴(나중에 생긴 메뉴)는 기본 순서에서 바로 앞에 있던 메뉴 뒤에 끼운다
+function navOrderOf(saved) {
+  const order = [...new Set((Array.isArray(saved) ? saved : []).filter(k => NAV_ITEMS[k]))];
+  DEFAULT_NAV.forEach((key, i) => {
+    if (order.includes(key)) return;
+    const prev = DEFAULT_NAV.slice(0, i).reverse().find(k => order.includes(k));
+    order.splice(prev ? order.indexOf(prev) + 1 : 0, 0, key);
+  });
+  return order;
+}
 const MAX_NAME = 30;
 const MAX_LOGO = 1024 * 1024;
 

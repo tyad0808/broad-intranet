@@ -194,8 +194,9 @@ function createApp({
   const currentChannelInfo = channelInfoWith(db);
   // 왼쪽 메뉴의 미답변 건수: 문의함(쇼핑몰 문의·채팅)과 메일함을 따로
   const openCountsStmt = db.prepare(`
-    SELECT COALESCE(SUM(NOT (source GLOB 'naver_mail*' OR source GLOB 'gmail*')), 0) AS inquiries,
-      COALESCE(SUM(source GLOB 'naver_mail*' OR source GLOB 'gmail*'), 0) AS mails
+    SELECT COALESCE(SUM(NOT (source GLOB 'naver_mail*' OR source GLOB 'gmail*') AND source != 'talktalk'), 0) AS inquiries,
+      COALESCE(SUM(source GLOB 'naver_mail*' OR source GLOB 'gmail*'), 0) AS mails,
+      COALESCE(SUM(source = 'talktalk'), 0) AS chats
     FROM inquiries WHERE status = 'open' AND deleted_at IS NULL
   `);
   app.use((req, res, next) => {
@@ -212,9 +213,12 @@ function createApp({
       req.user && req.user.role === 'admin' && req.user.status === 'active' ? pendingCountStmt.get().n : 0;
     res.locals.unassignedAlert = notifier.unassignedBanner(req.user);
     // 위쪽 메뉴의 문의함 미답변 건수
-    const open = req.user && req.user.status === 'active' ? openCountsStmt.get() : { inquiries: 0, mails: 0 };
+    const open = req.user && req.user.status === 'active' ? openCountsStmt.get() : { inquiries: 0, mails: 0, chats: 0 };
     res.locals.openInquiries = open.inquiries;
     res.locals.openMails = open.mails;
+    res.locals.openChats = open.chats;
+    // 왼쪽 메뉴 '톡톡' 은 톡톡을 연결했을 때만 보인다
+    res.locals.chatOn = Boolean(inbox.talktalk);
     // 이 직원이 끈 알림 칸 (끈 칸은 왼쪽 메뉴 숫자를 숨긴다)
     res.locals.notifyOff = req.user ? notifyOff(req.user) : [];
     next();
@@ -235,9 +239,9 @@ function createApp({
     notifier.hub.add(req, res, req.user.id);
   });
 
-  // 왼쪽 메뉴의 종 버튼: 메일함·문의함 알림 켜기/끄기 (직원마다 따로)
+  // 왼쪽 메뉴의 종 버튼: 메일함·톡톡·문의함 알림 켜기/끄기 (직원마다 따로)
   app.post('/me/notify/:box', requireActive, (req, res) => {
-    const box = req.params.box === 'mail' ? 'mail' : req.params.box === 'inbox' ? 'inbox' : null;
+    const box = ['mail', 'chat', 'inbox'].includes(req.params.box) ? req.params.box : null;
     if (!box) return res.status(400).json({ error: '알 수 없는 칸' });
     const off = new Set(notifyOff(req.user));
     if (off.has(box)) off.delete(box);

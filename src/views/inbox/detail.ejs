@@ -1,6 +1,6 @@
 <%- include('../partials/header') %>
 <% if (!locals.embed) { %>
-  <p class="back-row"><a href="<%= back %>" class="btn-back">← <%= isMail ? '메일함으로' : '문의함으로' %></a></p>
+  <p class="back-row"><a href="<%= back %>" class="btn-back">← <%= isMail ? '메일함으로' : chat ? '톡톡으로' : '문의함으로' %></a></p>
 <% } %>
 <% const backQs = back !== '/inbox' ? `?back=${encodeURIComponent(back)}` : ''; %>
 

@@ -61,7 +61,7 @@ test('관리자가 이름·로고를 바꾸면 모든 화면에 보이고, 되�
   assert.strictEqual((await fetch(baseUrl + '/brand/logo')).status, 404);
 });
 
-test('왼쪽 메뉴 순서: 처음엔 주문·메일함·문의함·일정, 관리자가 바꾸면 모든 직원에게, 관리자 메뉴는 늘 맨 아래', async t => {
+test('왼쪽 메뉴 순서: 처음엔 주문·메일함·(톡톡)·문의함·일정, 관리자가 바꾸면 모든 직원에게, 관리자 메뉴는 늘 맨 아래', async t => {
   const { db, server, baseUrl } = await startServer();
   t.after(() => server.close());
   addUser(db, { email: 'boss@broad.test', role: 'admin', name: '대표' });
@@ -70,10 +70,19 @@ test('왼쪽 메뉴 순서: 처음엔 주문·메일함·문의함·일정, 관�
   const staff = await loginAs(baseUrl, 'kim@broad.test');
   const menu = text => [...text.slice(text.indexOf('id="main-nav"')).matchAll(/<span>(주문|메일함|문의함|일정|관리자)/g)].map(m => m[1]);
   assert.deepStrictEqual(menu((await admin.request('/')).text), ['주문', '메일함', '문의함', '일정', '관리자']);
-  await admin.submit('/admin/brand', '/admin/brand/nav', { key: 'schedule', dir: 'up' });
-  await admin.submit('/admin/brand', '/admin/brand/nav', { key: 'schedule', dir: 'up' });
+  // 톡톡은 연결 전이라 메뉴엔 없지만 순서 목록엔 있다 (관리자 화면에 안내)
+  assert.match((await admin.request('/admin/brand')).text, /톡톡<\/strong> <span class="muted small">\(톡톡을 연결하면 보여요\)/);
+  for (let n = 0; n < 3; n++) await admin.submit('/admin/brand', '/admin/brand/nav', { key: 'schedule', dir: 'up' });
   await admin.submit('/admin/brand', '/admin/brand/nav', { key: 'orders', dir: 'up' }); // 맨 위에서 위로: 그대로
   assert.deepStrictEqual(menu((await staff.request('/')).text), ['주문', '일정', '메일함', '문의함'], '직원 화면에도 같은 순서 (직원은 관리자 메뉴 없음)');
   assert.deepStrictEqual(menu((await admin.request('/')).text).slice(-1), ['관리자']);
   assert.strictEqual((await staff.submit('/', '/admin/brand/nav', { key: 'inbox', dir: 'up' })).status, 403, '직원은 못 바꿈');
+});
+
+test('예전에 저장한 메뉴 순서에 없는 새 메뉴(톡톡)는 기본 순서에서 바로 앞 메뉴(메일함) 뒤에 들어간다', async t => {
+  const { db, server } = await startServer();
+  t.after(() => server.close());
+  const { createBrand } = require('../src/brand');
+  db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('nav_order', ?)").run(JSON.stringify(['orders', 'schedule', 'mail', 'inbox']));
+  assert.deepStrictEqual(createBrand(db).view().navOrder, ['orders', 'schedule', 'mail', 'chat', 'inbox']);
 });

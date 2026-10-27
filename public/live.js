@@ -173,8 +173,8 @@
         const res = await fetch('/inbox?tab=open&src=_none_', { headers: { Accept: 'text/html' }, credentials: 'same-origin' });
         if (!res.ok || res.redirected) return;
         const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
-        // 문의함·메일함 두 칸의 미답변 숫자 + 종 버튼 칸까지 함께 (알림을 끄고 켠 결과도 반영). 지금 보고 있는 칸 표시(on)는 그대로
-        for (const href of ['/inbox', '/inbox?box=mail']) {
+        // 문의함·메일함·톡톡 칸의 미답변 숫자 + 종 버튼 칸까지 함께 (알림을 끄고 켠 결과도 반영). 지금 보고 있는 칸 표시(on)는 그대로
+        for (const href of ['/inbox', '/inbox?box=mail', '/inbox?box=chat']) {
           const fresh = doc.querySelector(`#main-nav a[href="${href}"]`);
           const link = nav.querySelector(`a[href="${href}"]`);
           if (!fresh || !link) continue;

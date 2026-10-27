@@ -519,18 +519,15 @@ test('왼쪽 메뉴에서 문의함(쇼핑몰 문의·채팅)과 메일함이 �
   assert.match((await kim.request('/inbox?src=gmail')).text, /<h1 class="page-title">메일함<\/h1>/, '메일 출처를 고르면 메일함');
 });
 
-test('문의함 큰 탭(쇼핑몰 문의·채팅) 순서는 직원마다 바꿀 수 있고, 맨 앞 탭이 처음 열린다', async t => {
-  const { kim, kimId, db } = await setupInbox(t);
+test('톡톡은 문의함 안의 탭이 아니라 따로 (/inbox?box=chat), 톡톡을 연결하지 않았으면 왼쪽 메뉴에 없다', async t => {
+  const { kim, db } = await setupInbox(t);
   db.prepare(`INSERT INTO inquiries (source, external_id, subject, body, received_at) VALUES ('talktalk', 'u1', '[톡톡] 안녕하세요', '', '2026-10-19T02:00:00Z')`).run();
   const first = (await kim.request('/inbox')).text;
-  assert.ok(first.indexOf('data-key="shop"') < first.indexOf('data-key="chat"'), '처음엔 쇼핑몰 문의가 앞');
-  assert.match(first, /data-sortable data-url="\/me\/inbox-order"/);
-  await kim.submit('/inbox', '/me/inbox-order', { order: 'chat,shop,zzz' });
-  assert.strictEqual(db.prepare('SELECT inbox_order FROM users WHERE id = ?').get(kimId).inbox_order, '["chat","shop"]');
-  const after = (await kim.request('/inbox')).text;
-  assert.ok(after.indexOf('data-key="chat"') < after.indexOf('data-key="shop"'), '채팅이 앞으로');
-  assert.ok(after.includes('[톡톡] 안녕하세요'), '채팅 탭이 처음 열림');
-  assert.match(after, /href="\/inbox\?box=shop"/, '쇼핑몰 탭 링크엔 box=shop');
+  assert.doesNotMatch(first, /data-key="chat"/);
+  assert.doesNotMatch(first, /\[톡톡\] 안녕하세요/);
+  assert.doesNotMatch(first, /href="\/inbox\?box=chat"/, '연결 전에는 메뉴 없음');
+  const chat = (await kim.request('/inbox?box=chat')).text;
+  assert.ok(chat.includes('[톡톡] 안녕하세요'), '주소로 들어가면 예전 대화는 볼 수 있다');
 });
 
 test('보낸 사람이 없는 문의(쿠팡): 주문번호가 같은 주문의 주문자 이름으로 채운다, 주문이 나중에 들어와도', async () => {
