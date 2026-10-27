@@ -8,14 +8,14 @@
 <div class="detail-head">
   <div class="detail-head-main">
     <p class="detail-channel"><span class="src-tag src-<%= inquiry.source %>"><%= label %></span> <span class="st-badge <%= inquiry.status === 'open' ? 'sb-new' : inquiry.status === 'answered' ? 'sb-done' : 'sb-wait' %>"><%= (chat ? CHAT_STATUS : STATUS_LABELS)[inquiry.status] %></span> <span class="muted"><%= kst(inquiry.received_at) %></span></p>
-    <h1 class="detail-title"><% if (chat) { %><%= inquiry.from_name || '톡톡 고객' %><% if (inquiry.cust_memo) { %> <span class="muted">· <%= inquiry.cust_memo %></span><% } %><% } else { %><%= inquiry.subject || '(제목 없음)' %><% } %></h1>
+    <h1 class="detail-title"><% if (chat) { %><%= (linkedOrder && linkedOrder.buyer_name) || inquiry.from_name || '톡톡 고객' %><% if (inquiry.cust_memo) { %> <span class="muted">· <%= inquiry.cust_memo %></span><% } %><% } else { %><%= inquiry.subject || '(제목 없음)' %><% } %></h1>
   </div>
 </div>
 
 <div class="detail" data-inquiry-id="<%= inquiry.id %>">
   <section class="card">
     <dl class="info">
-      <dt>보낸 사람</dt><dd><%= inquiry.from_name || '' %><% if (!inquiry.from_name && !inquiry.from_addr) { %><span class="muted">알 수 없음 (채널이 이름을 알려주지 않아요)</span><% } %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
+      <dt>보낸 사람</dt><dd><% if (chat && linkedOrder && linkedOrder.buyer_name) { %><strong><%= linkedOrder.buyer_name %></strong> <span class="muted small">(연결된 주문의 주문자)</span> · <% } %><%= inquiry.from_name || '' %><% if (!inquiry.from_name && !inquiry.from_addr) { %><span class="muted">알 수 없음 (채널이 이름을 알려주지 않아요)</span><% } %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
       <% if (inquiry.reply_to) { %><dt>답장 주소</dt><dd><%= inquiry.reply_to %></dd><% } %>
       <dt><%= chat ? '마지막 말' : '받은 시각' %></dt><dd><%= kst(inquiry.received_at) %></dd>
       <% if (chat && chatProduct) { %>

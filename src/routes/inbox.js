@@ -221,8 +221,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const params = [];
     for (const t of terms) {
       const fields = ['q.from_name', 'q.cust_memo', 'q.order_no', 'q.meta'].map(f => `${f} LIKE ? ESCAPE '\\'`);
-      where.push(`(${fields.join(' OR ')} OR EXISTS (SELECT 1 FROM chat_messages s WHERE s.inquiry_id = q.id AND s.text LIKE ? ESCAPE '\\'))`);
-      params.push(...Array(5).fill(likeOf(t)));
+      where.push(`(${fields.join(' OR ')} OR EXISTS (SELECT 1 FROM chat_messages s WHERE s.inquiry_id = q.id AND s.text LIKE ? ESCAPE '\\')
+        OR EXISTS (SELECT 1 FROM orders o WHERE o.channel_order_id = q.order_no AND o.buyer_name LIKE ? ESCAPE '\\'))`);
+      params.push(...Array(6).fill(likeOf(t)));
     }
     if (who === 'mine') { where.push('q.assignee_id = ?'); params.push(req.user.id); }
     else if (who === 'none') where.push('q.assignee_id IS NULL');
@@ -238,7 +239,8 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const rows = db.prepare(`
       SELECT q.id, q.from_name, q.cust_memo, q.status, q.assignee_id, q.order_no, q.meta, q.received_at,
         lm.direction AS last_dir, lm.kind AS last_kind, COALESCE(lm.text, q.body) AS last_text, ${LAST_AT_SQL} AS last_at, ${UNREAD_SQL} AS unread,
-        (SELECT o.product_name FROM orders o WHERE o.channel_order_id = q.order_no ORDER BY o.item_type = 'addon', o.id LIMIT 1) AS order_product
+        (SELECT o.product_name FROM orders o WHERE o.channel_order_id = q.order_no ORDER BY o.item_type = 'addon', o.id LIMIT 1) AS order_product,
+        (SELECT o.buyer_name FROM orders o WHERE o.channel_order_id = q.order_no AND o.buyer_name IS NOT NULL ORDER BY o.id LIMIT 1) AS order_buyer
       ${from} ${sql([...where, CHAT_TAB_SQL[tab]])}
       ORDER BY ${LAST_AT_SQL} ${sort === 'old' ? 'ASC' : 'DESC'}, q.id DESC LIMIT 300
     `).all(...params).map(r => ({ ...r, product: metaOf(r).product || null }));
@@ -391,7 +393,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       chatProduct: chat ? metaOf(inquiry).product || null : null,
       saidNo: chat && !inquiry.order_no ? metaOf(inquiry).saidNo || null : null,
       linkedOrder: chat && inquiry.order_no
-        ? db.prepare("SELECT id, channel, channel_order_id, product_name FROM orders WHERE channel_order_id = ? ORDER BY item_type = 'addon', id LIMIT 1").get(String(inquiry.order_no)) || null
+        ? db.prepare(`SELECT id, channel, channel_order_id, product_name,
+            (SELECT buyer_name FROM orders b WHERE b.channel_order_id = o.channel_order_id AND b.buyer_name IS NOT NULL ORDER BY b.id LIMIT 1) AS buyer_name
+            FROM orders o WHERE channel_order_id = ? ORDER BY item_type = 'addon', id LIMIT 1`).get(String(inquiry.order_no)) || null
         : null,
       withRo,
       previewType,

@@ -171,6 +171,10 @@ test('톡톡 대화 화면: 보류·보류 풀기, 고객 메모, 주문번호�
   assert.match(detail, /연결된 주문/);
   assert.match(detail, /글자스티커 시트컷팅/);
   assert.match((await kim.request('/inbox?box=chat')).text, /주문 연결<\/span>/);
+  // 연결되면 이름이 주문자 이름(김대성)으로, 그 이름으로 검색도 된다
+  assert.match((await kim.request('/inbox?box=chat')).text, /class="talk-name" title="톡톡 고객 1111 · 연결된 주문의 주문자">김대성</);
+  assert.match((await kim.request('/inbox?box=chat&q=김대성')).text, /class="talk-item/);
+  assert.match(detail, /<h1 class="detail-title">김대성/);
   await kim.submit(url, `${url}/unlink-order`, {});
   assert.strictEqual(db.prepare('SELECT order_no FROM inquiries WHERE id = ?').get(id).order_no, null);
 
