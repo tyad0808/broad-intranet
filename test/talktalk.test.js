@@ -117,7 +117,8 @@ test('톡톡 목록: 아이콘 탭(전체·대기·진행중·보류), 마지막
   assert.match(list, /진행중 <b>1<\/b>/);
   assert.match(list, /전체 <b>2<\/b>/);
   assert.match(list, /<span class="talk-tag">상품정보 문의<\/span>/);
-  assert.match(list, /class="talk-product talk-product-link" href="https:\/\/smartstore.naver.com\/broad\/products\/1"/);
+  assert.match(list, /<span class="talk-product">UV인쇄 실사출력 시트지<\/span>/);
+  assert.doesNotMatch(list, /href="https:\/\/smartstore.naver.com/, '목록에는 상품 링크가 없다 (잘못 눌러 나가지 않게)');
   assert.match(list, /사이즈는 1m 입니다<\/span>\s*<span class="talk-unread" aria-label="안 읽은 메시지 2개">2</, '마지막 말 + 안 읽은 손님 말 2개');
   assert.match(list, /<span class="talk-who">[^<]+<\/span>네 확인해 볼게요/, '우리가 마지막에 말했으면 앞에 우리 이름');
   // 검색: 첫 말이 아니어도 대화 안의 말로 찾는다

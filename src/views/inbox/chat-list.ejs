@@ -101,16 +101,11 @@
                   <span class="talk-text"><% if (r.last_dir === 'out') { %><span class="talk-who"><%= brandName %></span><% } %><% hl(last).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></span>
                   <% if (r.unread > 0) { %><span class="talk-unread" aria-label="안 읽은 메시지 <%= r.unread %>개"><%= r.unread > 99 ? '99+' : r.unread %></span><% } %>
                 </span>
-                <% if (!r.product && r.order_product) { %><span class="talk-product">📦 <%= r.order_product %></span><% } %>
+                <%# 문의한 상품(없으면 연결된 주문의 상품). 목록에선 글자만 — 상품 페이지 링크는 대화 화면에만 (잘못 눌러 나가지 않게) %>
+                <% if (r.product) { %><span class="talk-product"><%= r.product.name %></span>
+                <% } else if (r.order_product) { %><span class="talk-product">📦 <%= r.order_product %></span><% } %>
               </span>
             </a>
-            <% if (r.product) { %>
-              <% if (r.product.url) { %>
-                <a class="talk-product talk-product-link" href="<%= r.product.url %>" target="_blank" rel="noopener noreferrer" title="상품 페이지 열기"><span><%= r.product.name %></span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M17 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4"/></svg></a>
-              <% } else { %>
-                <span class="talk-product talk-product-link"><span><%= r.product.name %></span></span>
-              <% } %>
-            <% } %>
           </li>
         <% }) %>
       </ul>
