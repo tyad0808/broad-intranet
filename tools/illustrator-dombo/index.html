@@ -9,8 +9,6 @@
   details[data-id] > summary { cursor: pointer; font-weight: bold; color: #eee; padding: 5px 0; font-size: 12px; }
   .row { display: flex; gap: 4px; }
   .row > button { flex: 1; }
-  .row.hebe { align-items: center; }
-  .row.hebe .radios { flex: 1; }
   button { width: 100%; margin: 2px 0; padding: 5px 4px; border: 1px solid #666; border-radius: 3px;
            background: #444; color: #eee; cursor: pointer; font-size: 11px; }
   button.main { background: #2d6fd1; border-color: #2d6fd1; color: #fff; font-weight: bold; }
@@ -61,9 +59,6 @@
   <details open data-id="dombo">
     <summary>돔보마크</summary>
     <div class="row"><button class="main" id="place">돔보 찍기</button><button id="remove">지우기</button></div>
-    <div class="row hebe"><div class="radios"><label><input type="radio" name="hebeScale" value="1" checked>1:1</label>
-      <label><input type="radio" name="hebeScale" value="10">10:1</label></div><button id="hebe">크기·헤베</button></div>
-    <p class="hint">크기·헤베: 선택한 것의 실제 가로·세로와 헤베(㎡). 10:1 은 1/10 로 그린 파일 (×10). 기준은 맨 바깥 클리핑 마스크 &gt; 그룹 &gt; 가장 큰 개체 순, 패스 기준(선 두께 제외).</p>
     <details class="opts" data-sum="dombo"><summary></summary><div class="box">
       <div class="radios"><label><input type="radio" name="target" value="selection" checked>작업물</label>
         <label><input type="radio" name="target" value="artboard">현재 대지</label></div>
@@ -163,6 +158,14 @@
       </div>
       <p class="hint">단위 mm. 글자 자동: 큰 변의 3%. '치수' 레이어에 파랑으로. 클리핑 마스크는 마스크 모양 기준. 출력할 땐 레이어를 숨기세요.</p>
     </div></details>
+  </details>
+
+  <details open data-id="hebe">
+    <summary>크기·헤베</summary>
+    <button id="hebe">크기·헤베 보기</button>
+    <div class="radios"><label><input type="radio" name="hebeScale" value="1" checked>1:1 파일</label>
+      <label><input type="radio" name="hebeScale" value="10">10:1 파일 (×10)</label></div>
+    <p class="hint">선택한 것의 실제 가로·세로(mm)와 헤베(㎡). 10:1 은 1/10 로 그린 파일. 기준은 맨 바깥 클리핑 마스크 &gt; 그룹 &gt; 가장 큰 개체 순, 패스 기준(선 두께 제외).</p>
   </details>
   </div>
 

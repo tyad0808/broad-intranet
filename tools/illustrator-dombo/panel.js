@@ -170,14 +170,22 @@
     var saved;
     try { saved = JSON.parse(localStorage.getItem(LAYOUT_KEY)); } catch (e) {}
     var list = [], seen = {};
-    // 저장된 순서를 따르되, 없어진 칸은 빼고 새로 생긴 칸은 뒤에 붙인다
-    ((saved && saved.items) || []).concat(defaults).forEach(function (it) {
+    // 저장된 순서를 따르되, 없어진 칸은 뺀다
+    ((saved && saved.items) || []).forEach(function (it) {
       if (!it || !sections[it.id] || seen[it.id]) return;
       seen[it.id] = true;
       var def = defaults.filter(function (x) { return x.id === it.id; })[0];
       var name = typeof it.name === 'string' && it.name.trim();
       if (!name || (LEGACY_NAMES[it.id] || []).indexOf(name) >= 0) name = def.name;
       list.push({ id: it.id, name: name, open: it.open !== false });
+    });
+    // 새로 생긴 칸은 처음 순서에서 바로 앞에 있던 칸 뒤에 끼운다 (없으면 맨 뒤)
+    defaults.forEach(function (def, i) {
+      if (seen[def.id]) return;
+      seen[def.id] = true;
+      var at = list.length;
+      for (var j = 0; j < list.length; j++) if (i > 0 && list[j].id === defaults[i - 1].id) at = j + 1;
+      list.splice(at, 0, { id: def.id, name: def.name, open: true });
     });
     return list;
   }
