@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.11.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.12.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -395,44 +395,78 @@ function domboBleedScale(bounds, n) {
   return [(w + 2 * n) / w * 100, (h + 2 * n) / h * 100];
 }
 
-// 도련: 작업물을 가로·세로로 키워 기준 범위가 사방 n(pt) 씩 커지게, 가운데는 그대로
-function domboBleedItem(target, bounds, n) {
+// 개체를 가로·세로로 키워 기준 범위(bounds)가 사방 n(pt) 씩 커지게, 가운데는 그대로
+function domboGrow(item, bounds, n, measure) {
   var s = domboBleedScale(bounds, n);
   var cx = (bounds[0] + bounds[2]) / 2, cy = (bounds[1] + bounds[3]) / 2;
-  target.resize(s[0], s[1], true, true, true, true, 100, Transformation.CENTER);
-  var nb = domboHebePick([target]).bounds;
-  target.translate(cx - (nb[0] + nb[2]) / 2, cy - (nb[1] + nb[3]) / 2);
+  item.resize(s[0], s[1], true, true, true, true, 100, Transformation.CENTER);
+  var nb = measure();
+  item.translate(cx - (nb[0] + nb[2]) / 2, cy - (nb[1] + nb[3]) / 2);
+}
+
+// 도련 한 개: 원본은 그대로 두고 복제본을 원본 바로 아래(뒤)에 놓아 사방 n(pt) 키운다.
+//  mode 'item': 복제본 전체를 키움 / 'mask': 맨 바깥 마스크만 키워 가려졌던 그림이 보이게 (마스크가 없으면 전체를 키움)
+// 결과: 실제로 쓴 방식 'item' | 'mask', 기준이 없으면 null
+function domboBleedOne(target, n, mode) {
+  var pick = domboHebePick([target]);
+  if (!pick) return null;
+  var dup = target.duplicate(target, ElementPlacement.PLACEAFTER);
+  dup.name = '도련';
+  var dp = domboHebePick([dup]);
+  if (mode === 'mask' && dp.kind === '클리핑 마스크') {
+    var mask = domboClipMask(dp.item);
+    domboGrow(mask, dp.bounds, n, function () { return mask.geometricBounds; });
+    return 'mask';
+  }
+  domboGrow(dup, dp.bounds, n, function () { return domboHebePick([dup]).bounds; });
+  return 'item';
+}
+
+// 선택한 작업물마다 도련. opts: { mode: 'item' | 'mask', bleedMm: 실제 mm, scale: 1 | 10 (10:1 파일이면 1/10) }
+function domboBleed(opts) {
+  var mode = opts && opts.mode === 'mask' ? 'mask' : 'item';
+  var bleedMm = Number(opts && opts.bleedMm);
+  var scale = opts && Number(opts.scale) === 10 ? 10 : 1;
+  if (!(bleedMm > 0 && bleedMm <= 50)) throw new Error('도련은 0 보다 크고 50mm 이하로 넣으세요.');
+  var doc = domboDoc();
+  if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  if (!domboHasSelection(doc)) throw new Error('도련을 줄 작업물을 선택하세요.');
+  var sel = [], i;
+  for (i = 0; i < doc.selection.length; i++) sel.push(doc.selection[i]);
+  var targets = domboSizeTargets(sel);
+  var factor = 1;
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
+  var n = bleedMm / scale / factor * DOMBO_PT_PER_MM;
+  doc.selection = null;
+  var done = 0, noMask = 0;
+  for (i = 0; i < targets.length; i++) {
+    var r = domboBleedOne(targets[i], n, mode);
+    if (!r) continue;
+    done++;
+    if (mode === 'mask' && r === 'item') noMask++;
+  }
+  if (!done) throw new Error('선택한 것에 보이는 모양이 없습니다.');
+  var msg = done + '개에 도련 ' + bleedMm + 'mm' + (scale === 10 ? ' (10:1 파일이라 ' + (bleedMm / 10) + 'mm)' : '') +
+    (mode === 'mask' ? ' 를 마스크로' : ' 를 원본 크기 키우기로') + ' 넣었습니다. 원본 바로 아래에 \'도련\' 으로 있습니다.';
+  if (noMask) msg += ' 마스크가 없는 ' + noMask + '개는 원본 크기 키우기로 했습니다.';
+  return msg;
 }
 
 // 선택한 작업물마다 칼선을 '칼선' 레이어에 CutContour 별색 선으로 만든다. 고르는 법은 사이즈 표시와 같다.
-// opts: { bleedMm: 도련(실제 mm, 0 이면 칼선만), scale: 1 | 10 (10:1 파일이면 도련도 1/10) }
-// 칼선은 원래 크기 자리에 남고, 도련은 작업물(원본)을 키운다
-function domboCutContour(opts) {
-  var bleedMm = Number(opts && opts.bleedMm) || 0;
-  var scale = opts && Number(opts.scale) === 10 ? 10 : 1;
-  if (bleedMm < 0 || bleedMm > 50) throw new Error('도련은 0 ~ 50mm 사이여야 합니다.');
+function domboCutContour() {
   var doc = domboDoc();
   if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
   if (!domboHasSelection(doc)) throw new Error('칼선으로 만들 작업물을 선택하세요.');
   var sel = [], i;
   for (i = 0; i < doc.selection.length; i++) sel.push(doc.selection[i]);
   var targets = domboSizeTargets(sel);
-  var factor = 1;
-  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
-  var bleedPt = bleedMm / scale / factor * DOMBO_PT_PER_MM;
-
   var layer = domboGetLayer(doc, DOMBO_CUT_LAYER);
   var color = domboCutColor(doc);
-  var stat = { paths: 0, skipped: 0 }, done = [];
-  for (i = 0; i < targets.length; i++) {
-    var pick = domboCutOne(targets[i], layer, color, stat, domboUnite);
-    if (pick) done.push({ target: targets[i], bounds: pick.bounds });
-  }
+  var stat = { paths: 0, skipped: 0 };
+  for (i = 0; i < targets.length; i++) domboCutOne(targets[i], layer, color, stat, domboUnite);
   if (stat.paths === 0) throw new Error('칼선으로 만들 패스가 없습니다.');
-  if (bleedPt > 0) for (i = 0; i < done.length; i++) domboBleedItem(done[i].target, done[i].bounds, bleedPt);
   doc.selection = null;
   var msg = '칼선 ' + stat.paths + '개를 만들었습니다.';
-  if (bleedPt > 0) msg += ' 도련 ' + bleedMm + 'mm' + (scale === 10 ? ' (10:1 파일이라 ' + (bleedMm / 10) + 'mm)' : '') + ' 를 사방으로 넣었습니다.';
   if (stat.skipped > 0) msg += ' 패스가 아닌 ' + stat.skipped + '개(이미지 등)는 뺐습니다.';
   return msg;
 }
@@ -1225,7 +1259,8 @@ function domboCall(fn, arg) {
 }
 function domboPanelPlace(opts) { return domboCall(domboPlace, opts); }
 function domboPanelRemove() { return domboCall(domboRemove); }
-function domboPanelCut(opts) { return domboCall(domboCutContour, opts); }
+function domboPanelCut() { return domboCall(domboCutContour); }
+function domboPanelBleed(opts) { return domboCall(domboBleed, opts); }
 function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
 function domboPanelCount() { return domboCall(domboCount); }
 function domboPanelBarBox(opts) { return domboCall(domboBarBox, opts); }

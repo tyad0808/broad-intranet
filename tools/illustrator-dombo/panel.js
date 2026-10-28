@@ -60,12 +60,14 @@
     call('domboPanelPlace', o);
   });
   $('remove').addEventListener('click', function () { call('domboPanelRemove'); });
-  $('cut').addEventListener('click', function () { call('domboPanelCut', { bleedMm: 0 }); });
-  $('cutBleed').addEventListener('click', function () {
+  $('cut').addEventListener('click', function () { call('domboPanelCut'); });
+  function bleed(mode) {
     var o = readOptions();
     save(o);
-    call('domboPanelCut', { bleedMm: o.bleedMm, scale: Number(o.cutScale) });
-  });
+    call('domboPanelBleed', { mode: mode, bleedMm: o.bleedMm, scale: Number(o.cutScale) });
+  }
+  $('bleedItem').addEventListener('click', function () { bleed('item'); });
+  $('bleedMask').addEventListener('click', function () { bleed('mask'); });
   $('grid').addEventListener('click', function () {
     var o = readOptions();
     save(o);

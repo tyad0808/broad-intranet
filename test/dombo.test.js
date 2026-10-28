@@ -497,3 +497,52 @@ test('도련: 사방 n 씩 커지도록 가로·세로 비율', () => {
   near(s[1], 112);
   assert.throws(() => core.domboBleedScale([0, 0, 10, 0], 1), /크기가 0/);
 });
+
+test('도련: 원본은 그대로, 복제본을 원본 바로 아래에 키운다 — (원본) 전체 / (마스크) 마스크만', () => {
+  core.ElementPlacement = { PLACEAFTER: 'after' };
+  core.Transformation = { CENTER: 'center' };
+  // 크기 바꾸기·옮기기를 흉내 내는 패스 (가운데 기준)
+  const shape = (b, extra = {}) => ({
+    typename: 'PathItem', b: b.slice(), ...extra,
+    get geometricBounds() { return this.b; }, get visibleBounds() { return this.b; },
+    resize(sx, sy) {
+      const [l, t, r, btm] = this.b, cx = (l + r) / 2, cy = (t + btm) / 2, w = (r - l) * sx / 100, h = (t - btm) * sy / 100;
+      this.b = [cx - w / 2, cy + h / 2, cx + w / 2, cy - h / 2];
+    },
+    translate(dx, dy) { this.b = [this.b[0] + dx, this.b[1] + dy, this.b[2] + dx, this.b[3] + dy]; },
+  });
+  const placed = [];
+  const clone = it => {
+    if (it.typename === 'GroupItem') {
+      const kids = it.pageItems.map(clone);
+      const g = { typename: 'GroupItem', clipped: it.clipped, pageItems: kids,
+        resize(sx, sy) { kids.forEach(k => k.resize(sx, sy)); }, translate(dx, dy) { kids.forEach(k => k.translate(dx, dy)); } };
+      return g;
+    }
+    return shape(it.b, { clipping: it.clipping });
+  };
+  const dupable = it => Object.assign(it, { duplicate(rel, where) { const c = clone(this); placed.push([rel, where]); this.copy = c; return c; } });
+  const n = 3 * MM;
+
+  // 마스크 방식: 마스크만 사방 3mm, 안의 그림은 그대로
+  const mask = shape([0, 50 * MM, 100 * MM, 0], { clipping: true });
+  const art = shape([-20 * MM, 70 * MM, 120 * MM, -20 * MM]);
+  const clip = dupable({ typename: 'GroupItem', clipped: true, pageItems: [mask, art] });
+  assert.strictEqual(core.domboBleedOne(clip, n, 'mask'), 'mask');
+  assert.deepStrictEqual(placed[0], [clip, 'after'], '원본 바로 아래(뒤)');
+  const copy = clip.copy;
+  copy.pageItems[0].b.forEach((v, i) => near(v, [-3 * MM, 53 * MM, 103 * MM, -3 * MM][i]));
+  assert.deepStrictEqual(copy.pageItems[1].b, art.b, '그림은 그대로');
+  assert.deepStrictEqual(mask.b, [0, 50 * MM, 100 * MM, 0], '원본 마스크는 그대로');
+  assert.strictEqual(copy.name, '도련');
+
+  // 원본 방식: 복제본 전체를 키운다
+  const p = dupable(shape([0, 50 * MM, 100 * MM, 0]));
+  assert.strictEqual(core.domboBleedOne(p, n, 'item'), 'item');
+  p.copy.b.forEach((v, i) => near(v, [-3 * MM, 53 * MM, 103 * MM, -3 * MM][i]));
+  assert.deepStrictEqual(p.b, [0, 50 * MM, 100 * MM, 0], '원본은 그대로');
+
+  // 마스크 방식인데 마스크가 없으면 원본 방식
+  const q = dupable(shape([0, 10 * MM, 10 * MM, 0]));
+  assert.strictEqual(core.domboBleedOne(q, n, 'mask'), 'item');
+});
