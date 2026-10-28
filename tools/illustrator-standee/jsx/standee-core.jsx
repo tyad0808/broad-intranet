@@ -1,7 +1,7 @@
-﻿// 등신대 패널: 누끼 딴 PNG(배경 투명, 링크로 가져온 것)를 고르면 패널이 투명도로 외곽선을 계산하고(standee-shape.js),
-// 여기서는 1) 이미지 정보를 넘기고 2) 계산된 외곽선을 흰 면(이미지 뒤)과 칼선으로 그린다.
+﻿// 등신대 패널: 누끼 사진(과 글자·도형 디자인)을 고르면 여기서 배경 투명 PNG 로 내보내고,
+// 패널이 그 투명도로 외곽선을 계산한 뒤(standee-shape.js), 여기서 흰 면(맨 뒤)과 칼선으로 그린다.
 
-var STANDEE_VERSION = '1.0.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var STANDEE_VERSION = '1.1.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var STANDEE_PT_PER_MM = 72 / 25.4;
 var STANDEE_CUT_LAYER = '칼선';
 var STANDEE_CUT_SPOT = 'CutContour';
@@ -11,25 +11,60 @@ function standeeDoc() {
   return app.activeDocument;
 }
 
+// 선택한 것(누끼 사진, 글자, 도형 … 섞여도 됨)을 임시 문서로 복사해 배경 투명 PNG 로 내보낸다.
+// 패널은 이 PNG 의 투명도로 외곽선을 계산한다. 결과 PNG 는 선택한 것의 보이는 범위(bounds)와 같은 넓이
+function standeeUnion(b, v) {
+  if (!b) return [v[0], v[1], v[2], v[3]];
+  return [Math.min(b[0], v[0]), Math.max(b[1], v[1]), Math.max(b[2], v[2]), Math.min(b[3], v[3])];
+}
+
 function standeePrepare() {
   var doc = standeeDoc();
   var sel = doc.selection;
-  if (!sel || sel.typename === 'TextRange' || sel.length !== 1) throw new Error('누끼 딴 PNG 이미지 하나를 선택하세요.');
-  var it = sel[0];
-  if (it.typename === 'RasterItem') throw new Error('포함(임베드)된 이미지는 읽을 수 없습니다. 파일 > 가져오기에서 \'링크\' 를 켜고 PNG 를 다시 가져오세요.');
-  if (it.typename !== 'PlacedItem') throw new Error('누끼 딴 PNG 이미지(링크) 하나를 선택하세요.');
-  var f;
-  try { f = it.file; } catch (e) { f = null; }
-  if (!f || !f.exists) throw new Error('이미지 원본 파일을 찾을 수 없습니다 (링크 끊김).');
-  if (!/\.png$/i.test(f.name)) throw new Error('배경이 투명한 PNG 만 됩니다 (지금 파일: ' + f.name + ').');
-  var m = it.matrix;
-  if (Math.abs(m.mValueB) > 1e-6 || Math.abs(m.mValueC) > 1e-6) throw new Error('돌리거나 기울인 이미지는 안 됩니다. 돌리기 전 이미지로 하세요.');
+  if (!sel || sel.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  if (!sel.length) throw new Error('등신대로 만들 것(누끼 사진, 디자인 전체)을 선택하세요.');
+  var items = [], b = null, i;
+  for (i = 0; i < sel.length; i++) { items.push(sel[i]); b = standeeUnion(b, sel[i].visibleBounds); }
   var factor = 1;
-  try { factor = Number(doc.scaleFactor) || 1; } catch (e2) { factor = 1; } // 큰 캔버스 문서는 스크립트 좌표가 1/10
-  $.global.STANDEE_PENDING = it;
-  var b = it.geometricBounds;
-  return '{"path":"' + f.fsName.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '","bounds":[' + b.join(',') +
-    '],"flipX":' + (m.mValueA < 0) + ',"flipY":' + (m.mValueD < 0) + ',"factor":' + factor + '}';
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; } // 큰 캔버스 문서는 스크립트 좌표가 1/10
+  var wPt = b[2] - b[0], hPt = b[1] - b[3];
+  if (!(wPt > 0) || !(hPt > 0)) throw new Error('선택한 것의 크기가 0 입니다.');
+  // 칸 하나 = 큰 변의 1/1500 (0.5mm 보다 잘게는 안 함) → 그만큼의 픽셀로 내보낸다
+  var longMm = Math.max(wPt, hPt) / STANDEE_PT_PER_MM * factor;
+  var cellMm = Math.max(0.5, longMm / 1500);
+  var pct = Math.min(776, Math.max(1, longMm / cellMm / Math.max(wPt, hPt) * 100));
+
+  var tmp = app.documents.add(DocumentColorSpace.RGB, wPt + 100, hPt + 100);
+  var out = new File(Folder.temp.fsName + '/broad-standee-' + new Date().getTime() + '.png');
+  try {
+    var tb = null;
+    for (i = items.length - 1; i >= 0; i--) {
+      var d = items[i].duplicate(tmp.layers[0], ElementPlacement.PLACEATBEGINNING);
+      tb = standeeUnion(tb, d.visibleBounds);
+    }
+    tmp.artboards[0].artboardRect = tb;
+    var o = new ExportOptionsPNG24();
+    o.transparency = true;
+    o.antiAliasing = true;
+    o.artBoardClipping = true;
+    o.horizontalScale = pct;
+    o.verticalScale = pct;
+    tmp.exportFile(out, ExportType.PNG24, o);
+  } finally {
+    tmp.close(SaveOptions.DONOTSAVECHANGES);
+    doc.activate();
+  }
+  if (!out.exists) throw new Error('임시 PNG 를 만들지 못했습니다.');
+  $.global.STANDEE_PENDING = items;
+  return '{"path":"' + out.fsName.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '","bounds":[' + b.join(',') +
+    '],"flipX":false,"flipY":false,"factor":' + factor + ',"temp":true}';
+}
+
+// 패널이 다 읽은 임시 PNG 를 지운다
+function standeeRemoveTemp(path) {
+  var f = new File(path);
+  if (f.exists && /broad-standee-\d+\.png$/.test(f.name)) f.remove();
+  return '';
 }
 
 function standeeWhite(doc) {
@@ -95,16 +130,17 @@ function standeeMm(pt) { return String(Math.round(pt / STANDEE_PT_PER_MM)); }
 
 // data: { points: [...], outlineMm, roundMm }
 function standeeApply(data) {
-  var it = $.global.STANDEE_PENDING;
-  if (!it) throw new Error('준비된 이미지가 없습니다. 다시 누르세요.');
+  var items = $.global.STANDEE_PENDING;
+  if (!items || !items.length) throw new Error('준비된 것이 없습니다. 다시 누르세요.');
   $.global.STANDEE_PENDING = null;
   var doc = standeeDoc();
   if (!data || !data.points || data.points.length < 3) throw new Error('외곽선을 만들지 못했습니다.');
-  // 이미지와 흰 외곽선을 한 그룹으로 (흰 면은 이미지 뒤)
-  var grp = it.parent.groupItems.add();
-  grp.move(it, ElementPlacement.PLACEBEFORE);
+  // 선택한 것과 흰 외곽선을 한 그룹으로 (쌓인 순서 그대로, 흰 면은 맨 뒤)
+  try { items.sort(function (p, q) { return q.absoluteZOrderPosition - p.absoluteZOrderPosition; }); } catch (e) { /* 순서를 못 읽으면 선택 순서대로 */ }
+  var grp = items[0].parent.groupItems.add();
+  grp.move(items[0], ElementPlacement.PLACEBEFORE);
   grp.name = '등신대';
-  it.move(grp, ElementPlacement.PLACEATEND);
+  for (var i = 0; i < items.length; i++) items[i].move(grp, ElementPlacement.PLACEATEND);
   var white = standeeDrawPath(grp, data.points);
   white.move(grp, ElementPlacement.PLACEATEND);
   white.name = '외곽선';
@@ -136,3 +172,4 @@ function standeeCall(fn, arg) {
 }
 function standeePanelPrepare() { return standeeCall(standeePrepare); }
 function standeePanelApply(data) { return standeeCall(standeeApply, data); }
+function standeePanelRemoveTemp(path) { return standeeCall(standeeRemoveTemp, path); }

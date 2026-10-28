@@ -74,6 +74,7 @@
           show('ERR:' + e.message);
         }
       };
+      if (info.temp) window.__adobe_cep__.evalScript('standeePanelRemoveTemp(' + JSON.stringify(info.path) + ')', function () {});
       img.src = 'data:image/png;base64,' + file.data;
     });
   });
