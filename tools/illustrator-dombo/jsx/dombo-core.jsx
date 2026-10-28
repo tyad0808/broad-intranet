@@ -985,6 +985,74 @@ function domboCount() {
     '아웃라인 도형: ' + c.shapes + '개 (i·j 점처럼 떨어진 조각은 따로 셉니다)';
 }
 
+// ---- 크기·헤베 ----
+// 기준 개체: 맨 바깥 클리핑 마스크(마지막에 씌운 마스크) > 그룹 > 선택한 것 중 가장 큰 개체. 같은 순위가 여럿이면 가장 큰 것
+// 크기는 패스 기준(선 두께 제외), 마스크는 마스크 모양 기준
+
+function domboArea(b) { return (b[2] - b[0]) * (b[1] - b[3]); }
+
+// 그룹 안까지 내려가며 맨 바깥 클리핑 마스크 그룹을 모은다 (마스크 안의 마스크는 보지 않는다)
+function domboOuterClips(item, out) {
+  if (item.hidden || item.guides || item.typename !== 'GroupItem') return;
+  if (domboClipMask(item)) { out.push(item); return; }
+  for (var i = 0; i < item.pageItems.length; i++) domboOuterClips(item.pageItems[i], out);
+}
+
+function domboLargest(items) {
+  var best = null;
+  for (var i = 0; i < items.length; i++) {
+    var b = domboItemBounds(items[i], true);
+    if (b && (!best || domboArea(b) > domboArea(best.bounds))) best = { item: items[i], bounds: b };
+  }
+  return best;
+}
+
+// 결과: { kind: '클리핑 마스크' | '그룹' | '가장 큰 개체', item, bounds }
+function domboHebePick(items) {
+  var clips = [], groups = [], i, best;
+  for (i = 0; i < items.length; i++) domboOuterClips(items[i], clips);
+  best = domboLargest(clips);
+  if (best) { best.kind = '클리핑 마스크'; return best; }
+  for (i = 0; i < items.length; i++) if (items[i].typename === 'GroupItem') groups.push(items[i]);
+  best = domboLargest(groups);
+  if (best) { best.kind = '그룹'; return best; }
+  best = domboLargest(items);
+  if (best) { best.kind = '가장 큰 개체'; return best; }
+  return null;
+}
+
+// 범위(pt)와 배율로 글자를 만든다. scale 10 = 1/10 로 그린 파일 (10:1). factor = 큰 캔버스 문서의 배율
+// mm 를 정수면 정수로, 아니면 소수 1자리로 (천 단위 쉼표)
+function domboMmLabel(mm, unit) {
+  var whole = Math.abs(mm - Math.round(mm)) < 0.05;
+  return domboDimLabel(mm, whole ? 0 : 1, unit);
+}
+
+function domboHebeText(pick, scale, factor) {
+  var k = DOMBO_PT_PER_MM, b = pick.bounds, mul = scale * (factor || 1);
+  var w = (b[2] - b[0]) / k * mul, h = (b[1] - b[3]) / k * mul;
+  var m2 = Math.round(w * h / 1e4) / 100;
+  var lines = ['기준: ' + pick.kind + (pick.item.name ? ' (' + pick.item.name + ')' : '') + ' · ' + (scale === 10 ? '10:1 파일 (×10)' : '1:1 파일')];
+  lines.push('실제 크기: 가로 ' + domboMmLabel(w, true) + ' × 세로 ' + domboMmLabel(h, true));
+  if (scale === 10) lines.push('(파일 크기 ' + domboMmLabel(w / 10, false) + ' × ' + domboMmLabel(h / 10, false) + ' mm)');
+  lines.push('헤베: ' + m2.toFixed(2) + ' ㎡');
+  return lines.join('\n');
+}
+
+function domboHebe(opts) {
+  var scale = opts && Number(opts.scale) === 10 ? 10 : 1;
+  var doc = domboDoc();
+  if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  if (!domboHasSelection(doc)) throw new Error('크기를 잴 작업물을 선택하세요.');
+  var items = [];
+  for (var i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+  var pick = domboHebePick(items);
+  if (!pick) throw new Error('선택한 개체에 보이는 모양이 없습니다.');
+  var factor = 1;
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; } // 큰 캔버스 문서는 스크립트 좌표가 1/10
+  return domboHebeText(pick, scale, factor);
+}
+
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다
 function domboCall(fn, arg) {
   try {
@@ -1004,3 +1072,4 @@ function domboPanelSplit(opts) { return domboCall(domboSplit, opts); }
 function domboPanelGrommet(opts) { return domboCall(domboGrommet, opts); }
 function domboPanelGrommetRemove() { return domboCall(domboGrommetRemove); }
 function domboPanelDimRemove() { return domboCall(domboDimRemove); }
+function domboPanelHebe(opts) { return domboCall(domboHebe, opts); }

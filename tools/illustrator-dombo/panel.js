@@ -13,7 +13,7 @@
   }
 
   function readOptions() {
-    var o = { target: radio('target'), dimTarget: radio('dimTarget'), splitDir: radio('splitDir') };
+    var o = { target: radio('target'), dimTarget: radio('dimTarget'), splitDir: radio('splitDir'), hebeScale: radio('hebeScale') };
     CHECKS.forEach(function (c) { o[c] = $(c).checked; });
     SELECTS.forEach(function (c) { o[c] = $(c).value; });
     FIELDS.forEach(function (f) { o[f] = parseFloat($(f).value); });
@@ -29,6 +29,7 @@
     if (o.target) setRadio('target', o.target);
     if (o.dimTarget) setRadio('dimTarget', o.dimTarget);
     if (o.splitDir) setRadio('splitDir', o.splitDir);
+    if (o.hebeScale) setRadio('hebeScale', o.hebeScale);
     SELECTS.forEach(function (c) { if (typeof o[c] === 'string') $(c).value = o[c]; });
     FIELDS.forEach(function (f) { if (typeof o[f] === 'number' && !isNaN(o[f])) $(f).value = o[f]; });
     CHECKS.forEach(function (c) { if (typeof o[c] === 'boolean') $(c).checked = o[c]; });
@@ -97,6 +98,11 @@
     call('domboPanelSplit', { direction: o.splitDir, count: o.splitCount, overlapMm: o.splitOverlapMm, gapMm: o.splitGapMm });
   });
   $('count').addEventListener('click', function () { call('domboPanelCount'); });
+  $('hebe').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelHebe', { scale: Number(o.hebeScale) });
+  });
 
   // ---- 접힌 '설정' 줄에 지금 값을 한 줄로 ----
   var SUMS = {

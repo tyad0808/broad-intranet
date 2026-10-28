@@ -378,3 +378,44 @@ test('분할: 조각마다 원본 복제 + 맨 위 사각형으로 클리핑 마
   near(groups[1].kids[0].rect[0], 290 * MM);
   assert.deepStrictEqual(art.geometricBounds, [0, 300 * MM, 900 * MM, 0], '원본은 그대로');
 });
+
+test('크기·헤베: 기준은 맨 바깥 클리핑 마스크 > 그룹 > 가장 큰 개체', () => {
+  const mm = (x1, y1, x2, y2) => [x1 * MM, y1 * MM, x2 * MM, y2 * MM];
+  // 마스크 안의 마스크는 보지 않고, 그룹 안에 있어도 맨 바깥 마스크를 쓴다. 큰 개체가 있어도 마스크가 먼저
+  const inner = group([pathItem(mm(0, 50, 50, 0), { clipping: true }), pathItem(mm(0, 900, 900, 0))], { clipped: true });
+  const outerClip = group([pathItem(mm(0, 900, 300, 0), { clipping: true }), inner], { clipped: true, name: '현수막' });
+  const big = pathItem(mm(0, 2000, 2000, 0));
+  let p = core.domboHebePick([big, group([outerClip, pathItem(mm(-10, 1000, 1000, -10))])]);
+  assert.strictEqual(p.kind, '클리핑 마스크');
+  assert.strictEqual(p.item, outerClip);
+  // 마스크가 없으면 그룹 (그룹이 개체보다 작아도)
+  const g = group([pathItem(mm(0, 100, 100, 0)), pathItem(mm(200, 100, 300, 0))]);
+  p = core.domboHebePick([big, g]);
+  assert.strictEqual(p.kind, '그룹');
+  assert.deepStrictEqual(Array.from(p.bounds), mm(0, 100, 300, 0));
+  // 그룹도 없으면 가장 큰 개체, 패스 기준(선 두께 제외)
+  const thick = pathItem(mm(0, 10, 10, 0), { visibleBounds: mm(-50, 60, 60, -50) });
+  p = core.domboHebePick([thick, pathItem(mm(0, 20, 20, 0))]);
+  assert.strictEqual(p.kind, '가장 큰 개체');
+  assert.deepStrictEqual(Array.from(p.bounds), mm(0, 20, 20, 0));
+  assert.strictEqual(core.domboHebePick([pathItem(mm(0, 1, 1, 0), { hidden: true })]), null);
+});
+
+test('크기·헤베: 1:1 과 10:1 파일, 큰 캔버스 배율', () => {
+  const pick = { kind: '클리핑 마스크', item: { name: '' }, bounds: [0, 900 * MM, 3000 * MM, 0] };
+  let t = core.domboHebeText(pick, 1, 1);
+  assert.match(t, /1:1 파일/);
+  assert.match(t, /가로 3,000 mm × 세로 900 mm/);
+  assert.match(t, /헤베: 2\.70 ㎡/);
+  // 1/10 로 그린 파일: 300 x 90mm → 실제 3,000 x 900mm
+  t = core.domboHebeText({ ...pick, bounds: [0, 90 * MM, 300 * MM, 0] }, 10, 1);
+  assert.match(t, /가로 3,000 mm × 세로 900 mm/);
+  assert.match(t, /파일 크기 300 × 90 mm/);
+  assert.match(t, /헤베: 2\.70 ㎡/);
+  // 큰 캔버스 문서(배율 10)는 스크립트 좌표가 1/10
+  t = core.domboHebeText({ ...pick, bounds: [0, 90 * MM, 300 * MM, 0] }, 1, 10);
+  assert.match(t, /헤베: 2\.70 ㎡/);
+  t = core.domboHebeText({ ...pick, bounds: [0, 333.33 * MM, 1234.5 * MM, 0] }, 1, 1);
+  assert.match(t, /가로 1,234\.5 mm × 세로 333\.3 mm/);
+  assert.match(t, /헤베: 0\.41 ㎡/);
+});
