@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm'];
+  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm'];
   var CHECKS = ['orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -13,7 +13,7 @@
   }
 
   function readOptions() {
-    var o = { target: radio('target'), dimTarget: radio('dimTarget'), splitDir: radio('splitDir'), hebeScale: radio('hebeScale') };
+    var o = { target: radio('target'), dimTarget: radio('dimTarget'), splitDir: radio('splitDir'), hebeScale: radio('hebeScale'), cutScale: radio('cutScale') };
     CHECKS.forEach(function (c) { o[c] = $(c).checked; });
     SELECTS.forEach(function (c) { o[c] = $(c).value; });
     FIELDS.forEach(function (f) { o[f] = parseFloat($(f).value); });
@@ -30,6 +30,7 @@
     if (o.dimTarget) setRadio('dimTarget', o.dimTarget);
     if (o.splitDir) setRadio('splitDir', o.splitDir);
     if (o.hebeScale) setRadio('hebeScale', o.hebeScale);
+    if (o.cutScale) setRadio('cutScale', o.cutScale);
     SELECTS.forEach(function (c) { if (typeof o[c] === 'string') $(c).value = o[c]; });
     FIELDS.forEach(function (f) { if (typeof o[f] === 'number' && !isNaN(o[f])) $(f).value = o[f]; });
     CHECKS.forEach(function (c) { if (typeof o[c] === 'boolean') $(c).checked = o[c]; });
@@ -59,7 +60,12 @@
     call('domboPanelPlace', o);
   });
   $('remove').addEventListener('click', function () { call('domboPanelRemove'); });
-  $('cut').addEventListener('click', function () { call('domboPanelCut'); });
+  $('cut').addEventListener('click', function () { call('domboPanelCut', { bleedMm: 0 }); });
+  $('cutBleed').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelCut', { bleedMm: o.bleedMm, scale: Number(o.cutScale) });
+  });
   $('grid').addEventListener('click', function () {
     var o = readOptions();
     save(o);
@@ -126,6 +132,9 @@
     split: function (o) {
       return (o.splitDir === 'v' ? '세로 ' : '가로 ') + o.splitCount + '등분 · 겹침 ' + o.splitOverlapMm;
     },
+    cut: function (o) {
+      return (o.cutScale === '10' ? '10:1 · ' : '1:1 · ') + '도련 ' + o.bleedMm + 'mm' + (o.cutScale === '10' ? ' (파일 ' + o.bleedMm / 10 + 'mm)' : '');
+    },
     size: function (o) {
       return (o.hebeScale === '10' ? '10:1' : '1:1') + ' · 글자 ' + o.sizeTextMm + 'mm' + (o.hebeScale === '10' ? ' (파일 ' + o.sizeTextMm / 10 + 'mm)' : '');
     },
@@ -166,7 +175,7 @@
   // ---- 칸 순서·이름 바꾸기 (이 컴퓨터에 기억) ----
   var LAYOUT_KEY = 'broad-dombo-layout';
   // 예전 기본 이름: 저장돼 있어도 직접 바꾼 이름이 아니므로 새 기본 이름으로 보여 준다
-  var LEGACY_NAMES = { barbox: ['막대 + 박스'] };
+  var LEGACY_NAMES = { barbox: ['막대 + 박스'], cut: ['칼선'] };
   var box = $('sections');
   var sections = {}, defaults = [];
   Array.prototype.forEach.call(box.querySelectorAll('details[data-id]'), function (d) {

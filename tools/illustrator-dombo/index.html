@@ -81,9 +81,16 @@
   </details>
 
   <details open data-id="cut">
-    <summary>칼선</summary>
-    <button id="cut">선택 → 칼선(CutContour)</button>
-    <p class="hint">선택한 것을 복제해 '칼선' 레이어에 만듭니다. 클리핑 마스크는 마스크 모양만, 글자는 아웃라인해서.</p>
+    <summary>칼선 · 도련</summary>
+    <div class="row"><button id="cut">칼선만</button><button class="main" id="cutBleed">칼선 + 도련</button></div>
+    <details class="opts" data-sum="cut"><summary></summary><div class="box">
+      <div class="radios"><label><input type="radio" name="cutScale" value="1" checked>1:1 파일</label>
+        <label><input type="radio" name="cutScale" value="10">10:1 파일</label></div>
+      <div class="grid">
+        <div class="f">도련 (실제 mm) <input id="bleedMm" type="number" step="0.5" min="0" value="3"></div>
+      </div>
+    </div></details>
+    <p class="hint">작업물마다 '칼선' 레이어에 CutContour 칼선 하나. 기준은 맨 바깥 클리핑 마스크(마스크 모양) &gt; 그룹(도형을 합친 외곽선) &gt; 개체 모양. 글자는 아웃라인. 도련: 칼선은 그 자리에 두고 작업물을 사방 N mm 씩 키웁니다 (10:1 파일이면 1/10).</p>
   </details>
 
   <details open data-id="grid">

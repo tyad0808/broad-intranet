@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.10.2'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.11.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -352,19 +352,87 @@ function domboStyleCutDeep(item, color) {
   else if (t === 'GroupItem') for (i = 0; i < item.pageItems.length; i++) domboStyleCutDeep(item.pageItems[i], color);
 }
 
-// 선택한 개체의 칼선을 '칼선' 레이어에 CutContour 별색 선으로 만든다.
-function domboCutContour() {
+// 작업물 하나의 칼선. 기준은 크기·헤베와 같다:
+//  맨 바깥 클리핑 마스크 → 마스크 모양, 마스크 없는 그룹 → 그룹 도형을 합친 외곽선 하나, 그 밖 → 그 개체 모양
+// unite(group) 는 그룹 안 패스를 하나로 합쳐 돌려준다 (일러스트에서는 domboUnite). 결과: 기준(pick) 또는 null
+function domboCutOne(target, layer, color, stat, unite) {
+  var pick = domboHebePick([target]);
+  if (!pick) return null;
+  if (pick.kind !== '그룹') {
+    var before0 = stat.paths;
+    domboCollectCut(pick.item, layer, color, stat);
+    return stat.paths > before0 ? pick : null;
+  }
+  var tmp = layer.groupItems.add(), before = stat.paths;
+  domboCollectCut(pick.item, tmp, color, stat);
+  if (stat.paths === before) { tmp.remove(); return null; }
+  stat.paths = before + 1;
+  domboStyleCutDeep(unite ? unite(tmp) : tmp, color);
+  return pick;
+}
+
+// 그룹 안 패스를 패스파인더 '합치기' 로 외곽선 하나로. 안 되면 그대로 둔다
+function domboUnite(group) {
+  var doc = app.activeDocument;
+  try {
+    doc.selection = null;
+    group.selected = true;
+    app.executeMenuCommand('Live Pathfinder Add');
+    app.executeMenuCommand('expandStyle');
+    var r = doc.selection.length > 0 ? doc.selection[0] : group;
+    doc.selection = null;
+    return r;
+  } catch (e) {
+    doc.selection = null;
+    return group;
+  }
+}
+
+// 범위를 사방으로 n(pt)만큼 키우려면 가로·세로를 몇 % 로 늘려야 하는지
+function domboBleedScale(bounds, n) {
+  var w = bounds[2] - bounds[0], h = bounds[1] - bounds[3];
+  if (!(w > 0) || !(h > 0)) throw new Error('크기가 0인 개체는 도련을 줄 수 없습니다.');
+  return [(w + 2 * n) / w * 100, (h + 2 * n) / h * 100];
+}
+
+// 도련: 작업물을 가로·세로로 키워 기준 범위가 사방 n(pt) 씩 커지게, 가운데는 그대로
+function domboBleedItem(target, bounds, n) {
+  var s = domboBleedScale(bounds, n);
+  var cx = (bounds[0] + bounds[2]) / 2, cy = (bounds[1] + bounds[3]) / 2;
+  target.resize(s[0], s[1], true, true, true, true, 100, Transformation.CENTER);
+  var nb = domboHebePick([target]).bounds;
+  target.translate(cx - (nb[0] + nb[2]) / 2, cy - (nb[1] + nb[3]) / 2);
+}
+
+// 선택한 작업물마다 칼선을 '칼선' 레이어에 CutContour 별색 선으로 만든다. 고르는 법은 사이즈 표시와 같다.
+// opts: { bleedMm: 도련(실제 mm, 0 이면 칼선만), scale: 1 | 10 (10:1 파일이면 도련도 1/10) }
+// 칼선은 원래 크기 자리에 남고, 도련은 작업물(원본)을 키운다
+function domboCutContour(opts) {
+  var bleedMm = Number(opts && opts.bleedMm) || 0;
+  var scale = opts && Number(opts.scale) === 10 ? 10 : 1;
+  if (bleedMm < 0 || bleedMm > 50) throw new Error('도련은 0 ~ 50mm 사이여야 합니다.');
   var doc = domboDoc();
-  if (!domboHasSelection(doc)) throw new Error('칼선으로 만들 개체를 선택하세요.');
-  var items = [], i;
-  for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+  if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  if (!domboHasSelection(doc)) throw new Error('칼선으로 만들 작업물을 선택하세요.');
+  var sel = [], i;
+  for (i = 0; i < doc.selection.length; i++) sel.push(doc.selection[i]);
+  var targets = domboSizeTargets(sel);
+  var factor = 1;
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
+  var bleedPt = bleedMm / scale / factor * DOMBO_PT_PER_MM;
 
   var layer = domboGetLayer(doc, DOMBO_CUT_LAYER);
   var color = domboCutColor(doc);
-  var stat = { paths: 0, skipped: 0 };
-  for (i = 0; i < items.length; i++) domboCollectCut(items[i], layer, color, stat);
+  var stat = { paths: 0, skipped: 0 }, done = [];
+  for (i = 0; i < targets.length; i++) {
+    var pick = domboCutOne(targets[i], layer, color, stat, domboUnite);
+    if (pick) done.push({ target: targets[i], bounds: pick.bounds });
+  }
   if (stat.paths === 0) throw new Error('칼선으로 만들 패스가 없습니다.');
+  if (bleedPt > 0) for (i = 0; i < done.length; i++) domboBleedItem(done[i].target, done[i].bounds, bleedPt);
+  doc.selection = null;
   var msg = '칼선 ' + stat.paths + '개를 만들었습니다.';
+  if (bleedPt > 0) msg += ' 도련 ' + bleedMm + 'mm' + (scale === 10 ? ' (10:1 파일이라 ' + (bleedMm / 10) + 'mm)' : '') + ' 를 사방으로 넣었습니다.';
   if (stat.skipped > 0) msg += ' 패스가 아닌 ' + stat.skipped + '개(이미지 등)는 뺐습니다.';
   return msg;
 }
@@ -1157,7 +1225,7 @@ function domboCall(fn, arg) {
 }
 function domboPanelPlace(opts) { return domboCall(domboPlace, opts); }
 function domboPanelRemove() { return domboCall(domboRemove); }
-function domboPanelCut() { return domboCall(domboCutContour); }
+function domboPanelCut(opts) { return domboCall(domboCutContour, opts); }
 function domboPanelGrid(opts) { return domboCall(domboGridCut, opts); }
 function domboPanelCount() { return domboCall(domboCount); }
 function domboPanelBarBox(opts) { return domboCall(domboBarBox, opts); }

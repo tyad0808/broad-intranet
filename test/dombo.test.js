@@ -444,3 +444,56 @@ test('사이즈 표시 대상: 고른 것마다 (그룹이 아닌 패스도), �
   // 각 작업물 안의 기준은 맨 바깥 마스크
   assert.strictEqual(core.domboHebePick([group([clip, large])]).item, clip);
 });
+
+test('칼선: 작업물마다 하나 — 마스크는 마스크 모양, 마스크 없는 그룹은 합친 외곽선, 그 밖은 개체 모양', () => {
+  core.ElementPlacement = { PLACEATEND: 'end' };
+  const dupable = (item) => Object.assign(item, {
+    duplicate(target) { const c = { ...this }; target.items.push(c); return c; },
+  });
+  const mkLayer = () => {
+    const l = { items: [] };
+    l.groupItems = { add() { const g = { typename: 'GroupItem', items: [], removed: false, remove() { this.removed = true; } }; g.pageItems = g.items; l.items.push(g); return g; } };
+    return l;
+  };
+  const stat = { paths: 0, skipped: 0 };
+  const united = [];
+  const unite = g => { united.push(g); return g; };
+
+  // 마스크: 그룹 안에 있어도 맨 바깥 마스크 하나
+  let l = mkLayer();
+  const mask = dupable(pathItem([0, 50, 100, 0], { clipping: true }));
+  const clip = group([mask, dupable(pathItem([-500, 500, 500, -500]))], { clipped: true });
+  let p = core.domboCutOne(group([clip, dupable(pathItem([0, 10, 10, 0]))]), l, 'SPOT', stat, unite);
+  assert.strictEqual(p.kind, '클리핑 마스크');
+  assert.strictEqual(l.items.length, 1);
+  assert.deepStrictEqual(Array.from(l.items[0].geometricBounds), [0, 50, 100, 0]);
+  assert.strictEqual(united.length, 0);
+
+  // 마스크 없는 그룹: 도형을 모아 합치기 → 칼선 1개
+  l = mkLayer();
+  const before = stat.paths;
+  p = core.domboCutOne(group([dupable(pathItem([0, 50, 80, 0])), dupable(pathItem([70, 30, 100, 0]))]), l, 'SPOT', stat, unite);
+  assert.strictEqual(p.kind, '그룹');
+  assert.strictEqual(united.length, 1);
+  assert.strictEqual(united[0].items.length, 2, '두 도형을 모아서');
+  assert.strictEqual(stat.paths - before, 1, '칼선은 하나로 셈');
+
+  // 그룹이 아닌 개체 하나: 그 모양
+  l = mkLayer();
+  p = core.domboCutOne(dupable(pathItem([0, 20, 30, 0])), l, 'SPOT', stat, unite);
+  assert.strictEqual(p.kind, '가장 큰 개체');
+  assert.strictEqual(l.items[0].strokeColor, 'SPOT');
+  assert.strictEqual(l.items[0].filled, false);
+
+  // 이미지만 있는 그룹은 칼선 없음
+  l = mkLayer();
+  assert.strictEqual(core.domboCutOne(group([{ typename: 'PlacedItem', geometricBounds: [0, 1, 1, 0] }]), l, 'SPOT', stat, unite), null);
+  assert.ok(l.items[0].removed, '빈 임시 그룹은 지운다');
+});
+
+test('도련: 사방 n 씩 커지도록 가로·세로 비율', () => {
+  const s = Array.from(core.domboBleedScale([0, 50 * MM, 100 * MM, 0], 3 * MM));
+  near(s[0], 106);
+  near(s[1], 112);
+  assert.throws(() => core.domboBleedScale([0, 0, 10, 0], 1), /크기가 0/);
+});
