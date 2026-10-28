@@ -1054,29 +1054,27 @@ function domboHebe(opts) {
 }
 
 // ---- 사이즈 표시 ----
-// 그룹마다 위쪽에 '103*105cm(가로*세로)' 글자를 쓴다. 그룹 안의 기준은 크기·헤베와 같다 (맨 바깥 마스크 > 그룹)
-// 그룹을 고르지 않았으면 선택한 것 중 가장 큰 개체 하나
+// 작업물마다 위쪽에 '103*105cm(가로*세로)' 글자를 쓴다. 작업물 안의 기준은 크기·헤베와 같다 (맨 바깥 마스크 > 그룹 > 가장 큰 개체)
 
 var DOMBO_SIZE_LAYER = '사이즈';
 var DOMBO_SIZE_FONTS = ['MalgunGothic', 'NanumGothic', 'NanumSquareOTF_acB', 'AppleSDGothicNeo-Regular', 'KoPubDotumMedium'];
 
-// 그룹 하나만 골랐고 안에 하위 그룹이 있으면 하위 그룹마다 (막대 + 박스와 같음)
+// 여러 개를 골랐으면 고른 것마다 (그룹이든 패스든). 그룹 하나만 골랐고 안에 하위 그룹이 있으면
+// 그 안의 보이는 것마다 (그룹이 아닌 패스·복합 패스도), 하위 그룹이 없으면 그 그룹 하나
 function domboSizeTargets(sel) {
-  var groups = [], i;
-  for (i = 0; i < sel.length; i++) if (sel[i].typename === 'GroupItem' && !sel[i].hidden) groups.push(sel[i]);
-  if (groups.length === 0) {
-    var best = domboLargest(sel);
-    return best ? [best.item] : [];
-  }
-  if (sel.length === 1 && !groups[0].clipped) {
-    var kids = [];
-    for (i = 0; i < groups[0].pageItems.length; i++) {
-      var k = groups[0].pageItems[i];
-      if (k.typename === 'GroupItem' && !k.hidden) kids.push(k);
+  var out = [], i, hasGroup = false;
+  if (sel.length === 1 && sel[0].typename === 'GroupItem' && !sel[0].clipped) {
+    for (i = 0; i < sel[0].pageItems.length; i++) {
+      var k = sel[0].pageItems[i];
+      if (k.hidden || k.guides) continue;
+      out.push(k);
+      if (k.typename === 'GroupItem') hasGroup = true;
     }
-    if (kids.length > 0) return kids;
+    if (hasGroup) return out;
+    out = [];
   }
-  return groups;
+  for (i = 0; i < sel.length; i++) if (!sel[i].hidden && !sel[i].guides) out.push(sel[i]);
+  return out;
 }
 
 // cm 를 정수면 정수로, 아니면 소수 1자리로
@@ -1105,7 +1103,7 @@ function domboSize(opts) {
   if (textMm <= 0 || textMm > 1000) throw new Error('글자 크기는 0 ~ 1000mm 사이여야 합니다.');
   var doc = domboDoc();
   if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
-  if (!domboHasSelection(doc)) throw new Error('사이즈를 표시할 그룹을 선택하세요.');
+  if (!domboHasSelection(doc)) throw new Error('사이즈를 표시할 작업물을 선택하세요.');
   var sel = [], i;
   for (i = 0; i < doc.selection.length; i++) sel.push(doc.selection[i]);
   var factor = 1;
