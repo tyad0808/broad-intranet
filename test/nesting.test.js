@@ -220,7 +220,7 @@ const MM = 72 / 25.4;
 const inside = (b, ab) => b[0] >= ab[0] - 1e-6 && b[1] <= ab[1] + 1e-6 && b[2] <= ab[2] + 1e-6 && b[3] >= ab[3] - 1e-6;
 const apart = (a, b, gap) => a[2] + gap <= b[0] + 1e-6 || b[2] + gap <= a[0] + 1e-6 || a[3] >= b[1] + gap - 1e-6 || b[3] >= a[1] + gap - 1e-6;
 
-test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 용지는 안내선, 원본은 숨긴 레이어로', () => {
+test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 안내선 없음, 원본은 숨긴 레이어로', () => {
   const f = fakeIllustrator();
   const a = f.rectPath(0, 300, 400 * MM, 300 - 200 * MM);  // 400 x 200mm
   const b = f.rectPath(50, 0, 50 + 100 * MM, -100 * MM);   // 100 x 100mm
@@ -232,14 +232,14 @@ test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 용지�
   assert.strictEqual(f.artboards.length, 1, '대지는 만들지 않는다');
 
   const layer = f.layers.find(l => l.name === '네스팅');
-  const sheets = layer.items.filter(it => it.guides);
-  const parts = layer.items.filter(it => !it.guides);
+  assert.ok(!layer.items.some(it => it.guides), '안내선은 그리지 않는다');
+  const parts = layer.items;
   assert.strictEqual(parts.length, 6);
-  assert.strictEqual(sheets.length, 1);
-  const sb = sheets[0].b;
-  // 선택한 것들의 왼쪽 위 (선 두께 뺀 패스 범위 geometricBounds) 에서 시작
-  assert.deepStrictEqual([sb[0], sb[1]], [0, 300]);
-  assert.ok(Math.abs(sb[2] - sb[0] - 1000 * MM) < 1e-6, '안내선 폭 = 용지 폭');
+  // 용지: 선택한 것들의 왼쪽 위 (선 두께 뺀 패스 범위 geometricBounds) 에서 시작, 길이는 메시지의 사용 길이
+  const used = Number(msg.match(/사용 길이 (\d+)mm/)[1]) * MM;
+  const sb = [0, 300, 1000 * MM, 300 - used];
+  assert.ok(Math.min(...parts.map(p => p.geometricBounds[0])) === 10 * MM, '왼쪽 여백부터');
+  assert.ok(Math.max(...parts.map(p => p.geometricBounds[1])) === 300 - 10 * MM, '위 여백부터');
 
   const backup = f.layers.find(l => l.name === '네스팅 전 원본');
   assert.deepStrictEqual(backup.items, [a, b], '원본은 숨긴 레이어로');
@@ -273,12 +273,9 @@ test('아크릴 텍스트 네스팅: 살아있는 글자를 아웃라인해서 �
     const ai = loadWith(f);
     const msg = ai.nestText({ sheetWMm: 100, sheetHMm: 100, gapMm: 2, marginMm: 3, unit, laserLine: true });
     const layer = f.layers.find(l => l.name === '네스팅');
-    const sheets = layer.items.filter(it => it.guides);
-    layer.items = layer.items.filter(it => !it.guides);
+    assert.ok(!layer.items.some(it => it.guides), '안내선은 그리지 않는다');
     const expected = unit === 'glyph' ? 2 : 3;
     assert.strictEqual(layer.items.length, expected, `${unit}: ${msg}`);
-    assert.strictEqual(sheets.length, 1);
-    assert.deepStrictEqual([sheets[0].b[0], sheets[0].b[1]], [0, 100], '글자가 있던 자리(왼쪽 위)부터');
     const backup = f.layers.find(l => l.name === '네스팅 전 원본');
     assert.ok(f.all.has(text) && text.parent === backup && backup.visible === false, '원본 글자는 숨긴 레이어에');
     assert.strictEqual(f.artboards.length, 1);
@@ -290,7 +287,7 @@ test('아크릴 텍스트 네스팅: 살아있는 글자를 아웃라인해서 �
       assert.strictEqual(p.filled, false);
       assert.strictEqual(p.strokeWidth, 0.1);
     }));
-    const ab = sheets[0].b;
+    const ab = [0, 100, 100 * MM, 100 - 100 * MM]; // 원판: 글자가 있던 자리(왼쪽 위)부터
     layer.items.forEach(it => assert.ok(inside(it.geometricBounds, [ab[0] + 3 * MM, ab[1] - 3 * MM, ab[2] - 3 * MM, ab[3] + 3 * MM])));
     assert.match(layer.items[0].name, unit === 'glyph' ? /^글자_/ : /^조각_/);
   }
@@ -334,8 +331,9 @@ test('모양대로 네스팅: 준비 → 패널 계산 → 적용, ㅁ 구멍 �
   assert.match(msg, /글자 5개를 모양대로 110×110mm 원판 1장/);
 
   const layer = f.layers.find(l => l.name === '네스팅');
-  const parts = layer.items.filter(it => !it.guides);
-  const sheet = layer.items.find(it => it.guides).b;
+  assert.ok(!layer.items.some(it => it.guides), '안내선은 그리지 않는다');
+  const parts = layer.items;
+  const sheet = [0, 100 * MM, 110 * MM, 100 * MM - 110 * MM]; // 원판: 글자가 있던 자리(왼쪽 위)부터
   assert.strictEqual(parts.length, 5);
   // 실제 자리에서: 원판 여백 안, 작은 것들은 ㅁ 구멍 안, 서로 간격 유지
   const big = parts.find(p => p.kids && p.kids.length === 2);
