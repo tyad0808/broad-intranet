@@ -30,7 +30,8 @@
   .radios { display: flex; gap: 10px; flex-wrap: wrap; }
   .hint { display: none; margin: 4px 0 0; color: #999; font-size: 10px; line-height: 1.35; }
   body.help .hint { display: block; }
-  .top { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 2px; }
+  .top { display: flex; justify-content: flex-end; align-items: center; gap: 4px; margin-bottom: 2px; }
+  #ver { margin-right: auto; color: #777; font-size: 10px; }
   #editor { border: 1px solid #2d6fd1; border-radius: 4px; padding: 6px 8px; margin-bottom: 8px; }
   .editRow { display: flex; gap: 4px; align-items: center; margin: 4px 0; }
   .editRow input { flex: 1; min-width: 0; background: #222; color: #eee; border: 1px solid #555; padding: 3px 4px; }
@@ -45,6 +46,7 @@
 </head>
 <body>
   <div class="top">
+    <span id="ver" title="일러스트에 실제로 올라간 버전"></span>
     <button id="helpToggle" class="small">도움말</button>
     <button id="editToggle" class="small">순서·이름</button>
   </div>

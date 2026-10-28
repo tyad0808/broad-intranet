@@ -273,4 +273,9 @@
   applyLayout();
   load();
   updateSums();
+
+  // 일러스트에 실제로 올라간 스크립트 버전 (새로 설치했는데 옛 버전이면 일러스트를 완전히 껐다 켜야 함)
+  if (window.__adobe_cep__) {
+    window.__adobe_cep__.evalScript("typeof DOMBO_VERSION === 'string' ? DOMBO_VERSION : '?'", function (v) { $('ver').textContent = 'v' + v; });
+  }
 })();
