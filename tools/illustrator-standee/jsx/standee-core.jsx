@@ -1,7 +1,7 @@
 ﻿// 등신대 패널: 누끼 사진(과 글자·도형 디자인)을 고르면 여기서 배경 투명 PNG 로 내보내고,
 // 패널이 그 투명도로 외곽선을 계산한 뒤(standee-shape.js), 여기서 흰 면(맨 뒤)과 칼선으로 그린다.
 
-var STANDEE_VERSION = '1.2.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var STANDEE_VERSION = '1.2.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var STANDEE_PT_PER_MM = 72 / 25.4;
 var STANDEE_CUT_LAYER = '칼선';
 var STANDEE_CUT_SPOT = 'CutContour';
@@ -29,6 +29,10 @@ function standeePrepare() {
   try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; } // 큰 캔버스 문서는 스크립트 좌표가 1/10
   var wPt = b[2] - b[0], hPt = b[1] - b[3];
   if (!(wPt > 0) || !(hPt > 0)) throw new Error('선택한 것의 크기가 0 입니다.');
+  // 둘레에 여백을 두고, 왼쪽 위 여백에 방향 표시(네모)를 찍어 내보낸다.
+  // 패널은 PNG 에서 이 네모가 어느 구석에 있는지 보고 위아래·좌우가 뒤집혔는지 알아낸다
+  var m = Math.max(5, Math.max(wPt, hPt) * 0.03);
+  wPt += 2 * m; hPt += 2 * m;
   // 칸 하나 = 큰 변의 1/1500 (0.5mm 보다 잘게는 안 함) → 그만큼의 픽셀로 내보낸다
   var longMm = Math.max(wPt, hPt) / STANDEE_PT_PER_MM * factor;
   var cellMm = Math.max(0.5, longMm / 1500);
@@ -42,7 +46,13 @@ function standeePrepare() {
       var d = items[i].duplicate(tmp.layers[0], ElementPlacement.PLACEATBEGINNING);
       tb = standeeUnion(tb, d.visibleBounds);
     }
-    tmp.artboards[0].artboardRect = tb;
+    tmp.artboards[0].artboardRect = [tb[0] - m, tb[1] + m, tb[2] + m, tb[3] - m];
+    var mk = tmp.layers[0].pathItems.rectangle(tb[1] + m, tb[0] - m, m * 0.8, m * 0.8);
+    var black = new RGBColor();
+    black.red = 0; black.green = 0; black.blue = 0;
+    mk.filled = true;
+    mk.fillColor = black;
+    mk.stroked = false;
     var o = new ExportOptionsPNG24();
     o.transparency = true;
     o.antiAliasing = true;
@@ -57,7 +67,7 @@ function standeePrepare() {
   if (!out.exists) throw new Error('임시 PNG 를 만들지 못했습니다.');
   $.global.STANDEE_PENDING = items;
   return '{"path":"' + out.fsName.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '","bounds":[' + b.join(',') +
-    '],"flipX":false,"flipY":false,"factor":' + factor + ',"temp":true}';
+    '],"margin":' + m + ',"factor":' + factor + ',"temp":true}';
 }
 
 // 패널이 다 읽은 임시 PNG 를 지운다
@@ -141,23 +151,11 @@ function standeeApply(data) {
   grp.move(items[0], ElementPlacement.PLACEBEFORE);
   grp.name = '등신대';
   for (var i = 0; i < items.length; i++) items[i].move(grp, ElementPlacement.PLACEATEND);
-  // 위아래 확인: 발 아래 일자 자리는 선택한 것의 아래쪽, 외곽선만큼 넓어지는 쪽은 위쪽이어야 한다.
-  // 일러스트 버전에 따라 위아래가 뒤집혀 나오면 선택 범위 가운데를 기준으로 뒤집어 다시 그린다
-  var white = standeeDrawPath(grp, data.points), flipped = false;
-  if (data.bounds) {
-    var sb = data.bounds, wb = white.geometricBounds;
-    var up = sb[1] >= sb[3] ? 1 : -1;
-    var growTop = (wb[1] - sb[1]) * up, growBottom = (sb[3] - wb[3]) * up;
-    if (growBottom > growTop + 1) {
-      var c = sb[1] + sb[3];
-      for (var q = 0; q < data.points.length; q++) {
-        var pt = data.points[q];
-        pt[1] = c - pt[1]; pt[3] = c - pt[3]; pt[5] = c - pt[5];
-      }
-      white.remove();
-      white = standeeDrawPath(grp, data.points);
-      flipped = true;
-    }
+  var white = standeeDrawPath(grp, data.points);
+  // 보낸 좌표와 그려진 좌표가 같은지 (다르면 원인을 찾게 메시지에 남긴다)
+  var a0 = white.pathPoints[0].anchor, check = '';
+  if (Math.abs(a0[0] - data.points[0][0]) > 1 || Math.abs(a0[1] - data.points[0][1]) > 1) {
+    check = ' [좌표 확인: 보냄 ' + Math.round(data.points[0][0]) + ',' + Math.round(data.points[0][1]) + ' / 그려짐 ' + Math.round(a0[0]) + ',' + Math.round(a0[1]) + ']';
   }
   white.move(grp, ElementPlacement.PLACEATEND);
   white.name = '외곽선';
@@ -177,7 +175,7 @@ function standeeApply(data) {
   var b = white.geometricBounds;
   return '등신대 외곽선을 만들었습니다 (외곽선 ' + data.outlineMm + 'mm, 예각 정리 ' + data.roundMm + 'mm, 발 아래 일자). ' +
     '전체 ' + standeeMm(b[2] - b[0]) + ' × ' + standeeMm(Math.abs(b[1] - b[3])) + ' mm. 칼선은 \'' + STANDEE_CUT_LAYER + '\' 레이어에 있습니다.' +
-    (flipped ? ' (위아래가 뒤집혀 나와서 바로잡았습니다)' : '');
+    (data.orient ? ' (그림 방향: ' + data.orient + ')' : '') + check;
 }
 
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다
