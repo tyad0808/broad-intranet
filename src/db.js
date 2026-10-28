@@ -90,6 +90,8 @@ function addMissingColumns(db) {
   addColumn(db, 'inquiries', 'chat_read_id', 'INTEGER');
   // 인트라넷에서 보낸 톡톡 말: 0 = 보냄, 1 = 네이버가 되돌려 준 것(echo)까지 확인. 손님·파트너센터 말은 비어 있음
   addColumn(db, 'chat_messages', 'echoed', 'INTEGER');
+  // 메일: 고객이 답장한 메일이면 앞 메일(같은 대화)의 id. 담당자를 이어받고 '↩ 이전 메일' 로 이어 준다
+  addColumn(db, 'inquiries', 'prev_id', 'INTEGER');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)과 발송지연(delay)도 받을 수 있게 넓힌다.

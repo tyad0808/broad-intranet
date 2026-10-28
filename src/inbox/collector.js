@@ -5,6 +5,35 @@ const { transaction } = require('../db');
 // 메일 계정에서 온 것 (naver_mail, naver_mail2, gmail …)
 const isMailSource = source => /^(naver_mail|gmail)/.test(String(source || ''));
 
+// 'Re: 견적 문의' · 'RE: Fwd: 견적 문의' → '견적 문의' (같은 대화인지 제목으로 볼 때)
+const baseSubject = s => String(s || '').replace(/^\s*((re|fw|fwd|답장|전달)\s*(\[\d+\])?\s*:\s*)+/i, '').trim().toLowerCase();
+
+// 새로 받은 메일이 고객 답장이면 앞 메일을 찾아 이어 준다 (prev_id), 담당자가 비어 있으면 앞 메일 담당자를 이어받는다
+//   ① 메일 머리의 '답장 대상' 번호(References·In-Reply-To)가 문의함 메일의 번호와 같으면 확실
+//   ② 없으면 같은 보낸 사람 + 'Re:' 를 뗀 같은 제목, 최근 30일 안의 앞 메일
+// 돌려주는 값: 이어받은 담당자 id (없으면 null)
+function linkMailThread(db, id) {
+  const row = db.prepare('SELECT id, source, from_addr, subject, references_hdr, received_at, assignee_id FROM inquiries WHERE id = ?').get(id);
+  if (!row || !isMailSource(row.source)) return null;
+  const MAIL = "(source GLOB 'naver_mail*' OR source GLOB 'gmail*') AND deleted_at IS NULL AND id != ?";
+  let prev = null;
+  const refs = String(row.references_hdr || '').split(/\s+/).filter(Boolean).slice(-30);
+  if (refs.length) {
+    prev = db.prepare(`SELECT id, assignee_id FROM inquiries WHERE ${MAIL} AND message_id IN (${refs.map(() => '?').join(',')})
+      ORDER BY received_at DESC LIMIT 1`).get(row.id, ...refs);
+  }
+  const base = baseSubject(row.subject);
+  if (!prev && row.from_addr && base && base !== String(row.subject || '').trim().toLowerCase()) {
+    const since = new Date(Date.parse(row.received_at) - 30 * 24 * 3600 * 1000).toISOString();
+    prev = db.prepare(`SELECT id, assignee_id, subject FROM inquiries WHERE ${MAIL} AND lower(from_addr) = lower(?) AND received_at < ? AND received_at >= ?
+      ORDER BY received_at DESC LIMIT 20`).all(row.id, row.from_addr, row.received_at, since).find(p => baseSubject(p.subject) === base) || null;
+  }
+  if (!prev) return null;
+  const inherit = !row.assignee_id && prev.assignee_id ? prev.assignee_id : null;
+  db.prepare('UPDATE inquiries SET prev_id = ?, assignee_id = COALESCE(assignee_id, ?) WHERE id = ?').run(prev.id, inherit, row.id);
+  return inherit;
+}
+
 function createInboxCollector({ db, sources = [], notifier = null, now = () => new Date() }) {
   const getState = source => {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(`inbox_state_${source}`);
@@ -61,7 +90,10 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
             if (!r.changes && it.meta) updateMeta.run(it.meta, it.subject, it.source, it.external_id);
             if (r.changes) {
               result.created++;
-              if (!it.answered) createdRows.push({ id: Number(r.lastInsertRowid), label: src.label, ...it });
+              const id = Number(r.lastInsertRowid);
+              // 고객 답장 메일: 앞 메일과 이어 주고 담당자를 이어받는다
+              const assignee = isMailSource(it.source) ? linkMailThread(db, id) : null;
+              if (!it.answered) createdRows.push({ id, label: src.label, assignee, ...it });
             }
           }
           for (const id of out.answeredIds || []) result.answered += markAnswered.run(src.source, id).changes;
@@ -91,6 +123,13 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
       if (notifier.inboxNew) notifier.inboxNew(box, payload);
       else notifier.notify(box === 'mail' ? 'new_mail' : 'new_inquiry', payload, () => true);
     }
+    // 담당자를 이어받은 고객 답장: 그 담당자에게 따로 알린다
+    if (notifier) {
+      for (const r of recent.filter(x => x.assignee)) {
+        notifier.notify('new_mail', { title: '내 담당 메일에 고객 답장', body: `${r.from_name || r.from_addr || ''}: ${r.subject}`, url: `/inbox/${r.id}` },
+          userId => userId === r.assignee);
+      }
+    }
     return result;
   }
 
@@ -105,4 +144,4 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
   };
 }
 
-module.exports = { createInboxCollector };
+module.exports = { createInboxCollector, linkMailThread, baseSubject };

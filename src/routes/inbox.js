@@ -177,7 +177,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       SELECT q.id, q.source, q.from_name, q.from_addr, q.subject, q.received_at,
         substr(q.body, max(1, instr(lower(q.body), lower(?1)) - 40), 160) AS preview,
         instr(lower(q.body), lower(?1)) > 41 AS preview_cut,
-        q.status, q.assignee_id, q.attachments, u.name AS assignee_name
+        q.status, q.assignee_id, q.attachments, q.prev_id, u.name AS assignee_name
       FROM inquiries q LEFT JOIN users u ON u.id = q.assignee_id
       ${whereSql([...base, ...srcWhere, ...tabWhere[tab]])}
       ORDER BY q.received_at DESC, q.id DESC LIMIT 300
@@ -392,6 +392,8 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       chat, PARTNER_CENTER_URL, CHAT_STATUS,
       chatProduct: chat ? metaOf(inquiry).product || null : null,
       saidNo: chat && !inquiry.order_no ? metaOf(inquiry).saidNo || null : null,
+      // 고객 답장 메일이면 앞 메일 (같은 대화)
+      prevMail: inquiry.prev_id ? db.prepare('SELECT id, subject, received_at FROM inquiries WHERE id = ? AND deleted_at IS NULL').get(inquiry.prev_id) || null : null,
       linkedOrder: chat && inquiry.order_no
         ? db.prepare(`SELECT id, channel, channel_order_id, product_name,
             (SELECT buyer_name FROM orders b WHERE b.channel_order_id = o.channel_order_id AND b.buyer_name IS NOT NULL ORDER BY b.id LIMIT 1) AS buyer_name

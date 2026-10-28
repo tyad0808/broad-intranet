@@ -544,3 +544,48 @@ test('보낸 사람이 없는 문의(쿠팡): 주문번호가 같은 주문의 �
   assert.strictEqual(db.prepare("SELECT from_name FROM inquiries WHERE external_id = 'p:1'").get().from_name, '김고객');
   assert.strictEqual(db.prepare("SELECT from_name FROM inquiries WHERE external_id = 'p:2'").get().from_name, null);
 });
+
+test('고객 답장 메일은 앞 메일과 이어지고 담당자를 이어받는다 (답장 번호 → 없으면 같은 보낸 사람·같은 제목), 담당자에게 따로 알림', async () => {
+  const db = openDb(':memory:');
+  const kimId = addUser(db, { email: 'kim@broad.test', name: '김직원' });
+  const sent = [];
+  const notifier = { inboxChanged() {}, inboxNew: (box, p) => sent.push({ to: 'box', title: p.title }), notify: (type, p, can) => sent.push({ to: [kimId, 999].filter(id => can(id)), title: p.title, url: p.url }) };
+  const at = mins => new Date(Date.now() - mins * 60 * 1000).toISOString();
+  const mail = (id, extra) => ({ source: 'naver_mail', external_id: id, from_name: '홍길동', from_addr: 'hong@example.com', reply_to: null,
+    subject: '견적 문의드립니다', body: '', attachments: '[]', message_id: `<${id}@example.com>`, references_hdr: null, received_at: at(30), ...extra });
+  let items = [mail('m1')];
+  const col = createInboxCollector({ db, notifier, sources: [{ source: 'naver_mail', label: '네이버메일', fetch: async () => ({ items, state: {} }) }] });
+  await col.run();
+  const row = id => ({ ...db.prepare('SELECT id, assignee_id, prev_id FROM inquiries WHERE external_id = ?').get(id) });
+  db.prepare('UPDATE inquiries SET assignee_id = ? WHERE external_id = ?').run(kimId, 'm1');
+
+  // ① 답장 번호(References)로: 제목이 달라도 같은 대화
+  sent.length = 0;
+  items = [mail('m2', { subject: '시안 확인했어요', references_hdr: '<m1@example.com>', received_at: at(10) })];
+  await col.run();
+  assert.deepStrictEqual(row('m2'), { id: 2, assignee_id: kimId, prev_id: 1 });
+  assert.ok(sent.some(s => s.title === '내 담당 메일에 고객 답장' && s.to.length === 1 && s.to[0] === kimId && s.url === '/inbox/2'), '담당자에게만 따로 알림');
+
+  // ② 번호가 없으면 같은 보낸 사람 + 'Re:' 뗀 같은 제목
+  items = [mail('m3', { subject: 'RE: Re: 견적 문의드립니다', received_at: at(5) })];
+  await col.run();
+  assert.deepStrictEqual(row('m3'), { id: 3, assignee_id: kimId, prev_id: 1 });
+
+  // 다른 사람의 같은 제목 메일, 'Re:' 없는 새 메일은 이어지지 않는다
+  items = [mail('m4', { from_addr: 'other@example.com', subject: 'Re: 견적 문의드립니다', received_at: at(4) }), mail('m5', { received_at: at(3) })];
+  await col.run();
+  assert.deepStrictEqual([row('m4').prev_id, row('m4').assignee_id, row('m5').prev_id], [null, null, null]);
+});
+
+test('메일 머리의 In-Reply-To 도 답장 번호로 기억하고, 화면에 ↩ 고객 답장·이전 메일 링크', async t => {
+  const m = await parseMail('naver_mail', raw({ subject: 'Re: 견적 문의드립니다', extra: 'In-Reply-To: <m1@example.com>' }), { uidKey: '1:9' });
+  assert.match(m.references_hdr, /<m1@example.com>/);
+
+  const { kim, db } = await setupInbox(t);
+  const ins = db.prepare(`INSERT INTO inquiries (source, external_id, from_addr, subject, body, received_at, prev_id) VALUES ('naver_mail', ?, 'hong@example.com', ?, '', ?, ?)`);
+  const first = Number(ins.run('t1', '견적 문의드립니다', '2026-10-20T01:00:00Z', null).lastInsertRowid);
+  const reply = Number(ins.run('t2', 'Re: 견적 문의드립니다', '2026-10-21T01:00:00Z', first).lastInsertRowid);
+  assert.match((await kim.request('/inbox?box=mail')).text, /↩ 고객 답장<\/span> Re: 견적 문의드립니다/);
+  const detail = (await kim.request(`/inbox/${reply}`)).text;
+  assert.match(detail, new RegExp(`<dt>이전 메일</dt><dd><a href="/inbox/${first}[^"]*">↩ 견적 문의드립니다</a>`));
+});

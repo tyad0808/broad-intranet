@@ -130,7 +130,7 @@
             <span class="src-tag src-<%= r.source %>"><%= labelOf(r.source) %></span>
             <span class="muted"><strong class="buyer"><% hl(r.from_name || r.from_addr || '-').forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></strong><% if (r.from_name && r.from_addr) { %> &lt;<%= r.from_addr %>&gt;<% } %> · <%= kst(r.received_at) %></span>
           </div>
-          <div class="oi-name"><% hl(r.subject).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %><% if (files.length) { %> <span class="clip" title="첨부 <%= files.length %>개">📎<%= files.length %></span><% } %></div>
+          <div class="oi-name"><% if (r.prev_id) { %><span class="reply-tag" title="앞 메일에 대한 고객 답장 (담당자를 이어받음)">↩ 고객 답장</span> <% } %><% hl(r.subject).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %><% if (files.length) { %> <span class="clip" title="첨부 <%= files.length %>개">📎<%= files.length %></span><% } %></div>
           <div class="muted inbox-preview"><%= r.preview_cut ? '…' : '' %><% hl((r.preview || '').replace(/\s+/g, ' ')).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></div>
         </a>
         <div class="oi-meta">

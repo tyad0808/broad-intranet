@@ -96,7 +96,8 @@ async function parseMail(source, raw, { uidKey, flags = new Set(), date = null, 
   const from = (m.from && m.from.value && m.from.value[0]) || {};
   const replyTo = (m.replyTo && m.replyTo.value && m.replyTo.value[0]) || null;
   const text = (m.text && m.text.trim()) || htmlToText(m.html);
-  const refs = Array.isArray(m.references) ? m.references : m.references ? [m.references] : [];
+  // 어느 메일에 대한 답장인지 (References + In-Reply-To): 같은 대화를 찾아 담당자를 이어받을 때 쓴다
+  const refs = [...new Set([...(Array.isArray(m.references) ? m.references : m.references ? [m.references] : []), ...(m.inReplyTo ? [m.inReplyTo] : [])])];
   return {
     source,
     external_id: uidKey,

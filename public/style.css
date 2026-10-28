@@ -1417,3 +1417,5 @@ body.no-sidebar .card.narrow .muted { margin: 16px 0 0; text-align: center; }
 .error-text { color: var(--error); }
 .token-help { margin-top: 10px; font-size: 14px; }
 .token-help summary { cursor: pointer; color: var(--text-2); }
+/* 메일함: 앞 메일에 대한 고객 답장 표시 */
+.reply-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 7px; border-radius: 6px; background: var(--primary-weak); color: var(--primary-dark); font-size: 14px; font-weight: 600; vertical-align: 1px; }
