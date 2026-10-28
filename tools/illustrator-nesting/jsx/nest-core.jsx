@@ -502,7 +502,7 @@ function nestRoll(opts) {
   var src = nestSelection(doc, '배치할 작업물을');
   var k = NEST_PT_PER_MM, sizes = [], bounds = [], names = [], i, q;
   for (i = 0; i < src.length; i++) {
-    var b = nestBounds(src[i], false);
+    var b = nestBounds(src[i], true); // 패스 기준 (선 두께 제외)
     if (!b) throw new Error('선택한 것 중에 보이는 모양이 없는 개체가 있습니다.');
     bounds.push(b);
     names.push((src[i].name || src[i].typename) + ' ' + Math.round((b[2] - b[0]) / k) + '×' + Math.round((b[1] - b[3]) / k) + 'mm');
@@ -520,14 +520,14 @@ function nestRoll(opts) {
     throw new Error(nestTooBigMessage(e, names));
   }
 
-  var start = nestStart(src, false);
+  var start = nestStart(src, true);
   var origins = nestOrigins(start, r.binHeights, NEST_SHEET_GAP_MM * k);
   var layer = nestGetLayer(doc), placed = [];
   nestDrawSheets(layer, origins, o.widthMm * k, r.binHeights, '용지');
   for (i = 0; i < r.placements.length; i++) {
     var pl = r.placements[i];
     var d = src[pl.id].duplicate(layer, ElementPlacement.PLACEATEND);
-    nestMoveTo(d, pl, origins[pl.bin], false);
+    nestMoveTo(d, pl, origins[pl.bin], true);
     placed.push(d);
   }
   nestBackup(doc, src);

@@ -237,8 +237,8 @@ test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 용지�
   assert.strictEqual(parts.length, 6);
   assert.strictEqual(sheets.length, 1);
   const sb = sheets[0].b;
-  // 선택한 것들의 왼쪽 위 (선 두께 포함 visibleBounds) 에서 시작
-  assert.deepStrictEqual([sb[0], sb[1]], [-1, 301]);
+  // 선택한 것들의 왼쪽 위 (선 두께 뺀 패스 범위 geometricBounds) 에서 시작
+  assert.deepStrictEqual([sb[0], sb[1]], [0, 300]);
   assert.ok(Math.abs(sb[2] - sb[0] - 1000 * MM) < 1e-6, '안내선 폭 = 용지 폭');
 
   const backup = f.layers.find(l => l.name === '네스팅 전 원본');
@@ -247,7 +247,7 @@ test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 용지�
   assert.strictEqual(backup.locked, true);
   assert.deepStrictEqual(a.b, [0, 300, 400 * MM, 300 - 200 * MM], '원본 위치는 그대로');
 
-  const vb = parts.map(it => it.visibleBounds);
+  const vb = parts.map(it => it.geometricBounds); // 간격·여백은 패스 기준
   const inner = [sb[0] + 10 * MM, sb[1] - 10 * MM, sb[2] - 10 * MM, sb[3] + 10 * MM];
   vb.forEach(v => assert.ok(inside(v, inner), '여백 안'));
   for (let i = 0; i < vb.length; i++) for (let j = i + 1; j < vb.length; j++) assert.ok(apart(vb[i], vb[j], 5 * MM - 1e-6), '간격 유지');
