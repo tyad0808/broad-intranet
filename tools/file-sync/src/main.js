@@ -26,6 +26,7 @@ const DEFAULTS = {
   intervalSec: 5,                                          // 몇 초마다 확인
   sound: true,                                             // 받으면 소리
   repeatSound: false,                                      // 확인할 때까지 소리 반복
+  popWindow: true,                                         // 새 파일이 오면 목록 창을 맨 앞에 띄우기
   autoStart: true,                                         // 윈도우 켤 때 자동 실행
   skipExisting: true,                                      // 처음 켤 때 이미 있던 파일은 받지 않기
   remindMin: 30,                                           // 출력 전인 채 이만큼(분) 지나면 다시 알림 (0 이면 끔)
@@ -209,6 +210,7 @@ function remind() {
     n.on('click', showWindow);
     n.show();
   }
+  popWindow();
   chimeOnce(stale.some(e => e.urgent), false);
 }
 
@@ -247,6 +249,7 @@ function notify(list) {
     n.on('click', showWindow);
     n.show();
   }
+  popWindow();
   chimeOnce(urgent > 0, config.repeatSound);
 }
 
@@ -264,12 +267,24 @@ function createWindow(show) {
   });
   win.loadFile(path.join(__dirname, 'ui', 'index.html'));
   // 닫기 = 트레이로 숨기기 (계속 받는다)
+  win.on('focus', () => win.flashFrame(false));
   win.on('close', e => { if (!app.isQuitting) { e.preventDefault(); win.hide(); } });
 }
 function showWindow() {
   if (!win || win.isDestroyed()) createWindow(true);
+  if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+}
+// 새 파일이 오면 목록 창을 맨 앞에 띄운다 (알림은 몇 초 뒤 사라지지만 창은 남아 한눈에 보인다).
+// 윈도우는 다른 프로그램 위로 창이 튀어나오는 것을 막으므로 잠깐 '항상 위' 로 올렸다가 푼다. 작업표시줄도 깜빡인다
+function popWindow() {
+  if (!config.popWindow) return;
+  showWindow();
+  win.setAlwaysOnTop(true, 'screen-saver');
+  win.moveTop();
+  win.flashFrame(true);
+  setTimeout(() => { if (win && !win.isDestroyed()) win.setAlwaysOnTop(false); }, 1500);
 }
 
 // 윈도우는 시작 메뉴 바로가기(앱 ID 포함)가 있어야 알림 창을 띄워 준다. 시작 메뉴에서 찾기도 쉬워진다

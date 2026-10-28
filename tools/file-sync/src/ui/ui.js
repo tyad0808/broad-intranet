@@ -241,7 +241,7 @@
   });
 
   // ---- 설정 ----
-  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin', 'skipExt', 'wifiName'], CHECKS = ['sound', 'urgentFirst', 'repeatSound', 'autoStart', 'skipExisting', 'moveDoneOnNas', 'wifiReconnect'];
+  const FIELDS = ['source', 'dest', 'intervalSec', 'remindMin', 'skipExt', 'wifiName'], CHECKS = ['sound', 'urgentFirst', 'repeatSound', 'popWindow', 'autoStart', 'skipExisting', 'moveDoneOnNas', 'wifiReconnect'];
   function openSettings() {
     const c = state.config;
     FIELDS.forEach(k => { $(k).value = c[k] == null ? '' : c[k]; });
