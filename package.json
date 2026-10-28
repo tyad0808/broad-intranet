@@ -24,6 +24,7 @@
     "naver-order-check": "node --disable-warning=ExperimentalWarning scripts/naver-order-check.js",
     "talktalk-check": "node --disable-warning=ExperimentalWarning scripts/talktalk-check.js",
     "logen-check": "node --disable-warning=ExperimentalWarning scripts/logen-check.js",
+    "order-trace": "node --disable-warning=ExperimentalWarning scripts/order-trace.js",
     "mail-backfill": "node --disable-warning=ExperimentalWarning scripts/mail-backfill.js"
   },
   "dependencies": {
