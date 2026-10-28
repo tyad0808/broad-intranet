@@ -363,20 +363,10 @@ function nestCheckText(o) {
   return o;
 }
 
-// 용지·원판 자리: 시작점(왼쪽 위, 문서 좌표)에서 아래로 간격을 두고 차례로 쌓는다
-// 용지 폭 네스팅: 여러 장이면 시작점에서 오른쪽으로 (용지 폭 + 간격) 씩 옆으로 놓는다
+// 용지·원판 자리: 여러 장이면 시작점(왼쪽 위, 문서 좌표)에서 오른쪽으로 (폭 + 간격) 씩 옆으로 놓는다 (위를 맞춤)
 function nestOriginsSide(start, widthPt, count, gapPt) {
   var out = [];
   for (var i = 0; i < count; i++) out.push([start[0] + i * (widthPt + gapPt), start[1]]);
-  return out;
-}
-
-function nestOrigins(start, heights, gapPt) {
-  var out = [], y = start[1];
-  for (var i = 0; i < heights.length; i++) {
-    out.push([start[0], y]);
-    y -= heights[i] + gapPt;
-  }
   return out;
 }
 
@@ -670,7 +660,7 @@ function nestText(opts) {
     cleanup();
     throw new Error(nestTooBigMessage(e, names));
   }
-  var origins = nestOrigins(start, r.binHeights, NEST_SHEET_GAP_MM * k);
+  var origins = nestOriginsSide(start, o.sheetWMm * k, r.bins, NEST_SHEET_GAP_MM * k);
 
   var red = o.laserLine ? nestRed(doc) : null;
   for (i = 0; i < r.placements.length; i++) {
@@ -779,7 +769,7 @@ function nestTextApply(plan) {
   var layer = nestGetLayer(doc);
   var heights = [];
   for (i = 0; i < plan.bins; i++) heights.push(o.sheetHMm * k);
-  var origins = nestOrigins(p.start, heights, NEST_SHEET_GAP_MM * k);
+  var origins = nestOriginsSide(p.start, o.sheetWMm * k, plan.bins, NEST_SHEET_GAP_MM * k);
 
   var red = o.laserLine ? nestRed(doc) : null;
   for (i = 0; i < plan.placements.length; i++) {

@@ -254,14 +254,9 @@ test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 안내�
   assert.match(msg, /대지 밖/, '1000mm 대지보다 크면 알려 준다');
 });
 
-test('용지 폭 네스팅은 여러 장이면 시작점에서 오른쪽 옆으로 (폭 + 간격) 씩 놓는다', () => {
+test('용지·원판은 여러 장이면 시작점에서 오른쪽 옆으로 (폭 + 간격) 씩 놓는다', () => {
   const o = Array.from(core.nestOriginsSide([10, 500], 1000, 3, 30), p => Array.from(p));
   assert.deepStrictEqual(o, [[10, 500], [1040, 500], [2070, 500]]);
-});
-
-test('원판(텍스트)은 여러 장이면 시작점에서 아래로 간격을 두고 쌓는다', () => {
-  const o = Array.from(core.nestOrigins([10, 500], [100, 50, 80], 30), p => Array.from(p));
-  assert.deepStrictEqual(o, [[10, 500], [10, 370], [10, 290]]);
 });
 
 test('아크릴 텍스트 네스팅: 살아있는 글자를 아웃라인해서 글자마다·조각마다 배치', () => {
@@ -417,4 +412,21 @@ test('용지 폭 네스팅: 최대 길이를 넘으면 두 번째 장은 오른�
   near(parts[1][0], (500 + 30 + 10) * MM, '옆 장: 용지 폭 + 30mm 오른쪽');
   near(parts[0][1], 300 - 10 * MM);
   near(parts[1][1], 300 - 10 * MM, '위를 맞춤');
+});
+
+test('아크릴 텍스트 네스팅: 원판이 여러 장이면 두 번째 원판은 오른쪽 옆에 위를 맞춰 놓는다', () => {
+  const f = fakeIllustrator();
+  // 80 x 80mm 글자 2개, 원판 100 x 100mm → 한 장에 하나씩
+  const text = new f.Item('TextFrame', { b: [0, 80 * MM, 200 * MM, 0], glyphs: [f.rectPath(0, 80 * MM, 80 * MM, 0), f.rectPath(100 * MM, 80 * MM, 180 * MM, 0)] });
+  f.layers[0].adopt(text);
+  f.doc.selection = [text];
+  const ai = loadWith(f);
+  const msg = ai.nestText({ sheetWMm: 100, sheetHMm: 100, gapMm: 2, marginMm: 3, unit: 'glyph' });
+  assert.match(msg, /원판 2장/);
+  const parts = f.layers.find(l => l.name === '네스팅').items.map(it => it.geometricBounds).sort((p, q) => p[0] - q[0]);
+  assert.strictEqual(parts.length, 2);
+  const near = (x, y, m) => assert.ok(Math.abs(x - y) < 1e-6, m || `${x} != ${y}`);
+  near(parts[0][0], 3 * MM);
+  near(parts[1][0], (100 + 30 + 3) * MM, '옆 원판: 원판 폭 + 30mm 오른쪽');
+  near(parts[1][1], parts[0][1], '위를 맞춤');
 });
