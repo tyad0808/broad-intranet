@@ -15,7 +15,7 @@
     el.textContent = result.slice(ok ? 3 : 4);
   }
 
-  function readOptions() { return { outlineMm: parseFloat($('outlineMm').value), roundMm: parseFloat($('roundMm').value) }; }
+  function readOptions() { return { outlineMm: parseFloat($('outlineMm').value), roundMm: parseFloat($('roundMm').value), baseMm: parseFloat($('baseMm').value) }; }
   function save(o) { try { localStorage.setItem(STORE_KEY, JSON.stringify(o)); } catch (e) {} }
   (function load() {
     var o;
@@ -23,6 +23,7 @@
     if (!o) return;
     if (typeof o.outlineMm === 'number' && !isNaN(o.outlineMm)) $('outlineMm').value = o.outlineMm;
     if (typeof o.roundMm === 'number' && !isNaN(o.roundMm)) $('roundMm').value = o.roundMm;
+    if (typeof o.baseMm === 'number' && !isNaN(o.baseMm)) $('baseMm').value = o.baseMm;
   })();
   document.addEventListener('change', function () { save(readOptions()); });
 
@@ -39,6 +40,7 @@
     save(o);
     if (!(o.outlineMm > 0)) { show('ERR:외곽선은 0 보다 커야 합니다.'); return; }
     if (!(o.roundMm >= 0)) o.roundMm = 0;
+    if (!(o.baseMm >= 0)) o.baseMm = 0;
     evalP('standeePanelPrepare()', function (json) {
       var info = JSON.parse(json);
       var file = window.cep && window.cep.fs ? window.cep.fs.readFile(info.path, window.cep.encoding.Base64) : null;
@@ -60,7 +62,7 @@
           var px = ctx.getImageData(0, 0, gw, gh).data, alpha = new Uint8Array(gw * gh);
           for (var i = 0; i < gw * gh; i++) alpha[i] = px[i * 4 + 3];
           var r = window.standeeShape.outline(alpha, gw, gh, {
-            cellMm: (physW / gw + physH / gh) / 2, outlineMm: o.outlineMm, roundMm: o.roundMm
+            cellMm: (physW / gw + physH / gh) / 2, outlineMm: o.outlineMm, roundMm: o.roundMm, baseMm: o.baseMm
           });
           // 칸 좌표 → 문서 좌표 (pt)
           var sx = (b[2] - b[0]) / gw, sy = (b[1] - b[3]) / gh;

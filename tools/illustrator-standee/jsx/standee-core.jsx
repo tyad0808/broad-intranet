@@ -1,7 +1,7 @@
 ﻿// 등신대 패널: 누끼 사진(과 글자·도형 디자인)을 고르면 여기서 배경 투명 PNG 로 내보내고,
 // 패널이 그 투명도로 외곽선을 계산한 뒤(standee-shape.js), 여기서 흰 면(맨 뒤)과 칼선으로 그린다.
 
-var STANDEE_VERSION = '1.1.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var STANDEE_VERSION = '1.2.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var STANDEE_PT_PER_MM = 72 / 25.4;
 var STANDEE_CUT_LAYER = '칼선';
 var STANDEE_CUT_SPOT = 'CutContour';

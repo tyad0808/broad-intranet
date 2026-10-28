@@ -1,6 +1,7 @@
 // 등신대 외곽선 계산 (래스터 방식). 등신대 패널에서 돌린다 (일러스트레이터 스크립트보다 훨씬 빠름).
 // 입력: 누끼 PNG 의 알파(투명도)를 줄인 칸 그림 (w x h, 0~255).
-// 순서: 사람 모양 → 외곽선만큼 넓히기 → 예각(좁은 틈·뾰족한 안쪽 모서리) 메우기 → 발 아래 일자로 자르기 → 구멍 메우기 → 윤곽선 → 부드럽게
+// 순서: 사람 모양 → 외곽선만큼 넓히기 → 예각(좁은 틈·뾰족한 안쪽 모서리) 메우기 → 발 아래 외곽선만큼에서 일자로 자르기
+//       → 바닥 가까운 빈 곳은 바닥까지 곧게 메우기 → 구멍 메우기 → 윤곽선 → 부드럽게
 // 결과 좌표는 칸 단위 (왼쪽 위가 0, 오른쪽·아래로 증가). 입력 그림의 (0,0) 이 결과의 (0,0).
 (function (root) {
   'use strict';
@@ -216,7 +217,7 @@
     return out;
   }
 
-  // alpha: 0~255 (w*h), opts: { cellMm: 칸 하나의 실제 크기(mm), outlineMm, roundMm, flatBottom }
+  // alpha: 0~255 (w*h), opts: { cellMm: 칸 하나의 실제 크기(mm), outlineMm, roundMm, baseMm: 바닥 채우기 높이(기본 300), flatBottom }
   // 결과: { points: [{ a:[x,y], l, r, corner }], feetY, cells } (칸 단위, 입력 그림 기준)
   function outline(alpha, w, h, opts) {
     const c = opts.cellMm, o = opts.outlineMm / c, r = Math.max(0, opts.roundMm || 0) / c;
@@ -240,9 +241,20 @@
       // 사람 모양은 꼭 남긴다 (줄이다가 깎이지 않게)
       for (let i = 0; i < W * H; i++) if (person[i]) shape[i] = 1;
     }
-    // 발 아래를 일자로: 사람의 맨 아래 줄 바로 밑에서 자른다
-    const cut = feet + 1 + P;
-    if (opts.flatBottom !== false) for (let y = cut; y < H; y++) for (let x = 0; x < W; x++) shape[y * W + x] = 0;
+    // 발 아래를 일자로: 맨 아래(발) 에서 외곽선만큼 내려온 자리에서 자른다
+    const cut = Math.min(H - 1, feet + 1 + P + Math.round(o));
+    if (opts.flatBottom !== false) {
+      for (let y = cut; y < H; y++) for (let x = 0; x < W; x++) shape[y * W + x] = 0;
+      // 바닥 채우기: 바닥에서 이 높이 안에 있는 것은 바닥까지 곧게 내린다
+      // (장화 사이·앞코 아래·치맛단 아래 빈 곳을 메워 바닥 일자 선이 끊기지 않게)
+      const band = Math.round(Math.max(0, opts.baseMm == null ? 300 : opts.baseMm) / c);
+      const top = Math.max(0, cut - band);
+      for (let x = 0; x < W; x++) {
+        let y0 = -1;
+        for (let y = top; y < cut; y++) if (shape[y * W + x]) { y0 = y; break; }
+        if (y0 >= 0) for (let y = y0; y < cut; y++) shape[y * W + x] = 1;
+      }
+    }
     fillHoles(shape, W, H);
     keepLargest(shape, W, H);
 
@@ -263,7 +275,7 @@
     const points = handles(out, corner2).map(p => ({
       a: [p.a[0] - P, p.a[1] - P], l: [p.l[0] - P, p.l[1] - P], r: [p.r[0] - P, p.r[1] - P], corner: p.corner,
     }));
-    return { points, feetY: feet + 1, cells: count };
+    return { points, feetY: feet + 1, cutY: cut - P, cells: count };
   }
 
   const api = { outline, distSq, fillHoles, keepLargest, traceOuter, simplifyClosed };
