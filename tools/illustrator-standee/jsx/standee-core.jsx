@@ -1,7 +1,7 @@
 ﻿// 등신대 패널: 누끼 사진(과 글자·도형 디자인)을 고르면 여기서 배경 투명 PNG 로 내보내고,
 // 패널이 그 투명도로 외곽선을 계산한 뒤(standee-shape.js), 여기서 흰 면(맨 뒤)과 칼선으로 그린다.
 
-var STANDEE_VERSION = '1.1.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var STANDEE_VERSION = '1.1.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var STANDEE_PT_PER_MM = 72 / 25.4;
 var STANDEE_CUT_LAYER = '칼선';
 var STANDEE_CUT_SPOT = 'CutContour';
@@ -141,7 +141,24 @@ function standeeApply(data) {
   grp.move(items[0], ElementPlacement.PLACEBEFORE);
   grp.name = '등신대';
   for (var i = 0; i < items.length; i++) items[i].move(grp, ElementPlacement.PLACEATEND);
-  var white = standeeDrawPath(grp, data.points);
+  // 위아래 확인: 발 아래 일자 자리는 선택한 것의 아래쪽, 외곽선만큼 넓어지는 쪽은 위쪽이어야 한다.
+  // 일러스트 버전에 따라 위아래가 뒤집혀 나오면 선택 범위 가운데를 기준으로 뒤집어 다시 그린다
+  var white = standeeDrawPath(grp, data.points), flipped = false;
+  if (data.bounds) {
+    var sb = data.bounds, wb = white.geometricBounds;
+    var up = sb[1] >= sb[3] ? 1 : -1;
+    var growTop = (wb[1] - sb[1]) * up, growBottom = (sb[3] - wb[3]) * up;
+    if (growBottom > growTop + 1) {
+      var c = sb[1] + sb[3];
+      for (var q = 0; q < data.points.length; q++) {
+        var pt = data.points[q];
+        pt[1] = c - pt[1]; pt[3] = c - pt[3]; pt[5] = c - pt[5];
+      }
+      white.remove();
+      white = standeeDrawPath(grp, data.points);
+      flipped = true;
+    }
+  }
   white.move(grp, ElementPlacement.PLACEATEND);
   white.name = '외곽선';
   white.filled = true;
@@ -159,7 +176,8 @@ function standeeApply(data) {
   grp.selected = true;
   var b = white.geometricBounds;
   return '등신대 외곽선을 만들었습니다 (외곽선 ' + data.outlineMm + 'mm, 예각 정리 ' + data.roundMm + 'mm, 발 아래 일자). ' +
-    '전체 ' + standeeMm(b[2] - b[0]) + ' × ' + standeeMm(b[1] - b[3]) + ' mm. 칼선은 \'' + STANDEE_CUT_LAYER + '\' 레이어에 있습니다.';
+    '전체 ' + standeeMm(b[2] - b[0]) + ' × ' + standeeMm(Math.abs(b[1] - b[3])) + ' mm. 칼선은 \'' + STANDEE_CUT_LAYER + '\' 레이어에 있습니다.' +
+    (flipped ? ' (위아래가 뒤집혀 나와서 바로잡았습니다)' : '');
 }
 
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다

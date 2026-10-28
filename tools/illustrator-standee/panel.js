@@ -69,7 +69,7 @@
           var pts = r.points.map(function (p) {
             return [X(p.a[0]), Y(p.a[1]), X(p.l[0]), Y(p.l[1]), X(p.r[0]), Y(p.r[1]), p.corner ? 1 : 0];
           });
-          window.__adobe_cep__.evalScript('standeePanelApply(' + JSON.stringify({ points: pts, outlineMm: o.outlineMm, roundMm: o.roundMm }) + ')', show);
+          window.__adobe_cep__.evalScript('standeePanelApply(' + JSON.stringify({ points: pts, bounds: b, outlineMm: o.outlineMm, roundMm: o.roundMm }) + ')', show);
         } catch (e) {
           show('ERR:' + e.message);
         }
