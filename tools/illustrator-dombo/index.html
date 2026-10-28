@@ -162,10 +162,17 @@
 
   <details open data-id="hebe">
     <summary>크기·헤베</summary>
-    <button id="hebe">크기·헤베 보기</button>
     <div class="radios"><label><input type="radio" name="hebeScale" value="1" checked>1:1 파일</label>
       <label><input type="radio" name="hebeScale" value="10">10:1 파일 (×10)</label></div>
-    <p class="hint">선택한 것의 실제 가로·세로(mm)와 헤베(㎡). 10:1 은 1/10 로 그린 파일. 기준은 맨 바깥 클리핑 마스크 &gt; 그룹 &gt; 가장 큰 개체 순, 패스 기준(선 두께 제외).</p>
+    <button id="hebe">크기·헤베 보기</button>
+    <div class="row"><button id="size">사이즈 표시</button><button id="sizeRemove">지우기</button></div>
+    <details class="opts" data-sum="size"><summary></summary><div class="box">
+      <div class="grid">
+        <div class="f">글자 (실제 mm) <input id="sizeTextMm" type="number" step="5" min="1" value="40"></div>
+      </div>
+      <p class="hint">글자 크기는 실제(출력) 크기 기준. 10:1 파일이면 1/10 로 씁니다.</p>
+    </div></details>
+    <p class="hint">크기·헤베: 선택한 것의 실제 가로·세로(mm)와 헤베(㎡). 사이즈 표시: 그룹마다 위에 '103*105cm(가로*세로)' 를 '사이즈' 레이어에 씁니다 (그룹 하나만 고르면 안의 하위 그룹마다, 그룹이 없으면 가장 큰 개체 하나). 10:1 은 1/10 로 그린 파일. 기준은 맨 바깥 클리핑 마스크 &gt; 그룹 &gt; 가장 큰 개체 순, 패스 기준(선 두께 제외).</p>
   </details>
   </div>
 

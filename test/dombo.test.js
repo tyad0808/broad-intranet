@@ -419,3 +419,23 @@ test('크기·헤베: 1:1 과 10:1 파일, 큰 캔버스 배율', () => {
   assert.match(t, /가로 1,234\.5 mm × 세로 333\.3 mm/);
   assert.match(t, /헤베: 0\.41 ㎡/);
 });
+
+test('사이즈 표시: 글자는 103*105cm(가로*세로), 10:1 이면 ×10, 소수는 1자리', () => {
+  assert.strictEqual(core.domboSizeLabel([0, 1050 * MM, 1030 * MM, 0], 1), '103*105cm(가로*세로)');
+  assert.strictEqual(core.domboSizeLabel([0, 105 * MM, 103 * MM, 0], 10), '103*105cm(가로*세로)');
+  assert.strictEqual(core.domboSizeLabel([0, 900 * MM, 12345 * MM, 0], 1), '1,234.5*90cm(가로*세로)');
+});
+
+test('사이즈 표시 대상: 그룹마다, 그룹 하나면 하위 그룹마다, 그룹이 없으면 가장 큰 개체 하나', () => {
+  const targets = sel => Array.from(core.domboSizeTargets(sel));
+  const small = pathItem([0, 10, 10, 0]), large = pathItem([0, 100, 100, 0]);
+  assert.deepStrictEqual(targets([small, large]), [large]);
+  const g1 = group([small]), g2 = group([large]);
+  assert.deepStrictEqual(targets([g1, small, g2]), [g1, g2]);
+  const parent = group([g1, g2, pathItem([0, 1, 1, 0])]);
+  assert.deepStrictEqual(targets([parent]), [g1, g2]);
+  const clip = group([pathItem([0, 50, 50, 0], { clipping: true }), g1], { clipped: true });
+  assert.deepStrictEqual(targets([clip]), [clip], '클리핑 그룹은 안으로 들어가지 않는다');
+  // 각 그룹 안의 기준은 맨 바깥 마스크
+  assert.strictEqual(core.domboHebePick([group([clip, large])]).item, clip);
+});

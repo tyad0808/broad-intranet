@@ -169,7 +169,7 @@ function domboHasSelection(doc) {
 
 // 레이어(하위 레이어 포함)에서 보이는 맨 위 개체들을 모은다. 돔보·칼선·치수 레이어는 뺀다.
 function domboLayerItems(layer, out) {
-  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER || layer.name === DOMBO_GROMMET_LAYER || layer.name === DOMBO_SPLIT_LAYER) return;
+  if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER || layer.name === DOMBO_GROMMET_LAYER || layer.name === DOMBO_SPLIT_LAYER || layer.name === DOMBO_SIZE_LAYER) return;
   for (var i = 0; i < layer.pageItems.length; i++) out.push(layer.pageItems[i]);
   for (var j = 0; j < layer.layers.length; j++) domboLayerItems(layer.layers[j], out);
 }
@@ -1053,6 +1053,101 @@ function domboHebe(opts) {
   return domboHebeText(pick, scale, factor);
 }
 
+// ---- 사이즈 표시 ----
+// 그룹마다 위쪽에 '103*105cm(가로*세로)' 글자를 쓴다. 그룹 안의 기준은 크기·헤베와 같다 (맨 바깥 마스크 > 그룹)
+// 그룹을 고르지 않았으면 선택한 것 중 가장 큰 개체 하나
+
+var DOMBO_SIZE_LAYER = '사이즈';
+var DOMBO_SIZE_FONTS = ['MalgunGothic', 'NanumGothic', 'NanumSquareOTF_acB', 'AppleSDGothicNeo-Regular', 'KoPubDotumMedium'];
+
+// 그룹 하나만 골랐고 안에 하위 그룹이 있으면 하위 그룹마다 (막대 + 박스와 같음)
+function domboSizeTargets(sel) {
+  var groups = [], i;
+  for (i = 0; i < sel.length; i++) if (sel[i].typename === 'GroupItem' && !sel[i].hidden) groups.push(sel[i]);
+  if (groups.length === 0) {
+    var best = domboLargest(sel);
+    return best ? [best.item] : [];
+  }
+  if (sel.length === 1 && !groups[0].clipped) {
+    var kids = [];
+    for (i = 0; i < groups[0].pageItems.length; i++) {
+      var k = groups[0].pageItems[i];
+      if (k.typename === 'GroupItem' && !k.hidden) kids.push(k);
+    }
+    if (kids.length > 0) return kids;
+  }
+  return groups;
+}
+
+// cm 를 정수면 정수로, 아니면 소수 1자리로
+function domboCmLabel(mm) {
+  var cm = Math.round(mm) / 10;
+  return domboDimLabel(cm, cm === Math.round(cm) ? 0 : 1, false);
+}
+
+// 범위(pt) → '103*105cm(가로*세로)'. mul = 배율 (10:1 파일이면 10)
+function domboSizeLabel(bounds, mul) {
+  var k = DOMBO_PT_PER_MM;
+  return domboCmLabel((bounds[2] - bounds[0]) / k * mul) + '*' + domboCmLabel((bounds[1] - bounds[3]) / k * mul) + 'cm(가로*세로)';
+}
+
+function domboSizeFont() {
+  for (var i = 0; i < DOMBO_SIZE_FONTS.length; i++) {
+    try { return app.textFonts.getByName(DOMBO_SIZE_FONTS[i]); } catch (e) { /* 없으면 다음 */ }
+  }
+  return null;
+}
+
+// opts: { scale: 1 | 10, textMm: 실제 크기 기준 글자 높이(mm), 10:1 파일이면 1/10 로 }
+function domboSize(opts) {
+  var scale = opts && Number(opts.scale) === 10 ? 10 : 1;
+  var textMm = Number(opts && opts.textMm) || 40;
+  if (textMm <= 0 || textMm > 1000) throw new Error('글자 크기는 0 ~ 1000mm 사이여야 합니다.');
+  var doc = domboDoc();
+  if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  if (!domboHasSelection(doc)) throw new Error('사이즈를 표시할 그룹을 선택하세요.');
+  var sel = [], i;
+  for (i = 0; i < doc.selection.length; i++) sel.push(doc.selection[i]);
+  var factor = 1;
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
+  var targets = domboSizeTargets(sel), picks = [];
+  for (i = 0; i < targets.length; i++) {
+    var p = domboHebePick([targets[i]]);
+    if (p) picks.push(p);
+  }
+  if (!picks.length) throw new Error('선택한 것에 보이는 모양이 없습니다.');
+
+  var layer = domboGetLayer(doc, DOMBO_SIZE_LAYER);
+  layer.zOrder(ZOrderMethod.BRINGTOFRONT);
+  var black = domboBlack(doc), font = domboSizeFont();
+  var sizePt = textMm / scale / factor * DOMBO_PT_PER_MM;  // 파일 안 글자 크기
+  for (i = 0; i < picks.length; i++) {
+    var b = picks[i].bounds, tf = layer.textFrames.add();
+    tf.contents = domboSizeLabel(b, scale * factor);
+    tf.name = '사이즈';
+    var ca = tf.textRange.characterAttributes;
+    ca.size = sizePt;
+    ca.fillColor = black;
+    if (font) ca.textFont = font;
+    // 글자 왼쪽 아래를 작업물 왼쪽 위에서 글자 크기의 30% 위로
+    var tb = tf.geometricBounds;
+    tf.translate(b[0] - tb[0], b[1] + sizePt * 0.3 - tb[3]);
+  }
+  doc.selection = null;
+  var msg = picks.length + '개에 사이즈를 표시했습니다 (' + (scale === 10 ? '10:1' : '1:1') + ').';
+  if (picks.length === 1) msg += ' ' + domboSizeLabel(picks[0].bounds, scale * factor);
+  return msg + " '" + DOMBO_SIZE_LAYER + "' 레이어에 있습니다.";
+}
+
+function domboSizeRemove() {
+  var doc = domboDoc();
+  var layer = domboFindLayer(doc, DOMBO_SIZE_LAYER);
+  if (!layer) return '지울 사이즈 표시가 없습니다.';
+  layer.locked = false;
+  layer.remove();
+  return '사이즈 표시를 지웠습니다.';
+}
+
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다
 function domboCall(fn, arg) {
   try {
@@ -1073,3 +1168,5 @@ function domboPanelGrommet(opts) { return domboCall(domboGrommet, opts); }
 function domboPanelGrommetRemove() { return domboCall(domboGrommetRemove); }
 function domboPanelDimRemove() { return domboCall(domboDimRemove); }
 function domboPanelHebe(opts) { return domboCall(domboHebe, opts); }
+function domboPanelSize(opts) { return domboCall(domboSize, opts); }
+function domboPanelSizeRemove() { return domboCall(domboSizeRemove); }
