@@ -85,13 +85,11 @@
     <button id="cut">칼선</button>
     <div class="row"><button id="bleedItem">도련 (원본)</button><button id="bleedMask">도련 (마스크)</button></div>
     <details class="opts" data-sum="cut"><summary></summary><div class="box">
-      <div class="radios"><label><input type="radio" name="cutScale" value="1" checked>1:1 파일</label>
-        <label><input type="radio" name="cutScale" value="10">10:1 파일</label></div>
       <div class="grid">
-        <div class="f">도련 (실제 mm) <input id="bleedMm" type="number" step="0.5" min="0" value="3"></div>
+        <div class="f">도련 (mm) <input id="bleedMm" type="number" step="0.5" min="0" value="3"></div>
       </div>
     </div></details>
-    <p class="hint">칼선: 작업물마다 '칼선' 레이어에 CutContour 하나. 기준은 맨 바깥 클리핑 마스크(마스크 모양) &gt; 그룹(도형을 합친 외곽선) &gt; 개체 모양. 글자는 아웃라인. 도련: 원본은 그대로 두고 복제본을 원본 바로 아래에 사방 N mm 키워 놓습니다. (원본) 은 전체를 키우고, (마스크) 는 마스크만 키워 가려졌던 그림이 보이게 합니다 (마스크가 없으면 원본 방식). 10:1 파일이면 1/10.</p>
+    <p class="hint">칼선: 작업물마다 '칼선' 레이어에 CutContour 하나. 기준은 맨 바깥 클리핑 마스크(마스크 모양) &gt; 그룹(도형을 합친 외곽선) &gt; 개체 모양. 글자는 아웃라인. 도련: 원본은 그대로 두고 복제본을 원본 바로 아래에 사방 N mm 키워 놓습니다. (원본) 은 전체를 키우고, (마스크) 는 마스크만 키워 가려졌던 그림이 보이게 합니다 (마스크가 없으면 원본 방식).</p>
   </details>
 
   <details open data-id="grid">

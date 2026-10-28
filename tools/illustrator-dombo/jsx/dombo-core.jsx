@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.12.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.12.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -422,11 +422,10 @@ function domboBleedOne(target, n, mode) {
   return 'item';
 }
 
-// 선택한 작업물마다 도련. opts: { mode: 'item' | 'mask', bleedMm: 실제 mm, scale: 1 | 10 (10:1 파일이면 1/10) }
+// 선택한 작업물마다 도련. opts: { mode: 'item' | 'mask', bleedMm: 파일에서 보이는 mm }
 function domboBleed(opts) {
   var mode = opts && opts.mode === 'mask' ? 'mask' : 'item';
   var bleedMm = Number(opts && opts.bleedMm);
-  var scale = opts && Number(opts.scale) === 10 ? 10 : 1;
   if (!(bleedMm > 0 && bleedMm <= 50)) throw new Error('도련은 0 보다 크고 50mm 이하로 넣으세요.');
   var doc = domboDoc();
   if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
@@ -436,7 +435,7 @@ function domboBleed(opts) {
   var targets = domboSizeTargets(sel);
   var factor = 1;
   try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
-  var n = bleedMm / scale / factor * DOMBO_PT_PER_MM;
+  var n = bleedMm / factor * DOMBO_PT_PER_MM; // 큰 캔버스 문서는 스크립트 좌표가 1/10
   doc.selection = null;
   var done = 0, noMask = 0;
   for (i = 0; i < targets.length; i++) {
@@ -446,7 +445,7 @@ function domboBleed(opts) {
     if (mode === 'mask' && r === 'item') noMask++;
   }
   if (!done) throw new Error('선택한 것에 보이는 모양이 없습니다.');
-  var msg = done + '개에 도련 ' + bleedMm + 'mm' + (scale === 10 ? ' (10:1 파일이라 ' + (bleedMm / 10) + 'mm)' : '') +
+  var msg = done + '개에 도련 ' + bleedMm + 'mm' +
     (mode === 'mask' ? ' 를 마스크로' : ' 를 원본 크기 키우기로') + ' 넣었습니다. 원본 바로 아래에 \'도련\' 으로 있습니다.';
   if (noMask) msg += ' 마스크가 없는 ' + noMask + '개는 원본 크기 키우기로 했습니다.';
   return msg;
