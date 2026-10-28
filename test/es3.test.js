@@ -6,7 +6,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const dirs = ['../tools/illustrator-dombo/jsx', '../tools/illustrator-nesting/jsx'].map(d => path.join(__dirname, d));
+const dirs = ['../tools/illustrator-dombo/jsx', '../tools/illustrator-nesting/jsx', '../tools/illustrator-standee/jsx'].map(d => path.join(__dirname, d));
 const files = dirs.flatMap(d => fs.readdirSync(d).filter(f => f.endsWith('.jsx')).map(f => path.join(d, f)));
 
 // 글자·주석·정규식 안의 내용을 지우고 코드만 남긴다 (줄 번호는 유지)

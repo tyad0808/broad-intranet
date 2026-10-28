@@ -1,7 +1,7 @@
 // 등신대 외곽선 계산 (standee-shape.js): 외곽선 두께, 발 아래 일자, 좁은 틈·예각 메우기
 const test = require('node:test');
 const assert = require('node:assert');
-const st = require('../tools/illustrator-dombo/standee-shape.js');
+const st = require('../tools/illustrator-standee/standee-shape.js');
 
 // 사람 흉내 (칸 1개 = 1mm): 머리 + 몸통 + 다리 둘 (사이 틈 10mm) + 몸에 붙은 팔 (사이 틈 15mm)
 function person() {
