@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm'];
+  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'stOutlineMm', 'stRoundMm'];
   var CHECKS = ['orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -117,6 +117,57 @@
   });
   $('sizeRemove').addEventListener('click', function () { call('domboPanelSizeRemove'); });
 
+  // ---- 등신대: 일러스트에서 이미지 정보 → 패널에서 투명도로 외곽선 계산 → 일러스트에서 그리기 ----
+  function evalP(code, done) {
+    window.__adobe_cep__.evalScript(code, function (r) {
+      if (typeof r !== 'string' || r.indexOf('OK:') !== 0) { show(r); return; }
+      done(r.slice(3));
+    });
+  }
+  $('standee').addEventListener('click', function () {
+    if (!window.__adobe_cep__) { show('ERR:일러스트레이터 안에서 열어야 합니다.'); return; }
+    var o = readOptions();
+    save(o);
+    if (!(o.stOutlineMm > 0)) { show('ERR:외곽선은 0 보다 커야 합니다.'); return; }
+    evalP('domboPanelStandeePrepare()', function (json) {
+      var info = JSON.parse(json);
+      var file = window.cep && window.cep.fs ? window.cep.fs.readFile(info.path, window.cep.encoding.Base64) : null;
+      if (!file || file.err) { show('ERR:이미지 파일을 읽지 못했습니다: ' + info.path); return; }
+      show('OK:외곽선 계산 중…');
+      var img = new Image();
+      img.onerror = function () { show('ERR:PNG 를 열지 못했습니다.'); };
+      img.onload = function () {
+        try {
+          var b = info.bounds, k = 72 / 25.4, f = info.factor || 1;
+          var physW = (b[2] - b[0]) / k * f, physH = (b[1] - b[3]) / k * f;
+          // 칸 하나 = 큰 변의 1/1500 (0.5mm 보다 잘게는 안 함), 원본 픽셀보다 잘게도 안 함
+          var cell = Math.max(0.5, Math.max(physW, physH) / 1500, physW / img.naturalWidth);
+          var gw = Math.max(1, Math.round(physW / cell)), gh = Math.max(1, Math.round(physH / cell));
+          var cv = document.createElement('canvas');
+          cv.width = gw; cv.height = gh;
+          var ctx = cv.getContext('2d');
+          ctx.drawImage(img, 0, 0, gw, gh);
+          var px = ctx.getImageData(0, 0, gw, gh).data, alpha = new Uint8Array(gw * gh);
+          for (var i = 0; i < gw * gh; i++) alpha[i] = px[i * 4 + 3];
+          var r = window.standeeShape.outline(alpha, gw, gh, {
+            cellMm: (physW / gw + physH / gh) / 2, outlineMm: o.stOutlineMm, roundMm: o.stRoundMm
+          });
+          // 칸 좌표 → 문서 좌표 (pt)
+          var sx = (b[2] - b[0]) / gw, sy = (b[1] - b[3]) / gh;
+          var X = function (x) { return info.flipX ? b[2] - x * sx : b[0] + x * sx; };
+          var Y = function (y) { return info.flipY ? b[3] + y * sy : b[1] - y * sy; };
+          var pts = r.points.map(function (p) {
+            return [X(p.a[0]), Y(p.a[1]), X(p.l[0]), Y(p.l[1]), X(p.r[0]), Y(p.r[1]), p.corner ? 1 : 0];
+          });
+          call('domboPanelStandeeApply', { points: pts, outlineMm: o.stOutlineMm, roundMm: o.stRoundMm });
+        } catch (e) {
+          show('ERR:' + e.message);
+        }
+      };
+      img.src = 'data:image/png;base64,' + file.data;
+    });
+  });
+
   // ---- 접힌 '설정' 줄에 지금 값을 한 줄로 ----
   var SUMS = {
     dombo: function (o) {
@@ -135,6 +186,9 @@
     },
     cut: function (o) {
       return '도련 ' + o.bleedMm + 'mm';
+    },
+    standee: function (o) {
+      return '외곽선 ' + o.stOutlineMm + 'mm · 예각 정리 ' + o.stRoundMm + 'mm · 발 아래 일자';
     },
     size: function (o) {
       return (o.hebeScale === '10' ? '10:1' : '1:1') + ' · 글자 ' + o.sizeTextMm + 'mm' + (o.hebeScale === '10' ? ' (파일 ' + o.sizeTextMm / 10 + 'mm)' : '');
