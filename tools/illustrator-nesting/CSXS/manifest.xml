@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.nesting" ExtensionBundleVersion="1.2.1"
+<ExtensionManifest Version="7.0" ExtensionBundleId="com.broad.nesting" ExtensionBundleVersion="1.3.0"
   ExtensionBundleName="Broad Nesting" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <ExtensionList>
-    <Extension Id="com.broad.nesting.roll" Version="1.2.1" />
-    <Extension Id="com.broad.nesting.text" Version="1.2.1" />
+    <Extension Id="com.broad.nesting.roll" Version="1.3.0" />
+    <Extension Id="com.broad.nesting.text" Version="1.3.0" />
   </ExtensionList>
   <ExecutionEnvironment>
     <HostList>

@@ -364,6 +364,13 @@ function nestCheckText(o) {
 }
 
 // 용지·원판 자리: 시작점(왼쪽 위, 문서 좌표)에서 아래로 간격을 두고 차례로 쌓는다
+// 용지 폭 네스팅: 여러 장이면 시작점에서 오른쪽으로 (용지 폭 + 간격) 씩 옆으로 놓는다
+function nestOriginsSide(start, widthPt, count, gapPt) {
+  var out = [];
+  for (var i = 0; i < count; i++) out.push([start[0] + i * (widthPt + gapPt), start[1]]);
+  return out;
+}
+
 function nestOrigins(start, heights, gapPt) {
   var out = [], y = start[1];
   for (var i = 0; i < heights.length; i++) {
@@ -461,8 +468,11 @@ function nestBackup(doc, items) {
 // 결과가 지금 대지 밖으로 나가면 알려 준다
 function nestOutsideNote(doc, origins, widthPt, heights) {
   var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()].artboardRect;
-  var last = origins.length - 1;
-  var L = origins[0][0], T = origins[0][1], R = L + widthPt, B = origins[last][1] - heights[last];
+  var L = origins[0][0], T = origins[0][1], R = L + widthPt, B = T - heights[0];
+  for (var i = 1; i < origins.length; i++) {
+    L = Math.min(L, origins[i][0]); T = Math.max(T, origins[i][1]);
+    R = Math.max(R, origins[i][0] + widthPt); B = Math.min(B, origins[i][1] - heights[i]);
+  }
   if (L < ab[0] || T > ab[1] || R > ab[2] || B < ab[3]) return '\n주의: 결과 일부가 지금 대지 밖에 있습니다.';
   return '';
 }
@@ -510,7 +520,7 @@ function nestRoll(opts) {
   }
 
   var start = nestStart(src, true);
-  var origins = nestOrigins(start, r.binHeights, NEST_SHEET_GAP_MM * k);
+  var origins = nestOriginsSide(start, o.widthMm * k, r.bins, NEST_SHEET_GAP_MM * k);
   var layer = nestGetLayer(doc), placed = [];
   for (i = 0; i < r.placements.length; i++) {
     var pl = r.placements[i];

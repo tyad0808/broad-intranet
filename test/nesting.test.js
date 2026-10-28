@@ -254,7 +254,12 @@ test('용지 폭 네스팅: 선택한 자리부터 수량만큼 배치, 안내�
   assert.match(msg, /대지 밖/, '1000mm 대지보다 크면 알려 준다');
 });
 
-test('여러 장이면 시작점에서 아래로 간격을 두고 쌓는다', () => {
+test('용지 폭 네스팅은 여러 장이면 시작점에서 오른쪽 옆으로 (폭 + 간격) 씩 놓는다', () => {
+  const o = Array.from(core.nestOriginsSide([10, 500], 1000, 3, 30), p => Array.from(p));
+  assert.deepStrictEqual(o, [[10, 500], [1040, 500], [2070, 500]]);
+});
+
+test('원판(텍스트)은 여러 장이면 시작점에서 아래로 간격을 두고 쌓는다', () => {
   const o = Array.from(core.nestOrigins([10, 500], [100, 50, 80], 30), p => Array.from(p));
   assert.deepStrictEqual(o, [[10, 500], [10, 370], [10, 290]]);
 });
@@ -395,4 +400,21 @@ test('세트 수량 2 면 두 세트', () => {
   const ai = loadWith(f);
   const data = JSON.parse(ai.nestTextPrepare({ quantity: 2, method: 'shape' }));
   assert.strictEqual(data.pieces.length, 4);
+});
+
+test('용지 폭 네스팅: 최대 길이를 넘으면 두 번째 장은 오른쪽 옆에 위를 맞춰 놓는다', () => {
+  const f = fakeIllustrator();
+  const a = f.rectPath(0, 300, 400 * MM, 300 - 400 * MM);  // 400 x 400mm
+  f.layers[0].adopt(a);
+  f.doc.selection = [a];
+  const ai = loadWith(f);
+  const msg = ai.nestRoll({ widthMm: 500, maxLengthMm: 500, quantity: 2, gapMm: 5, marginMm: 10 });
+  assert.match(msg, /2장으로 나눔/);
+  const parts = f.layers.find(l => l.name === '네스팅').items.map(it => it.geometricBounds).sort((p, q) => p[0] - q[0]);
+  assert.strictEqual(parts.length, 2);
+  const near = (x, y, m) => assert.ok(Math.abs(x - y) < 1e-6, m || `${x} != ${y}`);
+  near(parts[0][0], 10 * MM);
+  near(parts[1][0], (500 + 30 + 10) * MM, '옆 장: 용지 폭 + 30mm 오른쪽');
+  near(parts[0][1], 300 - 10 * MM);
+  near(parts[1][1], 300 - 10 * MM, '위를 맞춤');
 });
