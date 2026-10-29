@@ -595,3 +595,13 @@ test('넘버링 자리: 늘 작업물 바깥 — 윗줄 조각은 위, 아랫줄
   // 조각이 없으면 작업물 번호는 위쪽 바깥
   assert.strictEqual(core.domboNumberLabels([P(0, 10, 10, 0)], { pieces: true })[0].side, 'top');
 });
+
+test('넘버링: 작업물 번호는 우측 상단 바깥 (오른쪽 끝 맞춤), 기준은 맨 바깥 마스크', () => {
+  const mask = pathItem([10 * MM, 60 * MM, 110 * MM, 10 * MM], { clipping: true });
+  const clip = group([mask, pathItem([-500, 500, 500, -500])], { clipped: true });
+  const l = core.domboNumberLabels([group([clip, pathItem([0, 0, 1, -1])])], { pieces: false })[0];
+  assert.deepStrictEqual(Array.from(l.bounds), [10 * MM, 60 * MM, 110 * MM, 10 * MM]);
+  const tb = [0, 4 * MM, 6 * MM, 0], mv = Array.from(core.domboNumberMove(tb, l.bounds, l.edge, l.side, 2 * MM));
+  near(tb[2] + mv[0], 110 * MM);          // 오른쪽 끝 = 작업물 오른쪽
+  near(tb[3] + mv[1], 62 * MM);           // 아래 = 작업물 위 + 간격
+});

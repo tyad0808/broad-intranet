@@ -1,10 +1,10 @@
-﻿// 단독 실행용: 선택한 출력물에 번호를 붙인다 (조각 번호까지, 작업물 바깥, 5mm). dombo-core.jsx 가 같은 폴더에 있어야 한다.
+﻿// 단독 실행용: 선택한 출력물에 번호를 붙인다 (우측 상단 바깥, 실제 5mm). dombo-core.jsx 가 같은 폴더에 있어야 한다.
 #target illustrator
 #include "dombo-core.jsx"
 
 (function () {
   try {
-    alert(domboNumber({ pieces: confirm('작업물 안 조각 번호까지 붙일까요? (3-1, 3-2 …)\n(아니오: 작업물 번호만)'), textMm: 5 }));
+    alert(domboNumber({ pieces: false, scale: confirm('10:1 파일인가요? (1/10 로 그린 파일)\n(아니오: 1:1 파일)') ? 10 : 1, textMm: 5 }));
   } catch (e) {
     alert(e.message);
   }

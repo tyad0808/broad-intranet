@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.14.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.15.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -1304,7 +1304,7 @@ function domboPieces(item) {
 
 // 번호 글자 목록 (그리기 전 계산). opts: { pieces: 조각 번호까지, prefix: 앞 글자 }
 // 결과: [{ text, bounds: 번호를 붙일 것의 범위, side: 'top' | 'bottom' | 'left' | 'right', edge: 작업물 범위 }]
-// 번호는 출력되지 않게 늘 작업물 바깥에 놓는다: 작업물 번호는 위쪽, 조각 번호는 그 조각이 닿은 작업물 가장자리 바깥
+// 번호는 출력되지 않게 늘 작업물 바깥에 놓는다: 작업물 번호는 우측 상단 바깥, 조각 번호는 그 조각이 닿은 작업물 가장자리 바깥
 // (위 → 아래 → 왼쪽 → 오른쪽 순으로 먼저 닿은 쪽). 어느 가장자리에도 닿지 않은 안쪽 조각은 작업물 왼쪽 바깥에
 function domboNumberLabels(targets, opts) {
   var list = [], i, j;
@@ -1335,14 +1335,16 @@ function domboNumberLabels(targets, opts) {
 
 // 글자 범위(tb)를 옮길 거리: 작업물 가장자리(edge) 바깥 side 쪽, 붙일 것(b)에 맞춰. gap 만큼 띄운다
 function domboNumberMove(tb, b, edge, side, gap) {
-  if (side === 'top') return [b[0] - tb[0], edge[1] + gap - tb[3]];
-  if (side === 'bottom') return [b[0] - tb[0], edge[3] - gap - tb[1]];
+  // 위·아래는 오른쪽 끝에 맞춘다 (우측 상단)
+  if (side === 'top') return [b[2] - tb[2], edge[1] + gap - tb[3]];
+  if (side === 'bottom') return [b[2] - tb[2], edge[3] - gap - tb[1]];
   var cy = (b[1] + b[3]) / 2 - (tb[1] + tb[3]) / 2;
   if (side === 'right') return [edge[2] + gap - tb[0], cy];
   return [edge[0] - gap - tb[2], cy];
 }
 
-// opts: { pieces, prefix, textMm (파일 크기 mm, 기본 5) }. 번호는 늘 작업물 바깥에
+// opts: { pieces, prefix, textMm (실제 크기 mm, 기본 5), scale: 1 | 10 (10:1 파일이면 글자도 1/10) }. 번호는 늘 작업물 바깥에
+// 작업물 기준은 맨 바깥 클리핑 마스크 > 그룹 > 가장 큰 개체 (크기·헤베와 같음)
 function domboNumber(opts) {
   var o = opts || {};
   var textMm = Number(o.textMm) || 5;
@@ -1356,7 +1358,8 @@ function domboNumber(opts) {
   if (!labels.length) throw new Error('선택한 것에 보이는 모양이 없습니다.');
   var factor = 1;
   try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
-  var sizePt = textMm / factor * DOMBO_PT_PER_MM, pad = sizePt * 0.4;
+  var scale = Number(o.scale) === 10 ? 10 : 1;
+  var sizePt = textMm / scale / factor * DOMBO_PT_PER_MM, pad = sizePt * 0.4;
   var layer = domboGetLayer(doc, DOMBO_NUM_LAYER);
   layer.zOrder(ZOrderMethod.BRINGTOFRONT);
   var black = domboBlack(doc), font = domboSizeFont();
