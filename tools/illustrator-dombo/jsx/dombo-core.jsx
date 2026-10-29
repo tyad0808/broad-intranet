@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.17.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.17.2'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -136,8 +136,8 @@ function domboUnion(b, v) {
 // 클리핑 마스크 그룹에서 마스크 모양(패스 또는 복합 패스)을 찾는다. 없으면 null
 function domboClipMask(group) {
   if (group.typename !== 'GroupItem' || !group.clipped) return null;
-  var kids = group.pageItems;
-  for (var i = 0; i < kids.length; i++) {
+  var kids = group.pageItems, n = kids.length;
+  for (var i = 0; i < n; i++) {
     var k = kids[i];
     if (k.typename === 'PathItem' && k.clipping) return k;
     if (k.typename === 'CompoundPathItem' && k.pathItems.length > 0 && k.pathItems[0].clipping) return k;
@@ -148,17 +148,23 @@ function domboClipMask(group) {
 // 눈에 보이는 범위. 클리핑 마스크 그룹은 가려진 부분을 빼고 마스크 모양만 기준으로 삼는다.
 // (일러스트레이터의 visibleBounds 는 마스크에 가려진 부분까지 포함하기 때문)
 // 숨긴 개체나 안내선만 있으면 null. geometric 이면 선 두께를 뺀 패스 범위
-function domboItemBounds(item, geometric) {
+// 빠르게: 그룹 속을 끝까지 뒤지지 않고 두 단계까지만 내려간다 (그보다 깊은 그룹은 일러스트가 잰 범위를 그대로 쓴다).
+// 일러스트 스크립트는 개체 하나 읽을 때마다 느려서, 조각·패스가 많은 작업물에서 렉이 걸리기 때문
+var DOMBO_BOUNDS_DEPTH = 2;
+function domboItemBounds(item, geometric, depth) {
   if (item.hidden || item.guides) return null;
+  depth = depth || 0;
   if (item.typename === 'GroupItem') {
     var mask = domboClipMask(item);
     if (mask) return mask.geometricBounds;
-    var b = null;
-    for (var i = 0; i < item.pageItems.length; i++) {
-      var v = domboItemBounds(item.pageItems[i], geometric);
-      if (v) b = domboUnion(b, v);
+    if (depth < DOMBO_BOUNDS_DEPTH) {
+      var kids = item.pageItems, n = kids.length, b = null;
+      for (var i = 0; i < n; i++) {
+        var v = domboItemBounds(kids[i], geometric, depth + 1);
+        if (v) b = domboUnion(b, v);
+      }
+      return b;
     }
-    return b;
   }
   return geometric ? item.geometricBounds : item.visibleBounds;
 }
@@ -171,7 +177,7 @@ function domboHasSelection(doc) {
 // 레이어(하위 레이어 포함)에서 보이는 맨 위 개체들을 모은다. 돔보·칼선·치수 레이어는 뺀다.
 function domboLayerItems(layer, out) {
   if (!layer.visible || layer.name === DOMBO_LAYER || layer.name === DOMBO_CUT_LAYER || layer.name === DOMBO_DIM_LAYER || layer.name === DOMBO_GROMMET_LAYER || layer.name === DOMBO_SPLIT_LAYER || layer.name === DOMBO_SIZE_LAYER || layer.name === DOMBO_NUM_LAYER) return;
-  for (var i = 0; i < layer.pageItems.length; i++) out.push(layer.pageItems[i]);
+  var kids0 = layer.pageItems, n0 = kids0.length; for (var i = 0; i < n0; i++) out.push(kids0[i]);
   for (var j = 0; j < layer.layers.length; j++) domboLayerItems(layer.layers[j], out);
 }
 
@@ -333,7 +339,7 @@ function domboCollectCut(item, layer, color, stat) {
       stat.paths++;
       return;
     }
-    for (i = 0; i < item.pageItems.length; i++) domboCollectCut(item.pageItems[i], layer, color, stat);
+    var kids1 = item.pageItems, n1 = kids1.length; for (i = 0; i < n1; i++) domboCollectCut(kids1[i], layer, color, stat);
   } else if (t === 'PathItem' || t === 'CompoundPathItem') {
     domboStyleCutDeep(item.duplicate(layer, ElementPlacement.PLACEATEND), color);
     stat.paths++;
@@ -349,7 +355,7 @@ function domboStyleCutDeep(item, color) {
   var t = item.typename, i;
   if (t === 'PathItem') domboStyleCutPath(item, color);
   else if (t === 'CompoundPathItem') for (i = 0; i < item.pathItems.length; i++) domboStyleCutPath(item.pathItems[i], color);
-  else if (t === 'GroupItem') for (i = 0; i < item.pageItems.length; i++) domboStyleCutDeep(item.pageItems[i], color);
+  else if (t === 'GroupItem') { var kids2 = item.pageItems, n2 = kids2.length; for (i = 0; i < n2; i++) domboStyleCutDeep(kids2[i], color); }
 }
 
 // 작업물 하나의 칼선. 기준은 크기·헤베와 같다:
@@ -527,7 +533,7 @@ function domboCollectRects(item, out) {
   if (item.typename === 'PathItem') {
     if (item.closed && !item.clipping && item.pathPoints.length === 4) out.push(item);
   } else if (item.typename === 'GroupItem') {
-    for (var i = 0; i < item.pageItems.length; i++) domboCollectRects(item.pageItems[i], out);
+    var kids3 = item.pageItems, n3 = kids3.length; for (var i = 0; i < n3; i++) domboCollectRects(kids3[i], out);
   }
 }
 
@@ -619,8 +625,8 @@ function domboBarBoxTargets(sel) {
   }
   var obj = sel[0];
   if (obj.typename === 'GroupItem' && !obj.clipped) {
-    for (i = 0; i < obj.pageItems.length; i++) {
-      var k = obj.pageItems[i];
+    var kids4 = obj.pageItems, n4 = kids4.length; for (i = 0; i < n4; i++) {
+      var k = kids4[i];
       if (k.typename === 'GroupItem' && !k.hidden) targets.push(k);
     }
   }
@@ -1065,7 +1071,7 @@ function domboCountItem(item, c) {
   } else if (t === 'PathItem') {
     if (!item.clipping) c.shapes++;
   } else if (t === 'GroupItem') {
-    for (var i = 0; i < item.pageItems.length; i++) domboCountItem(item.pageItems[i], c);
+    var kids5 = item.pageItems, n5 = kids5.length; for (var i = 0; i < n5; i++) domboCountItem(kids5[i], c);
   }
 }
 
@@ -1094,10 +1100,14 @@ function domboCount() {
 function domboArea(b) { return (b[2] - b[0]) * (b[1] - b[3]); }
 
 // 그룹 안까지 내려가며 맨 바깥 클리핑 마스크 그룹을 모은다 (마스크 안의 마스크는 보지 않는다)
-function domboOuterClips(item, out) {
+// 맨 바깥 마스크는 보통 작업물 바로 아래에 있으므로 세 단계까지만 찾는다 (렉 줄이기)
+function domboOuterClips(item, out, depth) {
   if (item.hidden || item.guides || item.typename !== 'GroupItem') return;
   if (domboClipMask(item)) { out.push(item); return; }
-  for (var i = 0; i < item.pageItems.length; i++) domboOuterClips(item.pageItems[i], out);
+  depth = depth || 0;
+  if (depth >= 3) return;
+  var kids = item.pageItems, n = kids.length;
+  for (var i = 0; i < n; i++) domboOuterClips(kids[i], out, depth + 1);
 }
 
 function domboLargest(items) {
@@ -1166,8 +1176,8 @@ var DOMBO_SIZE_FONTS = ['MalgunGothic', 'NanumGothic', 'NanumSquareOTF_acB', 'Ap
 function domboSizeTargets(sel) {
   var out = [], i, hasGroup = false;
   if (sel.length === 1 && sel[0].typename === 'GroupItem' && !sel[0].clipped) {
-    for (i = 0; i < sel[0].pageItems.length; i++) {
-      var k = sel[0].pageItems[i];
+    var kids6 = sel[0].pageItems, n6 = kids6.length; for (i = 0; i < n6; i++) {
+      var k = kids6[i];
       if (k.hidden || k.guides) continue;
       out.push(k);
       if (k.typename === 'GroupItem') hasGroup = true;
@@ -1285,16 +1295,16 @@ function domboReadingOrder(list) {
 function domboPieces(item) {
   var node = item, guard = 0;
   while (node.typename === 'GroupItem' && guard++ < 10) {
-    var mask = domboClipMask(node), kids = [], i;
-    for (i = 0; i < node.pageItems.length; i++) {
-      var k = node.pageItems[i];
+    var mask = domboClipMask(node), kids = [], i, all = node.pageItems, an = all.length;
+    for (i = 0; i < an; i++) {
+      var k = all[i];
       if (k === mask || k.hidden || k.guides) continue;
       kids.push(k);
     }
     if (kids.length === 1 && kids[0].typename === 'GroupItem') { node = kids[0]; continue; }
     var out = [], min = DOMBO_PT_PER_MM;
     for (i = 0; i < kids.length; i++) {
-      var b = domboItemBounds(kids[i], true);
+      var b = domboItemBounds(kids[i], true, 1); // 조각 속은 한 단계만 (렉 줄이기)
       if (b && b[2] - b[0] >= min && b[1] - b[3] >= min) out.push({ item: kids[i], bounds: b });
     }
     return out.length >= 2 ? out : [];
@@ -1430,7 +1440,7 @@ function domboNumberRemove() {
   for (i = 0; i < doc.groupItems.length; i++) if (/^번호 묶음 /.test(doc.groupItems[i].name)) groups.push(doc.groupItems[i]);
   for (i = groups.length - 1; i >= 0; i--) {
     var g = groups[i], kids = [];
-    for (j = 0; j < g.pageItems.length; j++) kids.push(g.pageItems[j]);
+    var kids7 = g.pageItems, n7 = kids7.length; for (j = 0; j < n7; j++) kids.push(kids7[j]);
     for (j = kids.length - 1; j >= 0; j--) {
       if (/^번호 /.test(kids[j].name)) kids[j].remove();
       else kids[j].move(g, ElementPlacement.PLACEAFTER);
