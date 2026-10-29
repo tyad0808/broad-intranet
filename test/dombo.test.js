@@ -546,3 +546,33 @@ test('도련: 원본은 그대로, 복제본을 원본 바로 아래에 키운�
   const q = dupable(shape([0, 10 * MM, 10 * MM, 0]));
   assert.strictEqual(core.domboBleedOne(q, n, 'mask'), 'item');
 });
+
+test('넘버링 순서: 줄마다 왼쪽 → 오른쪽, 위 줄 → 아래 줄 (높이가 달라도 반 이상 겹치면 같은 줄)', () => {
+  // 그림처럼: 맨 위 작은 것 1개, 다음 줄 6개(높이 제각각), 그다음 줄 6개, 맨 아래 1개 (y 위로 증가)
+  const R = (l, t, w, h) => [l, t, l + w, t - h];
+  const list = [
+    R(240, 300, 250, 60), R(20, 300, 210, 60), R(500, 300, 130, 60), R(640, 305, 110, 60), R(760, 300, 200, 55), R(970, 298, 100, 55),  // 2줄 (섞어서)
+    R(20, 360, 55, 55),                                                                                                            // 1줄
+    R(15, 210, 100, 50), R(130, 215, 200, 60), R(350, 215, 240, 60), R(610, 210, 130, 55), R(755, 210, 110, 52),                  // 3줄
+    R(15, 90, 200, 65),                                                                                                            // 4줄
+  ];
+  list.push(R(880, 140, 60, 20)); // 3줄 아래쪽에 살짝 걸친 것 → 반도 안 겹치면 다른 줄
+  const order = Array.from(core.domboReadingOrder(list));
+  assert.deepStrictEqual(order, [6, 1, 0, 2, 3, 4, 5, 7, 8, 9, 10, 11, 13, 12]);
+});
+
+test('넘버링: 작업물 번호와 조각 번호 (작업물-조각), 앞 글자, 선·가는 것은 조각이 아님', () => {
+  const MMp = MM;
+  const P = (l, t, r, b, extra = {}) => pathItem([l * MMp, t * MMp, r * MMp, b * MMp], extra);
+  // 작업물 A: 2 x 2 조각 + 가는 흰 선 (넓이 0)
+  const A = group([P(0, 100, 50, 50), P(50, 100, 100, 50), P(0, 50, 50, 0), P(50, 50, 100, 0), P(0, 50, 100, 50)]);
+  // 작업물 B: 조각 하나뿐 (그냥 번호), 오른쪽에
+  const B = group([P(200, 100, 300, 0)]);
+  // 작업물 C: 클리핑 마스크 안에 그룹 하나, 그 안에 조각 3개 (가로로)
+  const inner = group([P(0, -50, 30, -100), P(30, -50, 60, -100), P(60, -50, 90, -100)]);
+  const C = group([P(0, -50, 90, -100, { clipping: true }), inner], { clipped: true });
+  const labels = Array.from(core.domboNumberLabels([B, C, A], { pieces: true, prefix: '1028-' }), l => l.text);
+  assert.deepStrictEqual(labels, ['1028-1-1', '1028-1-2', '1028-1-3', '1028-1-4', '1028-2', '1028-3-1', '1028-3-2', '1028-3-3']);
+  const plain = Array.from(core.domboNumberLabels([B, C, A], { pieces: false }), l => l.text);
+  assert.deepStrictEqual(plain, ['1', '2', '3']);
+});

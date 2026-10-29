@@ -1,7 +1,7 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm'];
-  var CHECKS = ['orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
+  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'numTextMm'];
+  var CHECKS = ['numPieces', 'orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
 
@@ -13,7 +13,7 @@
   }
 
   function readOptions() {
-    var o = { target: radio('target'), dimTarget: radio('dimTarget'), splitDir: radio('splitDir'), hebeScale: radio('hebeScale') };
+    var o = { target: radio('target'), dimTarget: radio('dimTarget'), splitDir: radio('splitDir'), hebeScale: radio('hebeScale'), numPlace: radio('numPlace'), numPrefix: $('numPrefix').value };
     CHECKS.forEach(function (c) { o[c] = $(c).checked; });
     SELECTS.forEach(function (c) { o[c] = $(c).value; });
     FIELDS.forEach(function (f) { o[f] = parseFloat($(f).value); });
@@ -30,6 +30,8 @@
     if (o.dimTarget) setRadio('dimTarget', o.dimTarget);
     if (o.splitDir) setRadio('splitDir', o.splitDir);
     if (o.hebeScale) setRadio('hebeScale', o.hebeScale);
+    if (o.numPlace) setRadio('numPlace', o.numPlace);
+    if (typeof o.numPrefix === 'string') $('numPrefix').value = o.numPrefix;
     SELECTS.forEach(function (c) { if (typeof o[c] === 'string') $(c).value = o[c]; });
     FIELDS.forEach(function (f) { if (typeof o[f] === 'number' && !isNaN(o[f])) $(f).value = o[f]; });
     CHECKS.forEach(function (c) { if (typeof o[c] === 'boolean') $(c).checked = o[c]; });
@@ -116,6 +118,12 @@
     call('domboPanelSize', { scale: Number(o.hebeScale), textMm: o.sizeTextMm });
   });
   $('sizeRemove').addEventListener('click', function () { call('domboPanelSizeRemove'); });
+  $('number').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelNumber', { pieces: o.numPieces, prefix: o.numPrefix, textMm: o.numTextMm, place: o.numPlace });
+  });
+  $('numberRemove').addEventListener('click', function () { call('domboPanelNumberRemove'); });
 
   // ---- 접힌 '설정' 줄에 지금 값을 한 줄로 ----
   var SUMS = {
@@ -135,6 +143,9 @@
     },
     cut: function (o) {
       return '도련 ' + o.bleedMm + 'mm';
+    },
+    number: function (o) {
+      return (o.numPrefix || '') + '1' + (o.numPieces ? ', ' + (o.numPrefix || '') + '1-1 …' : ' …') + ' · ' + (o.numPlace === 'outside' ? '바깥 위' : '안쪽 왼쪽 위') + ' · ' + o.numTextMm + 'mm';
     },
     size: function (o) {
       return (o.hebeScale === '10' ? '10:1' : '1:1') + ' · 글자 ' + o.sizeTextMm + 'mm' + (o.hebeScale === '10' ? ' (파일 ' + o.sizeTextMm / 10 + 'mm)' : '');
