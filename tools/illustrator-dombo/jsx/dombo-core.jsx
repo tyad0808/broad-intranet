@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.16.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.17.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -1317,7 +1317,7 @@ function domboNumberLabels(targets, opts) {
   for (i = 0; i < order.length; i++) {
     var t = list[order[i]], no = prefix + (i + 1);
     var pieces = opts && opts.pieces ? domboPieces(t.item) : [];
-    if (!pieces.length) { out.push({ text: no, bounds: t.bounds, side: domboNumberSide(opts && opts.side), edge: t.bounds, work: true }); continue; }
+    if (!pieces.length) { out.push({ text: no, bounds: t.bounds, side: domboNumberSide(opts && opts.side), edge: t.bounds, work: true, item: t.item }); continue; }
     var pb = [], e = t.bounds, tol = DOMBO_PT_PER_MM;
     for (j = 0; j < pieces.length; j++) pb.push(pieces[j].bounds);
     var po = domboReadingOrder(pb);
@@ -1327,7 +1327,7 @@ function domboNumberLabels(targets, opts) {
       else if (b[3] <= e[3] + tol) side = 'bottom';
       else if (b[0] <= e[0] + tol) side = 'left';
       else if (b[2] >= e[2] - tol) side = 'right';
-      out.push({ text: no + '-' + (j + 1), bounds: b, side: side, edge: e });
+      out.push({ text: no + '-' + (j + 1), bounds: b, side: side, edge: e, item: t.item });
     }
   }
   return out;
@@ -1349,7 +1349,8 @@ function domboNumberMove(tb, b, edge, side, gap, topAlign) {
 }
 
 // opts: { pieces, prefix, textMm: 폰트 크기(mm, 기본 7), scale: 1 | 10 (1:1 파일이면 그대로, 10:1 파일이면 1/10),
-//         side: 'top' | 'bottom' | 'left' | 'right' (작업물 번호 자리), box: 네모 테두리, gapMm: 작업물과 띄울 간격(mm, 기본 3) }.
+//         side: 'top' | 'bottom' | 'left' | 'right' (작업물 번호 자리), box: 네모 테두리, gapMm: 작업물과 띄울 간격(mm, 기본 3),
+//         group: 번호와 작업물을 한 그룹('번호 묶음 N')으로 묶기 (안 묶으면 번호는 '넘버링' 레이어에) }.
 // 번호는 늘 작업물 바깥에. 폰트 크기·간격 모두 10:1 파일이면 1/10
 // 작업물 기준은 맨 바깥 클리핑 마스크 > 그룹 > 가장 큰 개체 (크기·헤베와 같음)
 function domboNumber(opts) {
@@ -1373,7 +1374,7 @@ function domboNumber(opts) {
   if (sizePt < 0.1 || sizePt > 1296) throw new Error('파일에 들어갈 폰트 크기가 ' + (Math.round(sizePt / DOMBO_PT_PER_MM * 100) / 100) + 'mm 입니다. 일러스트는 0.04 ~ 457mm 만 됩니다.');
   var layer = domboGetLayer(doc, DOMBO_NUM_LAYER);
   layer.zOrder(ZOrderMethod.BRINGTOFRONT);
-  var black = domboBlack(doc), font = domboSizeFont();
+  var black = domboBlack(doc), font = domboSizeFont(), bundles = [];
   for (i = 0; i < labels.length; i++) {
     var b = labels[i].bounds, tf = layer.textFrames.add();
     tf.contents = labels[i].text;
@@ -1396,18 +1397,48 @@ function domboNumber(opts) {
       bx.strokeWidth = Math.max(0.1, 0.3 / scale / factor);
       tf.move(g, ElementPlacement.PLACEATBEGINNING);
     }
+    if (o.group) {
+      // 작업물마다 그룹 하나: 작업물이 있던 자리에 그룹을 만들어 작업물과 번호를 넣는다
+      var label = o.box ? g : tf, item = labels[i].item, bundle = null;
+      for (var q = 0; q < bundles.length; q++) if (bundles[q].item === item) bundle = bundles[q].group;
+      if (!bundle) {
+        bundle = item.parent.groupItems.add();
+        bundle.move(item, ElementPlacement.PLACEBEFORE);
+        bundle.name = '번호 묶음 ' + labels[i].text.replace(/-\d+$/, '');
+        item.move(bundle, ElementPlacement.PLACEATEND);
+        bundles.push({ item: item, group: bundle });
+      }
+      label.move(bundle, ElementPlacement.PLACEATBEGINNING);
+    }
   }
   doc.selection = null;
+  if (o.group) {
+    var empty = domboFindLayer(doc, DOMBO_NUM_LAYER);
+    if (empty && empty.pageItems.length === 0) empty.remove();
+    return '번호 ' + labels.length + '개를 붙이고 작업물과 그룹으로 묶었습니다 (' + labels[0].text + ' ~ ' + labels[labels.length - 1].text + ").";
+  }
   return '번호 ' + labels.length + '개를 붙였습니다 (' + labels[0].text + ' ~ ' + labels[labels.length - 1].text + "). '" + DOMBO_NUM_LAYER + "' 레이어에 있습니다.";
 }
 
+// '넘버링' 레이어를 지우고, 작업물과 묶은 '번호 묶음' 은 번호만 지운 뒤 작업물을 그룹 밖 원래 자리로 꺼낸다
 function domboNumberRemove() {
-  var doc = domboDoc();
+  var doc = domboDoc(), n = 0, i, j;
   var layer = domboFindLayer(doc, DOMBO_NUM_LAYER);
-  if (!layer) return '지울 번호가 없습니다.';
-  layer.locked = false;
-  layer.remove();
-  return '번호를 지웠습니다.';
+  if (layer) { layer.locked = false; layer.remove(); n++; }
+  var groups = [];
+  for (i = 0; i < doc.groupItems.length; i++) if (/^번호 묶음 /.test(doc.groupItems[i].name)) groups.push(doc.groupItems[i]);
+  for (i = groups.length - 1; i >= 0; i--) {
+    var g = groups[i], kids = [];
+    for (j = 0; j < g.pageItems.length; j++) kids.push(g.pageItems[j]);
+    for (j = kids.length - 1; j >= 0; j--) {
+      if (/^번호 /.test(kids[j].name)) kids[j].remove();
+      else kids[j].move(g, ElementPlacement.PLACEAFTER);
+    }
+    g.remove();
+    n++;
+  }
+  if (!n) return '지울 번호가 없습니다.';
+  return '번호를 지웠습니다' + (groups.length ? ' (묶었던 작업물 ' + groups.length + '개는 그룹을 풀어 원래대로)' : '') + '.';
 }
 
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다
