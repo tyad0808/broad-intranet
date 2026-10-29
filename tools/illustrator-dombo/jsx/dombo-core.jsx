@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.17.2'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.17.3'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -1403,9 +1403,7 @@ function domboNumber(opts) {
       g.name = tf.name;
       var bx = g.pathItems.rectangle(tb[1] + mv[1], tb[0] + mv[0], tb[2] - tb[0], tb[1] - tb[3]);
       bx.filled = false;
-      bx.stroked = true;
-      bx.strokeColor = black;
-      bx.strokeWidth = Math.max(0.1, 0.3 / scale / factor);
+      bx.stroked = false;  // 획 색 없음 (면도 없음)
       tf.move(g, ElementPlacement.PLACEATBEGINNING);
     }
     if (o.group) {
