@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.14.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.14.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -1303,7 +1303,9 @@ function domboPieces(item) {
 }
 
 // 번호 글자 목록 (그리기 전 계산). opts: { pieces: 조각 번호까지, prefix: 앞 글자 }
-// 결과: [{ text, bounds }]
+// 결과: [{ text, bounds: 번호를 붙일 것의 범위, side: 'top' | 'bottom' | 'left' | 'right', edge: 작업물 범위 }]
+// 번호는 출력되지 않게 늘 작업물 바깥에 놓는다: 작업물 번호는 위쪽, 조각 번호는 그 조각이 닿은 작업물 가장자리 바깥
+// (위 → 아래 → 왼쪽 → 오른쪽 순으로 먼저 닿은 쪽). 어느 가장자리에도 닿지 않은 안쪽 조각은 작업물 왼쪽 바깥에
 function domboNumberLabels(targets, opts) {
   var list = [], i, j;
   for (i = 0; i < targets.length; i++) {
@@ -1315,16 +1317,32 @@ function domboNumberLabels(targets, opts) {
   for (i = 0; i < order.length; i++) {
     var t = list[order[i]], no = prefix + (i + 1);
     var pieces = opts && opts.pieces ? domboPieces(t.item) : [];
-    if (!pieces.length) { out.push({ text: no, bounds: t.bounds }); continue; }
-    var pb = [];
+    if (!pieces.length) { out.push({ text: no, bounds: t.bounds, side: 'top', edge: t.bounds }); continue; }
+    var pb = [], e = t.bounds, tol = DOMBO_PT_PER_MM;
     for (j = 0; j < pieces.length; j++) pb.push(pieces[j].bounds);
     var po = domboReadingOrder(pb);
-    for (j = 0; j < po.length; j++) out.push({ text: no + '-' + (j + 1), bounds: pb[po[j]] });
+    for (j = 0; j < po.length; j++) {
+      var b = pb[po[j]], side = 'left';
+      if (b[1] >= e[1] - tol) side = 'top';
+      else if (b[3] <= e[3] + tol) side = 'bottom';
+      else if (b[0] <= e[0] + tol) side = 'left';
+      else if (b[2] >= e[2] - tol) side = 'right';
+      out.push({ text: no + '-' + (j + 1), bounds: b, side: side, edge: e });
+    }
   }
   return out;
 }
 
-// opts: { pieces, prefix, textMm (파일 크기 mm, 기본 5), place: 'inside' (왼쪽 위 안쪽) | 'outside' (위쪽 바깥) }
+// 글자 범위(tb)를 옮길 거리: 작업물 가장자리(edge) 바깥 side 쪽, 붙일 것(b)에 맞춰. gap 만큼 띄운다
+function domboNumberMove(tb, b, edge, side, gap) {
+  if (side === 'top') return [b[0] - tb[0], edge[1] + gap - tb[3]];
+  if (side === 'bottom') return [b[0] - tb[0], edge[3] - gap - tb[1]];
+  var cy = (b[1] + b[3]) / 2 - (tb[1] + tb[3]) / 2;
+  if (side === 'right') return [edge[2] + gap - tb[0], cy];
+  return [edge[0] - gap - tb[2], cy];
+}
+
+// opts: { pieces, prefix, textMm (파일 크기 mm, 기본 5) }. 번호는 늘 작업물 바깥에
 function domboNumber(opts) {
   var o = opts || {};
   var textMm = Number(o.textMm) || 5;
@@ -1350,9 +1368,8 @@ function domboNumber(opts) {
     ca.size = sizePt;
     ca.fillColor = black;
     if (font) ca.textFont = font;
-    var tb = tf.geometricBounds;
-    if (o.place === 'outside') tf.translate(b[0] - tb[0], b[1] + pad - tb[3]);   // 위쪽 바깥, 왼쪽 맞춤
-    else tf.translate(b[0] + pad - tb[0], b[1] - pad - tb[1]);                   // 왼쪽 위 안쪽
+    var mv = domboNumberMove(tf.geometricBounds, b, labels[i].edge, labels[i].side, pad);
+    tf.translate(mv[0], mv[1]);
   }
   doc.selection = null;
   return '번호 ' + labels.length + '개를 붙였습니다 (' + labels[0].text + ' ~ ' + labels[labels.length - 1].text + "). '" + DOMBO_NUM_LAYER + "' 레이어에 있습니다.";

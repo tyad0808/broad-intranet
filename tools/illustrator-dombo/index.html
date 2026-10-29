@@ -188,14 +188,12 @@
     <div class="row"><button id="number">번호 붙이기</button><button id="numberRemove">지우기</button></div>
     <details class="opts" data-sum="number"><summary></summary><div class="box">
       <label><input id="numPieces" type="checkbox" checked>조각 번호까지 (3-1, 3-2 …)</label>
-      <div class="radios"><label><input type="radio" name="numPlace" value="inside" checked>안쪽 왼쪽 위</label>
-        <label><input type="radio" name="numPlace" value="outside">바깥 위쪽</label></div>
       <div class="grid">
         <div class="f">앞 글자 <input id="numPrefix" type="text" value="" style="width:60px"></div>
         <div class="f">글자 (mm) <input id="numTextMm" type="number" step="1" min="1" value="5"></div>
       </div>
     </div></details>
-    <p class="hint">출력물을 전부 선택하고 누릅니다. 줄마다 왼쪽 → 오른쪽, 위 줄 → 아래 줄 순서로 1, 2, 3 … (높이가 달라도 세로로 반 이상 겹치면 같은 줄). 조각 번호를 켜면 작업물 안에 조각이 여러 개일 때 3-1, 3-2 … 도 같은 순서로. 앞 글자(예: 1028-)를 넣으면 번호 앞에 붙습니다. '넘버링' 레이어에 먹 100%.</p>
+    <p class="hint">출력물을 전부 선택하고 누릅니다. 줄마다 왼쪽 → 오른쪽, 위 줄 → 아래 줄 순서로 1, 2, 3 … (높이가 달라도 세로로 반 이상 겹치면 같은 줄). 조각 번호를 켜면 작업물 안에 조각이 여러 개일 때 3-1, 3-2 … 도 같은 순서로. 앞 글자(예: 1028-)를 넣으면 번호 앞에 붙습니다. 번호는 출력되지 않게 늘 작업물 바깥에: 작업물 번호는 위쪽, 조각 번호는 그 조각이 닿은 가장자리 바깥(윗줄은 위, 아랫줄은 아래). '넘버링' 레이어에 먹 100%.</p>
   </details>
   </div>
 

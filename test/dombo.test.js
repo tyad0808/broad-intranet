@@ -576,3 +576,22 @@ test('넘버링: 작업물 번호와 조각 번호 (작업물-조각), 앞 글�
   const plain = Array.from(core.domboNumberLabels([B, C, A], { pieces: false }), l => l.text);
   assert.deepStrictEqual(plain, ['1', '2', '3']);
 });
+
+test('넘버링 자리: 늘 작업물 바깥 — 윗줄 조각은 위, 아랫줄은 아래, 가운데 줄은 왼쪽·오른쪽', () => {
+  const P = (l, t, r, b) => pathItem([l * MM, t * MM, r * MM, b * MM]);
+  // 3줄 x 3칸 작업물 (0~90 x 0~90mm)
+  const kids = [];
+  for (let j = 0; j < 3; j++) for (let i = 0; i < 3; i++) kids.push(P(i * 30, 90 - j * 30, (i + 1) * 30, 60 - j * 30));
+  const labels = Array.from(core.domboNumberLabels([group(kids)], { pieces: true }));
+  assert.deepStrictEqual(labels.map(l => l.side), ['top', 'top', 'top', 'left', 'left', 'right', 'bottom', 'bottom', 'bottom']);
+  // 글자(가로 8 x 세로 4mm)를 옮긴 자리는 작업물 범위와 겹치지 않는다
+  const edge = [0, 90 * MM, 90 * MM, 0], gap = 2 * MM;
+  labels.forEach(l => {
+    const tb = [0, 4 * MM, 8 * MM, 0], mv = Array.from(core.domboNumberMove(tb, l.bounds, l.edge, l.side, gap));
+    const t = [tb[0] + mv[0], tb[1] + mv[1], tb[2] + mv[0], tb[3] + mv[1]];
+    const overlap = t[0] < edge[2] && t[2] > edge[0] && t[3] < edge[1] && t[1] > edge[3];
+    assert.ok(!overlap, `${l.text} 가 작업물 위에 있다`);
+  });
+  // 조각이 없으면 작업물 번호는 위쪽 바깥
+  assert.strictEqual(core.domboNumberLabels([P(0, 10, 10, 0)], { pieces: true })[0].side, 'top');
+});
