@@ -1,6 +1,6 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'numTextMm'];
+  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'numTextPt'];
   var CHECKS = ['numPieces', 'orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
   var SELECTS = ['orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
@@ -121,7 +121,7 @@
   $('number').addEventListener('click', function () {
     var o = readOptions();
     save(o);
-    call('domboPanelNumber', { pieces: o.numPieces, prefix: o.numPrefix, textMm: o.numTextMm, scale: Number(o.numScale) });
+    call('domboPanelNumber', { pieces: o.numPieces, prefix: o.numPrefix, textPt: o.numTextPt, scale: Number(o.numScale) });
   });
   $('numberRemove').addEventListener('click', function () { call('domboPanelNumberRemove'); });
 
@@ -145,7 +145,7 @@
       return '도련 ' + o.bleedMm + 'mm';
     },
     number: function (o) {
-      return (o.numPrefix || '') + '1' + (o.numPieces ? ', ' + (o.numPrefix || '') + '1-1 …' : ' …') + ' · 우측 상단 · ' + (o.numScale === '10' ? '10:1 · 글자 ' + o.numTextMm + 'mm (파일 ' + o.numTextMm / 10 + 'mm)' : '1:1 · 글자 ' + o.numTextMm + 'mm');
+      return (o.numPrefix ? '앞 글자 ' + o.numPrefix + ' · ' : '') + (o.numPieces ? '조각 번호까지' : '작업물 번호만') + (o.numScale === '10' ? ' · 파일에 ' + o.numTextPt / 10 + 'pt' : '');
     },
     size: function (o) {
       return (o.hebeScale === '10' ? '10:1' : '1:1') + ' · 글자 ' + o.sizeTextMm + 'mm' + (o.hebeScale === '10' ? ' (파일 ' + o.sizeTextMm / 10 + 'mm)' : '');
