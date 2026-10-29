@@ -4,7 +4,7 @@
 
 (function () {
   try {
-    alert(domboNumber({ pieces: false, scale: confirm('10:1 파일인가요? (1/10 로 그린 파일)\n(아니오: 1:1 파일)') ? 10 : 1, textMm: 7 }));
+    alert(domboNumber({ pieces: false, scale: confirm('10:1 파일인가요? (1/10 로 그린 파일)\n(아니오: 1:1 파일)') ? 10 : 1, textMm: 7, side: 'top', gapMm: 3, box: false }));
   } catch (e) {
     alert(e.message);
   }

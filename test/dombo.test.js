@@ -605,3 +605,19 @@ test('넘버링: 작업물 번호는 우측 상단 바깥 (오른쪽 끝 맞춤)
   near(tb[2] + mv[0], 110 * MM);          // 오른쪽 끝 = 작업물 오른쪽
   near(tb[3] + mv[1], 62 * MM);           // 아래 = 작업물 위 + 간격
 });
+
+test('넘버링 자리 고르기: 위·아래는 오른쪽 끝, 왼쪽·오른쪽은 위 끝 맞춤, 간격만큼 띄움', () => {
+  const art = pathItem([0, 50 * MM, 100 * MM, 0]);
+  const tb = [0, 4 * MM, 6 * MM, 0], gap = 3 * MM;
+  const at = side => {
+    const l = core.domboNumberLabels([art], { side })[0];
+    assert.strictEqual(l.side, side);
+    const mv = Array.from(core.domboNumberMove(tb, l.bounds, l.edge, l.side, gap, l.work));
+    return [tb[0] + mv[0], tb[1] + mv[1], tb[2] + mv[0], tb[3] + mv[1]].map(v => Math.round(v / MM * 10) / 10);
+  };
+  assert.deepStrictEqual(at('top'), [94, 57, 100, 53]);      // 위, 오른쪽 끝
+  assert.deepStrictEqual(at('bottom'), [94, -3, 100, -7]);   // 아래, 오른쪽 끝
+  assert.deepStrictEqual(at('left'), [-9, 50, -3, 46]);      // 왼쪽, 위 끝
+  assert.deepStrictEqual(at('right'), [103, 50, 109, 46]);   // 오른쪽, 위 끝
+  assert.strictEqual(core.domboNumberLabels([art], {})[0].side, 'top', '기본은 위 (우측 상단)');
+});

@@ -1,8 +1,8 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
-  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'numTextMm'];
-  var CHECKS = ['numPieces', 'orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
-  var SELECTS = ['orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
+  var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'numTextMm', 'numGapMm'];
+  var CHECKS = ['numBox', 'numPieces', 'orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
+  var SELECTS = ['numSide', 'orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
 
   function $(id) { return document.getElementById(id); }
@@ -121,7 +121,8 @@
   $('number').addEventListener('click', function () {
     var o = readOptions();
     save(o);
-    call('domboPanelNumber', { pieces: o.numPieces, prefix: o.numPrefix, textMm: o.numTextMm, scale: Number(o.numScale) });
+    call('domboPanelNumber', { pieces: o.numPieces, prefix: o.numPrefix, textMm: o.numTextMm, scale: Number(o.numScale),
+      side: o.numSide, box: o.numBox, gapMm: o.numGapMm });
   });
   $('numberRemove').addEventListener('click', function () { call('domboPanelNumberRemove'); });
 
