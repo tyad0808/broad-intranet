@@ -51,7 +51,7 @@ test('예각 정리: 다리 사이·팔 옆의 좁은 틈은 메우고, 0 이면
   const filled = st.outline(a, w, h, { cellMm: 1, outlineMm: 3, roundMm: 10 }).points;
   assert.ok(inside(filled, 150, 500), '다리 사이 메움');
   assert.ok(inside(filled, 92, 250), '팔과 몸 사이 메움');
-  const open = st.outline(a, w, h, { cellMm: 1, outlineMm: 3, roundMm: 0, baseMm: 0 }).points;
+  const open = st.outline(a, w, h, { cellMm: 1, outlineMm: 3, roundMm: 0, baseMm: 0, fillLegs: false }).points;
   assert.ok(!inside(open, 150, 500), '예각 정리·바닥 채우기 0 이면 다리 사이가 비어 있다');
 });
 
@@ -85,6 +85,22 @@ test('바닥 채우기: 장화 사이·앞코 아래 빈 곳은 바닥까지 곧
   const xs = corners.map(p => p.a[0]).sort((p, q) => p - q);
   assert.ok(xs[0] <= 72 && xs[1] >= 338, `바닥 선이 양쪽 끝까지: ${xs}`);
   // 바닥 채우기 0 이면 장화 사이가 빈다
-  const open = st.outline(a, w, h, { cellMm: 1, outlineMm: 10, roundMm: 5, baseMm: 0 });
+  const open = st.outline(a, w, h, { cellMm: 1, outlineMm: 10, roundMm: 5, baseMm: 0, fillLegs: false });
   assert.ok(!inside(open.points, 190, 560));
+});
+
+test('다리 사이 메우기: 바닥부터 다리가 만나는 곳(가랑이)까지 메운다 — 틈이 넓고 높아도, 한쪽 발이 더 내려와도', () => {
+  // 몸통(위) + 다리 둘: 사이 틈 60mm, 높이 350mm (바닥 채우기 높이 300mm 보다 높음). 왼발이 10mm 더 내려옴
+  const w = 300, h = 700, a = new Uint8Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const on = (y < 300 && x > 70 && x < 230) || (y >= 300 && y < 690 && x > 70 && x < 120) || (y >= 300 && y < 680 && x > 180 && x < 230) ||
+      (y > 50 && y < 250 && x > 20 && x < 45);  // 몸 옆 팔 (틈 25mm) — 위쪽이라 메우지 않는다
+    if (on) a[y * w + x] = 255;
+  }
+  const r = st.outline(a, w, h, { cellMm: 1, outlineMm: 5, roundMm: 5 });
+  assert.ok(inside(r.points, 150, 600), '다리 사이 아래쪽');
+  assert.ok(inside(r.points, 150, 320), '가랑이 바로 아래');
+  assert.ok(!inside(r.points, 57, 150), '팔과 몸 사이는 그대로');
+  const off = st.outline(a, w, h, { cellMm: 1, outlineMm: 5, roundMm: 5, fillLegs: false });
+  assert.ok(!inside(off.points, 150, 450), '끄면 다리 사이가 빈다');
 });

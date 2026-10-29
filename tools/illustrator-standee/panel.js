@@ -15,7 +15,7 @@
     el.textContent = result.slice(ok ? 3 : 4);
   }
 
-  function readOptions() { return { outlineMm: parseFloat($('outlineMm').value), roundMm: parseFloat($('roundMm').value), baseMm: parseFloat($('baseMm').value) }; }
+  function readOptions() { return { outlineMm: parseFloat($('outlineMm').value), roundMm: parseFloat($('roundMm').value), baseMm: parseFloat($('baseMm').value), fillLegs: $('fillLegs').checked }; }
   function save(o) { try { localStorage.setItem(STORE_KEY, JSON.stringify(o)); } catch (e) {} }
   (function load() {
     var o;
@@ -24,6 +24,7 @@
     if (typeof o.outlineMm === 'number' && !isNaN(o.outlineMm)) $('outlineMm').value = o.outlineMm;
     if (typeof o.roundMm === 'number' && !isNaN(o.roundMm)) $('roundMm').value = o.roundMm;
     if (typeof o.baseMm === 'number' && !isNaN(o.baseMm)) $('baseMm').value = o.baseMm;
+    if (typeof o.fillLegs === 'boolean') $('fillLegs').checked = o.fillLegs;
   })();
   document.addEventListener('change', function () { save(readOptions()); });
 
@@ -89,7 +90,7 @@
             alpha = fixed;
           }
           var r = window.standeeShape.outline(alpha, gw, gh, {
-            cellMm: (physW / gw + physH / gh) / 2, outlineMm: o.outlineMm, roundMm: o.roundMm, baseMm: o.baseMm
+            cellMm: (physW / gw + physH / gh) / 2, outlineMm: o.outlineMm, roundMm: o.roundMm, baseMm: o.baseMm, fillLegs: o.fillLegs
           });
           // 칸 좌표 → 문서 좌표 (pt). 칸 (0,0) = 범위 왼쪽 위
           var sx = (b[2] - b[0]) / gw, sy = (b[1] - b[3]) / gh;

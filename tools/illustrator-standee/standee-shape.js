@@ -217,7 +217,7 @@
     return out;
   }
 
-  // alpha: 0~255 (w*h), opts: { cellMm: 칸 하나의 실제 크기(mm), outlineMm, roundMm, baseMm: 바닥 채우기 높이(기본 300), flatBottom }
+  // alpha: 0~255 (w*h), opts: { cellMm: 칸 하나의 실제 크기(mm), outlineMm, roundMm, baseMm: 바닥 채우기 높이(기본 300), fillLegs: 다리 사이 메우기(기본 켬), flatBottom }
   // 결과: { points: [{ a:[x,y], l, r, corner }], feetY, cells } (칸 단위, 입력 그림 기준)
   function outline(alpha, w, h, opts) {
     const c = opts.cellMm, o = opts.outlineMm / c, r = Math.max(0, opts.roundMm || 0) / c;
@@ -253,6 +253,28 @@
         let y0 = -1;
         for (let y = top; y < cut; y++) if (shape[y * W + x]) { y0 = y; break; }
         if (y0 >= 0) for (let y = y0; y < cut; y++) shape[y * W + x] = 1;
+      }
+    }
+    // 다리 사이 메우기: 바닥에서부터 한 줄씩 올라가며, 양쪽 끝 사이 빈 곳을 메운다.
+    // 빈 곳(두 덩어리 이상)이 바닥 채우기 높이 안에서 시작해야 하고, 다리가 만나는 줄(한 덩어리)에서 멈춘다.
+    // (한쪽 발만 더 내려온 바닥 줄은 건너뛴다.) 모양 높이의 60% 를 넘어가지는 않는다
+    if (opts.flatBottom !== false && opts.fillLegs !== false) {
+      let topRow = H, botRow = 0;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (shape[y * W + x]) { if (y < topRow) topRow = y; if (y > botRow) botRow = y; }
+      const limit = botRow - Math.round((botRow - topRow) * 0.6);
+      const startBy = cut - Math.round(Math.max(0, opts.baseMm == null ? 300 : opts.baseMm) / c);
+      let started = false;
+      for (let y = Math.min(cut - 1, botRow); y >= limit; y--) {
+        let first = -1, last = -1, runs = 0, inRun = false;
+        for (let x = 0; x < W; x++) {
+          if (shape[y * W + x]) { if (first < 0) first = x; last = x; if (!inRun) { runs++; inRun = true; } } else inRun = false;
+        }
+        if (runs <= 1) {
+          if (started || y < startBy) break;
+          continue;
+        }
+        started = true;
+        for (let x = first; x <= last; x++) shape[y * W + x] = 1;
       }
     }
     fillHoles(shape, W, H);
