@@ -111,3 +111,41 @@ test('탭 제목은 통합 어드민(브로애드), 아이콘은 검정 바탕 �
   assert.match(icon, /fill="#000"/);
   assert.match(icon, />B</);
 });
+
+test("'로그인 상태 유지' 를 고르면 30일, 안 고르면 12시간 동안 로그인이 유지된다", async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  addUser(db, { email: 'phone@broad.test', name: '폰직원' });
+  // 쿠키가 끝나는 때까지 남은 시간(시간 단위)
+  const hoursLeft = res => {
+    const m = /Expires=([^;]+)/i.exec(res.headers.get('set-cookie') || '');
+    return m ? (new Date(m[1]).getTime() - Date.now()) / 3600e3 : null;
+  };
+  async function login(fields) {
+    const page = await fetch(baseUrl + '/login');
+    const cookie = page.headers.get('set-cookie').split(';')[0];
+    const token = /name="_csrf" value="([^"]+)"/.exec(await page.text())[1];
+    const res = await fetch(baseUrl + '/login', {
+      method: 'POST', redirect: 'manual',
+      headers: { cookie, 'content-type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ email: 'phone@broad.test', password: 'password123', _csrf: token, ...fields }).toString(),
+    });
+    return { res, cookie: res.headers.get('set-cookie').split(';')[0] };
+  }
+
+  const page = await (await fetch(baseUrl + '/login')).text();
+  assert.match(page, /name="remember" value="1" checked/);
+
+  const kept = await login({ remember: '1' });
+  assert.ok(Math.abs(hoursLeft(kept.res) - 30 * 24) < 1);
+  // 다음에 쓸 때도 다시 30일로 늘어난다
+  const later = await fetch(baseUrl + '/', { redirect: 'manual', headers: { cookie: kept.cookie } });
+  assert.strictEqual(later.status, 200);
+  assert.ok(Math.abs(hoursLeft(later) - 30 * 24) < 1);
+  // 서버에 저장된 로그인 정보도 30일 뒤에 지워진다 (쿠키만 길고 서버는 12시간이면 소용없음)
+  const saved = db.prepare('SELECT MAX(expires) AS e FROM sessions').get().e;
+  assert.ok(Math.abs((saved - Date.now()) / 3600e3 - 30 * 24) < 1);
+
+  const short = await login({});
+  assert.ok(Math.abs(hoursLeft(short.res) - 12) < 1);
+});

@@ -14,6 +14,8 @@ function authRoutes(db, notifier) {
   const activeJobs = () =>
     db.prepare('SELECT id, name FROM jobs WHERE active = 1 ORDER BY sort_order').all();
 
+  const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
+
   router.get('/login', (req, res) => {
     if (req.user) return res.redirect('/');
     res.render('login', { title: '로그인', error: null, notice: LOGIN_MESSAGES[req.query.m] || null, email: '' });
@@ -29,6 +31,8 @@ function authRoutes(db, notifier) {
     req.session.regenerate(err => {
       if (err) return next(err);
       req.session.userId = result.user.id;
+      // '로그인 상태 유지' 를 고르면 30일 (쓸 때마다 다시 30일로 늘어남), 아니면 기본 12시간
+      if (req.body.remember === '1') req.session.cookie.maxAge = REMEMBER_MS;
       res.redirect(result.user.status === 'pending' ? '/pending' : '/');
     });
   });
