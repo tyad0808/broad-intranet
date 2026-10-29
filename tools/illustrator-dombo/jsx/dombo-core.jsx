@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.15.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.15.2'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -1343,12 +1343,12 @@ function domboNumberMove(tb, b, edge, side, gap) {
   return [edge[0] - gap - tb[2], cy];
 }
 
-// opts: { pieces, prefix, textPt: 폰트 크기(pt, 기본 20), scale: 1 | 10 (1:1 파일이면 그대로, 10:1 파일이면 1/10) }. 번호는 늘 작업물 바깥에
+// opts: { pieces, prefix, textMm: 폰트 크기(mm, 기본 7), scale: 1 | 10 (1:1 파일이면 그대로, 10:1 파일이면 1/10) }. 번호는 늘 작업물 바깥에
 // 작업물 기준은 맨 바깥 클리핑 마스크 > 그룹 > 가장 큰 개체 (크기·헤베와 같음)
 function domboNumber(opts) {
   var o = opts || {};
-  var textPt = Number(o.textPt) || 20;
-  if (textPt <= 0) throw new Error('폰트 크기를 넣으세요.');
+  var textMm = Number(o.textMm) || 7;
+  if (textMm <= 0) throw new Error('폰트 크기를 넣으세요.');
   var doc = domboDoc();
   if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
   if (!domboHasSelection(doc)) throw new Error('번호를 붙일 출력물을 선택하세요.');
@@ -1359,8 +1359,8 @@ function domboNumber(opts) {
   var factor = 1;
   try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
   var scale = Number(o.scale) === 10 ? 10 : 1;
-  var sizePt = textPt / scale / factor, pad = sizePt * 0.4;
-  if (sizePt < 0.1 || sizePt > 1296) throw new Error('파일에 들어갈 폰트 크기가 ' + (Math.round(sizePt * 100) / 100) + 'pt 입니다. 일러스트는 0.1 ~ 1296pt 만 됩니다.');
+  var sizePt = textMm / scale / factor * DOMBO_PT_PER_MM, pad = sizePt * 0.4;
+  if (sizePt < 0.1 || sizePt > 1296) throw new Error('파일에 들어갈 폰트 크기가 ' + (Math.round(sizePt / DOMBO_PT_PER_MM * 100) / 100) + 'mm 입니다. 일러스트는 0.04 ~ 457mm 만 됩니다.');
   var layer = domboGetLayer(doc, DOMBO_NUM_LAYER);
   layer.zOrder(ZOrderMethod.BRINGTOFRONT);
   var black = domboBlack(doc), font = domboSizeFont();
