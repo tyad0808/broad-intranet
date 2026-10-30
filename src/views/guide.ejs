@@ -1,0 +1,12 @@
+<%- include('partials/header') %>
+<div class="page-head sticky-glass">
+  <div class="title-row"><h1 class="page-title">사용 방법</h1></div>
+</div>
+<div class="guide-layout">
+  <nav class="card guide-toc" aria-label="안내서 차례">
+    <strong>차례</strong>
+    <ol><% guide.toc.forEach(t => { %><li><a href="#<%= t.id %>"><%= t.text.replace(/^\d+\.\s*/, '') %></a></li><% }) %></ol>
+  </nav>
+  <article class="card guide"><h1 class="guide-title"><%= guide.title %></h1><%- guide.html %></article>
+</div>
+<%- include('partials/footer') %>

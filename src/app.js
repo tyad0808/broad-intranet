@@ -23,6 +23,7 @@ const { createWeeklyReporter } = require('./weeklyReport');
 const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier, notifyOff } = require('./notifier');
+const { loadGuide } = require('./guide');
 const { createOrderActions, canDispatch, DELAY_REASONS } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel, productUrl } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
@@ -280,6 +281,13 @@ function createApp({
     if (req.accepts(['html', 'json']) === 'json') return res.json({ box, off: off.has(box) });
     const back = String(req.body.back || '/');
     res.redirect(/^\/(?!\/)/.test(back) ? back : '/');
+  });
+
+  // 직원 사용 안내서 (docs/guide.md 를 고치면 바로 바뀐다)
+  app.get('/guide', requireActive, (req, res) => {
+    const guide = loadGuide();
+    if (!guide) return res.status(404).render('error', { title: '사용 방법', message: '사용 안내서 파일(docs/guide.md)이 없습니다.' });
+    res.render('guide', { title: '사용 방법', navSection: 'guide', guide });
   });
 
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));

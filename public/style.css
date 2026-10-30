@@ -88,6 +88,9 @@ body.with-sidebar { padding-left: var(--sidebar); }
 .main-nav a .badge { margin-left: auto; }
 .main-nav a:hover { background: var(--line-2); color: var(--text); text-decoration: none; }
 .main-nav a.on { background: var(--primary-weak); color: var(--primary-dark); font-weight: 650; }
+.nav-help { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 10px; border-top: 1px solid var(--line-2); border-radius: 0; color: var(--text-2); font-weight: 550; font-size: 15px; text-decoration: none; }
+.nav-help:hover { background: var(--line-2); color: var(--text); text-decoration: none; border-radius: var(--radius-sm); }
+.nav-help.on { background: var(--primary-weak); color: var(--primary-dark); font-weight: 650; border-radius: var(--radius-sm); }
 .nav-icon { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .me { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 10px 0; border-top: 1px solid var(--line-2); font-size: 13px; color: var(--text-2); }
 .me form { margin: 0; margin-left: auto; }
@@ -112,6 +115,9 @@ body.no-sidebar .card.narrow { margin-top: 24px; }
   .brand { padding: 0; font-size: 15px; }
   .me { margin: 0 0 0 auto; padding: 0; border: 0; flex-wrap: nowrap; }
   .me-name { display: none; }
+  .nav-help { margin: 0 0 0 auto; padding: 0 12px; min-height: 44px; border: 0; gap: 6px; font-size: 14px; }
+  .nav-help .nav-icon { width: 20px; height: 20px; }
+  .nav-help + .me { margin-left: 4px; }
   .main-nav {
     position: fixed;
     inset: auto 0 0 0;
@@ -1422,3 +1428,32 @@ body.no-sidebar .card.narrow .muted { margin: 16px 0 0; text-align: center; }
 .token-help summary { cursor: pointer; color: var(--text-2); }
 /* 메일함: 앞 메일에 대한 고객 답장 표시 */
 .reply-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 7px; border-radius: 6px; background: var(--primary-weak); color: var(--primary-dark); font-size: 14px; font-weight: 600; vertical-align: 1px; }
+
+/* ───────── 사용 방법 (직원 안내서) ───────── */
+.guide-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; align-items: start; max-width: 1080px; }
+.guide-layout > .card { margin: 0; }
+.guide-toc { position: sticky; top: 88px; padding: 18px 18px 14px; font-size: 14px; }
+.guide-toc strong { display: block; margin-bottom: 8px; color: var(--text); }
+.guide-toc ol { margin: 0; padding-left: 20px; }
+.guide-toc li { margin: 2px 0; color: var(--muted); }
+.guide-toc a { display: block; padding: 6px 0; color: var(--text-2); text-decoration: none; }
+.guide-toc a:hover { color: var(--primary-dark); }
+.guide { padding: 8px 32px 32px; font-size: 15px; line-height: 1.75; color: var(--text); }
+.guide-title { margin: 24px 0 2px; font-size: 22px; letter-spacing: -0.02em; }
+.guide-title + p { margin: 0 0 4px; color: var(--muted); font-size: 14px; }
+.guide h2 { margin: 32px 0 10px; padding-top: 20px; border-top: 1px solid var(--line-2); font-size: 21px; letter-spacing: -0.02em; scroll-margin-top: 88px; }
+.guide h3 { margin: 22px 0 6px; font-size: 16.5px; }
+.guide p { margin: 8px 0; }
+.guide ul, .guide ol { margin: 8px 0; padding-left: 22px; }
+.guide li { margin: 4px 0; }
+.guide strong { font-weight: 650; }
+.guide-table { overflow-x: auto; margin: 10px 0; }
+.guide table { width: 100%; border-collapse: collapse; font-size: 14.5px; line-height: 1.6; }
+.guide th, .guide td { padding: 9px 12px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.guide th { background: var(--line-2); font-weight: 650; white-space: nowrap; }
+@media (max-width: 900px) {
+  .guide-layout { grid-template-columns: 1fr; }
+  .guide-toc { position: static; }
+  .guide { padding: 4px 18px 24px; }
+  .guide th { white-space: normal; }
+}
