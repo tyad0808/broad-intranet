@@ -237,7 +237,7 @@
               <span class="claim-badge <%= claimLevel(g.claim.claim_status) %>"><%= claimLabel(g.claim.claim_status) %></span>
             <% } %>
             <span class="muted"><strong class="buyer"><%= o.buyer_name || o.receiver_name || '-' %></strong><% if (o.receiver_name && o.buyer_name && o.receiver_name !== o.buyer_name) { %> (받는 분 <%= o.receiver_name %>)<% } %> · <span title="<%= kst(o.paid_at) %>"><%= kst(o.paid_at).slice(5) %></span> <%= o.channel === 'manual' ? '등록' : '결제' %><% if (o.source_order_no) { %> · 주문번호 <%= o.source_order_no %><% } %><% if (g.items.length > 1) { %> · 상품 <%= g.items.length %>개<% } %></span>
-            <% if (o.ship_memo) { %><span class="memo-chip" title="배송 메시지: <%= o.ship_memo %>">💬 <%= o.ship_memo.length > 18 ? `${o.ship_memo.slice(0, 18)}…` : o.ship_memo %></span><% } %>
+            <% if (o.ship_memo) { %><span class="memo-chip" title="배송 메시지: <%= o.ship_memo %>"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4c4.97 0 9 3.13 9 7s-4.03 7-9 7c-.9 0-1.77-.1-2.6-.3L5 20l1.1-3.7C4.2 15 3 13.1 3 11c0-3.87 4.03-7 9-7z"/></svg><span class="visually-hidden">배송 메시지</span><%= o.ship_memo.length > 18 ? `${o.ship_memo.slice(0, 18)}…` : o.ship_memo %></span><% } %>
           </div>
           <ul class="oi-items">
             <% g.items.forEach(i => { %>

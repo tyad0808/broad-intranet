@@ -321,6 +321,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
     const lastRun = db.prepare('SELECT started_at, ok FROM collect_runs ORDER BY id DESC LIMIT 1').get() || null;
 
     res.render('orders/list', {
+      ds: true, // 새 디자인 규칙(.ds-v2) — 지금은 이 화면에만
       title: '주문',
       logenOn: Boolean(logen && logen.hasKey),
       logenEnv: logen ? logen.env : null,

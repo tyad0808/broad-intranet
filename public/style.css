@@ -1457,3 +1457,44 @@ body.no-sidebar .card.narrow .muted { margin: 16px 0 0; text-align: center; }
   .guide { padding: 4px 18px 24px; }
   .guide th { white-space: normal; }
 }
+
+/* ═════════════════════════════════════════════════════════════
+   새 디자인 규칙 (ui-ux-pro-max 점검 · .claude/rules/design.md)
+   지금은 주문 목록 화면(body.ds-v2)에만 켠다 → 확인 후 모든 화면으로 넓힌다
+   ═════════════════════════════════════════════════════════════ */
+body.ds-v2 {
+  --muted: #6b7684;     /* 흐린 글자: 흰 바탕 대비 4.6 (예전 #8b95a1 은 3.0) */
+  --ok: #067a52;        /* 완료: 배지 대비 4.9 */
+  --purple: #5b3cc4;    /* 발송 준비: 배지 대비 6.3 */
+  --error: #c81e2f;     /* 취소·위험: 배지 대비 5.1 */
+  font-size: 16px;
+  font-variant-numeric: tabular-nums; /* 숫자 폭을 같게 → 날짜·수량·금액이 세로로 맞는다 */
+}
+/* 14px 보다 작은 글자 없애기 */
+.ds-v2 .me, .ds-v2 button.link, .ds-v2 .badge, .ds-v2 label, .ds-v2 .flash-details,
+.ds-v2 .notify-card, .ds-v2 .notify-card strong, .ds-v2 .notify-card .btn-sm { font-size: 14px; }
+.ds-v2 .notify-card .btn-sm { min-height: 40px; }
+
+/* 주문 한 줄: 상품 이름이 가장 눈에 띄게, 채널 표시와 주문자는 한 줄로 이어서 */
+.ds-v2 .oi-head { display: block; margin-bottom: 6px; font-size: 15px; line-height: 1.7; }
+.ds-v2 .oi-head > * { vertical-align: middle; margin-right: 6px; }
+.ds-v2 .oi-head .muted { font-size: 15px; }
+.ds-v2 .oi-head .muted span[title] { white-space: nowrap; } /* 결제 시각이 가운데서 끊기지 않게 */
+.ds-v2 .oi-name { font-size: 18px; font-weight: 700; }
+.ds-v2 .oi-items li.addon .oi-name { font-size: 16px; }
+.ds-v2 .oi-items .muted { font-size: 15px; }
+.ds-v2 .memo-chip { font-size: 14px; }
+.ds-v2 .ico { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* 상태 배지: 색 + 점 + 글자, 조금 크게 */
+.ds-v2 .st-badge { height: 34px; padding: 0 13px 0 11px; font-size: 15px; }
+.ds-v2 .st-badge::before { width: 8px; height: 8px; }
+
+/* 버튼·선택 칸: PC 44px, 휴대폰 48px. 체크박스도 누르기 쉽게 */
+.ds-v2 .container .btn-sm, .ds-v2 .container a.btn-sm { min-height: 44px; padding: 0 16px; font-size: 15px; }
+.ds-v2 .bulk-bar button { min-height: 44px; font-size: 15px; }
+.ds-v2 .order-item input[type=checkbox], .ds-v2 .order-head input[type=checkbox] { width: 22px; height: 22px; }
+@media (max-width: 900px) {
+  .ds-v2 .container .btn-sm, .ds-v2 .container a.btn-sm, .ds-v2 .bulk-bar button,
+  .ds-v2 .container select, .ds-v2 .container input[type=search] { min-height: 48px; }
+}
