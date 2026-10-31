@@ -103,7 +103,7 @@ function csrf(req, res, next) {
   if (req.method === 'POST') {
     const sent = (req.body && req.body._csrf) || req.get('x-csrf-token');
     const expected = req.session.csrfToken;
-    const ok = typeof sent === 'string' && sent.length === expected.length &&
+    const ok = typeof sent === 'string' && Buffer.byteLength(sent) === Buffer.byteLength(expected) &&
       crypto.timingSafeEqual(Buffer.from(sent), Buffer.from(expected));
     if (!ok) {
       return res.status(403).render('error', {

@@ -133,6 +133,19 @@ const { storageInfo } = require('./storage');
 const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 setInterval(() => notifier.checkStorage(storageInfo(), kstDay()), 60 * 60 * 1000).unref();
 
+// 개인정보 3개월: 하루 한 번 (켜자마자 한 번, 이후 1시간마다 확인해 날짜가 바뀌었으면)
+const { autoPersonalCleanup } = require('./retention');
+function personalCleanup() {
+  try {
+    const r = autoPersonalCleanup(db);
+    if (r && (r.orders || r.inquiries)) console.log(`개인정보 정리: 주문 ${r.orders}건 이름·연락처·주소 삭제, 답변한 문의 ${r.inquiries}건 삭제`);
+  } catch (e) {
+    console.error('개인정보 정리 실패:', e.message);
+  }
+}
+personalCleanup();
+setInterval(personalCleanup, 60 * 60 * 1000).unref();
+
 // 만료된 로그인 정보를 1시간마다 정리
 setInterval(() => app.locals.sessionStore.cleanup(), 60 * 60 * 1000).unref();
 

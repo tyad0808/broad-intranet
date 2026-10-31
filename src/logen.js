@@ -259,7 +259,8 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
       const r = await fetchSlips();
       for (const row of r.foundRows) {
         onFound(row);
-        if (dispatch && autoDispatch()) await dispatch(row);
+        // 테스트 서버 송장은 진짜가 아니다 → 실제 발송처리하면 고객에게 가짜 송장 알림 (가송장 패널티)
+        if (dispatch && autoDispatch() && env === 'prod') await dispatch(row);
       }
       setSetting(db, 'logen_last_tick', JSON.stringify({ at: now().toISOString(), found: r.found, waiting: r.waiting }));
       return r;

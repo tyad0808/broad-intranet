@@ -28,6 +28,8 @@ const { createOrderActions, canDispatch, DELAY_REASONS } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel, productUrl } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
 
+const MAX_LOGIN_MS = 30 * 24 * 60 * 60 * 1000;
+
 function sessionSecret() {
   if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
   if (process.env.NODE_ENV === 'production') {
@@ -164,9 +166,15 @@ function createApp({
   // 5차 네이버 톡톡: 네이버가 새 메시지를 알려 주는 비밀 주소 (로그인·CSRF 대신 비밀 주소 + 네이버 서버 IP 로 확인)
   if (inbox.talktalk) {
     const expected = Buffer.from(String(inbox.talktalk.token));
-    app.post('/hooks/talktalk/:token', express.json({ limit: '1mb' }), (req, res) => {
+    const tokenOk = (req, res, next) => {
       const given = Buffer.from(String(req.params.token));
       if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return res.status(404).end();
+      next();
+    };
+    // 비밀 주소가 맞을 때만 본문을 읽는다 (모르는 사람이 보낸 큰 본문·압축 본문으로 서버를 괴롭히지 못하게)
+    const readJson = express.json({ limit: '1mb', inflate: false });
+    const body = (req, res, next) => readJson(req, res, err => (err ? res.status(err.status || 400).end() : next()));
+    app.post('/hooks/talktalk/:token', tokenOk, body, (req, res) => {
       if (!ipAllowed(req.ip)) {
         console.warn(`[톡톡] 네이버가 아닌 곳에서 온 요청을 막았습니다: ${req.ip}`);
         return res.status(403).end();
@@ -204,6 +212,13 @@ function createApp({
     },
   }));
 
+  // 로그인은 '로그인 상태 유지' 를 켜도 로그인한 날부터 최대 한 달 (쓸 때마다 늘어나도 그 이상은 다시 로그인)
+  app.use((req, res, next) => {
+    if (!req.session || !req.session.userId) return next();
+    if (!req.session.loginAt) req.session.loginAt = Date.now(); // 이 기능 전에 로그인한 사람은 지금부터 센다
+    if (Date.now() - req.session.loginAt <= MAX_LOGIN_MS) return next();
+    req.session.destroy(() => res.redirect('/login?m=expired'));
+  });
   app.use(loadUser(db));
   // 화면 공통 값: 처리 결과 안내 문구(한 번만 표시), 관리자에게 보이는 가입 신청 건수
   const pendingCountStmt = db.prepare("SELECT COUNT(*) AS n FROM users WHERE status = 'pending'");
@@ -280,7 +295,7 @@ function createApp({
     db.prepare('UPDATE users SET notify_off = ? WHERE id = ?').run(JSON.stringify([...off]), req.user.id);
     if (req.accepts(['html', 'json']) === 'json') return res.json({ box, off: off.has(box) });
     const back = String(req.body.back || '/');
-    res.redirect(/^\/(?!\/)/.test(back) ? back : '/');
+    res.redirect(/^\/(?![/\\])[^\\\s]*$/.test(back) ? back : '/');
   });
 
   // 직원 사용 안내서 (docs/guide.md 를 고치면 바로 바뀐다)

@@ -79,12 +79,30 @@ function mailAccountsFromEnv(env = process.env) {
 const isMailSource = source => /^(naver_mail|gmail)\d*$/.test(String(source || ''));
 
 // HTML 메일을 글자로 (mailparser 가 글자 본문을 못 만든 경우의 예비)
+//   일부러 만든 메일('<style' 수십만 번)로 서버가 멈추지 않게: 앞 20만 자만 보고, 정규식은 한 번 훑는 모양만 쓴다
+const MAX_HTML = 200000;
+function dropScriptStyle(html) {
+  const lower = html.toLowerCase();
+  let out = '';
+  let i = 0;
+  while (i < html.length) {
+    const s = lower.indexOf('<script', i);
+    const t = lower.indexOf('<style', i);
+    const start = s === -1 ? t : t === -1 ? s : Math.min(s, t);
+    if (start === -1) { out += html.slice(i); break; }
+    out += html.slice(i, start);
+    const close = lower.indexOf(start === s ? '</script' : '</style', start);
+    if (close === -1) break; // 닫는 태그가 없으면 나머지는 버린다
+    const end = lower.indexOf('>', close);
+    i = end === -1 ? html.length : end + 1;
+  }
+  return out;
+}
 function htmlToText(html) {
-  return String(html || '')
-    .replace(/<(script|style)[\s\S]*?<\/\1>/gi, '')
+  return dropScriptStyle(String(html || '').slice(0, MAX_HTML))
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|tr|li|h\d)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
+    .replace(/<[^<>]*>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

@@ -42,13 +42,18 @@
         <% KEEP_CHOICES.forEach(m => { %><option value="<%= m %>" <%= m === keepOrders ? 'selected' : '' %>><%= m < 12 ? `${m}개월` : `${m / 12}년` %></option><% }) %>
       </select>
     </label>
-    <label>문의 보관 기간
-      <select name="keep_inquiries_months">
-        <% KEEP_CHOICES.forEach(m => { %><option value="<%= m %>" <%= m === keepInquiries ? 'selected' : '' %>><%= m < 12 ? `${m}개월` : `${m / 12}년` %></option><% }) %>
-      </select>
-    </label>
     <button type="submit" class="btn-sm">저장</button>
   </form>
+</section>
+
+<section class="card">
+  <h2>개인정보 자동 정리</h2>
+  <p>매일 한 번 저절로 정리해요. 개인정보보호법에 따라 쓸 일이 끝난 개인정보는 바로 지워야 해서예요.</p>
+  <ul>
+    <li>끝난 지 <strong><%= PERSONAL_MONTHS %>개월</strong> 지난 주문: 주문자·받는 분의 이름·연락처·주소·배송 메시지·입금자명을 지워요. 주문 번호·상품·금액은 남아서 <strong>매출 통계는 그대로</strong>예요.</li>
+    <li>답변한 문의·메일·톡톡: <strong><%= PERSONAL_MONTHS %>개월</strong> 뒤 지워요. 미답변 문의는 남겨요.</li>
+  </ul>
+  <p class="muted small">마지막 정리: <%= personalLast ? `${kst(personalLast.at)} · 주문 ${personalLast.orders}건, 문의 ${personalLast.inquiries}건` : '아직 없음 (업데이트 뒤 처음 켜질 때 해요)' %>. 판매 채널과 메일 사이트의 원본은 그대로 남아요. 백업에는 14일 동안 남아 있다가 사라져요.</p>
 </section>
 
 <section class="card">

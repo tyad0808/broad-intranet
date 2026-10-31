@@ -6,6 +6,7 @@ const LOGIN_MESSAGES = {
   blocked: '계정이 정지되었거나 사용할 수 없어 로그아웃되었습니다.',
   signedup: '가입 신청이 완료되었습니다. 관리자 승인 후 사용할 수 있습니다.',
   loggedout: '로그아웃되었습니다.',
+  expired: '로그인한 지 한 달이 지나 다시 로그인해 주세요.',
 };
 
 function authRoutes(db, notifier) {
@@ -31,6 +32,7 @@ function authRoutes(db, notifier) {
     req.session.regenerate(err => {
       if (err) return next(err);
       req.session.userId = result.user.id;
+      req.session.loginAt = Date.now();
       // '로그인 상태 유지' 를 고르면 30일 (쓸 때마다 다시 30일로 늘어남), 아니면 기본 12시간
       if (req.body.remember === '1') req.session.cookie.maxAge = REMEMBER_MS;
       res.redirect(result.user.status === 'pending' ? '/pending' : '/');

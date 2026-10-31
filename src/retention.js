@@ -1,11 +1,14 @@
 // 오래된 자료: ① 끝난 주문·문의는 N일(기본 14일)이 지나면 목록에서 숨긴다 (월별 보기·검색으로는 보임)
-//              ② 보관 기간(기본 1년)이 지난 끝난 주문·문의는 관리자 화면에서 정리(삭제)한다
+//              ② 개인정보: 끝난 지 3개월 지난 주문은 이름·연락처·주소를 지우고(금액·상품은 통계용으로 남김),
+//                 답변한 문의는 3개월 뒤 지운다 — 매일 자동 (개인정보보호법: 목적이 끝나면 바로 파기)
+//              ③ 보관 기간(기본 1년)이 지난 끝난 주문은 관리자 화면에서 통째로 정리(삭제)한다
 // 날짜는 채널마다 모양이 달라서('…+09:00', '…Z', 'YYYY-MM-DD HH:MM:SS') SQLite datetime() 으로 UTC 로 맞춰 비교한다
 const { transaction } = require('./db');
 const { getSetting, setSetting, ENDED_SQL } = require('./collector');
 
 const DEFAULT_HIDE_DAYS = 14;
 const DEFAULT_KEEP_MONTHS = 12;
+const PERSONAL_MONTHS = 3; // 개인정보 보관 기간 (사장님 결정 2026-10)
 const KEEP_CHOICES = [6, 12, 24];
 const HIDE_CHOICES = [7, 14, 30, 60];
 const MAX_LOG = 20;
@@ -65,7 +68,8 @@ function quickPeriods(now = new Date()) {
 }
 
 // ───────── 정리 (삭제) ─────────
-const keepMonths = (db, kind) => Number(getSetting(db, `keep_${kind}_months`)) || DEFAULT_KEEP_MONTHS;
+// 문의는 내용 자체가 개인정보라서 3개월로 고정
+const keepMonths = (db, kind) => (kind === 'inquiries' ? PERSONAL_MONTHS : Number(getSetting(db, `keep_${kind}_months`)) || DEFAULT_KEEP_MONTHS);
 const keepCutoff = (months, now = new Date()) => {
   const d = new Date(now.getTime());
   d.setUTCMonth(d.getUTCMonth() - months);
@@ -73,7 +77,7 @@ const keepCutoff = (months, now = new Date()) => {
 };
 
 // 지울 주문 묶음: 모든 상품이 끝났고(채널에서 끝남 또는 마지막 단계), 진행 중인 취소·반품·교환 요청이 없고, 마지막 결제일이 보관 기간 전
-function oldOrderGroups(db, cutoff) {
+function oldOrderGroups(db, cutoff, { personalLeft = false } = {}) {
   const last = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
   const lastId = last ? Number(last.id) : -1;
   return db.prepare(`
@@ -83,7 +87,25 @@ function oldOrderGroups(db, cutoff) {
       AND MAX(o.claim_status IS NOT NULL AND o.claim_status NOT LIKE '%_REJECT' AND o.claim_status NOT LIKE '%_DONE'
         AND o.claim_status NOT IN ('PURCHASE_DECISION_HOLDBACK_RELEASE', 'PURCHASE_DECISION_REQUEST')) = 0
       AND MAX(${ORDER_TIME}) < ?
+      ${personalLeft ? 'AND MAX(o.pii_cleared_at IS NULL) = 1' : ''}
   `).all(cutoff);
+}
+
+// 개인정보만 지우기: 끝난 지 3개월 지난 주문 묶음의 이름·연락처·주소·배송 메시지·입금자명, 로젠 배송 조회 기록
+//   주문 번호·상품·금액·날짜는 남긴다 (매출 통계·처리 기록용)
+const PERSONAL_COLUMNS = ['buyer_name', 'buyer_phone', 'receiver_name', 'receiver_phone', 'receiver_address', 'receiver_address_detail', 'ship_memo', 'depositor'];
+function clearPersonal(db, { months = PERSONAL_MONTHS, now = new Date() } = {}) {
+  const groups = oldOrderGroups(db, keepCutoff(months, now), { personalLeft: true });
+  if (!groups.length) return 0;
+  transaction(db, () => {
+    const clear = db.prepare(`UPDATE orders SET ${PERSONAL_COLUMNS.map(c => `${c} = NULL`).join(', ')}, pii_cleared_at = ? WHERE channel = ? AND channel_order_id = ?`);
+    const track = db.prepare('UPDATE logen_shipments SET track_json = NULL WHERE channel = ? AND channel_order_id = ?');
+    for (const g of groups) {
+      clear.run(utcSql(now), g.channel, g.channel_order_id);
+      track.run(g.channel, g.channel_order_id);
+    }
+  });
+  return groups.length;
 }
 
 // 지울 문의: 답변완료·처리 완료이고 받은 날이 보관 기간 전 (미답변은 남긴다)
@@ -96,8 +118,8 @@ function previewCleanup(db, { orderMonths = keepMonths(db, 'orders'), inquiryMon
 }
 
 // 실제로 지운다. 메일은 '지웠음' 표시만 남긴다 (예전 메일 가져오기로 다시 들어오지 않게), 나머지는 통째로
-function runCleanup(db, { orderMonths = keepMonths(db, 'orders'), inquiryMonths = keepMonths(db, 'inquiries'), userId = null, userName = '', now = new Date() } = {}) {
-  const groups = oldOrderGroups(db, keepCutoff(orderMonths, now));
+function runCleanup(db, { orderMonths = keepMonths(db, 'orders'), inquiryMonths = keepMonths(db, 'inquiries'), userId = null, userName = '', now = new Date(), skipOrders = false } = {}) {
+  const groups = skipOrders ? [] : oldOrderGroups(db, keepCutoff(orderMonths, now));
   const inquiryIds = db.prepare(`SELECT q.id, q.source FROM inquiries q WHERE ${OLD_INQUIRY_SQL}`).all(keepCutoff(inquiryMonths, now));
   const isMail = s => /^(naver_mail|gmail)\d*$/.test(s);
   transaction(db, () => {
@@ -124,11 +146,27 @@ function runCleanup(db, { orderMonths = keepMonths(db, 'orders'), inquiryMonths 
       if (isMail(q.source)) tombstone.run(userId, q.id);
       else delInquiry.run(q.id);
     }
-    const log = cleanupLog(db);
-    log.unshift({ at: now.toISOString(), user: userName, orderMonths, inquiryMonths, orders: groups.length, inquiries: inquiryIds.length });
-    setSetting(db, 'cleanup_log', JSON.stringify(log.slice(0, MAX_LOG)));
+    if (groups.length || inquiryIds.length) {
+      const log = cleanupLog(db);
+      log.unshift({ at: now.toISOString(), user: userName, orderMonths, inquiryMonths, orders: groups.length, inquiries: inquiryIds.length });
+      setSetting(db, 'cleanup_log', JSON.stringify(log.slice(0, MAX_LOG)));
+    }
   });
   return { orders: groups.length, inquiries: inquiryIds.length };
+}
+
+// 매일 자동 (server.js): 3개월 지난 개인정보 지우기 + 답변한 문의 지우기. 하루 한 번만 (한국 날짜 기준)
+function autoPersonalCleanup(db, { now = new Date() } = {}) {
+  const day = new Date(now.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  if (getSetting(db, 'personal_cleanup_day') === day) return null;
+  const orders = clearPersonal(db, { now });
+  const { inquiries } = runCleanup(db, { skipOrders: true, userName: '자동 (개인정보 3개월)', now });
+  setSetting(db, 'personal_cleanup_day', day);
+  setSetting(db, 'personal_cleanup_last', JSON.stringify({ at: now.toISOString(), orders, inquiries }));
+  return { orders, inquiries };
+}
+function lastPersonalCleanup(db) {
+  try { return JSON.parse(getSetting(db, 'personal_cleanup_last') || 'null'); } catch { return null; }
 }
 
 function cleanupLog(db) {
@@ -138,4 +176,5 @@ function cleanupLog(db) {
 module.exports = {
   DEFAULT_HIDE_DAYS, DEFAULT_KEEP_MONTHS, KEEP_CHOICES, HIDE_CHOICES, ORDER_TIME, INQUIRY_TIME,
   utcSql, hideDays, hideCutoff, periodRange, periodLabel, quickPeriods, keepMonths, previewCleanup, runCleanup, cleanupLog,
+  PERSONAL_MONTHS, clearPersonal, autoPersonalCleanup, lastPersonalCleanup,
 };

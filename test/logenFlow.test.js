@@ -46,6 +46,11 @@ function seedOrders(db, n, { status = 'PAYED' } = {}) {
   return ids;
 }
 
+// 로젠에 등록돼 송장번호를 기다리는 줄을 직접 넣는다 (실제 서버는 LOGEN_WRITE 없이는 등록하지 않으므로)
+function seedShipment(db, orderId, env) {
+  db.prepare("INSERT INTO logen_shipments (channel, channel_order_id, env, take_no, status) VALUES ('smartstore', ?, ?, ?, 'registered')").run(orderId, env, orderId);
+}
+
 const groupsFor = (db, ids) => ids.map(id => {
   const o = db.prepare('SELECT channel, channel_order_id FROM orders WHERE id = ?').get(id);
   return db.prepare('SELECT * FROM orders WHERE channel = ? AND channel_order_id = ? ORDER BY id').all(o.channel, o.channel_order_id);
@@ -185,7 +190,7 @@ test('배송 조회: 단계를 시간 순으로 저장하고, 5분 안에 다시
   await assert.rejects(logen.track('123'), /송장번호가 아닙니다/);
 });
 
-test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 가져오기], 발송처리 칸에 송장번호가 미리 채워짐', async t => {
+test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 가져오기], 테스트 서버 송장은 발송처리 칸에 미리 채우지 않음', async t => {
   const db = openDb(':memory:');
   const client = fakeClient();
   const logen = createLogen({ db, client, gapMs: 0 });
@@ -222,17 +227,18 @@ test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 
   assert.match(got, /로젠 송장 38010101111/);
 
   const form = (await kim.submit('/', '/orders/bulk/dispatch-form', { ids: ids.map(String), back: '/' })).text;
-  assert.match(form, /name="tracking_\d+" value="38010101111"/);
+  // 테스트 서버 송장은 진짜가 아니다 → 실제 발송처리로 고객에게 가지 않게 미리 채우지 않는다
+  assert.doesNotMatch(form, /value="38010101111"/);
   // 아직 출력 전인 주문은 '출력 대기' 로 알려 주고, 출력한 뒤 그 자리에서 송장번호를 가져와 채운다
   assert.match(form, /출력 대기 1건<\/strong>은 아직 송장번호가 없어요/);
   assert.strictEqual((form.match(/로젠 출력 대기 · 송장번호 없음/g) || []).length, 1);
   client.slips.O2 = [{ slipNo: '38010102222', delYn: 'N' }];
   const refreshed = (await kim.submit('/', '/orders/bulk/dispatch-form', { ids: ids.map(String), back: '/', refresh_slips: '1' })).text;
   assert.match(refreshed, /송장번호 1건 받음/);
-  assert.match(refreshed, /name="tracking_\d+" value="38010102222"/);
+  assert.doesNotMatch(refreshed, /value="38010102222"/);
   assert.doesNotMatch(refreshed, /로젠 출력 대기 · 송장번호 없음/);
   const detail = (await kim.request(`/orders/${ids[0]}`)).text;
-  assert.match(detail, /name="tracking" value="38010101111"/);
+  assert.doesNotMatch(detail, /name="tracking" value="38010101111"/);
   assert.match(detail, /로젠 송장/);
   await kim.submit(`/orders/${ids[0]}`, `/orders/${ids[0]}/logen/track`, { back: '/' });
   const tracked = (await kim.request(`/orders/${ids[0]}`)).text;
@@ -240,9 +246,26 @@ test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 
   assert.match(tracked, /class="now"><strong>터미널입고/);
 });
 
-test('5분마다: 기다리는 주문이 있을 때만 묻고, 자동 발송처리는 켰을 때만 (기본 꺼짐)', async () => {
+test('실제 서버 송장은 발송처리 칸에 미리 채워진다', async t => {
   const db = openDb(':memory:');
-  const client = fakeClient();
+  const client = fakeClient('prod');
+  const logen = await ready(db, client, { gapMs: 0 });
+  const ctx = await startServer({ db, logen });
+  t.after(() => ctx.server.close());
+  addUser(db, { email: 'kim@broad.test' });
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  const ids = seedOrders(db, 1);
+  seedShipment(db, 'O1', 'prod');
+  client.slips.O1 = [{ slipNo: '38010101111', delYn: 'N' }];
+  await logen.fetchSlips();
+  const form = (await kim.submit('/', '/orders/bulk/dispatch-form', { ids: ids.map(String), back: '/' })).text;
+  assert.match(form, /name="tracking_\d+" value="38010101111"/);
+  assert.match((await kim.request(`/orders/${ids[0]}`)).text, /name="tracking" value="38010101111"/);
+});
+
+test('5분마다: 기다리는 주문이 있을 때만 묻고, 자동 발송처리는 켰을 때만 (기본 꺼짐) · 테스트 서버 송장으로는 하지 않음', async () => {
+  const db = openDb(':memory:');
+  const client = fakeClient('prod');
   const logen = await ready(db, client, { gapMs: 0 });
   const dispatched = [];
   const found = [];
@@ -251,7 +274,9 @@ test('5분마다: 기다리는 주문이 있을 때만 묻고, 자동 발송처�
   assert.strictEqual(await logen.tick(opts), null, '기다리는 주문이 없으면 로젠에 묻지 않음');
   assert.strictEqual(client.calls.length, 0);
 
-  await logen.register(groupsFor(db, seedOrders(db, 2)), null);
+  seedOrders(db, 2);
+  seedShipment(db, 'O1', 'prod');
+  seedShipment(db, 'O2', 'prod');
   client.slips.O1 = [{ slipNo: '38010101111', delYn: 'N' }];
   const r = await logen.tick(opts);
   assert.strictEqual(r.found, 1);
@@ -266,11 +291,23 @@ test('5분마다: 기다리는 주문이 있을 때만 묻고, 자동 발송처�
   client.calls.length = 0;
   assert.strictEqual(await logen.tick(opts), null, '다 받았으면 더 묻지 않음');
   assert.strictEqual(client.calls.length, 0);
+
+  // 테스트 서버: 자동 발송처리를 켜도 송장번호만 받고 발송처리는 하지 않는다
+  const devDb = openDb(':memory:');
+  const devClient = fakeClient();
+  const dev = await ready(devDb, devClient, { gapMs: 0 });
+  dev.setAutoDispatch(true);
+  await dev.register(groupsFor(devDb, seedOrders(devDb, 1)), null);
+  devClient.slips.O1 = [{ slipNo: '38010109999', delYn: 'N' }];
+  const devDispatched = [];
+  const dr = await dev.tick({ dispatch: async row => devDispatched.push(row) });
+  assert.strictEqual(dr.found, 1);
+  assert.deepStrictEqual(devDispatched, [], '테스트 서버 송장으로는 자동 발송처리 안 함');
 });
 
 test('자동 발송처리: 켜면 송장번호가 들어온 주문을 로젠택배·그 송장번호로 발송처리 (연습 모드면 기록만)', async t => {
   const db = openDb(':memory:');
-  const client = fakeClient();
+  const client = fakeClient('prod');
   const logen = await ready(db, client, { gapMs: 0 });
   const ctx = await startServer({ db, logen });
   t.after(() => ctx.server.close());
@@ -281,8 +318,8 @@ test('자동 발송처리: 켜면 송장번호가 들어온 주문을 로젠택�
   assert.match((await boss.request('/admin/logen')).text, /자동 발송처리를 켰습니다/);
   assert.ok(logen.autoDispatch());
 
-  const ids = seedOrders(db, 1);
-  await logen.register(groupsFor(db, ids), null);
+  seedOrders(db, 1);
+  seedShipment(db, 'O1', 'prod');
   client.slips.O1 = [{ slipNo: '38010101111', delYn: 'N' }];
   // server.js 가 5분마다 부르는 것과 같은 함수
   const { createApp } = require('../src/app');

@@ -201,7 +201,7 @@
             data-confirm="{ship} 로 발송처리할까요?&#10;고객에게 발송 알림이 가고, 되돌리기 어렵습니다.">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
-        <%- include('../partials/ship-pick', { onlyDelivery: isCoupang, tracking: logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' }) %>
+        <%- include('../partials/ship-pick', { onlyDelivery: isCoupang, tracking: logen && logen.env === 'prod' && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' }) %>
         <button type="submit" class="wide">발송처리 보내기</button>
       </form>
     <% } else if (canConfirm) { %>
@@ -288,7 +288,7 @@
             data-confirm="{ship} 로 발송 완료 기록할까요?<%= st === 'PAYMENT_WAITING' ? '&#10;※ 아직 입금대기 상태입니다.' : '' %>">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
-        <%- include('../partials/ship-pick', { tracking: logen && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' }) %>
+        <%- include('../partials/ship-pick', { tracking: logen && logen.env === 'prod' && logen.ship && logen.ship.slip_no && !shipped ? logen.ship.slip_no : '' }) %>
         <button type="submit" class="wide secondary">발송 완료 기록</button>
       </form>
       <p class="muted small">수기 주문은 인트라넷에만 기록됩니다. 고객 안내(문자 등)는 따로 해 주세요.</p>

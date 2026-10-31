@@ -110,7 +110,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const period = periodRange(req.query.from, req.query.to);
     // 검색·기간 보기는 처음에 '전체' 탭 (이미 답한 메일도 찾을 수 있게)
     const defaultTab = terms.length || period ? 'all' : 'open';
-    const tab = TABS[req.query.tab] ? req.query.tab : defaultTab;
+    const tab = Object.hasOwn(TABS, String(req.query.tab)) ? req.query.tab : defaultTab;
     // 출처를 골랐으면 그 출처의 탭, 아니면 고른 탭 (처음엔 쇼핑몰 문의)
     // 큰 탭 순서는 직원마다 (끌어다 놓아 바꿈). 맨 앞 탭이 처음 열린다
     // 채팅 탭은 톡톡을 연결했거나 채팅이 있을 때만
@@ -211,9 +211,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     linkSaidOrders(db); // 손님이 말한 주문번호의 주문이 그사이 수집됐으면 연결
     const q = String(req.query.q || '').trim().slice(0, 50);
     const terms = searchTerms(q);
-    const tab = CHAT_TABS[req.query.tab] ? req.query.tab : 'all';
+    const tab = Object.hasOwn(CHAT_TABS, String(req.query.tab)) ? req.query.tab : 'all';
     const who = String(req.query.who || '');
-    const days = CHAT_DAYS[req.query.days] ? String(req.query.days) : '';
+    const days = Object.hasOwn(CHAT_DAYS, String(req.query.days)) ? String(req.query.days) : '';
     const read = ['unread', 'read'].includes(req.query.read) ? req.query.read : '';
     const sort = req.query.sort === 'old' ? 'old' : '';
 

@@ -451,6 +451,7 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       hideDays: retention.hideDays(db), keepOrders: retention.keepMonths(db, 'orders'), keepInquiries: retention.keepMonths(db, 'inquiries'),
       HIDE_CHOICES: retention.HIDE_CHOICES, KEEP_CHOICES: retention.KEEP_CHOICES,
       preview: retention.previewCleanup(db), log: retention.cleanupLog(db),
+      PERSONAL_MONTHS: retention.PERSONAL_MONTHS, personalLast: retention.lastPersonalCleanup(db),
     });
   });
 
@@ -529,14 +530,12 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
   router.post('/storage/settings', (req, res) => {
     const hide = Number(req.body.hide_done_days);
     const orders = Number(req.body.keep_orders_months);
-    const inquiries = Number(req.body.keep_inquiries_months);
-    if (!retention.HIDE_CHOICES.includes(hide) || !retention.KEEP_CHOICES.includes(orders) || !retention.KEEP_CHOICES.includes(inquiries)) {
+    if (!retention.HIDE_CHOICES.includes(hide) || !retention.KEEP_CHOICES.includes(orders)) {
       flash(req, 'error', '목록에서 보여줄 기간과 보관 기간을 목록에서 골라 주세요.');
       return res.redirect('/admin/storage');
     }
     putSetting('hide_done_days', hide);
     putSetting('keep_orders_months', orders);
-    putSetting('keep_inquiries_months', inquiries);
     flash(req, 'ok', '저장했습니다.');
     res.redirect('/admin/storage');
   });

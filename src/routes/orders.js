@@ -95,15 +95,15 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
 
   router.get('/', (req, res) => {
     // st(채널 상태 칸: 신규주문·배송준비·배송중·배송완료)을 누르면 탭과 상관없이 그 상태의 주문을 모두 보여준다
-    const st = SHIP_STATES[req.query.st] ? req.query.st : '';
+    const st = Object.hasOwn(SHIP_STATES, String(req.query.st)) ? req.query.st : '';
     // 확인 필요(alert)를 누르면 탭과 상관없이 해당 주문을 모두 보여준다
-    const alert = ALERTS[req.query.alert] ? req.query.alert : '';
+    const alert = Object.hasOwn(ALERTS, String(req.query.alert)) ? req.query.alert : '';
     // 기간 보기 (from·to=YYYY-MM-DD, 결제일 기준): 그 기간 주문을 끝난 것까지 모두
     const period = periodRange(req.query.from, req.query.to);
     const stageFilter = Number(req.query.stage) || null;
     const last = lastStageId();
     // 마지막 단계(발송)를 고르면 끝난 주문이라 '전체' 탭에서 보여준다
-    const view = st || alert || period || (stageFilter && stageFilter === last) ? 'all' : VIEWS[req.query.view] ? req.query.view : 'active';
+    const view = st || alert || period || (stageFilter && stageFilter === last) ? 'all' : Object.hasOwn(VIEWS, String(req.query.view)) ? req.query.view : 'active';
     // 디자인 단계 거르기 (ds). 비어 있는 주문은 첫 번째 디자인 단계로 본다
     const designFilter = Number(req.query.ds) || null;
     const firstDesign = firstDesignId() || -1;
@@ -672,7 +672,8 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
       const items = groupItems(order);
       const lg = logen && logen.shipmentOf(order.channel, order.channel_order_id);
       // waiting: 로젠에 등록했지만 아직 iLOGEN 에서 출력하지 않아 송장번호가 없는 주문
-      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch), slip: (lg && lg.slip_no) || '', waiting: Boolean(lg && lg.status === 'registered' && !lg.slip_no) });
+      // slip: 미리 채울 송장번호 (로젠 테스트 서버 송장은 진짜가 아니라서 채우지 않는다)
+      if (items.some(canDispatch)) rows.push({ main: items[0], items: items.filter(canDispatch), slip: (lg && logen.env === 'prod' && lg.slip_no) || '', waiting: Boolean(lg && lg.status === 'registered' && !lg.slip_no) });
       else skipped.push(items[0].product_name);
     }
     return { rows, skipped };

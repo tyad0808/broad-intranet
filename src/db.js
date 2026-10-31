@@ -92,6 +92,8 @@ function addMissingColumns(db) {
   addColumn(db, 'chat_messages', 'echoed', 'INTEGER');
   // 메일: 고객이 답장한 메일이면 앞 메일(같은 대화)의 id. 담당자를 이어받고 '↩ 이전 메일' 로 이어 준다
   addColumn(db, 'inquiries', 'prev_id', 'INTEGER');
+  // 개인정보를 지운 때 (끝난 지 3개월 지난 주문: 이름·연락처·주소만 지우고 주문은 남김)
+  addColumn(db, 'orders', 'pii_cleared_at', 'TEXT');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)과 발송지연(delay)도 받을 수 있게 넓힌다.
