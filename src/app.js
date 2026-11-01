@@ -268,6 +268,7 @@ function createApp({
   app.use('/admin/brand/logo', replyUpload);
   app.use('/admin/sounds', replyUpload);
   app.use('/orders/:id/proof', replyUpload); // 시안 그림
+  app.use('/templates/upload', replyUpload); // 매크로 엑셀
   app.use(csrf);
 
   app.get('/health', (req, res) => res.json({ ok: true }));

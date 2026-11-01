@@ -3,8 +3,14 @@
   <div class="title-row wrap-head">
     <h1 class="page-title">답장 문구 · 매크로</h1>
     <div class="page-actions">
-      <% if (isAdmin && v1Left.fresh) { %><a href="/templates/import" class="btn-sm primary">CS 매크로 v1 가져오기 (<%= v1Left.fresh %>개)</a>
-      <% } else if (isAdmin && v1Left.overlap) { %><a href="/templates/import" class="btn-sm ghost">겹쳐서 건너뛴 v1 매크로 <%= v1Left.overlap %>개</a><% } %>
+      <% if (isAdmin) { %>
+        <a href="<%= byUsage ? '/templates' : '/templates?sort=usage' %>" class="btn-sm ghost"><%= byUsage ? '카테고리별로 보기' : '사용 횟수 순' %></a>
+        <a href="/templates/export.xlsx" class="btn-sm">엑셀 받기</a>
+        <form method="post" action="/templates/upload" enctype="multipart/form-data" class="inline" data-once>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <label class="btn-sm primary upload-btn">엑셀 올리기<input type="file" name="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="visually-hidden" data-auto-submit></label>
+        </form>
+      <% } %>
       <a href="#form" class="btn-sm">＋ 새 문구</a>
     </div>
   </div>
@@ -53,6 +59,30 @@
 </section>
 
 <% } %>
+<% if (byUsage) { %>
+<section class="card">
+  <h2>사용 횟수 순 <span class="count"><%= byUsage.length %></span></h2>
+  <p class="muted small">답장 칸에서 [＋ 매크로 넣기]로 넣을 때마다 1씩 세요. <strong>엑셀 받기</strong> 파일에도 사용 횟수·마지막 사용일이 들어가요.</p>
+  <div class="table-wrap">
+    <table class="usage-table">
+      <thead><tr><th>순위</th><th>번호</th><th>카테고리</th><th>제목</th><th class="num">사용 횟수</th><th>마지막 사용일</th><th></th></tr></thead>
+      <tbody>
+        <% byUsage.forEach((t, i) => { %>
+          <tr class="<%= t.use_count ? '' : 'unused' %>">
+            <td class="num"><%= i + 1 %></td>
+            <td class="num"><%= t.macro_no ?? '-' %></td>
+            <td><%= t.category || OTHER %></td>
+            <td><strong><%= t.title %></strong><% if (t.usage_hint) { %><br><span class="muted small"><%= t.usage_hint %></span><% } %></td>
+            <td class="num"><strong><%= t.use_count %></strong></td>
+            <td><%= t.last_used_at ? kst(t.last_used_at).slice(0, 10) : '-' %></td>
+            <td><a href="/templates?edit=<%= t.id %>#form" class="btn-sm">고치기</a></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+<% } else { %>
 <section class="card">
   <div class="macro-list-head">
     <h2>저장된 문구 <span class="count"><%= templates.length %></span></h2>
@@ -95,6 +125,7 @@
     <p class="muted macro-none" data-template-none hidden>찾는 문구가 없어요. 다른 낱말로 찾아보세요.</p>
   <% } %>
 </section>
+<% } %>
 <% if (!editing) { %>
 <section class="card" id="form">
   <h2><%= editing ? '문구 고치기' : '새 문구' %></h2>

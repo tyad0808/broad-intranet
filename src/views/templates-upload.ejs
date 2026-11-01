@@ -1,0 +1,96 @@
+<%- include('partials/header') %>
+<%# 매크로 엑셀 올리기 미리보기: 번호로 짝을 맞춰 새로 추가 / 고침 / 그대로 / 엑셀에 없음 을 보여 준다. 체크한 것만 반영 %>
+<% const p = preview; const overlapCount = p.add.filter(a => a.overlaps.length || a.deleted).length; %>
+<div class="page-head">
+  <div class="title-row"><h1 class="page-title">엑셀 올리기 미리보기</h1></div>
+  <p class="muted small"><%= up.name %> · '<%= up.sheet %>' 시트 · 매크로 <%= up.macros.length %>개. <strong>아직 아무것도 바뀌지 않았어요.</strong> 확인하고 아래 [반영하기]를 눌러야 바뀌어요.</p>
+</div>
+
+<section class="card upload-summary">
+  <div><span class="muted small">새로 추가</span><strong><%= p.add.length %></strong></div>
+  <div><span class="muted small">내용이 바뀜</span><strong><%= p.change.length %></strong></div>
+  <div><span class="muted small">그대로</span><strong><%= p.same %></strong></div>
+  <div><span class="muted small">엑셀에 없음 (안 지움)</span><strong><%= p.missing.length %></strong></div>
+</section>
+
+<% if (up.problems.length) { %>
+<section class="card notice-card">
+  <h2>읽지 못한 줄 <span class="count"><%= up.problems.length %></span></h2>
+  <ul class="plain-list"><% up.problems.forEach(m => { %><li><%= m %></li><% }) %></ul>
+</section>
+<% } %>
+
+<form method="post" action="/templates/upload/apply" data-once
+  data-confirm="체크한 매크로를 반영할까요?&#10;엑셀에 없는 매크로와 예전 문구는 그대로 둬요.">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card">
+    <h2>새로 추가 <span class="count"><%= p.add.length %></span></h2>
+    <% if (!p.add.length) { %><p class="muted">새로 추가할 매크로가 없어요.</p><% } else { %>
+      <% if (overlapCount) { %><p class="muted small">⚠ 표시는 <strong>인트라넷에서 지운 번호</strong>이거나 엑셀 이전부터 쓰던 <strong>예전 문구와 겹쳐 보이는 것</strong>이라 체크를 빼 두었어요. 넣고 싶으면 체크하세요. (예전 문구는 어느 쪽이든 그대로예요)</p><% } %>
+      <ul class="rows">
+        <% p.add.forEach(a => { const m = a.macro; %>
+          <li class="row import-row">
+            <label class="check">
+              <input type="checkbox" name="add" value="<%= m.no %>" <%= a.overlaps.length || a.deleted ? '' : 'checked' %>>
+              <span><strong><%= m.no %>. <%= m.title %></strong> <span class="tag"><%= m.category || '기타' %></span> <span class="muted small"><%= m.hint %></span>
+                <% if (a.deleted) { %><br><span class="warn-text small">⚠ 인트라넷에서 지운 번호예요. 다시 넣으려면 체크하세요.</span><% } %>
+                <% if (a.overlaps.length) { %><br><span class="warn-text small">⚠ 겹쳐 보이는 예전 문구: <%= a.overlaps.map(o => `'${o.title}' (${o.reason})`).join(', ') %></span><% } %></span>
+            </label>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>내용이 바뀜 <span class="count"><%= p.change.length %></span></h2>
+    <% if (!p.change.length) { %><p class="muted">바뀐 매크로가 없어요.</p><% } else { %>
+      <p class="muted small">같은 번호의 매크로를 엑셀 내용으로 고쳐요. 사용 횟수 기록은 그대로 남아요. 인트라넷 화면에서 고친 뒤 엑셀에 반영하지 않았다면 여기서 체크를 빼세요.</p>
+      <ul class="rows">
+        <% p.change.forEach(c => { const m = c.macro; const cur = c.current; %>
+          <li class="row import-row">
+            <label class="check">
+              <input type="checkbox" name="update" value="<%= m.no %>" checked>
+              <span><strong><%= m.no %>. <%= m.title %></strong> <span class="muted small">바뀐 칸: <%= c.fields.join(', ') %></span></span>
+            </label>
+            <details class="diff">
+              <summary>지금 → 엑셀 비교</summary>
+              <div class="diff-grid">
+                <div><div class="muted small">지금 인트라넷</div>
+                  <% if (c.fields.includes('제목')) { %><div><strong><%= cur.title %></strong></div><% } %>
+                  <% if (c.fields.includes('카테고리')) { %><div>카테고리: <%= cur.category || '기타' %></div><% } %>
+                  <% if (c.fields.includes('언제 쓰나')) { %><div>언제 쓰나: <%= cur.usage_hint || '-' %></div><% } %>
+                  <% if (c.fields.includes('메일 제목')) { %><div>메일 제목: <%= cur.mail_subject || '-' %></div><% } %>
+                  <% if (c.fields.includes('답변')) { %><div class="template-preview"><%= cur.body %></div><% } %>
+                </div>
+                <div><div class="muted small">엑셀 (반영 후)</div>
+                  <% if (c.fields.includes('제목')) { %><div><strong><%= m.title %></strong></div><% } %>
+                  <% if (c.fields.includes('카테고리')) { %><div>카테고리: <%= m.category || '기타' %></div><% } %>
+                  <% if (c.fields.includes('언제 쓰나')) { %><div>언제 쓰나: <%= m.hint || '-' %></div><% } %>
+                  <% if (c.fields.includes('메일 제목')) { %><div>메일 제목: <%= m.subject || '-' %></div><% } %>
+                  <% if (c.fields.includes('답변')) { %><div class="template-preview"><%= m.body %></div><% } %>
+                </div>
+              </div>
+            </details>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+
+  <% if (p.missing.length) { %>
+  <section class="card">
+    <h2>엑셀에 없음 <span class="count"><%= p.missing.length %></span></h2>
+    <p class="muted small">인트라넷에는 있는데 이 엑셀에는 없는 번호예요. <strong>지우지 않고 그대로 둬요.</strong> 필요 없으면 답장 문구 화면에서 [지우기]로 지워 주세요.</p>
+    <p class="small"><%= p.missing.map(t => `${t.macro_no}. ${t.title}`).join(' · ') %></p>
+  </section>
+  <% } %>
+
+  <div class="form-actions end import-actions">
+    <button type="submit" formaction="/templates/upload/cancel" class="btn-sm ghost" formnovalidate data-confirm="올린 엑셀을 반영하지 않고 그만둘까요?">그만두기</button>
+    <button type="submit" class="btn-sm primary" <%= p.add.length || p.change.length ? '' : 'disabled' %>>반영하기</button>
+  </div>
+</form>
+<script src="/confirm.js"></script>
+<%- include('partials/footer') %>

@@ -1,7 +1,7 @@
 // 자주 쓰는 답장 문구: 직원 누구나 만들고 고치고 지운다. 답장 칸 위 [문구 넣기] 로 넣는다
 //   문구 안의 {고객명} {상품명} {주문번호} {회사명} 은 넣을 때 그 문의의 값으로 바뀐다 (모르는 값은 그대로 남겨 직접 고치게)
 const express = require('express');
-const { CATEGORIES, OTHER, groupByCategory, previewImport, importMacros, loadV1 } = require('../macros');
+const { CATEGORIES, OTHER, groupByCategory, parseMacroWorkbook, previewUpload, applyUpload, exportWorkbook, rememberDeleted } = require('../macros');
 
 const SCOPES = { all: '메일·쇼핑몰 문의 모두', mail: '메일만', shop: '쇼핑몰 문의만' };
 const VARIABLES = ['고객명', '상품명', '주문번호', '회사명'];
@@ -33,7 +33,7 @@ function templateRoutes(db) {
     const title = String(body.title || '').trim().slice(0, MAX_TITLE);
     const text = String(body.body || '').replace(/\r\n/g, '\n').trim();
     const scope = SCOPES[body.scope] ? body.scope : 'all';
-    const category = CATEGORIES.includes(body.category) ? body.category : null;
+    const category = categories().includes(body.category) ? body.category : null;
     const hint = String(body.usage_hint || '').replace(/\s+/g, ' ').trim().slice(0, MAX_HINT) || null;
     const subject = String(body.mail_subject || '').replace(/\s+/g, ' ').trim().slice(0, MAX_SUBJECT) || null;
     if (!title) return { error: '문구 이름을 적어 주세요.' };
@@ -42,17 +42,26 @@ function templateRoutes(db) {
     return { title, text, scope, category, hint, subject };
   };
   const isAdmin = req => req.user && req.user.role === 'admin';
+  // 고를 수 있는 카테고리: 정해진 8개 + 엑셀로 새로 생긴 것
+  const categories = () => [...new Set([...CATEGORIES,
+    ...db.prepare("SELECT DISTINCT category FROM reply_templates WHERE category IS NOT NULL AND category != '' ORDER BY category").all().map(r => r.category)])];
+  const adminOnly = (req, res) => {
+    if (isAdmin(req)) return false;
+    res.status(403).render('error', { title: '권한 없음', message: '관리자만 쓸 수 있습니다.' });
+    return true;
+  };
 
   router.get('/templates', (req, res) => {
     const templates = db.prepare(`
       SELECT t.*, u.name AS updated_name FROM reply_templates t LEFT JOIN users u ON u.id = t.updated_by
       ORDER BY ${LIST_ORDER.replace(/(macro_no|use_count|title)/g, 't.$1')}
     `).all();
-    // 관리자에게만: CS 매크로 v1 중 아직 안 가져온 개수 (가져오기 버튼)
-    const preview = isAdmin(req) ? previewImport(db) : [];
-    const v1Left = { fresh: preview.filter(p => p.status === 'new').length, overlap: preview.filter(p => p.status === 'overlap').length };
+    // 관리자: '사용 횟수 순' 으로 보기 (1~2달 뒤 점검용)
+    const byUsage = isAdmin(req) && req.query.sort === 'usage'
+      ? [...templates].sort((a, b) => b.use_count - a.use_count || String(b.last_used_at || '').localeCompare(String(a.last_used_at || '')) || (a.macro_no ?? 1e9) - (b.macro_no ?? 1e9))
+      : null;
     res.render('templates', { title: '답장 문구', navSection: 'templates', templates, groups: groupByCategory(templates), SCOPES, VARIABLES,
-      CATEGORIES, OTHER, edit: Number(req.query.edit) || null, isAdmin: isAdmin(req), v1Left });
+      CATEGORIES: categories(), OTHER, edit: Number(req.query.edit) || null, isAdmin: isAdmin(req), byUsage });
   });
 
   router.post('/templates', (req, res) => {
@@ -64,18 +73,46 @@ function templateRoutes(db) {
     res.redirect('/templates');
   });
 
-  // CS 매크로 v1 가져오기 (관리자): ① 미리보기 — 새것 / 기존과 겹쳐 보이는 것 / 이미 가져온 것
-  router.get('/templates/import', (req, res) => {
-    if (!isAdmin(req)) return res.status(403).render('error', { title: '권한 없음', message: '관리자만 가져올 수 있습니다.' });
-    const rows = previewImport(db);
-    res.render('templates-import', { title: 'CS 매크로 가져오기', navSection: 'templates', rows, version: loadV1().version, CATEGORIES });
+  // ───────── 엑셀 받기 · 올리기 (관리자) ─────────
+  // 받기: 지금 매크로 전부 (올리기와 같은 모양 + 사용 횟수·마지막 사용일)
+  router.get('/templates/export.xlsx', (req, res) => {
+    if (adminOnly(req, res)) return;
+    const day = res.app.locals.kst(new Date().toISOString()).slice(0, 10);
+    res.set({
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'Content-Disposition': `attachment; filename="macros-${day}.xlsx"; filename*=UTF-8''${encodeURIComponent(`브로애드_CS매크로_${day}.xlsx`)}`,
+      'Cache-Control': 'no-store',
+    });
+    res.send(exportWorkbook(db, res.app.locals.kst));
   });
-  // ② 가져오기 — 새것은 모두, 겹치는 것은 체크한 것만. 기존 문구는 그대로
-  router.post('/templates/import', (req, res) => {
-    if (!isAdmin(req)) return res.status(403).render('error', { title: '권한 없음', message: '관리자만 가져올 수 있습니다.' });
-    const force = [].concat(req.body.force || []).map(Number).filter(Number.isInteger);
-    const n = importMacros(db, { force, userId: req.user.id });
-    flash(req, 'ok', n ? `CS 매크로 ${n}개를 더했습니다. 기존 문구는 그대로예요.` : '더할 매크로가 없습니다.');
+  // 올리기 ①: 엑셀을 읽어 로그인 정보(세션)에 잠깐 들고 있다가 미리보기로 (아직 아무것도 바꾸지 않음)
+  router.post('/templates/upload', (req, res) => {
+    if (adminOnly(req, res)) return;
+    const file = (req.files || [])[0];
+    const r = req.uploadError ? { error: '엑셀 파일이 너무 커요.' } : parseMacroWorkbook(file && file.content);
+    if (r.error) { flash(req, 'error', r.error); return res.redirect('/templates'); }
+    req.session.macroUpload = { macros: r.macros, problems: r.problems, sheet: r.sheet, name: file.name };
+    res.redirect('/templates/upload');
+  });
+  router.get('/templates/upload', (req, res) => {
+    if (adminOnly(req, res)) return;
+    const up = req.session.macroUpload;
+    if (!up) { flash(req, 'error', '올린 엑셀이 없어요. 다시 올려 주세요.'); return res.redirect('/templates'); }
+    res.render('templates-upload', { title: '엑셀 올리기 미리보기', navSection: 'templates', up, preview: previewUpload(db, up.macros) });
+  });
+  // 올리기 ②: 체크한 것만 반영 (새로 추가 · 고침). 엑셀에 없는 매크로·예전 문구는 그대로
+  router.post('/templates/upload/apply', (req, res) => {
+    if (adminOnly(req, res)) return;
+    const up = req.session.macroUpload;
+    if (!up) { flash(req, 'error', '올린 엑셀이 없어요. 다시 올려 주세요.'); return res.redirect('/templates'); }
+    const pick = k => [].concat(req.body[k] || []).map(Number).filter(Number.isInteger);
+    const r = applyUpload(db, up.macros, { add: pick('add'), update: pick('update'), userId: req.user.id });
+    delete req.session.macroUpload;
+    flash(req, 'ok', r.added || r.updated ? `엑셀을 반영했습니다: 새로 추가 ${r.added}개 · 고침 ${r.updated}개` : '바뀐 매크로가 없습니다.');
+    res.redirect('/templates');
+  });
+  router.post('/templates/upload/cancel', (req, res) => {
+    delete req.session.macroUpload;
     res.redirect('/templates');
   });
 
@@ -90,7 +127,9 @@ function templateRoutes(db) {
   });
 
   router.post('/templates/:id/delete', (req, res) => {
+    const row = db.prepare('SELECT macro_no FROM reply_templates WHERE id = ?').get(Number(req.params.id));
     db.prepare('DELETE FROM reply_templates WHERE id = ?').run(Number(req.params.id));
+    if (row && row.macro_no !== null) rememberDeleted(db, row.macro_no); // 엑셀을 다시 올려도 기본으로 다시 넣지 않게
     flash(req, 'ok', '문구를 지웠습니다.');
     res.redirect('/templates');
   });

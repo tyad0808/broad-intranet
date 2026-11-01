@@ -21,3 +21,8 @@
     if (none) none.hidden = shown > 0;
   });
 })();
+
+// [엑셀 올리기]: 파일을 고르면 바로 올린다 (미리보기 화면으로 감, 아직 반영 안 됨)
+document.querySelectorAll('input[data-auto-submit]').forEach(input => {
+  input.addEventListener('change', () => { if (input.files.length) input.form.requestSubmit ? input.form.requestSubmit() : input.form.submit(); });
+});
