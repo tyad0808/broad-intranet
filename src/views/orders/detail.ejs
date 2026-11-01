@@ -40,6 +40,7 @@
   </div>
   <div class="page-actions">
     <a class="btn-sm" href="/orders/<%= order.id %>/print" target="_blank" rel="noopener">🖨 발주서 출력</a>
+    <% if (locals.proof) { %><a class="btn-sm" href="/orders/<%= order.id %>/work-sheet" target="_blank" rel="noopener">🖨 작업지시서</a><% } %>
   </div>
 </div>
 
@@ -171,6 +172,52 @@
       </div>
     </form>
   </section>
+
+  <% if (locals.proofForm) { const pf = proofForm; %>
+  <%# 시안 · 작업지시서: 디자이너가 확정 시안을 올리고 출력실이 볼 값을 적는다 %>
+  <section class="card" id="proof">
+    <h2>시안 · 작업지시서 <span class="h2-sub"><%= proof ? `수정 ${proof.revision}회 · ${kst(proof.updated_at)} 저장` : '확정 시안을 올리면 작업지시서를 뽑을 수 있어요' %></span></h2>
+    <% if (proof && proof.image_file) { %>
+      <a class="proof-thumb" href="/orders/<%= order.id %>/proof/image?v=<%= encodeURIComponent(proof.updated_at) %>" target="_blank" rel="noopener" title="크게 보기">
+        <img src="/orders/<%= order.id %>/proof/image?v=<%= encodeURIComponent(proof.updated_at) %>" alt="올린 시안">
+      </a>
+    <% } %>
+    <form method="post" action="/orders/<%= order.id %>/proof" enctype="multipart/form-data" class="detail-form" data-once>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <input type="hidden" name="back" value="<%= back %>">
+      <label><%= proof && proof.image_file ? '새 시안으로 바꾸기' : '확정 시안 그림' %> <span class="muted small">(PNG·JPG·WEBP, 20MB까지<%= proof && proof.image_file ? ' · 올리면 수정 횟수 +1' : '' %>)</span>
+        <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
+      </label>
+      <div class="two-fields">
+        <label>수정 횟수
+          <input type="number" name="revision" min="0" max="999" value="<%= pf.revision %>" inputmode="numeric">
+        </label>
+        <label>배송방법
+          <select name="ship_method">
+            <% SHIP_CHOICES.forEach(m => { %><option <%= m === pf.ship_method ? 'selected' : '' %>><%= m %></option><% }) %>
+          </select>
+        </label>
+      </div>
+      <div class="two-fields">
+        <label>소재·두께
+          <input type="text" name="material" maxlength="60" value="<%= pf.material %>" placeholder="예: 포맥스 3T">
+        </label>
+        <label>실제 사이즈 <span class="muted small">(cm · 긴 쪽 × 짧은 쪽)</span>
+          <span class="size-pair">
+            <input type="text" name="size_long" inputmode="decimal" maxlength="7" value="<%= pf.size_long %>" placeholder="긴 쪽" aria-label="긴 쪽 cm">
+            <span aria-hidden="true">×</span>
+            <input type="text" name="size_short" inputmode="decimal" maxlength="7" value="<%= pf.size_short %>" placeholder="짧은 쪽" aria-label="짧은 쪽 cm">
+          </span>
+        </label>
+      </div>
+      <% if (pf.guessed && (pf.material || pf.size_long)) { %><p class="muted small">소재·사이즈는 옵션과 상품 이름에서 짐작해 미리 채운 값이에요. 실제 값으로 확인한 뒤 저장해 주세요.</p><% } %>
+      <div class="form-actions end">
+        <% if (proof) { %><a class="btn-sm" href="/orders/<%= order.id %>/work-sheet" target="_blank" rel="noopener">🖨 작업지시서 출력</a><% } %>
+        <button type="submit"><%= proof ? '저장' : '시안 올리기' %></button>
+      </div>
+    </form>
+  </section>
+  <% } %>
   </div>
 
   <div class="detail-side">

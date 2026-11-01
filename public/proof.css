@@ -1,0 +1,57 @@
+/* 시안확정서·작업지시서 인쇄: A4 세로 한 장. 칸 이름은 연회색, 직접 봐야 하는 값은 검정 */
+@page { size: A4; margin: 0; }
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: #e9ecef; color: #111; font-family: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; letter-spacing: -0.1pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+.print-bar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #fff; border-bottom: 1px solid #d0d5da; font-size: 14px; }
+.print-bar span { color: #6b7684; }
+.print-bar button { margin-left: auto; padding: 8px 16px; border: 0; border-radius: 8px; background: #191f28; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.print-bar button.ghost { margin-left: 0; background: #f2f4f6; color: #333d4b; }
+
+.sheet { width: 210mm; height: 297mm; margin: 16px auto; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,.12); display: flex; flex-direction: column; overflow: hidden; }
+.brandline { height: 1mm; flex: none; background: linear-gradient(90deg, #1aa3e8, #7b3fe4 30%, #e8336d 55%, #f7941d 80%, #ffd400); }
+.g { color: #9ca0a7; font-weight: 400; }
+.lab { font-size: 7.5pt; color: #9ca0a7; margin-bottom: 0.6mm; }
+.need { color: #e60012; font-weight: 600; }
+
+.top { display: flex; align-items: center; justify-content: space-between; padding: 4.5mm 10mm 0; }
+.top .logo { height: 5mm; width: auto; }
+.top .brand-name { font-size: 10pt; font-weight: 700; }
+.top .doc { font-size: 8pt; color: #9ca0a7; }
+.top .doc b { color: #111; font-weight: 600; margin-right: 2mm; }
+
+.meta { display: grid; grid-template-columns: 1.3fr 1fr 0.55fr 1fr; gap: 5mm; margin: 0 10mm; padding: 3.5mm 0 3mm; border-bottom: 0.2mm solid #e3e5e8; }
+.meta .v { font-size: 9.5pt; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.meta .v .g { margin-left: 1mm; }
+
+.spec { display: grid; grid-template-columns: 1.1fr 1fr; gap: 8mm; margin: 0 10mm; padding: 3mm 0; border-bottom: 0.2mm solid #e3e5e8; }
+.pname { font-size: 10pt; font-weight: 600; line-height: 1.4; margin-bottom: 2.5mm; }
+.pname .opt { display: block; font-size: 8.5pt; font-weight: 400; color: #444; margin-top: 0.6mm; }
+.pname + .pname { margin-top: -1mm; }
+.facts { display: grid; grid-template-columns: 1fr 1.3fr 0.6fr; gap: 4mm; }
+.facts .v { font-size: 10pt; font-weight: 500; font-variant-numeric: tabular-nums; }
+.list { margin: 0 0 2.5mm; padding: 0; list-style: none; font-size: 9pt; line-height: 1.55; }
+.list .g { font-size: 7.5pt; margin-left: 1.5mm; }
+.memo { margin: 0; padding: 0; list-style: none; font-size: 9pt; line-height: 1.5; white-space: pre-wrap; }
+
+.design { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 6mm 10mm 3mm; }
+.design .unit { position: absolute; top: 2mm; left: 10mm; font-size: 7.5pt; color: #9ca0a7; }
+.design img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.design .empty { font-size: 12pt; }
+
+.work { display: grid; grid-template-columns: 1fr 1fr 2.4fr; gap: 6mm; align-items: end; margin: 0 10mm; padding: 3.5mm 0 5mm; border-top: 0.2mm solid #e3e5e8; }
+.work .v { font-size: 13pt; font-weight: 600; }
+.work .hot { color: #e60012; }
+.work .from { font-size: 7.5pt; color: #9ca0a7; font-weight: 400; margin-left: 1mm; }
+.checks { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; }
+.checks > div { border: 0.2mm solid #d5d8dc; border-radius: 1.2mm; padding: 2mm 2.5mm 2.5mm; }
+.checks .t { display: flex; align-items: center; gap: 1.6mm; font-size: 10pt; font-weight: 500; }
+.checks .box { width: 3.6mm; height: 3.6mm; border: 0.25mm solid #6b7079; border-radius: 0.5mm; }
+.checks .who { margin-top: 3.5mm; border-bottom: 0.2mm solid #d5d8dc; font-size: 7.5pt; color: #b5b9bf; }
+
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .sheet { margin: 0; box-shadow: none; }
+}

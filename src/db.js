@@ -316,6 +316,25 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_logen_order ON logen_shipments(channel, channel_order_id);
 
+    -- 시안확정서·작업지시서: 주문번호 묶음 하나에 시안 하나 (디자이너가 주문 카드에서 올린다)
+    --   image_file: 서버 폴더(data/proofs)에 저장한 파일 이름. 그림은 DB 에 넣지 않는다 (DB·백업이 너무 커지지 않게)
+    --   revision: 수정 횟수 (처음 0, 새 시안을 올릴 때마다 +1, 디자이너가 고칠 수 있음)
+    --   size_long / size_short: 실제 사이즈 cm (긴 쪽 / 짧은 쪽)
+    CREATE TABLE IF NOT EXISTS proof_sheets (
+      channel          TEXT    NOT NULL,
+      channel_order_id TEXT    NOT NULL,
+      image_file       TEXT,
+      image_type       TEXT,
+      revision         INTEGER NOT NULL DEFAULT 0,
+      material         TEXT,
+      size_long        TEXT,
+      size_short       TEXT,
+      ship_method      TEXT,
+      updated_by       INTEGER REFERENCES users(id),
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (channel, channel_order_id)
+    );
+
     -- 자주 쓰는 답장 문구 (직원 누구나 만들고 고친다). scope: all 모두 · mail 메일만 · shop 쇼핑몰 문의만
     CREATE TABLE IF NOT EXISTS reply_templates (
       id          INTEGER PRIMARY KEY,

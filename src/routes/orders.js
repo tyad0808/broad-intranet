@@ -11,6 +11,7 @@ const { historyForOrder } = require('../customer');
 const { fileLabel } = require('../fileLabel');
 const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, describeShipping, hasOpenClaim, DELAY_REASONS, DELAY_DEFAULT_TEXT } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
+const { sheetView, guessMaterial, guessSize, SHIP_CHOICES } = require('../proofs');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
@@ -61,7 +62,7 @@ const OPEN_CLAIM_SQL = `(o.claim_status IS NOT NULL AND o.claim_status NOT LIKE 
 // 묶음 안에서 본상품을 먼저, 추가상품을 뒤에
 const ITEM_ORDER = "CASE WHEN o.item_type = 'addon' THEN 1 ELSE 0 END, o.id";
 
-function orderRoutes(db, notifier, actions, collector = null, logen = null) {
+function orderRoutes(db, notifier, actions, collector = null, logen = null, proofs = null) {
   const router = express.Router();
 
   // 마지막 단계(보통 '발송')에 있는 주문은 끝난 것으로 보고 '진행 중' 목록에서 뺀다
@@ -461,6 +462,43 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
   });
   router.get('/orders/:id/print', (req, res) => renderPrint(res, [Number(req.params.id)]));
 
+  // ───────── 시안확정서 · 작업지시서 ─────────
+  // 시안 올리기·작업 정보 저장 (그림 파일은 app.js 에서 미리 읽어 둔다: req.files)
+  router.post('/orders/:id/proof', (req, res) => {
+    const order = findOrder(req.params.id);
+    if (!order || !proofs) return res.status(404).render('error', { title: '없는 주문', message: '주문을 찾을 수 없습니다.' });
+    const back = safeBack(req.body.back);
+    const self = `/orders/${order.id}${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}#proof`;
+    const file = (req.files || [])[0];
+    const r = req.uploadError
+      ? { error: '시안 그림은 20MB 이하로 올려 주세요.' }
+      : proofs.save(order, req.body, file && file.content, req.user.id);
+    req.session.flash = r.error
+      ? { type: 'error', message: r.error }
+      : { type: 'ok', message: r.uploaded ? `시안을 올렸습니다. (수정 ${r.revision}회)` : '작업 정보를 저장했습니다.' };
+    res.redirect(self);
+  });
+
+  // 올린 시안 그림 (로그인한 직원만)
+  router.get('/orders/:id/proof/image', (req, res) => {
+    const order = findOrder(req.params.id);
+    const img = order && proofs ? proofs.image(proofs.get(order)) : null;
+    if (!img) return res.status(404).end();
+    res.set('Cache-Control', 'private, no-cache');
+    res.type(img.type).send(img.data);
+  });
+
+  // 출력실용 작업지시서 (A4 한 장)
+  router.get('/orders/:id/work-sheet', (req, res) => {
+    const order = findOrder(req.params.id);
+    if (!order || !proofs) return res.status(404).render('error', { title: '작업지시서', message: '주문을 찾을 수 없습니다.' });
+    const items = groupItems(order);
+    const proof = proofs.get(order);
+    const sourceName = order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null;
+    const sheet = sheetView(db, { order, items, proof, channelName: res.locals.channelInfo(order.channel).name, sourceName });
+    res.render('orders/work-sheet', { title: `작업지시서 ${sheet.orderNo}`, order, sheet, proofVersion: proof ? proof.updated_at : '', printedAt: new Date().toISOString() });
+  });
+
   function renderPrint(res, ids) {
     const seen = new Set();
     const sheets = [];
@@ -781,8 +819,29 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null) {
       canPickStage: canPickStage(req.user),
       back: safeBack(req.query.back),
       today: kstToday(),
+      ...proofLocals(order, items),
     });
   });
+
+  // 주문 카드의 '시안 · 작업지시서' 칸: 저장한 값, 없으면 옵션·상품 이름에서 짐작한 값을 미리 채운다
+  function proofLocals(order, items) {
+    if (!proofs) return { proof: null, proofForm: null };
+    const proof = proofs.get(order);
+    const main = items.find(i => i.item_type !== 'addon') || items[0];
+    const size = guessSize(main);
+    return {
+      proof,
+      proofForm: {
+        revision: proof ? proof.revision : 0,
+        material: proof ? proof.material || '' : guessMaterial(main),
+        size_long: proof ? proof.size_long || '' : size.long,
+        size_short: proof ? proof.size_short || '' : size.short,
+        ship_method: (proof && proof.ship_method) || '택배',
+        guessed: !proof,
+      },
+      SHIP_CHOICES,
+    };
+  }
 
   router.post('/orders/:id', (req, res) => {
     const order = findOrder(req.params.id);

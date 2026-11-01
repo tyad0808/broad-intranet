@@ -1,0 +1,81 @@
+<!doctype html>
+<%# 출력실용 작업지시서: A4 한 장. 칸 이름은 연회색, 직접 봐야 하는 값은 검정, 빠진 값은 빨간 '확인 필요' %>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title %> · <%= brand.name %></title>
+  <link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
+  <link rel="stylesheet" href="/proof.css">
+</head>
+<body>
+  <% const s = sheet; const need = '<span class="need">확인 필요</span>'; %>
+  <div class="print-bar no-print">
+    <strong>작업지시서</strong>
+    <span>A4 · 출력실용</span>
+    <button type="button" data-print>인쇄하기</button>
+    <button type="button" data-close class="ghost">닫기</button>
+  </div>
+
+  <article class="sheet">
+    <div class="brandline"></div>
+    <div class="top">
+      <% if (brand.logoUrl) { %><img class="logo" src="<%= brand.logoUrl %>" alt="<%= brand.name %>"><% } else { %><span class="brand-name"><%= brand.name %></span><% } %>
+      <div class="doc"><b>작업지시서</b>출력 <%= kst(printedAt).slice(0, 10).replace(/-/g, '.') %></div>
+    </div>
+
+    <section class="meta">
+      <div><div class="lab">구매처 / 구매자 (수령자)</div><div class="v"><%= s.channelName %> · <% if (s.buyer) { %><%= s.buyer %><% } else { %><span class="g">이름 없음</span><% } %><% if (s.receiver) { %><span class="g">(<%= s.receiver %>)</span><% } %></div></div>
+      <div><div class="lab">주문번호</div><div class="v"><%= s.orderNo %></div></div>
+      <div><div class="lab">수정 횟수</div><div class="v"><%= s.revision %>회</div></div>
+      <div><div class="lab">담당 디자이너</div><div class="v"><% if (s.designer) { %><%= s.designer %><% } else { %><%- need %><% } %><span class="g"><%= s.phone %></span></div></div>
+    </section>
+
+    <section class="spec">
+      <div>
+        <div class="lab">상품명</div>
+        <% s.products.forEach(p => { %>
+          <div class="pname"><%= p.name %><% if (s.products.length > 1) { %> <span class="g">× <%= p.qty %></span><% } %><% if (p.option) { %><span class="opt"><%= p.option.split(' / ').join(' · ') %></span><% } %></div>
+        <% }) %>
+        <div class="facts">
+          <div><div class="lab">소재·두께</div><div class="v"><% if (s.material) { %><%= s.material %><% } else { %><%- need %><% } %></div></div>
+          <div><div class="lab">사이즈 (긴 쪽 × 짧은 쪽)</div><div class="v"><% if (s.size) { %><%= s.size %><% } else { %><%- need %><% } %></div></div>
+          <div><div class="lab">수량</div><div class="v"><%= s.qty %>개</div></div>
+        </div>
+      </div>
+      <div>
+        <div class="lab">추가옵션</div>
+        <% if (s.addons.length) { %>
+          <ul class="list">
+            <% s.addons.forEach(a => { %><li><%= a.value %> × <%= a.qty %><% if (a.label) { %><span class="g"><%= a.label %></span><% } %></li><% }) %>
+          </ul>
+        <% } else { %><ul class="list"><li class="g">없음</li></ul><% } %>
+        <div class="lab">고객 요청</div>
+        <% if (s.requests.length) { %>
+          <ul class="memo"><% s.requests.forEach(r => { %><li><%= r %></li><% }) %></ul>
+        <% } else { %><ul class="memo"><li class="g">없음</li></ul><% } %>
+      </div>
+    </section>
+
+    <div class="design">
+      <span class="unit">치수단위 cm</span>
+      <% if (s.hasImage) { %>
+        <img src="/orders/<%= order.id %>/proof/image?v=<%= encodeURIComponent(proofVersion) %>" alt="확정 시안">
+      <% } else { %>
+        <p class="empty need">시안이 아직 올라오지 않았어요</p>
+      <% } %>
+    </div>
+
+    <section class="work">
+      <div><div class="lab">납기일</div><div class="v<%= s.due && s.due.hot ? ' hot' : '' %>"><% if (s.due) { %><%= s.due.text %> · <%= s.due.dday %><% if (s.due.from !== '납기') { %><span class="from">(<%= s.due.from %>)</span><% } %><% } else { %><%- need %><% } %></div></div>
+      <div><div class="lab">배송방법</div><div class="v"><% if (s.ship) { %><%= s.ship %><% } else { %><%- need %><% } %></div></div>
+      <div class="checks">
+        <% ['출력', '후가공', '검수', '포장'].forEach(step => { %>
+          <div><div class="t"><span class="box"></span><%= step %></div><div class="who">담당</div></div>
+        <% }) %>
+      </div>
+    </section>
+  </article>
+  <script src="/print.js"></script>
+</body>
+</html>

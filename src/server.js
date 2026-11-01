@@ -135,10 +135,14 @@ setInterval(() => notifier.checkStorage(storageInfo(), kstDay()), 60 * 60 * 1000
 
 // 개인정보 3개월: 하루 한 번 (켜자마자 한 번, 이후 1시간마다 확인해 날짜가 바뀌었으면)
 const { autoPersonalCleanup } = require('./retention');
+const { createProofs } = require('./proofs');
 function personalCleanup() {
   try {
     const r = autoPersonalCleanup(db);
     if (r && (r.orders || r.inquiries)) console.log(`개인정보 정리: 주문 ${r.orders}건 이름·연락처·주소 삭제, 답변한 문의 ${r.inquiries}건 삭제`);
+    // 지워진 주문·개인정보를 지운 주문의 시안 그림도 함께 지운다
+    const proofs = createProofs({ db }).sweep();
+    if (proofs) console.log(`시안 정리: ${proofs}건 삭제`);
   } catch (e) {
     console.error('개인정보 정리 실패:', e.message);
   }

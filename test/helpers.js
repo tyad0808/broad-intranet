@@ -1,4 +1,7 @@
 // 테스트 공통 도우미: 메모리 DB 로 서버를 띄우고, 브라우저처럼 요청을 보낸다
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { openDb } = require('../src/db');
 const { createApp } = require('../src/app');
 const { hashPassword } = require('../src/auth');
@@ -35,14 +38,16 @@ function browser(baseUrl) {
   return { request, submit, cookie: () => cookie };
 }
 
-async function startServer({ db = openDb(':memory:'), collector = null, actions, notifier, inbox, weeklyAccount, weeklyTransport, logen } = {}) {
-  const app = createApp({ db, collector, secret: 'test-secret', ...(actions ? { actions } : {}), ...(notifier ? { notifier } : {}), ...(inbox ? { inbox } : {}),
+async function startServer({ db = openDb(':memory:'), collector = null, actions, notifier, inbox, weeklyAccount, weeklyTransport, logen, proofDir } = {}) {
+  // 시안 그림은 테스트마다 임시 폴더에 (진짜 data/proofs 를 건드리지 않게)
+  const dir = proofDir || fs.mkdtempSync(path.join(os.tmpdir(), 'proofs-'));
+  const app = createApp({ db, collector, secret: 'test-secret', proofDir: dir, ...(actions ? { actions } : {}), ...(notifier ? { notifier } : {}), ...(inbox ? { inbox } : {}),
     ...(weeklyAccount ? { weeklyAccount, weeklyTransport } : {}), ...(logen ? { logen } : {}) });
   const server = await new Promise(resolve => {
     const s = app.listen(0, () => resolve(s));
   });
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
-  return { db, server, baseUrl };
+  return { db, server, baseUrl, proofDir: dir };
 }
 
 function addUser(db, { email, password = 'password123', role = 'staff', status = 'active', name }) {

@@ -1498,3 +1498,10 @@ body.ds-v2 {
   .ds-v2 .container .btn-sm, .ds-v2 .container a.btn-sm, .ds-v2 .bulk-bar button,
   .ds-v2 .container select, .ds-v2 .container input[type=search] { min-height: 48px; }
 }
+
+/* 주문 카드 › 시안 · 작업지시서 */
+.proof-thumb { display: block; width: fit-content; max-width: 100%; margin: 14px 0 0; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.proof-thumb img { display: block; max-width: 100%; max-height: 260px; }
+.size-pair { display: flex; align-items: center; gap: 8px; }
+.size-pair input { flex: 1; min-width: 0; }
+.size-pair span { color: var(--muted); }

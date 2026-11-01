@@ -24,6 +24,7 @@ const { createLogen } = require('./logen');
 const { ipAllowed } = require('./inbox/talktalk');
 const { createNotifier, notifyOff } = require('./notifier');
 const { loadGuide } = require('./guide');
+const { createProofs } = require('./proofs');
 const { createOrderActions, canDispatch, DELAY_REASONS } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel, productUrl } = require('./channels/labels');
 const { shipMethodLabel, courierLabel } = require('./channels/shipping');
@@ -52,6 +53,7 @@ function createApp({
   weeklyAccount = null,
   weeklyTransport = null,
   logen = null, // 로젠 송장 (없으면 .env 로 만든다)
+  proofDir = undefined, // 시안 그림 폴더 (테스트는 임시 폴더)
 }) {
   const app = express();
   const isProd = process.env.NODE_ENV === 'production';
@@ -265,6 +267,7 @@ function createApp({
   app.use('/inbox/:id/reply', replyUpload);
   app.use('/admin/brand/logo', replyUpload);
   app.use('/admin/sounds', replyUpload);
+  app.use('/orders/:id/proof', replyUpload); // 시안 그림
   app.use(csrf);
 
   app.get('/health', (req, res) => res.json({ ok: true }));
@@ -312,7 +315,7 @@ function createApp({
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier, brandName: () => brand.view().name }));
   app.use(requireActive, templateRoutes(db));
   app.use(requireActive, manualRoutes(db, notifier));
-  app.use(requireActive, orderRoutes(db, notifier, actions, collector, logenSvc));
+  app.use(requireActive, orderRoutes(db, notifier, actions, collector, logenSvc, createProofs({ db, ...(proofDir ? { dir: proofDir } : {}) })));
 
   app.use((req, res) => {
     res.status(404).render('error', { title: '없는 페이지', message: '주소를 다시 확인하세요.' });
