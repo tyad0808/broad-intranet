@@ -1,0 +1,303 @@
+// 고객용 시안확정서 만들기: 칸 값과 시안 그림으로 A4(200dpi) 그림을 직접 그린다.
+// 미리보기 = 저장되는 JPG (같은 그림). 넣은 그림·글자는 서버로 보내지 않는다.
+(function () {
+  const data = JSON.parse(document.getElementById('maker-data').textContent);
+  const canvas = document.querySelector('[data-maker-canvas]');
+  const form = document.querySelector('[data-maker-form]');
+  const ctx = canvas.getContext('2d');
+
+  // A4 210×297mm 를 200dpi 로: 1654×2339 픽셀
+  const W = 210;
+  const H = 297;
+  const MM = canvas.width / W;
+  const PT = 0.3528; // 1pt = 0.3528mm
+  const FONT = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+  const INK = '#111111';
+  const GRAY = '#9ca0a7';
+  const LINE = '#e3e5e8';
+  const X0 = 10;
+  const X1 = 200;
+
+  let design = null; // 시안 그림 (Image)
+  let logo = null;
+
+  const font = (pt, weight) => `${weight || 400} ${pt * PT * MM}px ${FONT}`;
+  function text(str, x, y, pt, { weight = 400, color = INK, align = 'left' } = {}) {
+    ctx.font = font(pt, weight);
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.textBaseline = 'top';
+    ctx.fillText(str, x * MM, y * MM);
+    return ctx.measureText(str).width / MM; // 쓴 너비 (mm)
+  }
+  const widthOf = (str, pt, weight) => { ctx.font = font(pt, weight); return ctx.measureText(str).width / MM; };
+
+  // 정해진 너비에 맞게 줄을 나눈다 (띄어쓰기에서 먼저 끊고, 긴 낱말은 글자 단위로)
+  function wrap(str, maxW, pt, weight) {
+    const lines = [];
+    for (const para of String(str || '').split('\n')) {
+      let line = '';
+      for (const ch of para) {
+        const next = line + ch;
+        if (widthOf(next, pt, weight) <= maxW || !line) { line = next; continue; }
+        const cut = line.lastIndexOf(' ');
+        if (cut > line.length * 0.5) { lines.push(line.slice(0, cut)); line = line.slice(cut + 1) + ch; }
+        else { lines.push(line); line = ch; }
+      }
+      lines.push(line);
+    }
+    return lines.filter((l, i, a) => l.trim() || a.length === 1);
+  }
+  // 줄 수 제한: 넘치면 마지막 줄 끝을 … 로
+  function clip(lines, max) {
+    if (lines.length <= max) return lines;
+    const out = lines.slice(0, max);
+    out[max - 1] = out[max - 1].replace(/.{0,2}$/, '') + '…';
+    return out;
+  }
+  function hline(y) {
+    ctx.fillStyle = LINE;
+    ctx.fillRect(X0 * MM, y * MM, (X1 - X0) * MM, 0.25 * MM);
+  }
+  const lab = (str, x, y) => text(str, x, y, 7.5, { color: GRAY });
+
+  // '볼터치작업 × 1 (볼터치 무료옵션)' → 앞은 검정, 맨 끝 괄호는 연한 글씨
+  function splitTail(line) {
+    const s = line.trim();
+    if (!s.endsWith(')')) return [s, ''];
+    let depth = 0;
+    for (let i = s.length - 1; i >= 0; i--) {
+      if (s[i] === ')') depth++;
+      else if (s[i] === '(' && --depth === 0) {
+        return i > 0 && s[i - 1] === ' ' ? [s.slice(0, i).trim(), s.slice(i + 1, -1)] : [s, ''];
+      }
+    }
+    return [s, ''];
+  }
+
+  const val = name => (form.elements[name] ? String(form.elements[name].value || '').trim() : '');
+  const today = () => {
+    const d = new Date();
+    return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  function draw() {
+    const v = {
+      channel: val('channel'), orderNo: val('orderNo'), buyer: val('buyer'), receiver: val('receiver'), designer: val('designer'),
+      revision: val('revision') || '0', phone: val('phone'), productName: val('productName'), material: val('material'), qty: val('qty'),
+      sizeLong: val('sizeLong'), sizeShort: val('sizeShort'), addons: val('addons'), requests: val('requests'),
+    };
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // 맨 위 브랜드 줄
+    const g = ctx.createLinearGradient(0, 0, canvas.width, 0);
+    [['#1aa3e8', 0], ['#7b3fe4', 0.3], ['#e8336d', 0.55], ['#f7941d', 0.8], ['#ffd400', 1]].forEach(([c, o]) => g.addColorStop(o, c));
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, 1 * MM);
+
+    // 로고 · 문서 이름
+    if (logo && logo.naturalWidth) {
+      const h = 5;
+      const w = Math.min(40, (logo.naturalWidth / logo.naturalHeight) * h);
+      ctx.drawImage(logo, X0 * MM, 4.5 * MM, w * MM, h * MM);
+    } else {
+      text(data.brandName || '', X0, 5, 10, { weight: 700 });
+    }
+    const dateW = text(today(), X1, 5.6, 8, { color: GRAY, align: 'right' });
+    text('시안확정서', X1 - dateW - 2, 5.6, 8, { weight: 600, align: 'right' });
+
+    // 구매처 · 주문번호 · 수정 횟수 · 담당 디자이너
+    const metaY = 13;
+    const cols = [1.3, 1, 0.55, 1];
+    const unit = (X1 - X0 - 5 * 3) / cols.reduce((a, b) => a + b, 0);
+    const xs = [];
+    cols.reduce((x, f) => { xs.push(x); return x + f * unit + 5; }, X0);
+    const valueY = metaY + 3.4;
+    lab('구매처 / 구매자 (수령자)', xs[0], metaY);
+    const who = [v.channel, v.buyer].filter(Boolean).join(' · ') || '-';
+    const whoW = text(who, xs[0], valueY, 9.5, { weight: 500, color: who === '-' ? GRAY : INK });
+    if (v.receiver) text(`(${v.receiver})`, xs[0] + whoW + 1, valueY, 9.5, { color: GRAY });
+    lab('주문번호', xs[1], metaY);
+    text(v.orderNo || '-', xs[1], valueY, 9.5, { weight: 500, color: v.orderNo ? INK : GRAY });
+    lab('수정 횟수', xs[2], metaY);
+    text(`${v.revision}회`, xs[2], valueY, 9.5, { weight: 500 });
+    lab('담당 디자이너', xs[3], metaY);
+    const nameW = v.designer ? text(v.designer, xs[3], valueY, 9.5, { weight: 500 }) + 1 : 0;
+    if (v.phone) text(v.phone, xs[3] + nameW, valueY, 9.5, { color: GRAY });
+    const metaBottom = valueY + 4.2 + 3;
+    hline(metaBottom);
+
+    // 작업정보: 왼쪽 상품 · 소재 · 사이즈 · 수량 / 오른쪽 추가옵션 · 고객 요청
+    const specY = metaBottom + 3;
+    const leftW = (X1 - X0 - 8) * 1.1 / 2.1;
+    const rightX = X0 + leftW + 8;
+    const rightW = X1 - rightX;
+    let y = specY;
+    lab('상품명', X0, y);
+    y += 3.2;
+    const pLines = clip(wrap(v.productName || '-', leftW, 10, 600), 2);
+    pLines.forEach(l => { text(l, X0, y, 10, { weight: 600, color: v.productName ? INK : GRAY }); y += 4.9; });
+    y += 2;
+    const fcols = [1, 1.3, 0.6];
+    const funit = (leftW - 8) / 2.9;
+    let fx = X0;
+    const facts = [
+      ['소재·두께', v.material],
+      ['사이즈 (긴 쪽 × 짧은 쪽)', v.sizeLong && v.sizeShort ? `${v.sizeLong} × ${v.sizeShort} cm` : v.sizeLong || v.sizeShort ? `${v.sizeLong || v.sizeShort} cm` : ''],
+      ['수량', v.qty],
+    ];
+    facts.forEach(([k, value], i) => {
+      lab(k, fx, y);
+      text(value || '-', fx, y + 3.4, 10, { weight: 500, color: value ? INK : GRAY });
+      fx += fcols[i] * funit + 4;
+    });
+    const leftBottom = y + 3.4 + 4.5;
+
+    let ry = specY;
+    lab('추가옵션', rightX, ry);
+    ry += 3.2;
+    const addons = v.addons ? v.addons.split('\n').map(s => s.trim()).filter(Boolean) : [];
+    if (!addons.length) { text('없음', rightX, ry, 9, { color: GRAY }); ry += 4.9; }
+    addons.slice(0, 6).forEach((line, i) => {
+      if (i === 5 && addons.length > 6) { text(`외 ${addons.length - 5}개`, rightX, ry, 9, { color: GRAY }); ry += 4.9; return; }
+      const [main, tail] = splitTail(line);
+      const mLines = clip(wrap(main, rightW, 9, 400), 2);
+      mLines.forEach((l, j) => {
+        const w = text(l, rightX, ry, 9);
+        if (j === mLines.length - 1 && tail && w + widthOf(tail, 7.5) + 2 < rightW) text(tail, rightX + w + 1.5, ry + 0.45, 7.5, { color: GRAY });
+        ry += 4.9;
+      });
+    });
+    ry += 2;
+    lab('고객 요청', rightX, ry);
+    ry += 3.2;
+    const reqLines = clip(wrap(v.requests || '없음', rightW, 9, 400), 4);
+    reqLines.forEach(l => { text(l, rightX, ry, 9, { color: v.requests ? INK : GRAY }); ry += 4.75; });
+    const specBottom = Math.max(leftBottom, ry) + 2;
+    hline(specBottom);
+
+    // 아래 약관 (높이를 먼저 재서 맨 아래에 붙인다)
+    const terms = data.terms || [];
+    const tcols = [1.5, 1, 1];
+    const tunit = (X1 - X0 - 7 * 2) / 3.5;
+    const blocks = terms.map((t, i) => {
+      const w = tcols[i] * tunit;
+      const lines = t.lines.map(l => wrap(l, w - 3.2, 7.4, 400));
+      const h = (t.title ? 5.2 : 0) + lines.reduce((n, ls) => n + ls.length * 4.15 + 0.6, 0);
+      return { t, w, lines, h };
+    });
+    const termsH = Math.max(0, ...blocks.map(b => b.h));
+    const termsTop = H - (termsH ? termsH + 4 + 4.5 : 0);
+    if (termsH) {
+      ctx.fillStyle = '#f6f7f8';
+      ctx.fillRect(0, termsTop * MM, canvas.width, (H - termsTop) * MM);
+      let tx = X0;
+      blocks.forEach(b => {
+        let ty = termsTop + 4;
+        if (b.t.title) { text(b.t.title, tx, ty, 9, { weight: 600 }); ty += 5.2; }
+        b.lines.forEach(ls => {
+          text('•', tx, ty, 7.4, { color: '#b5b9bf' });
+          ls.forEach(l => { text(l, tx + 3.2, ty, 7.4, { color: '#6b7079' }); ty += 4.15; });
+          ty += 0.6;
+        });
+        tx += b.w + 7;
+      });
+    }
+
+    // 시안
+    lab('치수단위 cm', X0, specBottom + 2);
+    const box = { x: X0, y: specBottom + 6, w: X1 - X0, h: termsTop - 3 - (specBottom + 6) };
+    if (design && design.naturalWidth && box.h > 10) {
+      const k = Math.min(box.w / design.naturalWidth, box.h / design.naturalHeight);
+      const dw = design.naturalWidth * k;
+      const dh = design.naturalHeight * k;
+      ctx.drawImage(design, (box.x + (box.w - dw) / 2) * MM, (box.y + (box.h - dh) / 2) * MM, dw * MM, dh * MM);
+    } else {
+      ctx.strokeStyle = '#d5d8dc';
+      ctx.lineWidth = 0.3 * MM;
+      ctx.setLineDash([2 * MM, 1.5 * MM]);
+      ctx.strokeRect(box.x * MM, box.y * MM, box.w * MM, box.h * MM);
+      ctx.setLineDash([]);
+      text('시안 그림을 넣어 주세요', W / 2, box.y + box.h / 2 - 2, 12, { color: '#b5b9bf', align: 'center' });
+    }
+  }
+
+  // 글꼴을 다 받은 뒤 그린다 (한글 글꼴은 쓰는 글자만 나눠 받음)
+  let pending = null;
+  async function render() {
+    const all = [...form.querySelectorAll('input[type=text], input[type=number], textarea')].map(el => el.value).join('')
+      + (data.terms || []).map(t => t.title + t.lines.join('')).join('') + '구매처주문번호수정횟수담당디자이너상품명소재두께사이즈긴쪽짧은수량추가옵션고객요청치수단위없음시안확정서그림을넣어주세요외개회0123456789.·×•…()';
+    try {
+      await Promise.all([400, 500, 600, 700].map(w => document.fonts.load(font(10, w), all)));
+    } catch { /* 글꼴을 못 받아도 기본 글꼴로 그린다 */ }
+    draw();
+  }
+  const later = () => { clearTimeout(pending); pending = setTimeout(render, 120); };
+  form.addEventListener('input', later);
+
+  // 시안 그림 넣기: 누르기 · 끌어다 놓기
+  const drop = document.querySelector('[data-maker-drop]');
+  const input = document.querySelector('[data-maker-input]');
+  const fileLabel = document.querySelector('[data-maker-file]');
+  function useFile(file) {
+    if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) {
+      alert('PNG·JPG·WEBP 그림만 넣을 수 있어요. (PDF·AI 파일은 JPG 로 내보내 주세요)');
+      return;
+    }
+    const img = new Image();
+    img.onload = () => { design = img; fileLabel.textContent = file.name; render(); };
+    img.src = URL.createObjectURL(file);
+  }
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); input.click(); } });
+  input.addEventListener('change', () => useFile(input.files[0]));
+  ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, () => drop.classList.remove('over')));
+  drop.addEventListener('drop', e => { e.preventDefault(); useFile(e.dataTransfer.files[0]); });
+
+  // 저장할 파일 이름: 시안확정서_주문번호_구매자.jpg
+  function fileName() {
+    const parts = ['시안확정서', val('orderNo'), val('buyer')].filter(Boolean).map(s => s.replace(/[\\/:*?"<>|\s]+/g, '_'));
+    return `${parts.join('_')}.jpg`;
+  }
+  document.querySelector('[data-maker-save]').addEventListener('click', async () => {
+    if (!design && !confirm('시안 그림이 없어요. 그래도 저장할까요?')) return;
+    await render();
+    canvas.toBlob(blob => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName();
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    }, 'image/jpeg', 0.92);
+  });
+  // 인쇄: 같은 그림을 새 창에 A4 로 띄워 인쇄
+  document.querySelector('[data-maker-print]').addEventListener('click', async () => {
+    await render();
+    const w = window.open('', '_blank');
+    if (!w) { alert('새 창이 막혀 있어요. 브라우저에서 팝업을 허용해 주세요.'); return; }
+    w.document.write('<!doctype html><title>시안확정서</title><style>@page{size:A4;margin:0}html,body{margin:0}img{display:block;width:210mm;height:297mm}</style><img alt="">');
+    w.document.close();
+    const img = w.document.querySelector('img');
+    img.onload = () => { w.focus(); w.print(); };
+    img.src = canvas.toDataURL('image/jpeg', 0.95);
+  });
+
+  // 처음: 로고 · 주문에 올려 둔 시안을 불러와서 그린다
+  const loadImg = src => new Promise(resolve => {
+    if (!src) return resolve(null);
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+  Promise.all([loadImg(data.logoUrl), loadImg(data.imageUrl)]).then(([l, d]) => {
+    logo = l;
+    if (d) design = d;
+    render();
+  });
+  render();
+})();

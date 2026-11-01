@@ -104,7 +104,7 @@ test('주문 카드에 시안 칸이 있고, 소재·사이즈를 미리 채워 
   assert.doesNotMatch(page.text, /\/work-sheet/); // 시안을 올리기 전에는 작업지시서 버튼 없음
 });
 
-test('시안을 올리면 수정 0회, 다시 올리면 +1 되고 예전 그림 파일은 지운다', async t => {
+test('시안을 올리면 수정 0회, 다시 올리면 +1 되고 두 번 전 그림 파일은 지운다', async t => {
   const ctx = await setup(t);
   const r1 = await ctx.upload({ revision: '0', material: '포맥스 3T', size_long: '63', size_short: '160', ship_method: '택배' }, { data: PNG });
   assert.strictEqual(r1.status, 302);
@@ -123,13 +123,17 @@ test('시안을 올리면 수정 0회, 다시 올리면 +1 되고 예전 그림 
   assert.strictEqual(p2.revision, 1);
   assert.strictEqual(p2.ship_method, '퀵서비스');
   assert.notStrictEqual(p2.image_file, p1.image_file);
+  assert.ok(fs.existsSync(path.join(ctx.proofDir, p1.image_file))); // 바로 전 시안은 취소용으로 남김
+  await ctx.upload({ revision: '1', material: '포맥스 3T', size_long: '160', size_short: '63', ship_method: '퀵서비스' }, { data: PNG });
+  assert.strictEqual(ctx.proof().revision, 2);
   await new Promise(r => setTimeout(r, 50));
   assert.ok(!fs.existsSync(path.join(ctx.proofDir, p1.image_file)));
+  const p2b = ctx.proof();
 
   // 그림 없이 저장하면 수정 횟수는 적은 그대로
   await ctx.upload({ revision: '3', material: '포맥스 5T', size_long: '160', size_short: '63', ship_method: '택배' });
   assert.strictEqual(ctx.proof().revision, 3);
-  assert.strictEqual(ctx.proof().image_file, p2.image_file);
+  assert.strictEqual(ctx.proof().image_file, p2b.image_file);
 });
 
 test('그림이 아닌 파일·이상한 사이즈는 저장하지 않는다', async t => {
@@ -174,4 +178,75 @@ test('지워진 주문·개인정보를 지운 주문의 시안은 정리한다'
   assert.strictEqual(ctx.proof(), undefined);
   await new Promise(r => setTimeout(r, 50));
   assert.ok(!fs.existsSync(file));
+});
+
+test('시안 취소: 바로 전 시안으로 되돌리고, 처음 올린 시안이면 지운다', async t => {
+  const ctx = await setup(t);
+  const cancel = async () => {
+    const page = await ctx.kim.request(`/orders/${ctx.id}`);
+    const token = /name="_csrf" value="([^"]+)"/.exec(page.text)[1];
+    return ctx.kim.request(`/orders/${ctx.id}/proof/cancel`, { method: 'POST', form: { _csrf: token } });
+  };
+  await ctx.upload({ revision: '0', material: '포맥스 3T' }, { data: PNG });
+  const first = ctx.proof().image_file;
+  await ctx.upload({ revision: '0', material: '포맥스 3T' }, { data: PNG });
+  const second = ctx.proof();
+  assert.strictEqual(second.revision, 1);
+  assert.strictEqual(second.prev_file, first);
+  assert.ok(fs.existsSync(path.join(ctx.proofDir, first))); // 취소할 수 있게 남겨 둠
+  assert.match((await ctx.kim.request(`/orders/${ctx.id}`)).text, /시안 취소 \(이전 시안으로\)/);
+
+  const r = await cancel();
+  assert.strictEqual(r.status, 302);
+  const back = ctx.proof();
+  assert.strictEqual(back.image_file, first);
+  assert.strictEqual(back.revision, 0);
+  assert.strictEqual(back.prev_file, null);
+  await new Promise(res => setTimeout(res, 50));
+  assert.ok(!fs.existsSync(path.join(ctx.proofDir, second.image_file)));
+
+  await cancel(); // 이제 이전 시안이 없으니 지운다
+  assert.strictEqual(ctx.proof().image_file, null);
+  assert.strictEqual(ctx.proof().material, '포맥스 3T');
+  const page = await ctx.kim.request(`/orders/${ctx.id}`);
+  assert.doesNotMatch(page.text, /시안 취소/);
+});
+
+test('고객용 시안확정서 만들기: 빈 양식과 주문으로 미리 채운 양식', async t => {
+  const ctx = await setup(t);
+  const blank = await ctx.kim.request('/proof-maker');
+  assert.strictEqual(blank.status, 200);
+  assert.match(blank.text, /시안확정서 만들기/);
+  assert.match(blank.text, /data-maker-canvas/);
+  assert.match(blank.text, /031-822-7815/);
+  assert.match(blank.text, /수정 횟수는 템플릿에 기재된 횟수입니다/); // 약관
+  await ctx.upload({ revision: '2', material: '포맥스 3T', size_long: '160', size_short: '63', ship_method: '택배' }, { data: PNG });
+  const filled = await ctx.kim.request(`/orders/${ctx.id}/proof-maker`);
+  for (const text of ['value="홍길동"', 'value="김길동"', 'value="O1"', 'value="김디자"', 'value="2"', 'value="포맥스 3T"', 'value="160"', 'value="63"', '볼터치작업 × 1 (볼터치 무료옵션)', '거치대는 뒤쪽 가운데로', '/proof/image']) {
+    assert.ok(filled.text.includes(text), text);
+  }
+  // 데이터 칸에 < 가 그대로 들어가 스크립트가 끊기지 않게
+  ctx.db.prepare("UPDATE orders SET ship_memo = '</script><b>x' WHERE channel_order_id = 'O1'").run();
+  const evil = await ctx.kim.request(`/orders/${ctx.id}/proof-maker`);
+  assert.ok(!evil.text.includes('</script><b>x'));
+});
+
+test('관리자: 시안확정서 연락처·약관을 바꾸고 처음 문구로 되돌린다', async t => {
+  const ctx = await setup(t);
+  addUser(ctx.db, { email: 'boss@broad.test', role: 'admin', name: '사장' });
+  const boss = await loginAs(ctx.baseUrl, 'boss@broad.test');
+  const page = await boss.request('/admin/brand');
+  assert.match(page.text, /고객용 시안확정서/);
+  const r = await boss.submit('/admin/brand', '/admin/brand/proof', {
+    phone: '02-123-4567', term_title_0: '수정 안내', term_lines_0: '- 첫째 줄\n둘째 줄\n\n', term_title_1: '환불', term_lines_1: '환불 줄', term_title_2: '오탈자', term_lines_2: '',
+  });
+  assert.strictEqual(r.status, 302);
+  const maker = await ctx.kim.request('/proof-maker');
+  assert.match(maker.text, /02-123-4567/);
+  assert.match(maker.text, /"title":"수정 안내","lines":\["첫째 줄","둘째 줄"\]/);
+  const bad = await boss.submit('/admin/brand', '/admin/brand/proof', { phone: 'x'.repeat(40) });
+  assert.strictEqual(bad.status, 302);
+  assert.match((await ctx.kim.request('/proof-maker')).text, /02-123-4567/); // 잘못된 값은 저장 안 함
+  await boss.submit('/admin/brand', '/admin/brand/proof/reset', {});
+  assert.match((await ctx.kim.request('/proof-maker')).text, /031-822-7815/);
 });

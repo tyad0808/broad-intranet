@@ -51,6 +51,7 @@
         <button type="submit" class="btn-sm ghost">↻ 지금 수집</button>
       </form>
     <% } %>
+    <a href="/proof-maker?back=<%= encodeURIComponent(currentUrl) %>" class="btn-sm">시안확정서 만들기</a>
     <a href="/orders/new?back=<%= encodeURIComponent(currentUrl) %>" class="btn-sm primary new-order" data-modal-link>＋ 수기 주문 등록</a>
   </div>
 </div>

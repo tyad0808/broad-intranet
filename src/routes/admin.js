@@ -501,7 +501,21 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
   // ───────── 회사 이름·로고 ─────────
   router.get('/brand', (req, res) => {
     const { MAX_NAME, DEFAULT_NAME, NAV_ITEMS } = require('../brand');
-    res.render('admin/brand', { title: '회사·로고', tab: 'brand', MAX_NAME, DEFAULT_NAME, NAV_ITEMS });
+    const { phoneOf, termsOf } = require('../proofs');
+    res.render('admin/brand', { title: '회사·로고', tab: 'brand', MAX_NAME, DEFAULT_NAME, NAV_ITEMS, proofPhone: phoneOf(db), proofTerms: termsOf(db) });
+  });
+  // 고객용 시안확정서: 담당 디자이너 옆 연락처, 아래 약관
+  router.post('/brand/proof', (req, res) => {
+    const { saveProofSettings } = require('../proofs');
+    const { setSetting } = require('../collector');
+    const error = saveProofSettings(db, req.body, setSetting);
+    flash(req, error ? 'error' : 'ok', error || '시안확정서 연락처·약관을 저장했습니다.');
+    res.redirect('/admin/brand#proof');
+  });
+  router.post('/brand/proof/reset', (req, res) => {
+    db.prepare("DELETE FROM settings WHERE key IN ('proof_phone', 'proof_terms')").run();
+    flash(req, 'ok', '시안확정서 연락처·약관을 처음 문구로 되돌렸습니다.');
+    res.redirect('/admin/brand#proof');
   });
   // 왼쪽 메뉴 순서 (모든 직원에게 같이 적용)
   router.post('/brand/nav', (req, res) => {
