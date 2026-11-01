@@ -13,7 +13,7 @@ const { transaction } = require('./db');
 const CATEGORIES = ['첫 응대', '주문 안내', '파일', '디자인·시안', '주문·제작', '배송', '클레임', '사후관리'];
 const OTHER = '기타';
 const V1_ORIGIN = 'cs-v1';
-const V1_FILE = path.join(__dirname, 'data', 'cs-macros-v1.json');
+const V1_FILE = path.join(__dirname, 'seed', 'cs-macros-v1.json');
 
 function loadV1(file = V1_FILE) {
   return JSON.parse(fs.readFileSync(file, 'utf8'));
