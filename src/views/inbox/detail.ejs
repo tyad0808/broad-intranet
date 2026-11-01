@@ -95,13 +95,30 @@
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="version" value="<%= inquiry.version %>">
-        <%# 자주 쓰는 답장 문구: 고르면 답장 칸에 들어간다 (그 뒤에 고쳐 써도 됨) %>
-        <div class="template-row">
-          <select data-template aria-label="답장 문구 넣기" data-csrf="<%= csrfToken %>">
-            <option value=""><%= templates.length ? '＋ 자주 쓰는 문구 넣기' : '저장된 문구가 없어요' %></option>
-            <% templates.forEach(t => { %><option value="<%= t.id %>" data-body="<%= t.body %>"><%= t.title %></option><% }) %>
-          </select>
+        <%# 매크로(자주 쓰는 답장 문구): 찾아서 고르면 답장 칸에 들어간다 (그 뒤에 고쳐 써도 됨). public/macro-picker.js %>
+        <% const macroCount = templates.reduce((n, g) => n + g.items.length, 0); %>
+        <div class="template-row macro-picker" data-macro-picker data-csrf="<%= csrfToken %>">
+          <button type="button" class="btn-sm" data-macro-open aria-expanded="false" aria-haspopup="listbox" <%= macroCount ? '' : 'disabled' %>>＋ 매크로 넣기<%= macroCount ? '' : ' (저장된 문구 없음)' %></button>
           <a href="/templates" target="_top" class="btn-sm ghost">문구 관리</a>
+          <% if (macroCount) { %>
+          <div class="macro-panel" data-macro-panel hidden>
+            <input type="search" class="macro-search" placeholder="제목·내용으로 찾기 (예: 환불, 송장)" aria-label="매크로 찾기" data-macro-search autocomplete="off">
+            <div class="macro-list" role="listbox" aria-label="매크로" data-macro-list>
+              <% templates.forEach(g => { %>
+                <div class="macro-group" data-macro-group>
+                  <div class="macro-cat"><%= g.name %></div>
+                  <% g.items.forEach(t => { %>
+                    <button type="button" class="macro-item" role="option" data-macro-item data-id="<%= t.id %>" data-body="<%= t.body %>" data-subject="<%= t.subject %>"
+                      data-search="<%= [t.title, t.hint, t.body, g.name].join(' ').toLowerCase() %>">
+                      <strong><%= t.title %></strong><% if (t.hint) { %><span class="macro-hint"><%= t.hint %></span><% } %><span class="macro-tag"><%= g.name %></span>
+                    </button>
+                  <% }) %>
+                </div>
+              <% }) %>
+              <p class="macro-none" data-macro-none hidden>찾는 매크로가 없어요</p>
+            </div>
+          </div>
+          <% } %>
         </div>
         <% if (chat) { %>
           <label>톡톡 답장 <span class="muted small">(손님에게 바로 보입니다)</span>
@@ -235,4 +252,5 @@
 <script src="/confirm.js"></script>
 <script src="/orders.js"></script>
 <script src="/inbox.js"></script>
+<script src="/macro-picker.js"></script>
 <%- include('../partials/footer') %>

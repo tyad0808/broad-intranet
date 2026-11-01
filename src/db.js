@@ -94,6 +94,13 @@ function addMissingColumns(db) {
   addColumn(db, 'inquiries', 'prev_id', 'INTEGER');
   // 개인정보를 지운 때 (끝난 지 3개월 지난 주문: 이름·연락처·주소만 지우고 주문은 남김)
   addColumn(db, 'orders', 'pii_cleared_at', 'TEXT');
+  // 답장 매크로: 카테고리·번호·언제 쓰나·메일 제목·어디서 가져왔는지(cs-v1 = CS 매크로 v1 엑셀)·마지막 사용 시각
+  addColumn(db, 'reply_templates', 'category', 'TEXT');
+  addColumn(db, 'reply_templates', 'macro_no', 'INTEGER');
+  addColumn(db, 'reply_templates', 'usage_hint', 'TEXT');
+  addColumn(db, 'reply_templates', 'mail_subject', 'TEXT');
+  addColumn(db, 'reply_templates', 'origin', 'TEXT');
+  addColumn(db, 'reply_templates', 'last_used_at', 'TEXT');
   // 시안 취소용: 새 시안을 올리기 바로 전 시안 하나를 남겨 둔다 (잘못 올렸으면 되돌림)
   addColumn(db, 'proof_sheets', 'prev_file', 'TEXT');
   addColumn(db, 'proof_sheets', 'prev_type', 'TEXT');

@@ -1,0 +1,58 @@
+<%- include('partials/header') %>
+<%# CS 매크로 v1 가져오기 미리보기: 새것은 모두 더하고, 기존과 겹쳐 보이는 것은 체크한 것만. 기존 문구는 절대 바꾸지 않는다 %>
+<% const fresh = rows.filter(r => r.status === 'new'); const overlap = rows.filter(r => r.status === 'overlap'); const done = rows.filter(r => r.status === 'imported'); %>
+<div class="page-head">
+  <div class="title-row"><h1 class="page-title">CS 매크로 가져오기</h1></div>
+  <p class="muted small"><%= version %> · 모두 <%= rows.length %>개. <strong>기존에 저장된 문구는 지우거나 덮어쓰지 않아요.</strong> 새 줄로 더하기만 해요.</p>
+</div>
+
+<form method="post" action="/templates/import" data-once
+  data-confirm="새 매크로를 가져올까요?&#10;기존 문구는 그대로 두고 새로 더하기만 해요.">
+  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+  <section class="card">
+    <h2>기존 문구와 겹쳐 보이는 것 <span class="count"><%= overlap.length %></span></h2>
+    <% if (!overlap.length) { %>
+      <p class="muted">겹치는 문구가 없어요.</p>
+    <% } else { %>
+      <p class="muted small">이름이 같거나 내용이 거의 같은 기존 문구가 있어요. <strong>기본은 건너뛰어요.</strong> 그래도 따로 더하고 싶은 것만 체크하세요. (기존 문구는 어느 쪽이든 그대로예요)</p>
+      <ul class="rows">
+        <% overlap.forEach(r => { %>
+          <li class="row import-row">
+            <label class="check">
+              <input type="checkbox" name="force" value="<%= r.macro.no %>">
+              <span><strong><%= r.macro.no %>. <%= r.macro.title %></strong> <span class="tag"><%= r.macro.category %></span><br>
+                <span class="muted small">겹치는 기존 문구: <%= r.matches.map(m => `'${m.title}' (${m.reason})`).join(', ') %></span></span>
+            </label>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+
+  <section class="card">
+    <h2>새로 들어갈 것 <span class="count"><%= fresh.length %></span></h2>
+    <% if (!fresh.length) { %><p class="muted">새로 들어갈 매크로가 없어요.</p><% } else { %>
+      <% CATEGORIES.forEach(c => { const list = fresh.filter(r => r.macro.category === c); if (!list.length) return; %>
+        <h3 class="macro-cat-title"><%= c %> <span class="muted small"><%= list.length %>개</span></h3>
+        <ul class="import-list">
+          <% list.forEach(r => { %><li><strong><%= r.macro.no %>. <%= r.macro.title %></strong> <span class="muted small"><%= r.macro.hint %></span></li><% }) %>
+        </ul>
+      <% }) %>
+    <% } %>
+  </section>
+
+  <% if (done.length) { %>
+  <section class="card">
+    <h2>이미 가져온 것 <span class="count"><%= done.length %></span></h2>
+    <p class="muted small">같은 번호의 매크로가 이미 있어서 다시 넣지 않아요: <%= done.map(r => `${r.macro.no}. ${r.macro.title}`).join(', ') %></p>
+  </section>
+  <% } %>
+
+  <div class="form-actions end import-actions">
+    <a href="/templates" class="btn-sm ghost">취소</a>
+    <button type="submit" class="btn-sm primary" <%= fresh.length || overlap.length ? '' : 'disabled' %>>가져오기 (새 <%= fresh.length %>개<%= overlap.length ? ' + 체크한 것' : '' %>)</button>
+  </div>
+</form>
+<script src="/confirm.js"></script>
+<%- include('partials/footer') %>

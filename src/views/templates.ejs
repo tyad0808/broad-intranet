@@ -1,11 +1,19 @@
 <%- include('partials/header') %>
 <div class="page-head">
-  <h1 class="page-title">답장 문구</h1>
-  <p class="muted small">메일·쇼핑몰 문의 답장 칸 위 <strong>[자주 쓰는 문구 넣기]</strong> 에서 고르면 바로 들어가요. 직원 누구나 만들고 고칠 수 있어요.</p>
+  <div class="title-row wrap-head">
+    <h1 class="page-title">답장 문구 · 매크로</h1>
+    <div class="page-actions">
+      <% if (isAdmin && v1Left.fresh) { %><a href="/templates/import" class="btn-sm primary">CS 매크로 v1 가져오기 (<%= v1Left.fresh %>개)</a>
+      <% } else if (isAdmin && v1Left.overlap) { %><a href="/templates/import" class="btn-sm ghost">겹쳐서 건너뛴 v1 매크로 <%= v1Left.overlap %>개</a><% } %>
+      <a href="#form" class="btn-sm">＋ 새 문구</a>
+    </div>
+  </div>
+  <p class="muted small">메일·톡톡·쇼핑몰 문의 답장 칸 위 <strong>[＋ 매크로 넣기]</strong> 에서 찾아 고르면 바로 들어가요. 직원 누구나 만들고 고칠 수 있어요.</p>
 </div>
 
 <% const editing = edit && templates.find(t => t.id === edit); %>
-<section class="card">
+<% if (editing) { %>
+<section class="card" id="form">
   <h2><%= editing ? '문구 고치기' : '새 문구' %></h2>
   <form method="post" action="<%= editing ? `/templates/${editing.id}` : '/templates' %>" class="template-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -13,12 +21,26 @@
       <label>문구 이름 <span class="muted small">(목록에 보이는 이름)</span>
         <input type="text" name="title" maxlength="40" required value="<%= editing ? editing.title : '' %>" placeholder="예: 시안 확인 요청">
       </label>
+      <label>카테고리
+        <select name="category">
+          <option value="">기타</option>
+          <% CATEGORIES.forEach(c => { %><option <%= editing && editing.category === c ? 'selected' : '' %>><%= c %></option><% }) %>
+        </select>
+      </label>
+    </div>
+    <div class="two-fields">
+      <label>언제 쓰나 <span class="muted small">(고를 때 제목 옆에 보여요)</span>
+        <input type="text" name="usage_hint" maxlength="60" value="<%= editing ? editing.usage_hint || '' : '' %>" placeholder="예: 시안 보낸 뒤 답이 없을 때">
+      </label>
       <label>쓰는 곳
         <select name="scope">
           <% Object.entries(SCOPES).forEach(([k, v]) => { %><option value="<%= k %>" <%= (editing ? editing.scope : 'all') === k ? 'selected' : '' %>><%= v %></option><% }) %>
         </select>
       </label>
     </div>
+    <label>메일 제목 <span class="muted small">(메일로 보낼 때 쓰는 제목)</span>
+      <input type="text" name="mail_subject" maxlength="100" value="<%= editing ? editing.mail_subject || '' : '' %>" placeholder="예: [브로애드] 시안 확인 부탁드립니다">
+    </label>
     <label>내용
       <textarea name="body" rows="7" maxlength="5000" required placeholder="예: {고객명}님, 주문하신 {상품명} 시안 보내드립니다. 확인 부탁드립니다."><%= editing ? editing.body : '' %></textarea>
     </label>
@@ -30,30 +52,90 @@
   </form>
 </section>
 
+<% } %>
 <section class="card">
-  <h2>저장된 문구 <span class="count"><%= templates.length %></span></h2>
+  <div class="macro-list-head">
+    <h2>저장된 문구 <span class="count"><%= templates.length %></span></h2>
+    <% if (templates.length) { %>
+      <input type="search" class="macro-search" placeholder="제목·내용으로 찾기 (예: 환불, 송장)" aria-label="문구 찾기" data-template-search>
+    <% } %>
+  </div>
   <% if (!templates.length) { %>
     <p class="muted">아직 문구가 없어요. 위에서 자주 쓰는 답장을 만들어 보세요.</p>
   <% } else { %>
-    <ul class="rows">
-      <% templates.forEach(t => { %>
-        <li class="row">
-          <div class="row-main">
-            <strong><%= t.title %></strong> <span class="tag"><%= SCOPES[t.scope] %></span>
-            <span class="muted small"><%= t.use_count %>번 사용<%= t.updated_name ? ` · ${t.updated_name}` : '' %> · <%= kst(t.updated_at).slice(0, 10) %></span>
-            <div class="template-preview"><%= t.body %></div>
-          </div>
-          <div class="row-actions">
-            <a href="/templates?edit=<%= t.id %>" class="btn-sm">고치기</a>
-            <form method="post" action="/templates/<%= t.id %>/delete" class="inline" data-confirm="'<%= t.title %>' 문구를 지울까요?">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <button type="submit" class="btn-sm danger">지우기</button>
-            </form>
-          </div>
-        </li>
-      <% }) %>
-    </ul>
+    <nav class="chip-row macro-cats" aria-label="카테고리">
+      <% groups.forEach(g => { %><a class="chip" href="#cat-<%= g.name %>"><%= g.name %> <span class="muted"><%= g.items.length %></span></a><% }) %>
+    </nav>
+    <% groups.forEach(g => { %>
+      <div class="macro-group" id="cat-<%= g.name %>" data-template-group>
+        <h3 class="macro-cat-title"><%= g.name %> <span class="muted small"><%= g.items.length %>개</span></h3>
+        <ul class="rows">
+          <% g.items.forEach(t => { %>
+            <li class="row" data-template-row data-search="<%= [t.title, t.usage_hint, t.body, t.mail_subject, g.name].filter(Boolean).join(' ').toLowerCase() %>">
+              <div class="row-main">
+                <strong><%= t.macro_no ? `${t.macro_no}. ` : '' %><%= t.title %></strong>
+                <% if (t.usage_hint) { %><span class="muted small macro-hint"><%= t.usage_hint %></span><% } %>
+                <span class="tag"><%= SCOPES[t.scope] %></span>
+                <span class="muted small"><%= t.use_count %>번 사용<%= t.updated_name ? ` · ${t.updated_name}` : '' %> · <%= kst(t.updated_at).slice(0, 10) %></span>
+                <% if (t.mail_subject) { %><div class="muted small">메일 제목: <%= t.mail_subject %></div><% } %>
+                <div class="template-preview"><%= t.body %></div>
+              </div>
+              <div class="row-actions">
+                <a href="/templates?edit=<%= t.id %>#form" class="btn-sm">고치기</a>
+                <form method="post" action="/templates/<%= t.id %>/delete" class="inline" data-confirm="'<%= t.title %>' 문구를 지울까요?">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button type="submit" class="btn-sm danger">지우기</button>
+                </form>
+              </div>
+            </li>
+          <% }) %>
+        </ul>
+      </div>
+    <% }) %>
+    <p class="muted macro-none" data-template-none hidden>찾는 문구가 없어요. 다른 낱말로 찾아보세요.</p>
   <% } %>
 </section>
+<% if (!editing) { %>
+<section class="card" id="form">
+  <h2><%= editing ? '문구 고치기' : '새 문구' %></h2>
+  <form method="post" action="<%= editing ? `/templates/${editing.id}` : '/templates' %>" class="template-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="two-fields">
+      <label>문구 이름 <span class="muted small">(목록에 보이는 이름)</span>
+        <input type="text" name="title" maxlength="40" required value="<%= editing ? editing.title : '' %>" placeholder="예: 시안 확인 요청">
+      </label>
+      <label>카테고리
+        <select name="category">
+          <option value="">기타</option>
+          <% CATEGORIES.forEach(c => { %><option <%= editing && editing.category === c ? 'selected' : '' %>><%= c %></option><% }) %>
+        </select>
+      </label>
+    </div>
+    <div class="two-fields">
+      <label>언제 쓰나 <span class="muted small">(고를 때 제목 옆에 보여요)</span>
+        <input type="text" name="usage_hint" maxlength="60" value="<%= editing ? editing.usage_hint || '' : '' %>" placeholder="예: 시안 보낸 뒤 답이 없을 때">
+      </label>
+      <label>쓰는 곳
+        <select name="scope">
+          <% Object.entries(SCOPES).forEach(([k, v]) => { %><option value="<%= k %>" <%= (editing ? editing.scope : 'all') === k ? 'selected' : '' %>><%= v %></option><% }) %>
+        </select>
+      </label>
+    </div>
+    <label>메일 제목 <span class="muted small">(메일로 보낼 때 쓰는 제목)</span>
+      <input type="text" name="mail_subject" maxlength="100" value="<%= editing ? editing.mail_subject || '' : '' %>" placeholder="예: [브로애드] 시안 확인 부탁드립니다">
+    </label>
+    <label>내용
+      <textarea name="body" rows="7" maxlength="5000" required placeholder="예: {고객명}님, 주문하신 {상품명} 시안 보내드립니다. 확인 부탁드립니다."><%= editing ? editing.body : '' %></textarea>
+    </label>
+    <p class="muted small">자동으로 바뀌는 칸: <% VARIABLES.forEach(v => { %><code class="var">{<%= v %>}</code> <% }) %> — 값을 모르면 그대로 남아서 직접 고칠 수 있어요.</p>
+    <div class="form-actions">
+      <button type="submit" class="btn-sm primary"><%= editing ? '고친 내용 저장' : '문구 만들기' %></button>
+      <% if (editing) { %><a href="/templates" class="btn-sm ghost">취소</a><% } %>
+    </div>
+  </form>
+</section>
+
+<% } %>
 <script src="/confirm.js"></script>
+<script src="/templates.js"></script>
 <%- include('partials/footer') %>

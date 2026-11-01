@@ -1528,8 +1528,8 @@ body.ds-v2 {
 .maker-form input[type=file][hidden] { display: none; }
 .maker-form .cap { display: block; }
 @media (max-width: 600px) {
-  .page-head .title-row.maker-head { flex-wrap: wrap; row-gap: 8px; }
-  .maker-head .page-title { flex: 1 1 100%; }
+  .page-head .title-row.maker-head, .page-head .title-row.wrap-head { flex-wrap: wrap; row-gap: 8px; }
+  .maker-head .page-title, .wrap-head .page-title { flex: 1 1 100%; }
 }
 /* 시안확정서 인쇄: 화면은 숨기고 그린 그림 한 장만 A4 로 */
 .maker-print { display: none; page: proof; }
@@ -1544,3 +1544,38 @@ body.ds-v2 {
 .proof-pasted { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 8px; border: 1px solid var(--primary); border-radius: 8px; background: var(--primary-weak); }
 .proof-pasted[hidden] { display: none; }
 .proof-pasted img { max-width: 120px; max-height: 120px; border-radius: 4px; background: #fff; }
+
+/* ───────── 매크로(답장 문구) ───────── */
+/* 답장 칸 위 [＋ 매크로 넣기]: 떠 있는 찾기 창 (떠 있는 것이라 유리 효과 허용) */
+.macro-picker { position: relative; }
+.macro-panel { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 20; min-width: 300px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; background: #fff; box-shadow: var(--shadow-pop); }
+.macro-panel[hidden] { display: none; }
+.macro-search { width: 100%; height: 40px; margin: 0 0 8px; font-size: 15px; }
+.macro-list { max-height: min(420px, 55vh); overflow: auto; overscroll-behavior: contain; }
+.macro-group[hidden] { display: none; }
+.macro-cat { position: sticky; top: 0; z-index: 1; padding: 8px 8px 4px; background: #fff; color: var(--muted); font-size: 14px; font-weight: 700; }
+.macro-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 44px; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 15px; text-align: left; cursor: pointer; }
+.macro-item[hidden] { display: none; }
+.macro-item strong { font-weight: 600; }
+.macro-item .macro-hint { color: var(--muted); font-size: 14px; }
+.macro-item:hover, .macro-item.active, .macro-item:focus-visible { background: var(--primary-weak); outline: none; }
+.macro-tag { display: none; }
+.macro-results .macro-tag { display: inline-block; margin-top: 2px; padding: 0 6px; border-radius: 4px; background: var(--surface-2); color: var(--muted); font-size: 14px; }
+.macro-results[hidden] { display: none; }
+.macro-none { margin: 12px 8px; color: var(--muted); font-size: 14px; }
+.macro-none[hidden] { display: none; }
+/* 답장 문구 관리 화면 */
+.macro-list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin-bottom: 8px; }
+.macro-list-head h2 { margin: 0; }
+.macro-list-head .macro-search { width: min(360px, 100%); margin: 0; }
+.macro-cats { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.macro-cat-title { margin: 18px 0 6px; font-size: 18px; }
+.macro-group:first-of-type .macro-cat-title { margin-top: 8px; }
+.row .macro-hint { margin: 0 4px; }
+.row[hidden] { display: none; }
+.macro-group[data-template-group][hidden] { display: none; }
+/* 가져오기 미리보기 */
+.import-list { margin: 0 0 8px; padding-left: 18px; line-height: 1.8; }
+.import-row .check { display: flex; align-items: flex-start; gap: 10px; }
+.import-row .check input { margin-top: 3px; }
+.import-actions { margin-top: 8px; }
