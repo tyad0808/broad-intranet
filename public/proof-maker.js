@@ -84,8 +84,7 @@
   function draw() {
     const v = {
       channel: val('channel'), orderNo: val('orderNo'), buyer: val('buyer'), receiver: val('receiver'), designer: val('designer'),
-      revision: val('revision') || '0', phone: val('phone'), productName: val('productName'), material: val('material'), qty: val('qty'),
-      sizeLong: val('sizeLong'), sizeShort: val('sizeShort'), addons: val('addons'), requests: val('requests'),
+      revision: val('revision') || '0', phone: val('phone'), products: val('products'), addons: val('addons'), requests: val('requests'),
     };
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = '#ffffff';
@@ -137,23 +136,18 @@
     let y = specY;
     lab('상품명', X0, y);
     y += 3.2;
-    const pLines = clip(wrap(v.productName || '-', leftW, 10, 600), 2);
-    pLines.forEach(l => { text(l, X0, y, 10, { weight: 600, color: v.productName ? INK : GRAY }); y += 4.9; });
-    y += 2;
-    const fcols = [1, 1.3, 0.6];
-    const funit = (leftW - 8) / 2.9;
-    let fx = X0;
-    const facts = [
-      ['소재·두께', v.material],
-      ['사이즈 (긴 쪽 × 짧은 쪽)', v.sizeLong && v.sizeShort ? `${v.sizeLong} × ${v.sizeShort} cm` : v.sizeLong || v.sizeShort ? `${v.sizeLong || v.sizeShort} cm` : ''],
-      ['수량', v.qty],
-    ];
-    facts.forEach(([k, value], i) => {
-      lab(k, fx, y);
-      text(value || '-', fx, y + 3.4, 10, { weight: 500, color: value ? INK : GRAY });
-      fx += fcols[i] * funit + 4;
-    });
-    const leftBottom = y + 3.4 + 4.5;
+    // 고객이 주문한 그대로: 상품마다 첫 줄(이름 × 수량)은 굵게, 다음 줄(옵션)은 보통 글씨. 상품 사이는 빈 줄
+    const items = v.products ? v.products.split(/\n\s*\n/).map(b => b.split('\n').map(l => l.trim()).filter(Boolean)).filter(b => b.length) : [];
+    if (!items.length) { text('-', X0, y, 10, { weight: 600, color: GRAY }); y += 4.9; }
+    const MAX_LEFT = 62; // 상품 칸 높이 한도 (mm). 넘치면 '외 N개'
+    for (let i = 0; i < items.length; i++) {
+      if (y - specY > MAX_LEFT) { text(`외 상품 ${items.length - i}개`, X0, y, 8.5, { color: GRAY }); y += 4.5; break; }
+      const [head, ...rest] = items[i];
+      clip(wrap(head, leftW, 10, 600), 2).forEach(l => { text(l, X0, y, 10, { weight: 600 }); y += 4.9; });
+      clip(wrap(rest.join(' · '), leftW, 8.5, 400), 3).filter(Boolean).forEach(l => { text(l, X0, y, 8.5, { color: '#444444' }); y += 4.2; });
+      y += 2;
+    }
+    const leftBottom = y;
 
     let ry = specY;
     lab('추가옵션', rightX, ry);

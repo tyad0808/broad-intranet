@@ -35,17 +35,7 @@
       <label><span class="cap">수정 횟수</span><input type="number" name="revision" value="<%= d.revision || 0 %>" min="0" max="999" inputmode="numeric"></label>
     </div>
     <label><span class="cap">연락처</span><input type="text" name="phone" value="<%= d.phone || '' %>" maxlength="30"></label>
-    <label><span class="cap">상품명</span><input type="text" name="productName" value="<%= d.productName || '' %>" maxlength="200"></label>
-    <div class="two-fields">
-      <label><span class="cap">소재·두께</span><input type="text" name="material" value="<%= d.material || '' %>" maxlength="60" placeholder="예: 포맥스 3T"></label>
-      <label><span class="cap">수량</span><input type="text" name="qty" value="<%= d.qty ? `${d.qty}개` : '' %>" maxlength="20" placeholder="예: 1개"></label>
-    </div>
-    <label><span class="cap">사이즈 <span class="muted small">(cm · 긴 쪽 × 짧은 쪽)</span></span>
-      <span class="size-pair">
-        <input type="text" name="sizeLong" value="<%= d.sizeLong || '' %>" inputmode="decimal" maxlength="7" placeholder="긴 쪽" aria-label="긴 쪽 cm">
-        <span aria-hidden="true">×</span>
-        <input type="text" name="sizeShort" value="<%= d.sizeShort || '' %>" inputmode="decimal" maxlength="7" placeholder="짧은 쪽" aria-label="짧은 쪽 cm">
-      </span>
+    <label><span class="cap">상품 <span class="muted small">(상품마다 첫 줄 = 이름 × 수량, 다음 줄 = 옵션 · 상품 사이는 빈 줄)</span></span><textarea name="products" rows="6" maxlength="1500" placeholder="예: 실물 등신대 포맥스3T 1인 × 1&#10;등신대 키 선택: ~180cm · 거치대 선택: 거치대O"><%= d.products || '' %></textarea>
     </label>
     <label><span class="cap">추가옵션 <span class="muted small">(한 줄에 하나씩 · 괄호 안은 연한 글씨)</span></span><textarea name="addons" rows="3" maxlength="600" placeholder="예: 볼터치작업 × 1 (볼터치 무료옵션)"><%= d.addons || '' %></textarea>
     </label>

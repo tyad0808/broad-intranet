@@ -34,14 +34,10 @@
     <section class="spec">
       <div>
         <div class="lab">상품명</div>
+        <%# 고객이 주문한 그대로: 상품마다 이름 · 수량 · 옵션 (사이즈·소재를 따로 모아 적지 않는다 — 상품마다 달라 헷갈림) %>
         <% s.products.forEach(p => { %>
-          <div class="pname"><%= p.name %><% if (s.products.length > 1) { %> <span class="g">× <%= p.qty %></span><% } %><% if (p.option) { %><span class="opt"><%= p.option.split(' / ').join(' · ') %></span><% } %></div>
+          <div class="pname"><%= p.name %> <span class="qty">× <%= p.qty %></span><% if (p.option) { %><span class="opt"><%= p.option.split(' / ').join(' · ') %></span><% } %></div>
         <% }) %>
-        <div class="facts">
-          <div><div class="lab">소재·두께</div><div class="v"><% if (s.material) { %><%= s.material %><% } else { %><%- need %><% } %></div></div>
-          <div><div class="lab">사이즈 (긴 쪽 × 짧은 쪽)</div><div class="v"><% if (s.size) { %><%= s.size %><% } else { %><%- need %><% } %></div></div>
-          <div><div class="lab">수량</div><div class="v"><%= s.qty %>개</div></div>
-        </div>
       </div>
       <div>
         <div class="lab">추가옵션</div>

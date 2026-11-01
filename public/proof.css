@@ -28,7 +28,7 @@ body { background: #e9ecef; color: #111; font-family: "Pretendard Variable", Pre
 .spec { display: grid; grid-template-columns: 1.1fr 1fr; gap: 8mm; margin: 0 10mm; padding: 3mm 0; border-bottom: 0.2mm solid #e3e5e8; }
 .pname { font-size: 10pt; font-weight: 600; line-height: 1.4; margin-bottom: 2.5mm; }
 .pname .opt { display: block; font-size: 8.5pt; font-weight: 400; color: #444; margin-top: 0.6mm; }
-.pname + .pname { margin-top: -1mm; }
+.pname .qty { font-weight: 600; margin-left: 0.5mm; }
 .facts { display: grid; grid-template-columns: 1fr 1.3fr 0.6fr; gap: 4mm; }
 .facts .v { font-size: 10pt; font-weight: 500; font-variant-numeric: tabular-nums; }
 .list { margin: 0 0 2.5mm; padding: 0; list-style: none; font-size: 9pt; line-height: 1.55; }

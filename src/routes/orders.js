@@ -11,7 +11,7 @@ const { historyForOrder } = require('../customer');
 const { fileLabel } = require('../fileLabel');
 const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, describeShipping, hasOpenClaim, DELAY_REASONS, DELAY_DEFAULT_TEXT } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
-const { sheetView, guessMaterial, guessSize, SHIP_CHOICES, termsOf, phoneOf } = require('../proofs');
+const { sheetView, SHIP_CHOICES, termsOf, phoneOf } = require('../proofs');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
@@ -517,8 +517,6 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     const proof = proofs ? proofs.get(order) : null;
     const sourceName = order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null;
     const v = sheetView(db, { order, items, proof, channelName: res.locals.channelInfo(order.channel).name, sourceName });
-    const main = items.find(i => i.item_type !== 'addon') || items[0];
-    const size = guessSize(main);
     makerPage(req, res, {
       orderId: order.id,
       channel: v.channelName,
@@ -528,11 +526,8 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       revision: v.revision,
       designer: v.designer,
       phone: v.phone,
-      productName: v.products.map(p => p.name).join(' / '),
-      material: v.material || guessMaterial(main),
-      sizeLong: proof && proof.size_long ? proof.size_long : size.long,
-      sizeShort: proof && proof.size_short ? proof.size_short : size.short,
-      qty: v.qty,
+      // 고객이 주문한 그대로: 상품마다 '이름 × 수량' 줄 + 옵션 줄, 상품 사이는 빈 줄
+      products: v.products.map(p => `${p.name} × ${p.qty}${p.option ? `\n${p.option.split(' / ').join(' · ')}` : ''}`).join('\n\n'),
       addons: v.addons.map(a => `${a.value} × ${a.qty}${a.label ? ` (${a.label})` : ''}`).join('\n'),
       requests: v.requests.join('\n'),
       imageUrl: v.hasImage ? `/orders/${order.id}/proof/image?v=${encodeURIComponent(proof.updated_at)}` : '',
@@ -870,26 +865,17 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       canPickStage: canPickStage(req.user),
       back: safeBack(req.query.back),
       today: kstToday(),
-      ...proofLocals(order, items),
+      ...proofLocals(order),
     });
   });
 
-  // 주문 카드의 '시안 · 작업지시서' 칸: 저장한 값, 없으면 옵션·상품 이름에서 짐작한 값을 미리 채운다
-  function proofLocals(order, items) {
+  // 주문 카드의 '시안 · 작업지시서' 칸: 수정 횟수·배송방법
+  function proofLocals(order) {
     if (!proofs) return { proof: null, proofForm: null };
     const proof = proofs.get(order);
-    const main = items.find(i => i.item_type !== 'addon') || items[0];
-    const size = guessSize(main);
     return {
       proof,
-      proofForm: {
-        revision: proof ? proof.revision : 0,
-        material: proof ? proof.material || '' : guessMaterial(main),
-        size_long: proof ? proof.size_long || '' : size.long,
-        size_short: proof ? proof.size_short || '' : size.short,
-        ship_method: (proof && proof.ship_method) || '택배',
-        guessed: !proof,
-      },
+      proofForm: { revision: proof ? proof.revision : 0, ship_method: (proof && proof.ship_method) || '택배' },
       SHIP_CHOICES,
     };
   }

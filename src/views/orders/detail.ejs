@@ -206,19 +206,6 @@
           </select>
         </label>
       </div>
-      <div class="two-fields">
-        <label>소재·두께
-          <input type="text" name="material" maxlength="60" value="<%= pf.material %>" placeholder="예: 포맥스 3T">
-        </label>
-        <label>실제 사이즈 <span class="muted small">(cm · 긴 쪽 × 짧은 쪽)</span>
-          <span class="size-pair">
-            <input type="text" name="size_long" inputmode="decimal" maxlength="7" value="<%= pf.size_long %>" placeholder="긴 쪽" aria-label="긴 쪽 cm">
-            <span aria-hidden="true">×</span>
-            <input type="text" name="size_short" inputmode="decimal" maxlength="7" value="<%= pf.size_short %>" placeholder="짧은 쪽" aria-label="짧은 쪽 cm">
-          </span>
-        </label>
-      </div>
-      <% if (pf.guessed && (pf.material || pf.size_long)) { %><p class="muted small">소재·사이즈는 옵션과 상품 이름에서 짐작해 미리 채운 값이에요. 실제 값으로 확인한 뒤 저장해 주세요.</p><% } %>
       <div class="form-actions end">
         <a class="btn-sm" href="/orders/<%= order.id %>/proof-maker" target="_blank" rel="noopener">고객용 시안확정서</a>
         <% if (proof) { %><a class="btn-sm" href="/orders/<%= order.id %>/work-sheet" target="_blank" rel="noopener">🖨 작업지시서 출력</a><% } %>

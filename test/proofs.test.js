@@ -95,12 +95,13 @@ async function setup(t) {
   return ctx;
 }
 
-test('주문 카드에 시안 칸이 있고, 소재·사이즈를 미리 채워 둔다', async t => {
+test('주문 카드에 시안 칸이 있다 (수정 횟수·배송방법만, 소재·사이즈 칸은 없음)', async t => {
   const { kim, id } = await setup(t);
   const page = await kim.request(`/orders/${id}`);
   assert.match(page.text, /시안 · 작업지시서/);
-  assert.match(page.text, /name="material"[^>]*value="포맥스 3T"/);
-  assert.match(page.text, /name="size_long"[^>]*value="120"/);
+  assert.match(page.text, /name="revision"/);
+  assert.match(page.text, /name="ship_method"/);
+  assert.doesNotMatch(page.text, /name="material"|name="size_long"/);
   assert.doesNotMatch(page.text, /\/work-sheet/); // 시안을 올리기 전에는 작업지시서 버튼 없음
 });
 
@@ -153,15 +154,16 @@ test('로그인하지 않으면 시안 그림·작업지시서를 볼 수 없다
   }
 });
 
-test('작업지시서: 주문 정보·추가옵션·고객 요청이 들어가고, 빠진 값은 확인 필요', async t => {
+test('작업지시서: 고객이 주문한 그대로(상품·수량·옵션)·추가옵션·고객 요청, 빠진 값은 확인 필요', async t => {
   const ctx = await setup(t);
-  await ctx.upload({ revision: '0', material: '포맥스 3T', size_long: '', size_short: '', ship_method: '택배' }, { data: PNG });
+  await ctx.upload({ revision: '0', ship_method: '택배' }, { data: PNG });
   const res = await ctx.kim.request(`/orders/${ctx.id}/work-sheet`);
   assert.strictEqual(res.status, 200);
-  for (const text of ['작업지시서', '스마트스토어', '홍길동', '김길동', 'O1', '김디자', '0회', '포맥스 3T', '볼터치작업 × 1', '볼터치 무료옵션', '거치대는 뒤쪽 가운데로', '택배', '치수단위 cm', '/proof/image']) {
+  for (const text of ['작업지시서', '스마트스토어', '홍길동', '김길동', 'O1', '김디자', '0회', '실물 등신대 입간판 포맥스3T 1인 120x60cm 거치대O <span class="qty">× 1</span>',
+    '등신대 키 선택: ~180cm · 거치대 선택: 거치대O', '볼터치작업 × 1', '볼터치 무료옵션', '거치대는 뒤쪽 가운데로', '택배', '치수단위 cm', '/proof/image']) {
     assert.ok(res.text.includes(text), text);
   }
-  assert.match(res.text, /사이즈 \(긴 쪽 × 짧은 쪽\)<\/div><div class="v"><span class="need">확인 필요/);
+  assert.doesNotMatch(res.text, /소재·두께|사이즈 \(긴 쪽/); // 따로 모아 적는 칸은 없음
   assert.match(res.text, /납기일<\/div><div class="v"><span class="need">확인 필요/); // 납기·발송기한 없음
   const card = await ctx.kim.request(`/orders/${ctx.id}`);
   assert.match(card.text, /\/orders\/\d+\/work-sheet/);
@@ -222,7 +224,7 @@ test('고객용 시안확정서 만들기: 빈 양식과 주문으로 미리 채
   assert.match(blank.text, /수정 횟수는 템플릿에 기재된 횟수입니다/); // 약관
   await ctx.upload({ revision: '2', material: '포맥스 3T', size_long: '160', size_short: '63', ship_method: '택배' }, { data: PNG });
   const filled = await ctx.kim.request(`/orders/${ctx.id}/proof-maker`);
-  for (const text of ['value="홍길동"', 'value="김길동"', 'value="O1"', 'value="김디자"', 'value="2"', 'value="포맥스 3T"', 'value="160"', 'value="63"', '볼터치작업 × 1 (볼터치 무료옵션)', '거치대는 뒤쪽 가운데로', '/proof/image']) {
+  for (const text of ['value="홍길동"', 'value="김길동"', 'value="O1"', 'value="김디자"', 'value="2"', '실물 등신대 입간판 포맥스3T 1인 120x60cm 거치대O × 1\n등신대 키 선택: ~180cm · 거치대 선택: 거치대O', '볼터치작업 × 1 (볼터치 무료옵션)', '거치대는 뒤쪽 가운데로', '/proof/image']) {
     assert.ok(filled.text.includes(text), text);
   }
   // 데이터 칸에 < 가 그대로 들어가 스크립트가 끊기지 않게
@@ -249,4 +251,11 @@ test('관리자: 시안확정서 연락처·약관을 바꾸고 처음 문구로
   assert.match((await ctx.kim.request('/proof-maker')).text, /02-123-4567/); // 잘못된 값은 저장 안 함
   await boss.submit('/admin/brand', '/admin/brand/proof/reset', {});
   assert.match((await ctx.kim.request('/proof-maker')).text, /031-822-7815/);
+});
+
+test('시안확정서 화면 스크립트에 문법 오류가 없다', () => {
+  const vm = require('vm');
+  for (const file of ['public/proof-maker.js', 'public/print.js']) {
+    assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), { filename: file }), file);
+  }
 });
