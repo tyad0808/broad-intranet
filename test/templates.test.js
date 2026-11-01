@@ -132,3 +132,11 @@ test('문구 만들기·고치기: 카테고리·언제 쓰나·메일 제목도
   const after = db.prepare('SELECT * FROM reply_templates WHERE id = ?').get(row.id);
   assert.deepStrictEqual([after.category, after.usage_hint, after.mail_subject], [null, null, null], '없는 카테고리는 기타');
 });
+
+test('관리자 메뉴에 답장 문구·매크로 바로가기가 있다', async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  addUser(db, { email: 'boss@broad.test', name: '사장', role: 'admin' });
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  assert.match((await boss.request('/admin/users')).text, /<a href="\/templates" class="chip">답장 문구·매크로<\/a>/);
+});
