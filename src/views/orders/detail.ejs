@@ -41,7 +41,6 @@
   <div class="page-actions">
     <a class="btn-sm" href="/orders/<%= order.id %>/print" target="_blank" rel="noopener">🖨 발주서 출력</a>
     <% if (locals.proof) { %><a class="btn-sm" href="/orders/<%= order.id %>/work-sheet" target="_blank" rel="noopener">🖨 작업지시서</a><% } %>
-    <a class="btn-sm" href="/orders/<%= order.id %>/proof-maker" target="_blank" rel="noopener">고객용 시안확정서</a>
   </div>
 </div>
 
@@ -182,13 +181,6 @@
       <a class="proof-thumb" href="/orders/<%= order.id %>/proof/image?v=<%= encodeURIComponent(proof.updated_at) %>" target="_blank" rel="noopener" title="크게 보기">
         <img src="/orders/<%= order.id %>/proof/image?v=<%= encodeURIComponent(proof.updated_at) %>" alt="올린 시안">
       </a>
-      <%# 잘못 올렸을 때: 바로 전 시안이 있으면 그걸로 되돌리고, 없으면 지운다 %>
-      <form method="post" action="/orders/<%= order.id %>/proof/cancel" class="proof-cancel" data-once
-        data-confirm="<% if (proof.prev_file) { %>올린 시안을 취소하고 이전 시안(수정 <%= proof.prev_revision %>회)으로 되돌릴까요?<% } else { %>올린 시안을 지울까요?&#10;적어 둔 소재·사이즈·배송방법은 그대로 남아요.<% } %>">
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <input type="hidden" name="back" value="<%= back %>">
-        <button type="submit" class="btn-sm danger"><%= proof.prev_file ? '시안 취소 (이전 시안으로)' : '시안 취소' %></button>
-      </form>
     <% } %>
     <form method="post" action="/orders/<%= order.id %>/proof" enctype="multipart/form-data" class="detail-form" data-once>
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -220,7 +212,6 @@
       </div>
       <% if (pf.guessed && (pf.material || pf.size_long)) { %><p class="muted small">소재·사이즈는 옵션과 상품 이름에서 짐작해 미리 채운 값이에요. 실제 값으로 확인한 뒤 저장해 주세요.</p><% } %>
       <div class="form-actions end">
-        <a class="btn-sm" href="/orders/<%= order.id %>/proof-maker" target="_blank" rel="noopener">고객용 시안확정서</a>
         <% if (proof) { %><a class="btn-sm" href="/orders/<%= order.id %>/work-sheet" target="_blank" rel="noopener">🖨 작업지시서 출력</a><% } %>
         <button type="submit"><%= proof ? '저장' : '시안 올리기' %></button>
       </div>

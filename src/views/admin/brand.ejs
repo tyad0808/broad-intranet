@@ -12,32 +12,6 @@
   </form>
 </section>
 
-<section class="card" id="proof">
-  <h2>고객용 시안확정서 <span class="h2-sub">담당 디자이너 옆 연락처와 아래 약관</span></h2>
-  <form method="post" action="/admin/brand/proof" class="settings-form proof-terms-form">
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <label>연락처
-      <input type="text" name="phone" value="<%= proofPhone %>" maxlength="30" placeholder="031-822-7815">
-    </label>
-    <% proofTerms.forEach((t, i) => { %>
-      <fieldset class="term-box">
-        <legend>약관 <%= i + 1 %>번 칸</legend>
-        <label>제목
-          <input type="text" name="term_title_<%= i %>" value="<%= t.title %>" maxlength="30">
-        </label>
-        <label><span>내용 <span class="muted small">(한 줄에 하나씩 · 12줄까지)</span></span>
-          <textarea name="term_lines_<%= i %>" rows="<%= Math.max(3, t.lines.length + 3) %>"><%= t.lines.join('\n') %></textarea>
-        </label>
-      </fieldset>
-    <% }) %>
-    <button type="submit" class="btn-sm primary">저장</button>
-  </form>
-  <form method="post" action="/admin/brand/proof/reset" class="inline" data-confirm="연락처와 약관을 처음 문구로 되돌릴까요?">
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <button type="submit" class="btn-sm ghost">처음 문구로 되돌리기</button>
-  </form>
-</section>
-
 <section class="card">
   <h2>로고</h2>
   <div class="brand-preview">

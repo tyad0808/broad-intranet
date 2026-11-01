@@ -11,7 +11,7 @@ const { historyForOrder } = require('../customer');
 const { fileLabel } = require('../fileLabel');
 const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, describeShipping, hasOpenClaim, DELAY_REASONS, DELAY_DEFAULT_TEXT } = require('../actions');
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
-const { sheetView, guessMaterial, guessSize, SHIP_CHOICES, termsOf, phoneOf } = require('../proofs');
+const { sheetView, guessMaterial, guessSize, SHIP_CHOICES } = require('../proofs');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
@@ -479,18 +479,6 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     res.redirect(self);
   });
 
-  // 시안 취소 (잘못 올렸을 때): 바로 전 시안으로 되돌리거나, 처음 올린 시안이면 지운다
-  router.post('/orders/:id/proof/cancel', (req, res) => {
-    const order = findOrder(req.params.id);
-    if (!order || !proofs) return res.status(404).render('error', { title: '없는 주문', message: '주문을 찾을 수 없습니다.' });
-    const back = safeBack(req.body.back);
-    const r = proofs.cancel(order, req.user.id);
-    req.session.flash = r.error
-      ? { type: 'error', message: r.error }
-      : { type: 'ok', message: r.restored ? `시안을 취소하고 이전 시안으로 되돌렸습니다. (수정 ${r.revision}회)` : '올린 시안을 지웠습니다.' };
-    res.redirect(`/orders/${order.id}${back !== '/' ? `?back=${encodeURIComponent(back)}` : ''}#proof`);
-  });
-
   // 올린 시안 그림 (로그인한 직원만)
   router.get('/orders/:id/proof/image', (req, res) => {
     const order = findOrder(req.params.id);
@@ -498,45 +486,6 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     if (!img) return res.status(404).end();
     res.set('Cache-Control', 'private, no-cache');
     res.type(img.type).send(img.data);
-  });
-
-  // 고객용 시안확정서 만들기: 칸을 직접 채우고 시안 그림을 넣어 JPG 로 저장 (서버에는 아무것도 저장하지 않는다)
-  //   /proof-maker            빈 양식 (인트라넷에 없는 주문도)
-  //   /orders/12/proof-maker  주문 정보와 올려 둔 시안으로 미리 채움
-  const makerPage = (req, res, prefill) => res.render('orders/proof-maker', {
-    title: '시안확정서 만들기',
-    navSection: 'orders',
-    back: safeBack(req.query.back),
-    makerData: { ...prefill, phone: prefill.phone || phoneOf(db), terms: termsOf(db), logoUrl: res.locals.brand.logoUrl, brandName: res.locals.brand.name },
-  });
-  router.get('/proof-maker', (req, res) => makerPage(req, res, { revision: 0 }));
-  router.get('/orders/:id/proof-maker', (req, res) => {
-    const order = findOrder(req.params.id);
-    if (!order) return res.status(404).render('error', { title: '없는 주문', message: '주문을 찾을 수 없습니다.' });
-    const items = groupItems(order);
-    const proof = proofs ? proofs.get(order) : null;
-    const sourceName = order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null;
-    const v = sheetView(db, { order, items, proof, channelName: res.locals.channelInfo(order.channel).name, sourceName });
-    const main = items.find(i => i.item_type !== 'addon') || items[0];
-    const size = guessSize(main);
-    makerPage(req, res, {
-      orderId: order.id,
-      channel: v.channelName,
-      buyer: v.buyer,
-      receiver: v.receiver,
-      orderNo: v.orderNo,
-      revision: v.revision,
-      designer: v.designer,
-      phone: v.phone,
-      productName: v.products.map(p => p.name).join(' / '),
-      material: v.material || guessMaterial(main),
-      sizeLong: proof && proof.size_long ? proof.size_long : size.long,
-      sizeShort: proof && proof.size_short ? proof.size_short : size.short,
-      qty: v.qty,
-      addons: v.addons.map(a => `${a.value} × ${a.qty}${a.label ? ` (${a.label})` : ''}`).join('\n'),
-      requests: v.requests.join('\n'),
-      imageUrl: v.hasImage ? `/orders/${order.id}/proof/image?v=${encodeURIComponent(proof.updated_at)}` : '',
-    });
   });
 
   // 출력실용 작업지시서 (A4 한 장)

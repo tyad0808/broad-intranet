@@ -17,59 +17,8 @@ const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
 const FILE_RE = /^[0-9a-f]{24}\.(png|jpg|webp)$/;
 // 배송방법 고르는 칸 (출력실이 보는 글자 그대로 저장)
 const SHIP_CHOICES = ['택배', '퀵서비스', '방문수령', '화물', '직접전달'];
-// 담당 디자이너 옆에 적는 회사 연락처 (관리자 › 회사·로고 에서 바꾼다)
+// 담당 디자이너 옆에 적는 회사 연락처 (관리자 화면에서 바꾸는 칸은 고객용을 만들 때 함께)
 const DEFAULT_PHONE = '031-822-7815';
-const MAX_PHONE = 30;
-// 고객용 시안확정서 아래 약관 (관리자 › 회사·로고 에서 바꾼다). 칸 세 개, 칸마다 제목 + 한 줄에 하나씩
-const DEFAULT_TERMS = [
-  { title: '수정 / 출력작업', lines: [
-    '수정 횟수는 템플릿에 기재된 횟수입니다. 수정 추가 시 추가금이 발생합니다.',
-    '오탈자 수정은 제한없이 수정가능합니다.',
-    '고객님이 원하시는 컨셉을 보고 작업하기 때문에 전체 수정은 유료(추가 시안비)가 발생됩니다.',
-    '모든 저작권은 저희 브로애드에게 있습니다. 파일제공은 어떠한 이유로도 제공해 드리지않습니다.',
-    '고객님께서 직접 보내주신 디자인 샘플 시안을 똑같이 혹은 비슷하게 만들어 달라고 한 경우 이에 따른 저작권 침해는 당사가 책임지지 않습니다.',
-    '모든 작업물은 당사의 포트폴리오, 상세페이지 등에 사용될 수 있습니다.',
-    '모니터상의 컬러(RGB)와 출력(CMYK)의 색상은 차이가 있을 수 있으며, 이로인한 교환 및 환불은 불가합니다.',
-  ] },
-  { title: '디자인 후 환불 & 취소', lines: [
-    '작업 시작 전은 100% 환불가능합니다.',
-    '작업이 시간된 경우 작업비가 청구된 후 환불/취소가 가능합니다.',
-    '시안 확정 후 진행하신 경우, 수정은 불가합니다.',
-  ] },
-  { title: '오탈자 확인', lines: [
-    '시안확정 후 발생되는 오타, 수정사항은 교환 및 환불 대상이 아닙니다. 꼼꼼한 확인 부탁드립니다!',
-  ] },
-];
-const MAX_TERM_TITLE = 30;
-const MAX_TERM_LINES = 12;
-const MAX_TERM_LINE = 200;
-
-const phoneOf = db => getSetting(db, 'proof_phone') || DEFAULT_PHONE;
-function termsOf(db) {
-  try {
-    const saved = JSON.parse(getSetting(db, 'proof_terms') || 'null');
-    if (Array.isArray(saved) && saved.length === DEFAULT_TERMS.length) return saved;
-  } catch { /* 처음 값으로 */ }
-  return DEFAULT_TERMS;
-}
-
-// 관리자 저장: { phone, term_title_0, term_lines_0, … }. 오류 문구 또는 null
-function saveProofSettings(db, body, setSetting) {
-  const phone = String(body.phone || '').replace(/\s+/g, ' ').trim();
-  if (phone.length > MAX_PHONE) return `연락처는 ${MAX_PHONE}자까지 쓸 수 있습니다.`;
-  const terms = [];
-  for (let i = 0; i < DEFAULT_TERMS.length; i++) {
-    const title = String(body[`term_title_${i}`] || '').replace(/\s+/g, ' ').trim();
-    const lines = String(body[`term_lines_${i}`] || '').split(/\r?\n/).map(l => l.replace(/^\s*[-·•]\s*/, '').trim()).filter(Boolean);
-    if (title.length > MAX_TERM_TITLE) return `약관 제목은 ${MAX_TERM_TITLE}자까지 쓸 수 있습니다.`;
-    if (lines.length > MAX_TERM_LINES) return `약관은 칸마다 ${MAX_TERM_LINES}줄까지 쓸 수 있습니다.`;
-    if (lines.some(l => l.length > MAX_TERM_LINE)) return `약관 한 줄은 ${MAX_TERM_LINE}자까지 쓸 수 있습니다.`;
-    terms.push({ title, lines });
-  }
-  setSetting(db, 'proof_phone', phone || DEFAULT_PHONE);
-  setSetting(db, 'proof_terms', JSON.stringify(terms));
-  return null;
-}
 
 // ───────── 옵션 글자 다루기 ─────────
 
@@ -224,25 +173,8 @@ function createProofs({ db, dir = proofDirOf() }) {
           revision = excluded.revision, material = excluded.material, size_long = excluded.size_long, size_short = excluded.size_short,
           ship_method = excluded.ship_method, updated_by = excluded.updated_by, updated_at = excluded.updated_at
       `).run(order.channel, order.channel_order_id, file, type || (old && old.image_type) || null, revision, material, sizes[0], sizes[1], ship, userId || null);
-      if (type && old) {
-        // 새 시안을 올리면 바로 전 시안 하나만 남겨 둔다 (취소하면 되돌림). 그보다 더 예전 파일은 지운다
-        db.prepare('UPDATE proof_sheets SET prev_file = ?, prev_type = ?, prev_revision = ? WHERE channel = ? AND channel_order_id = ?')
-          .run(old.image_file || null, old.image_file ? old.image_type : null, old.image_file ? old.revision : null, order.channel, order.channel_order_id);
-        if (old.prev_file) removeFile(old.prev_file);
-      }
+      if (type && old && old.image_file && old.image_file !== file) removeFile(old.image_file); // 예전 시안 파일은 지운다
       return { ok: true, revision, uploaded: Boolean(type) };
-    },
-
-    // 시안 취소: 바로 전 시안이 있으면 그걸로(수정 횟수도 그때로) 되돌리고, 없으면 시안 그림만 지운다 (적은 값은 그대로)
-    cancel(order, userId) {
-      const row = getStmt.get(order.channel, order.channel_order_id);
-      if (!row || !row.image_file) return { error: '취소할 시안이 없습니다.' };
-      const restored = Boolean(row.prev_file);
-      db.prepare(`UPDATE proof_sheets SET image_file = ?, image_type = ?, revision = ?, prev_file = NULL, prev_type = NULL, prev_revision = NULL,
-        updated_by = ?, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?`)
-        .run(row.prev_file || null, row.prev_type || null, restored ? row.prev_revision ?? 0 : row.revision, userId || null, order.channel, order.channel_order_id);
-      removeFile(row.image_file);
-      return { ok: true, restored, revision: restored ? row.prev_revision ?? 0 : row.revision };
     },
 
     // 그림 파일 읽기 (없으면 null)
@@ -255,7 +187,7 @@ function createProofs({ db, dir = proofDirOf() }) {
     // 주문이 지워졌거나 개인정보를 지운(끝난 지 3개월) 주문의 시안을 지운다. 지운 개수
     sweep() {
       const rows = db.prepare(`
-        SELECT p.channel, p.channel_order_id, p.image_file, p.prev_file FROM proof_sheets p
+        SELECT p.channel, p.channel_order_id, p.image_file FROM proof_sheets p
         WHERE NOT EXISTS (SELECT 1 FROM orders o WHERE o.channel = p.channel AND o.channel_order_id = p.channel_order_id)
            OR EXISTS (SELECT 1 FROM orders o WHERE o.channel = p.channel AND o.channel_order_id = p.channel_order_id AND o.pii_cleared_at IS NOT NULL)
       `).all();
@@ -263,7 +195,6 @@ function createProofs({ db, dir = proofDirOf() }) {
       for (const r of rows) {
         del.run(r.channel, r.channel_order_id);
         removeFile(r.image_file);
-        removeFile(r.prev_file);
       }
       return rows.length;
     },
@@ -281,7 +212,7 @@ function sheetView(db, { order, items, proof, channelName, sourceName, now = new
     channelName: sourceName ? `${channelName} · ${sourceName}` : channelName,
     orderNo: order.source_order_no || order.channel_order_id,
     designer: order.assignee_name || '',
-    phone: phoneOf(db),
+    phone: getSetting(db, 'proof_phone') || DEFAULT_PHONE,
     revision: proof ? proof.revision : 0,
     products: mains.map(i => ({ name: i.product_name, option: i.option_text || '', qty: Number(i.quantity) || 1 })),
     productName: main ? main.product_name : '',
@@ -300,5 +231,4 @@ module.exports = {
   createProofs, sheetView, proofDirOf,
   cleanLabel, splitLabel, optionParts, addonLines, guessMaterial, guessSize, customerRequests, dueView, cleanSize, isNone,
   SHIP_CHOICES, DEFAULT_PHONE, MAX_IMAGE,
-  DEFAULT_TERMS, phoneOf, termsOf, saveProofSettings,
 };

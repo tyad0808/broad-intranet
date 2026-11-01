@@ -94,10 +94,6 @@ function addMissingColumns(db) {
   addColumn(db, 'inquiries', 'prev_id', 'INTEGER');
   // 개인정보를 지운 때 (끝난 지 3개월 지난 주문: 이름·연락처·주소만 지우고 주문은 남김)
   addColumn(db, 'orders', 'pii_cleared_at', 'TEXT');
-  // 시안 취소용: 새 시안을 올리기 바로 전 시안 하나를 남겨 둔다 (잘못 올렸으면 되돌림)
-  addColumn(db, 'proof_sheets', 'prev_file', 'TEXT');
-  addColumn(db, 'proof_sheets', 'prev_type', 'TEXT');
-  addColumn(db, 'proof_sheets', 'prev_revision', 'INTEGER');
 }
 
 // 처리 기록 표가 수기 주문 기록(등록·입금확인·수정·취소)과 발송지연(delay)도 받을 수 있게 넓힌다.
