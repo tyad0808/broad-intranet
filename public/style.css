@@ -1540,3 +1540,7 @@ body.ds-v2 {
   body.maker-printing .maker-print { display: block; }
   body.maker-printing .maker-print img { display: block; width: 210mm; height: 297mm; }
 }
+.proof-paste-hint { margin: -6px 0 12px; }
+.proof-pasted { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 8px; border: 1px solid var(--primary); border-radius: 8px; background: var(--primary-weak); }
+.proof-pasted[hidden] { display: none; }
+.proof-pasted img { max-width: 120px; max-height: 120px; border-radius: 4px; background: #fff; }

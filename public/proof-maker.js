@@ -241,7 +241,7 @@
       return;
     }
     const img = new Image();
-    img.onload = () => { design = img; fileLabel.textContent = file.name; render(); };
+    img.onload = () => { design = img; fileLabel.textContent = file.name && file.name !== 'image.png' ? file.name : '붙여 넣은 그림'; render(); };
     img.src = URL.createObjectURL(file);
   }
   drop.addEventListener('click', () => input.click());
@@ -250,6 +250,13 @@
   ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
   ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, () => drop.classList.remove('over')));
   drop.addEventListener('drop', e => { e.preventDefault(); useFile(e.dataTransfer.files[0]); });
+  // 캡처한 그림 붙여 넣기 (Ctrl+V). 글자 칸에 글자를 붙여 넣을 때는 그대로 둔다
+  document.addEventListener('paste', e => {
+    const file = [...((e.clipboardData && e.clipboardData.files) || [])].find(f => /^image\//.test(f.type));
+    if (!file) return;
+    e.preventDefault();
+    useFile(file);
+  });
 
   // 저장할 파일 이름: 시안확정서_주문번호_구매자.jpg
   function fileName() {

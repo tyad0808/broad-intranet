@@ -194,8 +194,10 @@
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <input type="hidden" name="back" value="<%= back %>">
       <label><%= proof && proof.image_file ? '새 시안으로 바꾸기' : '확정 시안 그림' %> <span class="muted small">(PNG·JPG·WEBP, 20MB까지<%= proof && proof.image_file ? ' · 올리면 수정 횟수 +1' : '' %>)</span>
-        <input type="file" name="image" accept="image/png,image/jpeg,image/webp">
+        <input type="file" name="image" accept="image/png,image/jpeg,image/webp" data-proof-file>
       </label>
+      <p class="muted small proof-paste-hint">캡처한 그림은 이 화면에서 <strong>Ctrl+V</strong> 로 붙여 넣어도 돼요.</p>
+      <p class="proof-pasted" data-proof-pasted hidden><img alt="붙여 넣은 시안"><span class="muted small">붙여 넣은 그림이에요. <strong>시안 올리기/저장</strong>을 눌러야 올라가요.</span></p>
       <div class="two-fields">
         <label>수정 횟수
           <input type="number" name="revision" min="0" max="999" value="<%= pf.revision %>" inputmode="numeric">
@@ -385,4 +387,5 @@
 </div>
 <script src="/confirm.js"></script>
 <script src="/orders.js"></script>
+<script src="/proof-paste.js"></script>
 <%- include('../partials/footer') %>
