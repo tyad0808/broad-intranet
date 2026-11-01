@@ -1531,3 +1531,12 @@ body.ds-v2 {
   .page-head .title-row.maker-head { flex-wrap: wrap; row-gap: 8px; }
   .maker-head .page-title { flex: 1 1 100%; }
 }
+/* 시안확정서 인쇄: 화면은 숨기고 그린 그림 한 장만 A4 로 */
+.maker-print { display: none; page: proof; }
+@page proof { size: A4; margin: 0; }
+@media print {
+  body.maker-printing > *:not(.maker-print) { display: none !important; }
+  body.maker-printing { margin: 0; padding: 0; background: #fff; }
+  body.maker-printing .maker-print { display: block; }
+  body.maker-printing .maker-print img { display: block; width: 210mm; height: 297mm; }
+}

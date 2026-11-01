@@ -268,17 +268,24 @@
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     }, 'image/jpeg', 0.92);
   });
-  // 인쇄: 같은 그림을 새 창에 A4 로 띄워 인쇄
+  // 인쇄: 새 창 없이, 이 화면에서 그 그림 한 장만 A4 로 인쇄 (style.css 의 body.maker-printing)
   document.querySelector('[data-maker-print]').addEventListener('click', async () => {
     await render();
-    const w = window.open('', '_blank');
-    if (!w) { alert('새 창이 막혀 있어요. 브라우저에서 팝업을 허용해 주세요.'); return; }
-    w.document.write('<!doctype html><title>시안확정서</title><style>@page{size:A4;margin:0}html,body{margin:0}img{display:block;width:210mm;height:297mm}</style><img alt="">');
-    w.document.close();
-    const img = w.document.querySelector('img');
-    img.onload = () => { w.focus(); w.print(); };
+    let box = document.querySelector('.maker-print');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'maker-print';
+      box.innerHTML = '<img alt="">';
+      document.body.appendChild(box);
+    }
+    const img = box.querySelector('img');
+    img.onload = () => {
+      document.body.classList.add('maker-printing');
+      window.print();
+    };
     img.src = canvas.toDataURL('image/jpeg', 0.95);
   });
+  window.addEventListener('afterprint', () => document.body.classList.remove('maker-printing'));
 
   // 처음: 로고 · 주문에 올려 둔 시안을 불러와서 그린다
   const loadImg = src => new Promise(resolve => {

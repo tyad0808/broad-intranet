@@ -41,7 +41,7 @@
   <div class="page-actions">
     <a class="btn-sm" href="/orders/<%= order.id %>/print" target="_blank" rel="noopener">🖨 발주서 출력</a>
     <% if (locals.proof) { %><a class="btn-sm" href="/orders/<%= order.id %>/work-sheet" target="_blank" rel="noopener">🖨 작업지시서</a><% } %>
-    <a class="btn-sm" href="/orders/<%= order.id %>/proof-maker" target="_blank" rel="noopener">고객용 시안확정서</a>
+    <a class="btn-sm" href="/orders/<%= order.id %>/proof-maker">고객용 시안확정서</a>
   </div>
 </div>
 
@@ -207,7 +207,7 @@
         </label>
       </div>
       <div class="form-actions end">
-        <a class="btn-sm" href="/orders/<%= order.id %>/proof-maker" target="_blank" rel="noopener">고객용 시안확정서</a>
+        <a class="btn-sm" href="/orders/<%= order.id %>/proof-maker">고객용 시안확정서</a>
         <% if (proof) { %><a class="btn-sm" href="/orders/<%= order.id %>/work-sheet" target="_blank" rel="noopener">🖨 작업지시서 출력</a><% } %>
         <button type="submit"><%= proof ? '저장' : '시안 올리기' %></button>
       </div>
