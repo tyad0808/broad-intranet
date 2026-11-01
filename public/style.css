@@ -1505,3 +1505,29 @@ body.ds-v2 {
 .size-pair { display: flex; align-items: center; gap: 8px; }
 .size-pair input { flex: 1; min-width: 0; }
 .size-pair span { color: var(--muted); }
+.proof-cancel { margin: 8px 0 0; }
+.proof-terms-form { max-width: 640px; }
+.term-box { display: grid; gap: 10px; margin: 0; padding: 12px 14px 14px; border: 1px solid var(--line); border-radius: 8px; }
+.term-box legend { padding: 0 6px; font-weight: 600; font-size: 14px; }
+.proof-terms-form + form.inline { margin-top: 8px; }
+
+/* 고객용 시안확정서 만들기: 왼쪽 입력 칸 · 오른쪽 A4 미리보기 (= 저장되는 JPG) */
+.maker { display: grid; grid-template-columns: minmax(320px, 440px) 1fr; gap: 16px; align-items: start; }
+.maker-form label { display: grid; gap: 4px; margin: 0 0 12px; }
+.maker-form .two-fields label { margin-bottom: 12px; }
+.maker-drop { display: grid; gap: 4px; margin: 0 0 16px; padding: 18px 14px; border: 1.5px dashed var(--line); border-radius: 8px; text-align: center; cursor: pointer; transition: background .15s, border-color .15s; }
+.maker-drop:hover, .maker-drop:focus-visible, .maker-drop.over { border-color: var(--primary); background: var(--primary-weak); outline: none; }
+.maker-file:empty { display: none; }
+.maker-preview { position: sticky; top: 84px; padding: 12px; background: var(--surface-2); }
+.maker-preview canvas { display: block; width: 100%; max-width: calc((100vh - 130px) * 210 / 297); height: auto; margin: 0 auto; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .1); }
+@media (max-width: 900px) {
+  .maker { grid-template-columns: 1fr; }
+  .maker-preview { position: static; }
+  .maker-preview canvas { max-width: 100%; }
+}
+.maker-form input[type=file][hidden] { display: none; }
+.maker-form .cap { display: block; }
+@media (max-width: 600px) {
+  .page-head .title-row.maker-head { flex-wrap: wrap; row-gap: 8px; }
+  .maker-head .page-title { flex: 1 1 100%; }
+}
