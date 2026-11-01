@@ -271,6 +271,7 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 | 하고 싶은 일 | 명령어 |
 |---|---|
 | 새 코드로 업데이트 | `bash /opt/broad-intranet/app/deploy/update.sh` |
+| 바로 전 업데이트 전으로 되돌리기 | `bash /opt/broad-intranet/app/deploy/rollback.sh` (바뀌는 내용을 보여 주고 y 를 눌러야 실행. 한 번 더 하면 한 단계 더 전으로. DB 는 그대로) |
 | 인트라넷이 켜져 있는지 | `systemctl status broad-intranet` (q 로 나가기) |
 | 최근 기록(오류 확인) | `journalctl -u broad-intranet -n 50 --no-pager` |
 | 재시작 | `systemctl restart broad-intranet` |

@@ -8,3 +8,9 @@
   bash /opt/broad-intranet/app/deploy/update.sh
   ```
   (백업 → git pull → npm ci → `systemctl restart broad-intranet`). CSS·JS 를 바꿨으면 브라우저에서 **Ctrl+F5** 도 안내.
+- **업데이트 명령을 줄 때는 늘 되돌리기 명령도 함께 준다** (사용자 요청):
+  ```
+  bash /opt/broad-intranet/app/deploy/rollback.sh
+  ```
+  바로 전 업데이트 전 코드로 돌아간다 (서버 git reflog 의 pull 기록 기준, 바뀌는 내용 보여 주고 y 확인, DB 는 되돌리지 않고 백업만). 한 번 더 실행하면 한 단계 더 전으로, 다시 최신은 update.sh.
+- 그래서 DB 바꾸기는 **칸·표를 더하기만** 한다 (지우거나 이름 바꾸지 않기) → 되돌린 예전 코드도 그대로 돈다.
