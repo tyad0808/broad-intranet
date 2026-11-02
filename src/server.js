@@ -131,7 +131,11 @@ setInterval(() => notifier.checkUnassigned(), 60 * 1000).unref();
 // 저장 공간: 1시간마다 확인해 80% 를 넘으면 관리자에게 하루 한 번 알림
 const { storageInfo } = require('./storage');
 const kstDay = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-setInterval(() => notifier.checkStorage(storageInfo(), kstDay()), 60 * 60 * 1000).unref();
+setInterval(() => {
+  const info = storageInfo();
+  notifier.checkStorage(info, kstDay());
+  notifier.checkNas(info.nas, kstDay()); // 사무실 NAS 백업이 3일 넘게 멈췄으면 알림
+}, 60 * 60 * 1000).unref();
 
 // 개인정보 3개월: 하루 한 번 (켜자마자 한 번, 이후 1시간마다 확인해 날짜가 바뀌었으면)
 const { autoPersonalCleanup } = require('./retention');

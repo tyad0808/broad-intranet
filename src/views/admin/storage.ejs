@@ -24,7 +24,26 @@
     <dt>DB</dt><dd><%= humanSize(info.db) %> <span class="muted small">(주문 <%= counts.orders.toLocaleString() %>줄 · 문의 <%= counts.inquiries.toLocaleString() %>건, 문의 본문 <%= humanSize(counts.inquiry_bytes) %>)</span></dd>
     <dt>백업</dt><dd><%= humanSize(info.backups.size) %> <span class="muted small">(<%= info.backups.count %>개<%= info.backups.latest ? ` · 최근 ${info.backups.latest}` : '' %>)</span></dd>
   </dl>
-  <p class="muted small">백업은 매일 새벽 3시에 압축해서 저장하고 14일치를 보관합니다. 메일은 본문 글자만 저장하고 첨부파일은 저장하지 않습니다.</p>
+  <p class="muted small">백업은 매일 새벽 3시에 압축해서 저장하고 14일치를 보관합니다. 올린 시안 그림도 함께 맞춰 둡니다. 메일은 본문 글자만 저장하고 첨부파일은 저장하지 않습니다.</p>
+</section>
+
+<section class="card">
+  <h2>사무실 NAS 백업</h2>
+  <% const nas = info.nas; %>
+  <% if (!nas.configured) { %>
+    <p class="muted">아직 연결하지 않았어요. 서버가 고장 나도 데이터가 남도록, 매일 백업을 사무실 NAS 에도 한 부 보관할 수 있어요. 설정 방법은 저장소의 <code>docs/nas-backup.md</code> 에 있어요.</p>
+  <% } else if (!nas.last) { %>
+    <p class="<%= nas.stale ? 'error' : 'muted' %>">연결은 해 두었는데 NAS 가 아직 한 번도 가져가지 않았어요. NAS 의 작업 스케줄러에서 '인트라넷 백업 가져오기' 를 한 번 실행해 보세요.</p>
+  <% } else { %>
+    <dl class="info">
+      <dt>마지막으로 가져감</dt><dd><strong class="<%= nas.stale ? 'error' : '' %>"><%= kst(nas.last) %></strong> <span class="muted small">(<%= nas.days === 0 ? '오늘' : `${nas.days}일 전` %>)</span></dd>
+    </dl>
+    <% if (nas.stale) { %>
+      <p class="error"><%= info.NAS_STALE_DAYS %>일 넘게 가져가지 않았어요. NAS 가 켜져 있는지, 인터넷이 되는지 확인해 주세요.</p>
+    <% } else { %>
+      <p class="muted small">NAS 가 매일 새벽 백업과 시안 그림을 가져가요. <%= info.NAS_STALE_DAYS %>일 넘게 안 가져가면 관리자에게 알림이 가요.</p>
+    <% } %>
+  <% } %>
 </section>
 
 <section class="card">

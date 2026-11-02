@@ -183,7 +183,21 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
     return true;
   }
 
-  return { hub, notify, inboxNew, ordersChanged, inboxChanged, calendarChanged, checkUnassigned, checkStorage, afterCollect, signup, unassignedCount, unassignedBanner };
+  // 사무실 NAS 백업: 설정했는데 3일 넘게 안 가져갔으면 관리자에게 하루 한 번 알린다 (NAS 꺼짐·인터넷 끊김·설정 바뀜)
+  function checkNas(nas, today) {
+    if (!nas || !nas.configured || !nas.stale) return false;
+    if (setting('nas_alert_day') === today) return false;
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .run('nas_alert_day', today);
+    notify('storage', {
+      title: 'NAS 백업이 멈췄어요',
+      body: nas.last ? `사무실 NAS 가 ${nas.days}일째 백업을 가져가지 않았습니다. NAS 가 켜져 있는지 확인하세요.` : '사무실 NAS 가 아직 한 번도 백업을 가져가지 않았습니다. NAS 작업 스케줄러를 확인하세요.',
+      url: '/admin/storage',
+    }, admins);
+    return true;
+  }
+
+  return { hub, notify, inboxNew, ordersChanged, inboxChanged, calendarChanged, checkUnassigned, checkStorage, checkNas, afterCollect, signup, unassignedCount, unassignedBanner };
 }
 
 module.exports = { notifyOff, createNotifier };
