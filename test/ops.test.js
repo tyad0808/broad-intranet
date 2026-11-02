@@ -42,7 +42,7 @@ test('백업 파일은 압축되어 있고, 풀면 원본과 같은 내용으로
   db.close();
 
   assert.strictEqual(path.basename(target), 'intranet-2026-10-15-0300.db.gz', '파일 이름은 한국 시간');
-  assert.deepStrictEqual(fs.readdirSync(backups), ['intranet-2026-10-15-0300.db.gz'], '압축 전 사본은 남지 않음');
+  assert.deepStrictEqual(fs.readdirSync(backups).sort(), ['intranet-2026-10-15-0300.db.gz', 'proofs'], '압축 전 사본은 남지 않음, 시안 폴더(빈 것)는 있음');
   const unzipped = path.join(dir, 'restored.db');
   fs.writeFileSync(unzipped, require('zlib').gunzipSync(fs.readFileSync(target)));
   assert.ok(fs.statSync(target).size < fs.statSync(unzipped).size / 2, '압축되어 작다');
@@ -58,7 +58,8 @@ test('백업 때 시안 그림도 backups/proofs 에 똑같이 맞춘다 (하드
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'intranet-proofs-'));
   const src = path.join(dir, 'proofs');
   const dest = path.join(dir, 'backups', 'proofs');
-  assert.strictEqual(mirrorProofs(src, dest), null, '시안 폴더가 없으면 아무것도 안 함');
+  assert.deepStrictEqual(mirrorProofs(src, dest), { count: 0, added: 0, removed: 0 }, '시안 폴더가 없어도 빈 폴더는 만든다');
+  assert.ok(fs.existsSync(dest));
   fs.mkdirSync(src);
   fs.writeFileSync(path.join(src, 'a.png'), 'A');
   fs.writeFileSync(path.join(src, 'b.jpg'), 'B');

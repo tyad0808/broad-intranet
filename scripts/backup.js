@@ -18,10 +18,11 @@ const BACKUP_NAME = /^intranet-\d{4}-\d{2}-\d{2}-\d{4}\.db(\.gz)?$/;
 
 // 시안 그림 폴더를 백업 폴더 안 proofs/ 에 똑같이: 새 파일은 하드링크(디스크를 더 쓰지 않음, 안 되면 복사), 원본에서 지워진 파일은 지운다
 //   (지워진 주문·개인정보를 지운 주문의 시안은 백업에서도 사라져야 한다)
+//   시안 폴더가 아직 없어도(시안을 올린 적 없음) 빈 proofs/ 는 만든다 → NAS 가 가져갈 때 '폴더 없음' 으로 실패하지 않게
 function mirrorProofs(src, dest) {
-  if (!fs.existsSync(src)) return null;
   fs.mkdirSync(dest, { recursive: true });
-  const want = new Set(fs.readdirSync(src).filter(n => !n.startsWith('.') && fs.statSync(path.join(src, n)).isFile()));
+  const names = fs.existsSync(src) ? fs.readdirSync(src) : [];
+  const want = new Set(names.filter(n => !n.startsWith('.') && fs.statSync(path.join(src, n)).isFile()));
   let added = 0;
   let removed = 0;
   for (const name of want) {

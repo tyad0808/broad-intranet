@@ -80,7 +80,10 @@ if grep -qE '^\s*AllowUsers' /etc/ssh/sshd_config 2>/dev/null && ! grep -qE "^\s
   systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
 fi
 
-say "5/5 확인: 백업 계정이 백업 폴더를 읽을 수 있는지"
+say "5/5 백업을 지금 한 번 만들고, 백업 계정이 읽을 수 있는지 확인합니다"
+# 새벽 백업을 기다리지 않고 바로 (시안 그림 폴더 proofs/ 까지 만들어져 NAS 가 오늘 바로 가져갈 수 있게)
+systemctl start broad-intranet-backup 2>/dev/null || sudo -u "$APP_USER" bash -c "cd /opt/broad-intranet/app && node --disable-warning=ExperimentalWarning scripts/backup.js" || true
+chmod -R g+rX "$BACKUP_DIR"
 if sudo -u "$NAS_USER" ls "$BACKUP_DIR" >/dev/null 2>&1; then
   echo "  ✔ 읽기 확인"
 else
