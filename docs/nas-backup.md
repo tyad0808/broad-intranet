@@ -55,12 +55,18 @@ bash /opt/broad-intranet/app/deploy/nas-backup-setup.sh
 
 ```
 DIR=/volume1/intranet-backup
+LOG=$DIR/backup-log.txt
+exec >> $LOG 2>&1
+echo "===== $(date '+%Y-%m-%d %H:%M:%S') start"
+[ -f $DIR/.ssh/nas_key ] || { echo "ERROR: no key file $DIR/.ssh/nas_key (do step 2 again)"; exit 1; }
 HOST=nasbackup@intranet.broadstore.co.kr
 SSH="ssh -i $DIR/.ssh/nas_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$DIR/.ssh/known_hosts -o BatchMode=yes -o ConnectTimeout=30"
 mkdir -p $DIR/data
-rsync -a --exclude 'proofs/' -e "$SSH" $HOST: $DIR/data/ || exit 1
-rsync -a --delete -e "$SSH" $HOST:proofs/ $DIR/data/proofs/ || exit 1
+rsync -av --exclude 'proofs/' -e "$SSH" $HOST: $DIR/data/ || { echo "ERROR: db backup failed"; exit 1; }
+rsync -av --delete -e "$SSH" $HOST:proofs/ $DIR/data/proofs/ || { echo "ERROR: proofs failed"; exit 1; }
 find $DIR/data -maxdepth 1 -name 'intranet-*.db*' -mtime +30 -delete
+echo "OK done"
+```
 ```
 
 5. **확인** 후, 목록에서 이 작업을 골라 **실행** 해서 바로 시험해 보세요.
@@ -73,7 +79,7 @@ find $DIR/data -maxdepth 1 -name 'intranet-*.db*' -mtime +30 -delete
 
 ## 안 될 때
 
-- 가져오기가 실패하면 작업 스케줄러에서 작업을 고르고 **작업 › 결과 보기** 의 내용을 캡처해 주세요.
+- 가져오기가 실패하면 **File Station › intranet-backup › backup-log.txt** 를 내려받아 메모장으로 열고, 맨 아래 부분을 캡처해 주세요. 실행할 때마다 결과가 여기에 쌓여요.
 - 인트라넷 주소가 클라우드플레어 같은 중간 서비스를 거친다면, 위 스크립트의 `intranet.broadstore.co.kr` 대신 **서버 IP 주소**를 넣어야 해요.
 
 ## 되살리기 (서버를 잃었을 때)
