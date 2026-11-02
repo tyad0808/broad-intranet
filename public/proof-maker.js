@@ -1,12 +1,15 @@
-// 고객용 시안확정서 만들기: 칸 값과 시안 그림으로 A4(200dpi) 그림을 직접 그린다.
+// 고객용 시안확정서 만들기: 칸 값과 시안 그림으로 A4(300dpi) 그림을 직접 그린다.
 // 미리보기 = 저장되는 JPG (같은 그림). 넣은 그림·글자는 서버로 보내지 않는다.
 (function () {
   const data = JSON.parse(document.getElementById('maker-data').textContent);
   const canvas = document.querySelector('[data-maker-canvas]');
   const form = document.querySelector('[data-maker-form]');
   const ctx = canvas.getContext('2d');
+  // 시안 그림을 줄여 넣을 때 가장 좋은 품질로
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
 
-  // A4 210×297mm 를 200dpi 로: 1654×2339 픽셀
+  // A4 210×297mm 를 300dpi(인쇄 표준) 로: 2480×3508 픽셀
   const W = 210;
   const H = 297;
   const MM = canvas.width / W;
@@ -273,7 +276,7 @@
       document.body.appendChild(a);
       a.click();
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    }, 'image/jpeg', 0.92);
+    }, 'image/jpeg', 0.95);
   });
   // 인쇄: 새 창 없이, 이 화면에서 그 그림 한 장만 A4 로 인쇄 (style.css 의 body.maker-printing)
   document.querySelector('[data-maker-print]').addEventListener('click', async () => {
