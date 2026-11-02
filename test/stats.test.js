@@ -101,10 +101,22 @@ test('직원별 처리 현황: 담당·디자인 단계 바뀐 기록이 남고,
   assert.match(page, /네이버메일/);
 });
 
-test('빠른 기간: 오늘·어제가 맨 앞, 기본은 이번 달', () => {
+test('빠른 기간: 오늘·어제가 맨 앞', () => {
   const { quickRanges } = require('../src/routes/stats');
   const q = quickRanges(new Date('2026-10-22T03:00:00Z')); // 한국 10/22 낮
   assert.deepStrictEqual(q.slice(0, 3).map(x => [x.label, x.from, x.to]), [
     ['오늘', '2026-10-22', '2026-10-22'], ['어제', '2026-10-21', '2026-10-21'], ['이번 달', '2026-10-01', '2026-10-22'],
   ]);
+});
+
+test('통계 화면은 처음에 오늘 기간으로 열린다', async t => {
+  const { startServer, addUser, loginAs } = require('./helpers');
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  addUser(db, { email: 'boss2@broad.test', name: '사장', role: 'admin' });
+  const boss = await loginAs(baseUrl, 'boss2@broad.test');
+  const page = (await boss.request('/stats')).text;
+  const today = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  assert.match(page, new RegExp(`${today} ~ ${today}`));
+  assert.match(page, /href="https:\/\/quote\.broadstore\.co\.kr\/" target="_blank" rel="noopener" class="nav-help nav-ext"/, '왼쪽 메뉴 견적/계산서');
 });

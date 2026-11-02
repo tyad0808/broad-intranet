@@ -27,10 +27,10 @@ function statsRoutes(db, { staffReport = null } = {}) {
   const router = express.Router();
   router.get('/', (req, res) => {
     const quick = quickRanges();
-    const thisMonth = quick.find(q => q.label === '이번 달');
+    const today = quick.find(q => q.label === '오늘');
     const picked = periodRange(req.query.from, req.query.to);
-    // 기본: 이번 달. 한쪽만 고르면 그날부터 오늘까지 / 처음부터 그날까지는 너무 길어서 그달 1일부터
-    const fromDay = picked && picked.from ? picked.from : picked && picked.to ? `${picked.to.slice(0, 8)}01` : thisMonth.from;
+    // 기본: 오늘. 한쪽만 고르면 그날부터 오늘까지 / 처음부터 그날까지는 너무 길어서 그달 1일부터
+    const fromDay = picked && picked.from ? picked.from : picked && picked.to ? `${picked.to.slice(0, 8)}01` : today.from;
     const toDay = picked && picked.to ? picked.to : kstDay();
     const tab = req.query.tab === 'staff' && staffReport ? 'staff' : 'sales';
     res.render('stats', {
