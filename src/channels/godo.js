@@ -177,6 +177,7 @@ function normalize(order, now = new Date()) {
       option_text: option,
       quantity: Number(item.quantity) || 1,
       buyer_name: orderer.name || null,
+      buyer_phone: orderer.cellPhone || orderer.phone || null,
       receiver_name: receiver.name || null,
       receiver_phone: receiver.cellPhone || receiver.phone || null,
       receiver_address: address,

@@ -16,7 +16,7 @@ function sheet(id, status = 'ACCEPT', extra = {}) {
     orderedAt: '2026-10-16T10:00:00',
     paidAt: '2026-10-16T10:00:05',
     status,
-    orderer: { name: '홍길동' },
+    orderer: { name: '홍길동', safeNumber: '0502-9999-0000' },
     parcelPrintMessage: '경비실에 맡겨 주세요',
     receiver: { name: '김수령', safeNumber: '0502-1234-5678', addr1: '서울 강남구 테헤란로 1', addr2: '2층', postCode: '06236' },
     orderItems: [
@@ -80,7 +80,7 @@ test('쿠팡 발주서 → 인트라넷 주문 (상태는 공통 상태로)', ()
   assert.deepStrictEqual(o, {
     channel: 'coupang', channel_order_id: '910004186321', channel_item_id: '642538970006401-3000000011',
     product_name: '명함 주문제작', item_type: 'main', option_text: '양면 / 200매', quantity: 2,
-    buyer_name: '홍길동', receiver_name: '김수령', receiver_phone: '0502-1234-5678',
+    buyer_name: '홍길동', buyer_phone: '0502-9999-0000', receiver_name: '김수령', receiver_phone: '0502-1234-5678',
     receiver_address: '(06236) 서울 강남구 테헤란로 1 2층', paid_at: '2026-10-16T10:00:05+09:00',
     channel_status: 'PAYED', channel_confirmed: 1, claim_type: null, claim_status: null, pay_amount: 30000,
     ship_memo: '경비실에 맡겨 주세요', product_no: '7012345678',

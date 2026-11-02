@@ -40,7 +40,7 @@ test('자사몰 주문 → 인트라넷 주문: 추가상품은 묶음 안 추�
   assert.deepStrictEqual(main, {
     channel: 'godo', channel_order_id: '2510171234561', channel_item_id: '2510171234561-1',
     product_name: '포맥스 안내판', item_type: 'main', option_text: '3T / 문구: 화장실 / 300x150mm', quantity: 2,
-    buyer_name: '홍길동', receiver_name: '김수령', receiver_phone: '010-3333-4444',
+    buyer_name: '홍길동', buyer_phone: '010-1111-2222', receiver_name: '김수령', receiver_phone: '010-3333-4444',
     receiver_address: '(06236) 서울 강남구 테헤란로 1 2층', paid_at: '2026-10-17T10:01:00+09:00',
     channel_status: 'PAYED', channel_confirmed: 0, claim_type: null, claim_status: null, channel_status_label: '결제완료',
     pay_amount: 23000, ship_memo: null, product_no: '1000701702',

@@ -92,9 +92,16 @@
   <section class="card">
     <h2>배송지 · 주문 정보</h2>
     <dl class="info">
-      <dt>주문자</dt><dd><%= order.buyer_name || '-' %><% if (order.buyer_phone) { %> · <%= order.buyer_phone %><% } %></dd>
-      <dt>받는 분</dt><dd><%= order.receiver_name || '-' %></dd>
-      <dt>연락처</dt><dd><%= order.receiver_phone || '-' %></dd>
+      <%# 주문자와 받는 분이 다른 주문이 많다. 고객과 소통은 주문자와 하므로 주문자 연락처를 먼저, 눈에 띄게 %>
+      <% const telHref = p => `tel:${String(p).replace(/[^0-9+]/g, '')}`;
+         const sameReceiver = order.receiver_name === order.buyer_name && (!order.receiver_phone || order.receiver_phone === order.buyer_phone); %>
+      <dt>주문자</dt>
+      <dd class="contact-line"><strong><%= order.buyer_name || '-' %></strong>
+        <% if (order.buyer_phone) { %> · <a class="phone" href="<%= telHref(order.buyer_phone) %>"><%= order.buyer_phone %></a><% } else { %> · <span class="muted">연락처 없음</span><% } %>
+        <span class="tag contact-tag">연락할 분</span></dd>
+      <dt>받는 분</dt>
+      <dd class="contact-line"><%= order.receiver_name || '-' %><% if (order.receiver_phone) { %> · <a class="phone" href="<%= telHref(order.receiver_phone) %>"><%= order.receiver_phone %></a><% } %>
+        <% if (sameReceiver && order.buyer_name) { %><span class="muted small">(주문자와 같음)</span><% } %></dd>
       <dt>주소</dt><dd><%= order.receiver_address || '-' %></dd>
       <dt>배송 메시지</dt><dd><% if (order.ship_memo) { %><span class="ship-memo">💬 <%= order.ship_memo %></span><% } else { %><span class="muted">없음</span><% } %></dd>
       <dt>채널</dt><dd><%= c.name %></dd>

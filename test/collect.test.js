@@ -29,7 +29,7 @@ function fakeNaver(handlers) {
 
 function naverItem(id, { confirmed = false, status = 'PAYED' } = {}) {
   return {
-    order: { orderId: `O${id}`, ordererName: '홍길동', paymentDate: '2026-10-14T10:00:00.0+09:00' },
+    order: { orderId: `O${id}`, ordererName: '홍길동', ordererTel: '010-5795-2237', paymentDate: '2026-10-14T10:00:00.0+09:00' },
     productOrder: {
       productOrderId: `P${id}`,
       productName: '명함',
@@ -142,6 +142,7 @@ test('바뀐 주문 목록 → 상세 조회 → 인트라넷 형식으로 바�
     option_text: '양면 / 200매',
     quantity: 2,
     buyer_name: '홍길동',
+    buyer_phone: '010-5795-2237',
     receiver_name: '김수령',
     receiver_phone: '010-1234-5678',
     receiver_address: '(06236) 서울 강남구 테헤란로 1 2층',

@@ -195,10 +195,12 @@ async function setupInbox(t, { senders = {} } = {}) {
   ctx.kimId = addUser(db, { email: 'kim@broad.test', name: '김상담' });
   ctx.leeId = addUser(db, { email: 'lee@broad.test', name: '이디자' });
   ctx.kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  // 받은 시각은 '지금부터 몇 시간 전' (고정 날짜면 끝난 문의 14일 숨김 때문에 시간이 지나면 테스트가 깨진다)
+  const recentAt = hours => new Date(Date.now() - hours * 3600 * 1000).toISOString();
   const add = db.prepare(`INSERT INTO inquiries (source, external_id, from_name, from_addr, subject, body, attachments, message_id, received_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  ctx.id1 = Number(add.run('naver_mail', '7:1', '홍길동', 'hong@example.com', '견적 문의', '현수막 가격\n알려주세요 <script>alert(1)</script>', '[{"name":"시안.ai","size":204800}]', '<m1@x>', '2026-10-19T01:00:00Z').lastInsertRowid);
-  ctx.id2 = Number(add.run('gmail', '1:1', '광고', 'ad@spam.com', '특가 안내', '광고입니다', '[]', null, '2026-10-19T00:00:00Z').lastInsertRowid);
+  ctx.id1 = Number(add.run('naver_mail', '7:1', '홍길동', 'hong@example.com', '견적 문의', '현수막 가격\n알려주세요 <script>alert(1)</script>', '[{"name":"시안.ai","size":204800}]', '<m1@x>', recentAt(2)).lastInsertRowid);
+  ctx.id2 = Number(add.run('gmail', '1:1', '광고', 'ad@spam.com', '특가 안내', '광고입니다', '[]', null, recentAt(3)).lastInsertRowid);
   ctx.row = id => ({ ...db.prepare('SELECT * FROM inquiries WHERE id = ?').get(id) });
   return ctx;
 }

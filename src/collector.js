@@ -44,12 +44,12 @@ function applyOrders(db, orders) {
   const stageConfirmed = Number(getSetting(db, 'stage_confirmed')) || null;
   const lastStage = lastStageId(db);
 
-  const find = db.prepare('SELECT id, stage_id, channel_status, channel_confirmed, claim_status, option_text, channel_status_label, delivery_type, ship_due, ship_delayed, pay_amount, ship_memo, product_no FROM orders WHERE channel = ? AND channel_item_id = ?');
+  const find = db.prepare('SELECT id, stage_id, channel_status, channel_confirmed, claim_status, option_text, channel_status_label, delivery_type, ship_due, ship_delayed, pay_amount, ship_memo, product_no, buyer_phone FROM orders WHERE channel = ? AND channel_item_id = ?');
   const insertRow = db.prepare(`
     INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
       buyer_name, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-      claim_type, claim_status, channel_status_label, stage_id, assignee_id, due_date, memo, nas_path, delivery_type, ship_due, ship_delayed, pay_amount, ship_memo, product_no)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      claim_type, claim_status, channel_status_label, stage_id, assignee_id, due_date, memo, nas_path, delivery_type, ship_due, ship_delayed, pay_amount, ship_memo, product_no, buyer_phone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   // 같은 주문번호의 다른 상품이 이미 카드로 있으면 그 카드의 사내 칸(단계·담당자·납기·메모)을 이어받는다
   const groupSibling = db.prepare(
@@ -63,7 +63,7 @@ function applyOrders(db, orders) {
       o.claim_type || null, o.claim_status || null, o.channel_status_label || null,
       sib && sib.stage_id ? sib.stage_id : stage, sib ? sib.assignee_id : null,
       sib ? sib.due_date : null, sib ? sib.memo : null, sib ? sib.nas_path : null,
-      o.delivery_type || null, o.ship_due || null, o.ship_delayed || null, o.pay_amount ?? null, o.ship_memo || null, o.product_no || null
+      o.delivery_type || null, o.ship_due || null, o.ship_delayed || null, o.pay_amount ?? null, o.ship_memo || null, o.product_no || null, o.buyer_phone || null
     );
     // 같은 주문의 디자인 단계도 이어받는다
     if (sib && sib.design_stage_id) {
@@ -76,7 +76,7 @@ function applyOrders(db, orders) {
     UPDATE orders SET product_name = ?, option_text = ?, quantity = ?, buyer_name = ?, receiver_name = ?,
       receiver_phone = ?, receiver_address = ?, paid_at = ?, channel_status = ?, channel_confirmed = ?,
       item_type = ?, claim_type = ?, claim_status = ?, channel_status_label = ?, delivery_type = ?, ship_due = ?,
-      ship_delayed = ?, pay_amount = COALESCE(?, pay_amount), ship_memo = COALESCE(?, ship_memo), product_no = COALESCE(?, product_no), updated_at = datetime('now')
+      ship_delayed = ?, pay_amount = COALESCE(?, pay_amount), ship_memo = COALESCE(?, ship_memo), product_no = COALESCE(?, product_no), buyer_phone = COALESCE(?, buyer_phone), updated_at = datetime('now')
     WHERE id = ?
   `);
   // 발주확인은 주문 단위로 본다: 같은 주문번호에서 아직 '발주' 단계인 상품을 모두 '발주확인'으로
@@ -129,14 +129,15 @@ function applyOrders(db, orders) {
         && existing.ship_delayed === (o.ship_delayed || null)
         && (o.pay_amount == null || existing.pay_amount === o.pay_amount)
         && (!o.ship_memo || existing.ship_memo === o.ship_memo)
-        && (!o.product_no || existing.product_no === o.product_no)) {
+        && (!o.product_no || existing.product_no === o.product_no)
+        && (!o.buyer_phone || existing.buyer_phone === o.buyer_phone)) {
         continue;
       }
       update.run(
         o.product_name, o.option_text, o.quantity, o.buyer_name, o.receiver_name, o.receiver_phone,
         o.receiver_address, o.paid_at, o.channel_status, o.channel_confirmed, o.item_type || 'main',
         o.claim_type || null, o.claim_status || null, o.channel_status_label || null,
-        o.delivery_type || null, o.ship_due || null, o.ship_delayed || null, o.pay_amount ?? null, o.ship_memo || null, o.product_no || null, existing.id
+        o.delivery_type || null, o.ship_due || null, o.ship_delayed || null, o.pay_amount ?? null, o.ship_memo || null, o.product_no || null, o.buyer_phone || null, existing.id
       );
       // 채널에서 발송됨(배송중·배송완료·구매확정)을 처음 본 때를 발송 시각으로 (주간 보고의 택배 수)
       if (SHIPPED_STATUSES.has(o.channel_status) && !SHIPPED_STATUSES.has(existing.channel_status)) {
@@ -191,13 +192,15 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
       // 발주확인 전 주문은 지금 상태를 따로 다시 읽는다 (판매자센터에서 바로 발주확인한 것을 알아내기 위해).
       // 오늘출발·발송기한을 아직 모르는 발송 전 주문(이 기능 전에 받은 주문)도 한 번 다시 읽는다.
       // 발송기한이 지났거나 하루 안에 다가오는 발송 전 주문도 다시 읽는다 (판매자센터에서 '발송지연 처리' 했으면 새 기한으로).
+      // 주문자 연락처가 비어 있는 발송 전 주문(이 기능 전에 받은 주문)도 다시 읽어 채운다.
       // 바뀐 게 없으면 '바뀐 주문' 건수에는 넣지 않는다
       if (source.fetchByIds) {
         const seen = new Set(orders.map(o => o.channel_item_id));
         const soon = new Date(to.getTime() + 24 * 3600 * 1000).toISOString();
         const open = db.prepare(
           `SELECT channel_item_id FROM orders WHERE channel = ? AND channel_status = 'PAYED'
-             AND (channel_confirmed = 0 ${source.fillsDeliveryType ? 'OR delivery_type IS NULL OR ship_due < ?' : ''})`
+             AND (channel_confirmed = 0 ${source.fillsDeliveryType ? 'OR delivery_type IS NULL OR ship_due < ?' : ''}
+               ${source.fillsBuyerPhone ? 'OR buyer_phone IS NULL' : ''})`
         ).all(source.channel, ...(source.fillsDeliveryType ? [soon] : [])).map(r => r.channel_item_id).filter(id => !seen.has(id));
         if (open.length) {
           const fresh = await source.fetchByIds(open);

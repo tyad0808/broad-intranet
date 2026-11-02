@@ -547,3 +547,19 @@ test('관리자 › 작업 파일 이름 모양: 이름표로 바꾸면 주문 �
   await boss.submit('/admin/collect', '/admin/file-label', { action: 'reset' });
   assert.strictEqual(await label(), '스마트스토어_20261027_홍서연(중랑아트센터)');
 });
+
+test('주문자 연락처: 받은 주문에 채워지고(이 기능 전 주문도 다시 읽으면 채움), 상세에 주문자·받는 분 연락처를 따로 보여 준다', async t => {
+  const { db, kim, idOf } = await setup(t);
+  // 이 기능 전에 받은 주문: 주문자 연락처 없음 → 다시 읽기만 해도(refreshOnly) 채운다
+  assert.strictEqual(db.prepare("SELECT buyer_phone FROM orders WHERE channel_item_id = 'P1'").get().buyer_phone, null);
+  applyOrders(db, [{ ...order(1, { buyer_name: '이다예', receiver_name: '강유진', receiver_phone: '010-4177-0612', buyer_phone: '010-5795-2237' }), refreshOnly: true }]);
+  assert.strictEqual(db.prepare("SELECT buyer_phone FROM orders WHERE channel_item_id = 'P1'").get().buyer_phone, '010-5795-2237');
+  // 채널이 연락처를 안 주면 있던 값을 지우지 않는다
+  applyOrders(db, [order(1, { buyer_name: '이다예', receiver_name: '강유진', receiver_phone: '010-4177-0612', buyer_phone: null })]);
+  assert.strictEqual(db.prepare("SELECT buyer_phone FROM orders WHERE channel_item_id = 'P1'").get().buyer_phone, '010-5795-2237');
+
+  const page = (await kim.request(`/orders/${idOf('P1')}`)).text;
+  assert.match(page, /<dt>주문자<\/dt>\s*<dd class="contact-line"><strong>이다예<\/strong>\s*· <a class="phone" href="tel:01057952237">010-5795-2237<\/a>\s*<span class="tag contact-tag">연락할 분<\/span>/);
+  assert.match(page, /<dt>받는 분<\/dt>\s*<dd class="contact-line">강유진 · <a class="phone" href="tel:01041770612">010-4177-0612<\/a>/);
+  assert.doesNotMatch(page, /주문자와 같음/);
+});

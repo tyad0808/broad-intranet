@@ -46,6 +46,8 @@ function normalize(item) {
     option_text: po.productOption || null,
     quantity: Number(po.quantity) || 1,
     buyer_name: order.ordererName || null,
+    // 주문자 연락처 (받는 분과 다를 때가 많다. 소통은 주문자와 한다)
+    buyer_phone: order.ordererTel || null,
     receiver_name: addr.name || null,
     receiver_phone: addr.tel1 || addr.tel2 || null,
     receiver_address: joinAddress(addr),
@@ -110,6 +112,7 @@ function createSmartstoreSource(options = {}) {
     channel: CHANNEL,
     label: '스마트스토어',
     fillsDeliveryType: true, // 주문에 오늘출발·발송기한이 들어 있다 (모르는 주문은 다시 읽어 채운다)
+    fillsBuyerPhone: true, // 주문자 연락처가 들어 있다 (이 기능 전에 받은 발송 전 주문은 다시 읽어 채운다)
     async fetchChanges({ from, to }) {
       const ids = await changedIds(from, to);
       if (ids.length === 0) return [];

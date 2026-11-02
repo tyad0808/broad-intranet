@@ -62,6 +62,8 @@ function normalize(sheet) {
       option_text: item.sellerProductItemName || null,
       quantity,
       buyer_name: orderer.name || null,
+      // 주문자 연락처 (쿠팡은 안심번호를 줄 때가 많다)
+      buyer_phone: orderer.ordererNumber || orderer.safeNumber || null,
       receiver_name: receiver.name || null,
       receiver_phone: receiver.safeNumber || receiver.receiverNumber || null,
       receiver_address: address,
