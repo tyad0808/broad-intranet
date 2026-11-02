@@ -1,18 +1,25 @@
-// 고객용 시안확정서 만들기: 칸 값과 시안 그림으로 A4(300dpi) 그림을 직접 그린다.
-// 미리보기 = 저장되는 JPG (같은 그림). 넣은 그림·글자는 서버로 보내지 않는다.
+// 고객용 시안확정서 만들기: 칸 값과 시안 그림으로 A4 그림을 직접 그린다.
+// 화면 미리보기는 가볍게(200dpi), [JPG로 저장]·[인쇄]는 같은 그림을 크게(400dpi) 다시 그린다. 넣은 그림·글자는 서버로 보내지 않는다.
 (function () {
   const data = JSON.parse(document.getElementById('maker-data').textContent);
-  const canvas = document.querySelector('[data-maker-canvas]');
+  const preview = document.querySelector('[data-maker-canvas]');
   const form = document.querySelector('[data-maker-form]');
-  const ctx = canvas.getContext('2d');
-  // 시안 그림을 줄여 넣을 때 가장 좋은 품질로
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = 'high';
-
-  // A4 210×297mm 를 300dpi(인쇄 표준) 로: 2480×3508 픽셀
-  const W = 210;
+  const W = 210; // A4 210×297mm
   const H = 297;
-  const MM = canvas.width / W;
+  // 저장·인쇄 해상도: 400dpi = 3307×4677 픽셀 (아이폰 브라우저가 만들 수 있는 그림 크기 한도 안쪽)
+  const SAVE_DPI = 400;
+  // 지금 그리는 곳 (미리보기 또는 저장용 큰 그림). 아래 그리기 함수들은 이 셋을 쓴다
+  let canvas;
+  let ctx;
+  let MM;
+  function target(c) {
+    canvas = c;
+    ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high'; // 시안 그림을 줄여 넣을 때 가장 좋은 품질로
+    MM = c.width / W;
+  }
+  target(preview);
   const PT = 0.3528; // 1pt = 0.3528mm
   const FONT = '"Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
   const INK = '#111111';
@@ -266,21 +273,48 @@
     const parts = ['시안확정서', val('orderNo'), val('buyer')].filter(Boolean).map(s => s.replace(/[\\/:*?"<>|\s]+/g, '_'));
     return `${parts.join('_')}.jpg`;
   }
-  document.querySelector('[data-maker-save]').addEventListener('click', async () => {
-    if (!design && !confirm('시안 그림이 없어요. 그래도 저장할까요?')) return;
+  // 저장·인쇄용 큰 그림 (400dpi): 같은 그리기를 큰 캔버스에 한 번 더
+  async function bigCanvas() {
     await render();
-    canvas.toBlob(blob => {
+    const big = document.createElement('canvas');
+    big.width = Math.round((W / 25.4) * SAVE_DPI);
+    big.height = Math.round((H / 25.4) * SAVE_DPI);
+    target(big);
+    try { draw(); } finally { target(preview); }
+    return big;
+  }
+  // JPG 안에 '400dpi' 라고 적어 둔다 (포토샵·인쇄에서 A4 크기로 바로 열리게). 모양이 다르면 그대로
+  async function withDpi(blob, dpi) {
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    const jfif = buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff && buf[3] === 0xe0
+      && String.fromCharCode(buf[6], buf[7], buf[8], buf[9]) === 'JFIF';
+    if (jfif) {
+      buf[13] = 1; // 단위: 인치
+      buf[14] = dpi >> 8; buf[15] = dpi & 255;
+      buf[16] = dpi >> 8; buf[17] = dpi & 255;
+    }
+    return new Blob([buf], { type: 'image/jpeg' });
+  }
+  const saveBtn = document.querySelector('[data-maker-save]');
+  saveBtn.addEventListener('click', async () => {
+    if (!design && !confirm('시안 그림이 없어요. 그래도 저장할까요?')) return;
+    saveBtn.disabled = true;
+    try {
+      const big = await bigCanvas();
+      const blob = await new Promise(ok => big.toBlob(ok, 'image/jpeg', 0.97));
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
+      a.href = URL.createObjectURL(await withDpi(blob, SAVE_DPI));
       a.download = fileName();
       document.body.appendChild(a);
       a.click();
       setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    }, 'image/jpeg', 0.95);
+    } finally {
+      saveBtn.disabled = false;
+    }
   });
   // 인쇄: 새 창 없이, 이 화면에서 그 그림 한 장만 A4 로 인쇄 (style.css 의 body.maker-printing)
   document.querySelector('[data-maker-print]').addEventListener('click', async () => {
-    await render();
+    const big = await bigCanvas();
     let box = document.querySelector('.maker-print');
     if (!box) {
       box = document.createElement('div');
@@ -293,7 +327,7 @@
       document.body.classList.add('maker-printing');
       window.print();
     };
-    img.src = canvas.toDataURL('image/jpeg', 0.95);
+    img.src = big.toDataURL('image/jpeg', 0.97);
   });
   window.addEventListener('afterprint', () => document.body.classList.remove('maker-printing'));
 
