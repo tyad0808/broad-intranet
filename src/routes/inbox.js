@@ -4,7 +4,7 @@
 const express = require('express');
 const { transaction } = require('../db');
 const { previewType, isMailSource } = require('../inbox/mail');
-const { IMAGE_HOSTS, PARTNER_CENTER_URL, MAX_IMAGE, orderNoIn, linkSaidOrders, imageKind } = require('../inbox/talktalk');
+const { IMAGE_HOSTS, PARTNER_CENTER_URL, MAX_IMAGE, findOrderInText, orderByPhone, setLinked, linkSaidOrders, imageKind } = require('../inbox/talktalk');
 const { templatesFor } = require('./templates');
 const { ordersForInquiry } = require('../customer');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
@@ -246,6 +246,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     `).all(...params).map(r => ({ ...r, product: metaOf(r).product || null }));
 
     res.render('inbox/chat-list', {
+      bodyClass: 'talk-list-page',
       title: '톡톡', navSection: 'chat',
       rows, tab, tabCounts, CHAT_TABS, CHAT_DAYS, CHAT_STATUS, q, who, days, read, sort, terms,
       hl: text => highlightParts(text, terms),
@@ -353,16 +354,15 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       if (db.prepare('UPDATE inquiries SET chat_read_id = ? WHERE id = ? AND COALESCE(chat_read_id, 0) < ?').run(lastId, inquiry.id, lastId).changes) {
         notifier.inboxChanged([inquiry.id], req.user.id);
       }
-      // 아직 주문과 연결 안 됐으면, 손님이 예전에 말한 주문번호를 다시 찾아본다 (주문이 나중에 들어온 경우)
+      // 아직 주문과 연결 안 됐으면, 손님이 예전에 말한 주문번호·전화번호로 다시 찾아본다 (주문이 나중에 들어온 경우)
       if (!inquiry.order_no) {
-        const said = chat.filter(m => m.direction === 'in' && m.text).map(m => m.text).join('\n');
-        const found = orderNoIn(db, said);
+        // 직원이 [연결 풀기] 한 대화는 그 뒤에 온 말만 본다 (풀자마자 예전 말로 다시 붙지 않게)
+        const after = Number(metaOf(inquiry).unlinkedAfter) || 0;
+        const said = chat.filter(m => m.direction === 'in' && m.text && m.id > after).map(m => m.text).join('\n');
+        const found = findOrderInText(db, said);
         if (found) {
-          const meta = metaOf(inquiry);
-          delete meta.saidNo;
-          db.prepare('UPDATE inquiries SET order_no = ?, meta = ? WHERE id = ?').run(found, JSON.stringify(meta), inquiry.id);
-          inquiry.order_no = found;
-          inquiry.meta = JSON.stringify(meta);
+          setLinked(db, inquiry.id, found);
+          Object.assign(inquiry, db.prepare('SELECT order_no, meta FROM inquiries WHERE id = ?').get(inquiry.id));
         }
       }
     }
@@ -381,7 +381,10 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       회사명: brandName(),
     });
     const custOrders = ordersForInquiry(db, inquiry);
-    res.render('inbox/detail', {
+    // 톡톡은 메신저 모양의 대화방 화면 (답장 칸 늘 아래), 메일·쇼핑몰 문의는 예전 화면
+    res.render(chat ? 'inbox/chat' : 'inbox/detail', {
+      linkedBy: chat ? metaOf(inquiry).linkedBy || null : null,
+      bodyClass: chat ? 'talk-page' : '',
       title: inquiry.subject || '문의',
       templates,
       customer: { orders: custOrders.orders, nameOrders: custOrders.nameOrders, inquiries: [], nameInquiries: [], total: 1 },
@@ -577,17 +580,25 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     if (!raw) return flashTo(req, res, ctx.url, 'error', '주문번호를 적어 주세요.');
     const find = db.prepare('SELECT channel_order_id FROM orders WHERE channel_order_id = ? OR channel_item_id = ? ORDER BY id LIMIT 1');
     const digits = raw.replace(/\D/g, '');
+    // 휴대폰 번호(010…)면 그 번호가 주문자·받는 분인 주문 (진행 중인 것 먼저, 그다음 최근 주문)
+    if (/^01\d{8,9}$/.test(digits)) {
+      const byPhone = orderByPhone(db, digits);
+      if (!byPhone) return flashTo(req, res, ctx.url, 'error', `전화번호 ${raw} 로 주문한 기록을 찾지 못했어요. 주문번호나 다른 번호로 찾아 주세요.`);
+      setLinked(db, ctx.inquiry.id, { orderNo: byPhone, by: 'order' });
+      return chatDone(req, res, ctx, `전화번호로 찾은 주문 ${byPhone} 와 연결했습니다.`);
+    }
     const row = find.get(raw, raw) || (digits ? find.get(digits, digits) : null);
     if (!row) return flashTo(req, res, ctx.url, 'error', `주문번호 ${raw} 인 주문을 인트라넷에서 찾지 못했어요. 번호를 다시 확인해 주세요.`);
-    const meta = metaOf(ctx.inquiry);
-    delete meta.saidNo;
-    db.prepare('UPDATE inquiries SET order_no = ?, meta = ? WHERE id = ?').run(String(row.channel_order_id), JSON.stringify(meta), ctx.inquiry.id);
+    setLinked(db, ctx.inquiry.id, { orderNo: String(row.channel_order_id), by: 'order' });
     chatDone(req, res, ctx, `주문 ${row.channel_order_id} 와 연결했습니다.`);
   });
   router.post('/inbox/:id/unlink-order', (req, res) => {
     const ctx = chatOnly(req, res);
     if (!ctx) return;
-    db.prepare('UPDATE inquiries SET order_no = NULL WHERE id = ?').run(ctx.inquiry.id);
+    const meta = metaOf(ctx.inquiry);
+    delete meta.linkedBy;
+    meta.unlinkedAfter = (db.prepare('SELECT MAX(id) AS id FROM chat_messages WHERE inquiry_id = ?').get(ctx.inquiry.id) || {}).id || 0;
+    db.prepare('UPDATE inquiries SET order_no = NULL, meta = ? WHERE id = ?').run(JSON.stringify(meta), ctx.inquiry.id);
     chatDone(req, res, ctx, '주문 연결을 풀었습니다. (손님이 주문번호를 다시 말하면 또 자동으로 연결돼요)');
   });
 

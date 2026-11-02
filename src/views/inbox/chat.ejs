@@ -1,0 +1,174 @@
+<%- include('../partials/header') %>
+<%# 톡톡 대화방: 메신저처럼 — 위 머리 줄(손님·상태·담당) 고정, 가운데 대화만 스크롤, 아래 답장 칸 고정.
+    고객·주문 정보는 넓으면 오른쪽 칸, 좁으면 [주문·고객] 버튼으로 펼친다 (public/talk-room.js).
+    폼·칸 이름은 예전 화면과 같다 (inbox.js 사진 넣기·Enter 보내기, macro-picker.js, live.js 실시간 갱신이 그대로 동작) %>
+<% const title = (linkedOrder && linkedOrder.buyer_name) || inquiry.from_name || '톡톡 고객'; %>
+<div class="talk-room" data-talk-room>
+  <header class="talk-room-head">
+    <div class="detail-head talk-head-main">
+      <% if (!locals.embed) { %><a href="<%= back %>" class="btn-back talk-back" aria-label="톡톡 목록으로">←</a><% } %>
+      <div class="talk-head-text">
+        <h1 class="talk-title"><%= title %><% if (inquiry.cust_memo) { %> <span class="muted">· <%= inquiry.cust_memo %></span><% } %></h1>
+        <p class="talk-sub">
+          <span class="st-badge <%= inquiry.status === 'open' ? 'sb-new' : inquiry.status === 'answered' ? 'sb-done' : 'sb-wait' %>"><%= CHAT_STATUS[inquiry.status] %></span>
+          <span class="muted small">마지막 말 <%= kst(inquiry.received_at).slice(5) %></span>
+          <% if (linkedOrder) { %>
+            <a href="/orders/<%= linkedOrder.id %>" target="_top" class="talk-order-chip" title="연결된 주문 열기"><span class="ch ch-<%= channelInfo(linkedOrder.channel).cls %>"><%= channelInfo(linkedOrder.channel).mark %></span><%= linkedOrder.product_name %></a>
+          <% } else { %>
+            <button type="button" class="talk-order-chip none" data-talk-side-open>주문 연결 안 됨</button>
+          <% } %>
+        </p>
+      </div>
+    </div>
+    <div class="talk-head-actions">
+      <form method="post" action="/inbox/<%= inquiry.id %>/assign" class="inline assign-row" data-autosubmit>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <input type="hidden" name="from" value="detail">
+        <select name="assignee_id" aria-label="담당" class="assign-select <%= inquiry.assignee_id ? staffColor(inquiry.assignee_id) : 'unassigned' %>">
+          <option value="">담당 미지정</option>
+          <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === inquiry.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
+        </select>
+        <noscript><button type="submit" class="btn-sm">지정</button></noscript>
+      </form>
+      <%# 보류(나중에 볼 대화) / 보류 풀기. 손님이 새로 말하면 저절로 대기로 돌아온다 %>
+      <form method="post" action="/inbox/<%= inquiry.id %>/<%= inquiry.status === 'closed' ? 'unhold' : 'hold' %>" class="inline" data-once>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <button type="submit" class="btn-sm"><%= inquiry.status === 'closed' ? '보류 풀기' : '⏸ 보류' %></button>
+      </form>
+      <button type="button" class="btn-sm talk-side-toggle" data-talk-side-toggle aria-expanded="false">주문·고객</button>
+    </div>
+  </header>
+
+  <div class="talk-room-body">
+    <div class="talk-room-main">
+      <%# 대화: 손님은 왼쪽, 우리(파트너센터·인트라넷)는 오른쪽 말풍선 %>
+      <div class="chat-thread talk-thread">
+        <% chat.forEach(m => { %>
+          <div class="chat-msg <%= m.direction %>">
+            <% if (m.kind === 'image' && m.image_url) { %>
+              <a href="/inbox/<%= inquiry.id %>/chat-image/<%= m.id %>" target="_blank" rel="noopener"><img src="/inbox/<%= inquiry.id %>/chat-image/<%= m.id %>" alt="사진" loading="lazy"></a>
+            <% } else { %>
+              <div class="chat-text"><%= m.text %></div>
+            <% } %>
+            <span class="chat-time muted small"><%= m.direction === 'out' ? `${m.who || '우리'} · ` : '' %><%= kst(m.created_at).slice(5) %></span>
+          </div>
+        <% }) %>
+        <% if (!chat.length) { %><p class="muted">주고받은 말이 없습니다.</p><% } %>
+      </div>
+
+      <%# 답장 칸: 늘 아래에. Enter 보내기 · Shift+Enter 줄바꿈 · 사진은 📷 / 붙여넣기 / 끌어다 놓기 %>
+      <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form talk-composer" enctype="multipart/form-data" data-once>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <input type="hidden" name="version" value="<%= inquiry.version %>">
+        <% const macroCount = templates.reduce((n, g) => n + g.items.length, 0); %>
+        <div class="composer-tools">
+          <div class="template-row macro-picker" data-macro-picker data-csrf="<%= csrfToken %>">
+            <button type="button" class="btn-sm" data-macro-open aria-expanded="false" aria-haspopup="listbox" <%= macroCount ? '' : 'disabled' %>>＋ 매크로 넣기<%= macroCount ? '' : ' (저장된 문구 없음)' %></button>
+            <% if (macroCount) { %>
+            <div class="macro-panel" data-macro-panel hidden>
+              <input type="search" class="macro-search" placeholder="제목·내용으로 찾기 (예: 환불, 송장)" aria-label="매크로 찾기" data-macro-search autocomplete="off">
+              <div class="macro-list" role="listbox" aria-label="매크로" data-macro-list>
+                <% templates.forEach(g => { %>
+                  <div class="macro-group" data-macro-group>
+                    <div class="macro-cat"><%= g.name %></div>
+                    <% g.items.forEach(t => { %>
+                      <button type="button" class="macro-item" role="option" data-macro-item data-id="<%= t.id %>" data-body="<%= t.body %>" data-subject="<%= t.subject %>"
+                        data-search="<%= [t.title, t.hint, t.body, g.name].join(' ').toLowerCase() %>">
+                        <strong><%= t.title %></strong><% if (t.hint) { %><span class="macro-hint"><%= t.hint %></span><% } %><span class="macro-tag"><%= g.name %></span>
+                      </button>
+                    <% }) %>
+                  </div>
+                <% }) %>
+                <p class="macro-none" data-macro-none hidden>찾는 매크로가 없어요</p>
+              </div>
+            </div>
+            <% } %>
+          </div>
+          <label for="reply-files" class="btn-sm attach-btn" title="사진 넣기 (붙여넣기 Ctrl+V · 끌어다 놓기도 돼요)">📷 사진</label>
+          <% if (mode !== 'live') { %><span class="practice-chip" title="보내기를 눌러도 손님에게 나가지 않고 기록만 남깁니다">연습 모드</span><% } %>
+          <a href="/templates" target="_top" class="composer-link">문구 관리</a>
+        </div>
+        <div class="talk-attach" data-drop-zone data-images>
+          <input type="file" name="files" id="reply-files" multiple accept="image/jpeg,image/png,image/gif" data-max-total="20971520" class="visually-hidden">
+          <ul class="drop-list drop-thumbs" data-drop-list></ul>
+        </div>
+        <div class="composer-row">
+          <textarea name="body" rows="3" maxlength="10000" data-enter-send aria-label="톡톡 답장 (손님에게 바로 보입니다)" placeholder="손님에게 보낼 말 · Enter 보내기 · Shift+Enter 줄바꿈 · 사진은 Ctrl+V"></textarea>
+          <button type="submit" class="composer-send">보내기</button>
+        </div>
+      </form>
+    </div>
+
+    <%# 고객·주문 정보: 넓은 화면은 오른쪽 칸, 좁으면 [주문·고객] 으로 펼치는 서랍 %>
+    <aside class="talk-room-side" data-talk-side aria-label="고객·주문 정보">
+      <div class="talk-side-head">
+        <strong>고객 · 주문</strong>
+        <button type="button" class="btn-sm ghost talk-side-close" data-talk-side-close aria-label="닫기">✕</button>
+      </div>
+      <section class="talk-cust-card">
+        <% if (linkedOrder) { %>
+          <div class="talk-linked">
+            <span class="muted small">연결된 주문<%= linkedBy === 'phone' ? ' · 전화번호로 자동 연결' : '' %></span>
+            <a href="/orders/<%= linkedOrder.id %>" target="_top" class="talk-linked-order"><span class="ch ch-<%= channelInfo(linkedOrder.channel).cls %>"><%= channelInfo(linkedOrder.channel).mark %></span><span><strong><%= linkedOrder.product_name %></strong><span class="muted small"><%= linkedOrder.buyer_name ? `${linkedOrder.buyer_name} · ` : '' %>주문번호 <%= linkedOrder.channel_order_id %></span></span></a>
+            <form method="post" action="/inbox/<%= inquiry.id %>/unlink-order" class="inline" data-confirm="이 대화와 주문의 연결을 풀까요?">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="back" value="<%= back %>">
+              <button type="submit" class="btn-sm ghost">연결 풀기</button>
+            </form>
+          </div>
+        <% } else { %>
+          <form method="post" action="/inbox/<%= inquiry.id %>/link-order" class="talk-inline-form">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="back" value="<%= back %>">
+            <label for="link-order">주문 연결 <span class="muted small">(손님이 주문번호·전화번호를 쓰면 자동으로 연결돼요)</span></label>
+            <% if (saidNo) { %>
+              <p class="talk-said-note">손님이 말한 번호 <strong><%= saidNo %></strong> 와 맞는 주문이 아직 인트라넷에 없어요. 방금 한 주문이면 수집되는 대로(몇 분 안) <strong>자동으로 연결</strong>돼요. 번호가 틀렸거나 다른 판매처 주문일 수도 있어요.</p>
+            <% } %>
+            <div class="talk-inline-row">
+              <input type="text" id="link-order" name="order_no" maxlength="40" value="<%= saidNo || '' %>" placeholder="주문번호 또는 전화번호">
+              <button type="submit" class="btn-sm">연결</button>
+            </div>
+          </form>
+        <% } %>
+        <form method="post" action="/inbox/<%= inquiry.id %>/memo" class="talk-inline-form">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="back" value="<%= back %>">
+          <label for="cust-memo">고객 메모 <span class="muted small">(목록에서 이름 옆에 보여요)</span></label>
+          <div class="talk-inline-row">
+            <input type="text" id="cust-memo" name="cust_memo" value="<%= inquiry.cust_memo || '' %>" maxlength="30" placeholder="예: 실사-김대성">
+            <button type="submit" class="btn-sm">저장</button>
+          </div>
+        </form>
+        <% if (chatProduct) { %>
+          <p class="talk-asked-product"><span class="muted small">문의 상품</span><br><% if (chatProduct.url) { %><a href="<%= chatProduct.url %>" target="_blank" rel="noopener noreferrer"><%= chatProduct.name %> ↗</a><% } else { %><%= chatProduct.name %><% } %></p>
+        <% } %>
+      </section>
+      <% if (linkedOrder) { %><%- include('../partials/customer-history', { cust: customer, firstNote: '' }) %><% } %>
+      <div class="talk-side-foot">
+        <a class="btn-sm ghost" href="<%= PARTNER_CENTER_URL %>" target="_blank" rel="noopener">파트너센터 ↗</a>
+        <span class="muted small"><%= CHAT_STATUS[inquiry.status] %><%= inquiry.status === 'closed' && inquiry.handled_name ? ` · ${inquiry.handled_name}` : '' %></span>
+      </div>
+      <% const failed = replies.filter(r => ['fail', 'partial', 'unknown'].includes(r.result)); %>
+      <% if (failed.length) { %>
+        <details class="talk-failed">
+          <summary>못 보낸 답장 <%= failed.length %>건</summary>
+          <ul class="history">
+            <% failed.forEach(r => { %>
+              <li><span class="result r-<%= r.result %>"><%= RESULT_LABELS[r.result] %></span> <span class="muted">· <%= r.user_name || '-' %> · <%= kst(r.created_at) %></span>
+                <div class="muted small"><%= r.message %></div><div class="reply-body"><%= r.body %></div></li>
+            <% }) %>
+          </ul>
+        </details>
+      <% } %>
+    </aside>
+  </div>
+</div>
+<script src="/confirm.js"></script>
+<script src="/orders.js"></script>
+<script src="/inbox.js"></script>
+<script src="/macro-picker.js"></script>
+<script src="/talk-room.js"></script>
+<%- include('../partials/footer') %>

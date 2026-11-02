@@ -255,7 +255,7 @@ test('관리자: 시안확정서 연락처·약관을 바꾸고 처음 문구로
 
 test('시안확정서 화면 스크립트에 문법 오류가 없다', () => {
   const vm = require('vm');
-  for (const file of ['public/proof-maker.js', 'public/print.js', 'public/proof-paste.js', 'public/macro-picker.js', 'public/templates.js', 'public/inbox.js']) {
+  for (const file of ['public/proof-maker.js', 'public/print.js', 'public/proof-paste.js', 'public/macro-picker.js', 'public/templates.js', 'public/inbox.js', 'public/talk-room.js']) {
     assert.doesNotThrow(() => new vm.Script(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), { filename: file }), file);
   }
 });

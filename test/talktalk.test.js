@@ -70,7 +70,7 @@ test('비밀 주소로 받은 톡톡이 왼쪽 메뉴 톡톡에 말풍선으로,
   const detail = (await kim.request(`/inbox/${id}`)).text;
   assert.match(detail, /class="chat-msg in">\s*<div class="chat-text">현수막 문의요/);
   assert.match(detail, /파트너센터 ↗/);
-  assert.match(detail, /href="\/inbox\?box=chat" class="btn-back">← 톡톡으로/);
+  assert.match(detail, /href="\/inbox\?box=chat" class="btn-back talk-back" aria-label="톡톡 목록으로">←/);
   assert.match(detail, /action="\/inbox\/\d+\/reply"/, '인트라넷에서도 답장할 수 있다');
   const mid = ctx.db.prepare("SELECT id FROM chat_messages WHERE kind = 'image'").get().id;
   assert.strictEqual((await kim.request(`/inbox/${id}/chat-image/${mid}`)).status, 404);
@@ -175,7 +175,7 @@ test('톡톡 대화 화면: 보류·보류 풀기, 고객 메모, 주문번호�
   // 연결되면 이름이 주문자 이름(김대성)으로, 그 이름으로 검색도 된다
   assert.match((await kim.request('/inbox?box=chat')).text, /class="talk-name" title="톡톡 고객 1111 · 연결된 주문의 주문자">김대성</);
   assert.match((await kim.request('/inbox?box=chat&q=김대성')).text, /class="talk-item/);
-  assert.match(detail, /<h1 class="detail-title">김대성/);
+  assert.match(detail, /<h1 class="talk-title">김대성/);
   await kim.submit(url, `${url}/unlink-order`, {});
   assert.strictEqual(db.prepare('SELECT order_no FROM inquiries WHERE id = ?').get(id).order_no, null);
 
@@ -325,14 +325,14 @@ test('톡톡 답장 연습 모드: 손님에게 안 나가고 기록만 (대화 
   addUser(db, { email: 'kim@broad.test', name: '김직원' });
   const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   const id = db.prepare("SELECT id FROM inquiries WHERE external_id = 'u1111'").get().id;
-  assert.match((await kim.request(`/inbox/${id}`)).text, /<strong>연습 모드<\/strong> 보내기를 눌러도 손님에게 나가지 않고/);
+  assert.match((await kim.request(`/inbox/${id}`)).text, /class="practice-chip" title="보내기를 눌러도 손님에게 나가지 않고 기록만 남깁니다">연습 모드/);
   await kim.submit(`/inbox/${id}`, `/inbox/${id}/reply`, { body: '네 안녕하세요', version: '0' });
   assert.strictEqual(db.prepare("SELECT result FROM inquiry_replies WHERE inquiry_id = ?").get(id).result, 'practice');
   assert.strictEqual(db.prepare("SELECT COUNT(*) AS n FROM chat_messages WHERE inquiry_id = ? AND direction = 'out'").get(id).n, 0);
   assert.match((await kim.request(`/inbox/${id}`)).text, /TALKTALK_ANSWER=on/);
 });
 
-test('손님이 말한 주문번호가 아직 인트라넷에 없으면 기억해 두고, 주문이 수집되면 연결한다 (휴대폰 번호는 무시)', async t => {
+test('손님이 말한 주문번호가 아직 인트라넷에 없으면 기억해 두고, 주문이 수집되면 연결한다 (휴대폰 번호는 주문번호로 보지 않음)', async t => {
   let handle;
   const ctx = await startServer({ inbox: { sourceLabels: { talktalk: '톡톡' }, talktalk: { token: TOKEN, handle: ev => handle(ev) } } });
   t.after(() => ctx.server.close());
@@ -347,7 +347,7 @@ test('손님이 말한 주문번호가 아직 인트라넷에 없으면 기억�
   const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   const page = (await kim.request(`/inbox/${row().id}`)).text;
   assert.match(page, /손님이 말한 번호 <strong>2026102737583121<\/strong> 와 맞는 주문이 아직 인트라넷에 없어요/);
-  assert.match(page, /name="order_no" maxlength="40" inputmode="numeric" value="2026102737583121"/, '연결 칸에 미리 채움');
+  assert.match(page, /name="order_no" maxlength="40" value="2026102737583121"/, '연결 칸에 미리 채움');
   assert.strictEqual(linkSaidOrders(db), 0);
   db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, paid_at, channel_status)
     VALUES ('smartstore', '2026102737583121', 'P1', '현수막', '2026-10-27T06:00:00Z', 'PAYED')`).run();
@@ -355,4 +355,55 @@ test('손님이 말한 주문번호가 아직 인트라넷에 없으면 기억�
   assert.strictEqual(row().order_no, '2026102737583121');
   assert.strictEqual(JSON.parse(row().meta).saidNo, undefined);
   assert.doesNotMatch((await kim.request(`/inbox/${row().id}`)).text, /손님이 말한 번호/);
+});
+
+test('전화번호로 주문 연결: 손님이 번호를 쓰면 자동(진행 중 주문 먼저), 직원이 번호를 넣어도 연결, 연결 풀면 예전 말로 다시 안 붙음', async t => {
+  let handle;
+  const ctx = await startServer({ inbox: { sourceLabels: { talktalk: '톡톡' }, talktalk: { token: TOKEN, handle: ev => handle(ev) } } });
+  t.after(() => ctx.server.close());
+  const { db } = ctx;
+  handle = createTalktalkHandler({ db });
+  const add = db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, buyer_name, buyer_phone, receiver_phone, paid_at, channel_status)
+    VALUES ('smartstore', ?, ?, ?, ?, ?, ?, ?, ?)`);
+  add.run('OLD1', 'OLD1-1', '예전 현수막', '이다예', '010-5795-2237', '010-4177-0612', '2026-08-01T00:00:00Z', 'PURCHASE_DECIDED');
+  add.run('NEW1', 'NEW1-1', '등신대', '이다예', '010-5795-2237', '010-4177-0612', '2026-10-28T10:00:00Z', 'PAYED');
+  add.run('OTHER', 'OTHER-1', '다른 손님', '김철수', '010-1111-2222', '010-1111-2222', '2026-10-30T10:00:00Z', 'PAYED');
+  const row = id => db.prepare('SELECT id, order_no, meta FROM inquiries WHERE external_id = ?').get(id);
+
+  // ① 손님이 주문자 번호를 쓰면 진행 중인 주문(NEW1)과 자동 연결 ('전화번호로 자동 연결' 표시)
+  handle(send('u1', '안녕하세요 10월 28일에 주문한 등신대 언제 출고되나요?'));
+  assert.strictEqual(row('u1').order_no, null, '번호 없으면 연결 안 함');
+  handle(send('u1', '주문자 번호는 010 5795 2237 이에요'));
+  assert.strictEqual(row('u1').order_no, 'NEW1');
+  assert.strictEqual(JSON.parse(row('u1').meta).linkedBy, 'phone');
+  addUser(db, { email: 'kim@broad.test', name: '김직원' });
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  const page = (await kim.request(`/inbox/${row('u1').id}`)).text;
+  assert.match(page, /연결된 주문 · 전화번호로 자동 연결/);
+  assert.match(page, /class="talk-order-chip"[^>]*>.*등신대<\/a>/s);
+
+  // ② 받는 분 번호로도 찾는다 · 이미 연결된 대화는 전화번호로는 바꾸지 않는다
+  handle(send('u1', '받는 사람은 01011112222 입니다'));
+  assert.strictEqual(row('u1').order_no, 'NEW1');
+
+  // ③ 연결 풀기 → 다시 열어도 예전 말로 다시 붙지 않음, 새로 번호를 쓰면 다시 연결
+  const id = row('u1').id;
+  await kim.submit(`/inbox/${id}`, `/inbox/${id}/unlink-order`, {});
+  assert.strictEqual(row('u1').order_no, null);
+  await kim.request(`/inbox/${id}`);
+  assert.strictEqual(row('u1').order_no, null, '풀자마자 다시 붙지 않음');
+  handle(send('u1', '010-4177-0612'));
+  assert.strictEqual(row('u1').order_no, 'NEW1');
+
+  // ④ 직원이 '주문 연결' 칸에 전화번호를 넣어도 연결 (없는 번호면 안내)
+  handle(send('u2', '시안 언제 와요?'));
+  const id2 = row('u2').id;
+  await kim.submit(`/inbox/${id2}`, `/inbox/${id2}/link-order`, { order_no: '010-9999-0000' });
+  assert.strictEqual(row('u2').order_no, null);
+  await kim.submit(`/inbox/${id2}`, `/inbox/${id2}/link-order`, { order_no: '010-1111-2222' });
+  assert.strictEqual(row('u2').order_no, 'OTHER');
+
+  // ⑤ 주문번호를 말하면 전화번호로 연결된 것보다 우선
+  handle(send('u2', '아 주문번호 OLD1 말고 NEW1-1 이에요'));
+  assert.strictEqual(row('u2').order_no, 'OTHER', '숫자 주문번호가 아니면 그대로');
 });

@@ -67,6 +67,34 @@ function orderNoIn(db, text) {
   return found.length ? found[found.length - 1] : null;
 }
 
+// 손님이 쓴 휴대폰 번호 (010-1234-5678, 010 1234 5678, 01012345678 …) → 숫자만
+function phonesIn(text) {
+  return [...String(text || '').matchAll(/(?:^|[^\d])(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})(?!\d)/g)].map(m => m[1] + m[2] + m[3]);
+}
+// 그 번호가 주문자 또는 받는 분 연락처인 주문 (진행 중인 주문 먼저, 그다음 최근 주문). 주문번호 또는 null
+function orderByPhone(db, digits) {
+  if (!/^01\d{8,9}$/.test(String(digits || ''))) return null;
+  const { ENDED_SQL } = require('../collector');
+  const num = col => `replace(replace(replace(COALESCE(${col}, ''), '-', ''), ' ', ''), '.', '')`;
+  const row = db.prepare(`
+    SELECT channel_order_id FROM orders
+    WHERE ${num('buyer_phone')} = ? OR ${num('receiver_phone')} = ?
+    ORDER BY (channel_status IN (${ENDED_SQL})), datetime(paid_at) DESC, id DESC LIMIT 1
+  `).get(digits, digits);
+  return row ? String(row.channel_order_id) : null;
+}
+// 손님 말에서 주문 찾기: 주문번호가 먼저, 없으면 전화번호. { orderNo, by: 'order' | 'phone' } 또는 null
+function findOrderInText(db, text) {
+  const byNo = orderNoIn(db, text);
+  if (byNo) return { orderNo: byNo, by: 'order' };
+  const phones = phonesIn(text);
+  for (let i = phones.length - 1; i >= 0; i--) { // 가장 마지막에 쓴 번호부터
+    const found = orderByPhone(db, phones[i]);
+    if (found) return { orderNo: found, by: 'phone' };
+  }
+  return null;
+}
+
 // 손님이 말한 번호인데 아직 인트라넷에 없는 주문 (주문 수집 전일 수 있다) → meta.saidNo 에 기억해 두고, 들어오면 연결
 function rememberSaid(db, inquiryId, text) {
   const nums = numbersIn(text);
@@ -75,6 +103,16 @@ function rememberSaid(db, inquiryId, text) {
   let meta = {};
   try { meta = JSON.parse((row && row.meta) || '{}') || {}; } catch { meta = {}; }
   db.prepare('UPDATE inquiries SET meta = ? WHERE id = ?').run(JSON.stringify({ ...meta, saidNo: nums[nums.length - 1] }), inquiryId);
+}
+
+// 대화에 주문 연결 (어떻게 찾았는지 meta.linkedBy 에 남긴다: 'phone' 이면 화면에 '전화번호로 자동 연결')
+function setLinked(db, inquiryId, { orderNo, by }) {
+  const row = db.prepare('SELECT meta FROM inquiries WHERE id = ?').get(inquiryId);
+  let meta = {};
+  try { meta = JSON.parse((row && row.meta) || '{}') || {}; } catch { meta = {}; }
+  delete meta.saidNo;
+  if (by === 'phone') meta.linkedBy = 'phone'; else delete meta.linkedBy;
+  db.prepare('UPDATE inquiries SET order_no = ?, meta = ? WHERE id = ?').run(orderNo, JSON.stringify(meta), inquiryId);
 }
 
 // 기억해 둔 번호의 주문이 그사이 들어왔으면 연결한다 (톡톡 목록·대화를 열 때)
@@ -235,11 +273,12 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
         try { meta = JSON.parse((row && row.meta) || '{}') || {}; } catch { meta = {}; }
         db.prepare('UPDATE inquiries SET meta = ? WHERE id = ?').run(JSON.stringify({ ...meta, product }), thread.id);
       }
-      // 고객이 주문번호를 말하면 그 주문과 연결한다
+      // 고객이 주문번호나 전화번호를 말하면 그 주문과 연결한다 (이미 연결된 대화는 주문번호를 말했을 때만 바꾼다)
       const said = m.kind === 'text' || m.kind === 'card' ? m.text : '';
-      const orderNo = said ? orderNoIn(db, said) : null;
-      if (orderNo) db.prepare('UPDATE inquiries SET order_no = ? WHERE id = ?').run(orderNo, thread.id);
-      else if (said) rememberSaid(db, thread.id, said);
+      const found = said ? findOrderInText(db, said) : null;
+      const linked = db.prepare('SELECT order_no FROM inquiries WHERE id = ?').get(thread.id).order_no;
+      if (found && (!linked || found.by === 'order')) setLinked(db, thread.id, found);
+      else if (said && !found) rememberSaid(db, thread.id, said);
     }
     return { id: thread.id, created, preview };
   }
@@ -279,4 +318,4 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
   };
 }
 
-module.exports = { SOURCE, LABEL, PARTNER_CENTER_URL, IMAGE_HOSTS, MAX_IMAGE, ipAllowed, messageOf, productOf, orderNoIn, linkSaidOrders, imageKind, createTalkImages, createTalktalkSender, createTalktalkClient, createTalktalkHandler };
+module.exports = { SOURCE, LABEL, PARTNER_CENTER_URL, IMAGE_HOSTS, MAX_IMAGE, ipAllowed, messageOf, productOf, orderNoIn, phonesIn, orderByPhone, findOrderInText, setLinked, linkSaidOrders, imageKind, createTalkImages, createTalktalkSender, createTalktalkClient, createTalktalkHandler };
