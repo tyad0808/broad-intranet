@@ -91,8 +91,11 @@ body.with-sidebar { padding-left: var(--sidebar); }
 .nav-help { display: flex; align-items: center; gap: 10px; margin-top: 10px; padding: 9px 10px; border-top: 1px solid var(--line-2); border-radius: 0; color: var(--text-2); font-weight: 550; font-size: 15px; text-decoration: none; }
 .nav-help:hover { background: var(--line-2); color: var(--text); text-decoration: none; border-radius: var(--radius-sm); }
 .nav-help.on { background: var(--primary-weak); color: var(--primary-dark); font-weight: 650; border-radius: var(--radius-sm); }
-.nav-help + .nav-ext { margin-top: 2px; border-top: 0; }
-.nav-ext-mark { color: var(--muted); font-size: 14px; }
+/* 견적/계산서 바로가기: 파란 버튼 (견적 프로그램 버튼과 같은 모양) */
+.nav-help + .nav-ext { justify-content: center; margin-top: 10px; padding: 10px 12px; border: 0; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-weight: 650; }
+.nav-help + .nav-ext:hover { background: var(--primary-dark); color: #fff; border-radius: var(--radius-sm); }
+.nav-ext .nav-icon { color: #fff; stroke: #fff; }
+.nav-ext-mark { color: rgba(255, 255, 255, 0.8); font-size: 14px; }
 .nav-icon { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .me { margin-top: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 12px 10px 0; border-top: 1px solid var(--line-2); font-size: 13px; color: var(--text-2); }
 .me form { margin: 0; margin-left: auto; }
@@ -120,7 +123,7 @@ body.no-sidebar .card.narrow { margin-top: 24px; }
   .nav-help { margin: 0 0 0 auto; padding: 0 12px; min-height: 44px; border: 0; gap: 6px; font-size: 14px; }
   .nav-help .nav-icon { width: 20px; height: 20px; }
   .nav-help + .me { margin-left: 4px; }
-  .nav-help + .nav-ext { margin: 0; padding: 0 8px; }
+  .nav-help + .nav-ext { width: 40px; min-height: 40px; margin: 0; padding: 0; }
   .nav-ext span { display: none; } /* 휴대폰 위쪽 줄은 좁아서 아이콘만 */
   .main-nav {
     position: fixed;
