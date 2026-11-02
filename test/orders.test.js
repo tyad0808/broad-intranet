@@ -559,7 +559,8 @@ test('주문자 연락처: 받은 주문에 채워지고(이 기능 전 주문�
   assert.strictEqual(db.prepare("SELECT buyer_phone FROM orders WHERE channel_item_id = 'P1'").get().buyer_phone, '010-5795-2237');
 
   const page = (await kim.request(`/orders/${idOf('P1')}`)).text;
-  assert.match(page, /<dt>주문자<\/dt>\s*<dd class="contact-line"><strong>이다예<\/strong>\s*· <a class="phone" href="tel:01057952237">010-5795-2237<\/a>\s*<span class="tag contact-tag">연락할 분<\/span>/);
-  assert.match(page, /<dt>받는 분<\/dt>\s*<dd class="contact-line">강유진 · <a class="phone" href="tel:01041770612">010-4177-0612<\/a>/);
+  assert.match(page, /<dt>주문자<\/dt>\s*<dd class="contact-line"><strong>이다예<\/strong>\s*· <span class="phone">010-5795-2237<\/span><button type="button" class="btn-sm copy-phone" data-copy="010-5795-2237"[^>]*>복사<\/button>\s*<span class="tag contact-tag">연락할 분<\/span>/);
+  assert.match(page, /<dt>받는 분<\/dt>\s*<dd class="contact-line">강유진 · <span class="phone">010-4177-0612<\/span><button type="button" class="btn-sm copy-phone" data-copy="010-4177-0612"/);
+  assert.doesNotMatch(page, /href="tel:/, '번호를 눌러도 전화 링크가 타지 않음');
   assert.doesNotMatch(page, /주문자와 같음/);
 });

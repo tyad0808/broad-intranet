@@ -1604,7 +1604,7 @@ body.ds-v2 {
 .upload-btn { display: inline-flex; align-items: center; margin: 0; }
 .wrap-head .page-actions { flex-wrap: wrap; }
 /* 주문 상세: 주문자(연락할 분) · 받는 분 연락처 */
-.contact-line .phone { color: inherit; font-variant-numeric: tabular-nums; text-decoration: none; }
+.contact-line .phone { font-variant-numeric: tabular-nums; }
 .contact-line strong ~ .phone { font-weight: 700; }
-.contact-line .phone:hover { text-decoration: underline; }
+.contact-line .copy-phone { height: 30px; min-height: 0; margin-left: 6px; padding: 0 10px; font-size: 14px; vertical-align: middle; }
 .contact-tag { margin-left: 6px; background: var(--primary-weak); color: var(--primary-dark); }
