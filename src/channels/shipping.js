@@ -60,33 +60,40 @@ function dispatchMethodFor(code) {
   return DEFAULT_METHOD;
 }
 
-// 끝난(취소·반품) 상품은 금액에서 뺀다
+// 끝난(취소·반품) 상품: 배송 방법을 고를 때 뒤로 미룬다
 const DEAD_STATUSES = new Set(['CANCELED', 'CANCELED_BY_NOPAYMENT', 'RETURNED']);
+// 매출에서 빼는 상태: 취소·반품·입금 전. 통계(src/stats.js)도 이 목록을 그대로 쓴다 → 화면 금액과 통계 매출이 늘 같은 기준
+const NOT_SALES = ['CANCELED', 'CANCELED_BY_NOPAYMENT', 'PAYMENT_WAITING', 'RETURNED'];
 
-// 주문 한 건(상품 여러 개)의 금액
-//   goods: 상품 결제 금액 합계 (할인 뒤, 배송비 빼고)
-//   fee:   배송비 — 같은 묶음배송(ship_pkg)의 상품마다 같은 값이 반복해서 오므로 묶음마다 한 번만 더한다
-//   total: 고객이 낸 총액 = goods + fee
-// 수기 주문은 등록할 때 적은 금액(amount)을 그대로 쓴다. 모르면 null
+// 주문 한 건(상품 여러 개)의 금액 — 통계 매출과 같은 기준
+//   goods:   매출로 치는 상품 결제 금액 합계 (할인 뒤, 배송비 빼고). 셀 게 없으면 null
+//   state:   'paid'(매출) · 'waiting'(입금 전) · 'canceled'(모두 취소) · 'returned'(모두 반품)
+//   pending: 입금 전 주문이 입금되면 받을 금액 (state 가 'waiting' 일 때만)
+// 수기 주문은 등록할 때 적은 금액(amount)을 쓴다
 function orderMoney(items) {
   const list = items || [];
-  if (!list.length) return { total: null, goods: null, fee: null };
-  if (list[0].channel === 'manual') {
-    const amount = list[0].amount == null ? null : Number(list[0].amount);
-    return { total: amount, goods: amount, fee: null };
-  }
-  const live = list.filter(i => !DEAD_STATUSES.has(i.channel_status));
-  const use = live.length ? live : list; // 모두 취소된 주문은 원래 금액을 보여 준다
-  const priced = use.filter(i => i.pay_amount != null);
-  const goods = priced.length ? priced.reduce((t, i) => t + Number(i.pay_amount), 0) : null;
-  const fees = new Map();
-  for (const i of use) {
-    if (i.ship_fee == null) continue;
-    const pkg = i.ship_pkg || i.channel_order_id;
-    fees.set(pkg, Math.max(fees.get(pkg) || 0, Number(i.ship_fee)));
-  }
-  const fee = fees.size ? [...fees.values()].reduce((t, v) => t + v, 0) : null;
-  return { total: goods === null ? null : goods + (fee || 0), goods, fee };
+  if (!list.length) return { goods: null, state: null, pending: null };
+  const sum = rows => {
+    if (list[0].channel === 'manual') return list[0].amount == null ? null : Number(list[0].amount);
+    const priced = rows.filter(i => i.pay_amount != null);
+    return priced.length ? priced.reduce((t, i) => t + Number(i.pay_amount), 0) : null;
+  };
+  const sales = list.filter(i => !NOT_SALES.includes(i.channel_status));
+  if (sales.length) return { goods: sum(sales), state: 'paid', pending: null };
+  const waiting = list.filter(i => i.channel_status === 'PAYMENT_WAITING');
+  if (waiting.length) return { goods: null, state: 'waiting', pending: sum(waiting) };
+  const returned = list.every(i => i.channel_status === 'RETURNED');
+  return { goods: null, state: returned ? 'returned' : 'canceled', pending: null };
+}
+
+// 목록·상세에 보여 줄 금액 글자. off = 매출이 아니라 흐리게
+function moneyLabel(m) {
+  if (!m) return null;
+  if (m.goods != null) return { text: won(m.goods), off: false };
+  if (m.state === 'waiting') return { text: m.pending != null ? `입금 전 ${won(m.pending)}` : '입금 전', off: true };
+  if (m.state === 'canceled') return { text: '취소됨', off: true };
+  if (m.state === 'returned') return { text: '반품됨', off: true };
+  return null;
 }
 
 // 주문 한 건의 배송 방법 코드 (본상품 먼저, 끝난 상품은 뒤로)
@@ -101,5 +108,5 @@ const won = n => `${Number(n).toLocaleString('ko-KR')}원`;
 
 module.exports = {
   SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER, shipMethodLabel, courierLabel,
-  SHIP_WAYS, shipWay, shipWayCode, dispatchMethodFor, orderMoney, orderShipWay, won,
+  SHIP_WAYS, shipWay, shipWayCode, dispatchMethodFor, orderMoney, moneyLabel, orderShipWay, won, NOT_SALES,
 };

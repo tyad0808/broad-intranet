@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const { applyOrders } = require('../src/collector');
-const { shipWay, shipWayCode, orderMoney, orderShipWay, dispatchMethodFor } = require('../src/channels/shipping');
+const { shipWay, shipWayCode, orderMoney, moneyLabel, orderShipWay, dispatchMethodFor } = require('../src/channels/shipping');
 const { normalize: godoNormalize } = require('../src/channels/godo');
 const { startServer, addUser, loginAs } = require('./helpers');
 
@@ -38,26 +38,36 @@ test('배송 방법: 채널 값(코드·한글)을 하나로 맞추고, 택배�
   assert.deepStrictEqual(['QUICK_SVC', 'VISIT_RECEIPT', 'DELIVERY', null].map(dispatchMethodFor), ['QUICK_SVC', 'DIRECT_DELIVERY', 'DELIVERY', 'DELIVERY']);
 });
 
-test('주문 금액: 배송비는 묶음배송마다 한 번만 더하고, 취소된 상품은 뺀다', () => {
+test('주문 금액: 배송비 빼고, 통계 매출과 같은 기준 (취소·반품·입금 전은 매출 아님)', () => {
   const item = extra => ({ channel: 'smartstore', channel_order_id: 'O1', channel_status: 'PAYED', item_type: 'main', ...extra });
-  // 네이버는 같은 묶음의 상품마다 배송비 3,000 을 반복해서 준다 → 한 번만
+  // 배송비(ship_fee)는 금액에 넣지 않는다
   const same = [
     item({ pay_amount: 19900, ship_fee: 3000, ship_pkg: 'K1' }),
     item({ pay_amount: 3000, ship_fee: 3000, ship_pkg: 'K1', item_type: 'addon' }),
-    item({ pay_amount: 3000, ship_fee: 3000, ship_pkg: 'K1', item_type: 'addon' }),
   ];
-  assert.deepStrictEqual(orderMoney(same), { total: 28900, goods: 25900, fee: 3000 });
-  // 묶음이 둘이면 배송비도 둘
-  assert.deepStrictEqual(orderMoney([...same, item({ pay_amount: 10000, ship_fee: 3500, ship_pkg: 'K2' })]),
-    { total: 42400, goods: 35900, fee: 6500 });
-  // 취소된 상품은 금액·배송비에서 뺀다
-  assert.deepStrictEqual(orderMoney([same[0], item({ pay_amount: 10000, ship_fee: 3500, ship_pkg: 'K2', channel_status: 'CANCELED' })]),
-    { total: 22900, goods: 19900, fee: 3000 });
-  // 무료배송 / 배송비를 모르는 주문(이 기능 전에 받은 주문)
-  assert.deepStrictEqual(orderMoney([item({ pay_amount: 50000, ship_fee: 0, ship_pkg: 'K1' })]), { total: 50000, goods: 50000, fee: 0 });
-  assert.deepStrictEqual(orderMoney([item({ pay_amount: 50000 })]), { total: 50000, goods: 50000, fee: null });
-  // 수기 주문은 등록할 때 적은 금액 그대로
-  assert.deepStrictEqual(orderMoney([{ channel: 'manual', amount: 154000 }, { channel: 'manual', amount: 154000 }]), { total: 154000, goods: 154000, fee: null });
+  assert.deepStrictEqual(orderMoney(same), { goods: 22900, state: 'paid', pending: null });
+  // 일부 취소·반품·입금 전 상품은 뺀다
+  assert.deepStrictEqual(orderMoney([same[0], item({ pay_amount: 10000, channel_status: 'CANCELED' }), item({ pay_amount: 5000, channel_status: 'RETURNED' })]),
+    { goods: 19900, state: 'paid', pending: null });
+  // 모두 취소 → 금액 없음 + '취소됨' / 모두 반품 → '반품됨'
+  assert.deepStrictEqual(orderMoney([item({ pay_amount: 10000, channel_status: 'CANCELED' }), item({ pay_amount: 5000, channel_status: 'RETURNED' })]),
+    { goods: null, state: 'canceled', pending: null });
+  assert.deepStrictEqual(orderMoney([item({ pay_amount: 5000, channel_status: 'RETURNED' })]), { goods: null, state: 'returned', pending: null });
+  // 입금 전 주문 → 매출 아님, 입금되면 받을 금액만 따로
+  assert.deepStrictEqual(orderMoney([item({ pay_amount: 50000, channel_status: 'PAYMENT_WAITING' })]), { goods: null, state: 'waiting', pending: 50000 });
+  // 금액을 모르는 주문
+  assert.deepStrictEqual(orderMoney([item({})]), { goods: null, state: 'paid', pending: null });
+  // 수기 주문: 등록할 때 적은 금액. 입금대기·취소도 통계처럼
+  const manual = extra => ({ channel: 'manual', amount: 154000, channel_status: 'PAYED', ...extra });
+  assert.deepStrictEqual(orderMoney([manual(), manual()]), { goods: 154000, state: 'paid', pending: null });
+  assert.deepStrictEqual(orderMoney([manual({ channel_status: 'PAYMENT_WAITING' })]), { goods: null, state: 'waiting', pending: 154000 });
+  assert.deepStrictEqual(orderMoney([manual({ channel_status: 'CANCELED' })]), { goods: null, state: 'canceled', pending: null });
+  // 화면 글자
+  assert.deepStrictEqual(moneyLabel(orderMoney(same)), { text: '22,900원', off: false });
+  assert.deepStrictEqual(moneyLabel(orderMoney([manual({ channel_status: 'PAYMENT_WAITING' })])), { text: '입금 전 154,000원', off: true });
+  assert.deepStrictEqual(moneyLabel(orderMoney([manual({ channel_status: 'CANCELED' })])), { text: '취소됨', off: true });
+  assert.deepStrictEqual(moneyLabel(orderMoney([item({ channel_status: 'RETURNED' })])), { text: '반품됨', off: true });
+  assert.strictEqual(moneyLabel(orderMoney([])), null);
   // 배송 방법은 본상품 기준
   assert.strictEqual(orderShipWay([item({ item_type: 'addon', delivery_method: 'DELIVERY' }), item({ delivery_method: 'QUICK_SVC' })]), 'QUICK_SVC');
 });
@@ -101,6 +111,26 @@ test('스마트스토어 수집: 배송 방법·배송비를 모르는 발송 �
   await createCollector({ db, source }).run();
   assert.deepStrictEqual(asked, ['P1']);
   assert.strictEqual(db.prepare("SELECT delivery_method FROM orders WHERE channel_item_id = 'P1'").get().delivery_method, 'VISIT_RECEIPT');
+});
+
+test('주문 금액 합계 = 통계 매출 (같은 목록으로 빼서 어긋나지 않는다)', () => {
+  const { openDb } = require('../src/db');
+  const { totals } = require('../src/stats');
+  const db = openDb(':memory:');
+  applyOrders(db, [
+    order(1, { pay_amount: 32000, ship_fee: 3000 }),
+    order(2, { channel_order_id: 'O1', item_type: 'addon', pay_amount: 4500, channel_status: 'CANCELED' }),
+    order(3, { pay_amount: 7000, channel_status: 'CANCELED' }),
+    order(4, { pay_amount: 9000, channel_status: 'RETURNED' }),
+    order(5, { pay_amount: 50000, channel_status: 'PAYMENT_WAITING' }),
+    order(6, { pay_amount: 8900 }),
+  ]);
+  const rows = db.prepare('SELECT * FROM orders').all();
+  const groups = Object.values(Object.groupBy(rows, r => r.channel_order_id));
+  const shown = groups.reduce((t, g) => t + (orderMoney(g).goods || 0), 0);
+  const sales = totals(db, '2000-01-01 00:00:00', '2100-01-01 00:00:00').sales;
+  assert.strictEqual(shown, 32000 + 8900);
+  assert.strictEqual(sales, shown);
 });
 
 test('목록: 배송 방법 표시와 상품 금액(배송비 빼고 = 통계 기준), 휴대폰용 디자인·담당 이름표', async t => {

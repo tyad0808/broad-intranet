@@ -27,7 +27,7 @@
 <% } %>
 
 <%# 머리: 채널·주문번호·결제일 + 배송 방법 + 상품 이름 + 발주서 출력 %>
-<% const wayCode = orderShipWay(items); const way = shipWay(wayCode); const money = orderMoney(items); %>
+<% const wayCode = orderShipWay(items); const way = shipWay(wayCode); const money = moneyLabel(orderMoney(items)); %>
 <div class="detail-head">
   <div class="detail-head-main">
     <p class="detail-channel">
@@ -113,7 +113,7 @@
         <% if (order.source_order_no) { %><dt>판매처 주문번호</dt><dd><%= order.source_order_no %></dd><% } %>
       <% } %>
       <% if (!isManual) { %>
-        <dt>상품 금액</dt><dd><% if (money.goods != null) { %><strong class="oi-amount"><%= won(money.goods) %></strong> <span class="muted small">배송비 빼고 (통계와 같은 기준)</span><% } else { %><span class="muted">-</span><% } %></dd>
+        <dt>상품 금액</dt><dd><% if (money) { %><strong class="oi-amount<%= money.off ? ' is-off' : '' %>"><%= money.text %></strong> <span class="muted small"><%= money.off ? '매출에 넣지 않음 (통계와 같은 기준)' : '배송비 빼고 (통계와 같은 기준)' %></span><% } else { %><span class="muted">-</span><% } %></dd>
       <% } %>
       <dt><%= isManual ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
     </dl>

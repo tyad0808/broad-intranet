@@ -28,6 +28,8 @@
   --ok-bg: #e5f8ef;
   --purple: #6b4ce6;
   --purple-bg: #f1edfe;
+  --ship-parcel: #ffd43b;     /* 배송 방법 '택배' 배지 (사용자가 고른 노랑) */
+  --ship-parcel-ink: #3b2f00;
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -120,10 +122,11 @@ body.no-sidebar .card.narrow { margin-top: 24px; }
   .brand { padding: 0; font-size: 15px; }
   .me { margin: 0 0 0 auto; padding: 0; border: 0; flex-wrap: nowrap; }
   .me-name { display: none; }
-  .nav-help { margin: 0 0 0 auto; padding: 0 12px; min-height: 44px; border: 0; gap: 6px; font-size: 14px; }
+  .nav-help { margin: 0 0 0 auto; padding: 0 12px; min-height: 44px; border: 0; gap: 6px; font-size: 14px; white-space: nowrap; } /* '사용 방법' 이 두 줄로 꺾이지 않게 */
   .nav-help .nav-icon { width: 20px; height: 20px; }
   .nav-help + .me { margin-left: 4px; }
-  .nav-help + .nav-ext { width: 40px; min-height: 40px; margin: 0; padding: 0; }
+  .nav-help + .nav-ext { width: 44px; min-height: 44px; margin: 0; padding: 0; }
+  .nav-ext + .me { margin-left: 4px; }
   .nav-ext span { display: none; } /* 휴대폰 위쪽 줄은 좁아서 아이콘만 */
   .main-nav {
     position: fixed;
@@ -632,13 +635,14 @@ form.inline { display: inline; margin: 0; }
 /* 배송 방법 (고객이 고른 것): 택배 = 노랑 · 퀵 = 파랑 · 방문수령 = 파란 테두리 (글자 + 아이콘, 색만으로 구분하지 않음) */
 .ship-way { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border-radius: 8px; font-size: 14px; font-weight: 700; white-space: nowrap; vertical-align: middle; }
 .ship-way::before { content: ""; flex: none; width: 16px; height: 16px; background: currentColor; -webkit-mask: var(--sw-ico) center / contain no-repeat; mask: var(--sw-ico) center / contain no-repeat; }
-.sw-parcel { background: #ffd43b; color: #3b2f00; --sw-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M3 7l9-4 9 4v10l-9 4-9-4z'/%3E%3Cpath d='M3 7l9 4 9-4M12 11v10'/%3E%3C/svg%3E"); }
+.sw-parcel { background: var(--ship-parcel); color: var(--ship-parcel-ink); --sw-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M3 7l9-4 9 4v10l-9 4-9-4z'/%3E%3Cpath d='M3 7l9 4 9-4M12 11v10'/%3E%3C/svg%3E"); }
 .sw-quick { background: var(--primary); color: #fff; --sw-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='6' cy='17' r='3'/%3E%3Ccircle cx='18' cy='17' r='3'/%3E%3Cpath d='M9 17h6l-3-8h4M6 17l3-7h3'/%3E%3C/svg%3E"); }
 .sw-visit { background: #fff; color: var(--primary-dark); box-shadow: inset 0 0 0 1.5px var(--primary); --sw-ico: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linejoin='round'%3E%3Cpath d='M3 10l9-6 9 6v10H3z'/%3E%3Cpath d='M9 20v-6h6v6'/%3E%3C/svg%3E"); }
 .sw-none { background: var(--line-2); color: var(--text-2); --sw-ico: none; }
 .sw-none::before { display: none; }
 /* 금액: 숫자 폭을 맞춰서 */
 .oi-amount { font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
+.oi-amount.is-off { color: var(--text-2); font-weight: 600; } /* 입금 전·취소됨·반품됨: 매출이 아니라 흐리게 */
 /* 휴대폰에서 고르는 칸 위에 붙는 이름표 (PC 는 표 머리에 이름이 있어서 숨김) */
 .cell-cap { display: none; }
 

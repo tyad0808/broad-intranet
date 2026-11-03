@@ -4,9 +4,10 @@
 //       수기 주문은 주문 전체 금액(amount)을 한 번만 센다.
 // 시각: 결제 시각(없으면 등록 시각)을 한국 시간으로. 채널마다 모양이 달라서 SQLite datetime() 으로 맞춘다
 const { utcSql } = require('./retention');
+const { NOT_SALES } = require('./channels/shipping');
 
-// 매출에서 빼는 상태: 취소·반품·입금 전
-const DEAD = "('CANCELED', 'CANCELED_BY_NOPAYMENT', 'PAYMENT_WAITING', 'RETURNED')";
+// 매출에서 빼는 상태: 취소·반품·입금 전 (주문 화면의 금액과 같은 목록)
+const DEAD = `(${NOT_SALES.map(st => `'${st}'`).join(', ')})`;
 const T = 'datetime(COALESCE(o.paid_at, o.created_at))';
 
 // 주문 묶음(주문번호) 단위 표

@@ -257,11 +257,11 @@
             <% if (status.sub) { %><span class="st-sub" title="<%= status.sub %>"><%= status.sub %></span><% } %>
           </span>
           <%# 배송 방법(고객이 고른 것) + 상품 금액(배송비 빼고, 통계와 같은 기준). 발주·발주확인·발송 단계는 상태 칸에 이미 나와서 따로 안 보여 준다 %>
-          <% const way = shipWay(orderShipWay(g.items)); const money = orderMoney(g.items); %>
+          <% const way = shipWay(orderShipWay(g.items)); const money = moneyLabel(orderMoney(g.items)); %>
           <span class="cell c-ship">
             <% if (way) { %><span class="ship-way <%= way.cls %>" title="고객이 고른 배송 방법"><%= way.text %></span><% } %>
-            <% if (money.goods != null) { %><span class="oi-amount" title="상품 금액 (배송비 빼고)"><%= won(money.goods) %></span><% } %>
-            <% if (!way && money.goods == null) { %><span class="muted small">-</span><% } %>
+            <% if (money) { %><span class="oi-amount<%= money.off ? ' is-off' : '' %>" title="<%= money.off ? '매출에 넣지 않음 (통계와 같은 기준)' : '상품 금액 (배송비 빼고)' %>"><%= money.text %></span><% } %>
+            <% if (!way && !money) { %><span class="muted small">-</span><% } %>
           </span>
           <span class="cell c-stage"><span class="cell-cap">디자인</span>
           <%# 디자인 단계: 디자이너·관리자가 고른다 (비어 있으면 첫 단계) %>
