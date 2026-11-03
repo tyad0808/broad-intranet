@@ -33,6 +33,7 @@
       <div class="key-dates">
         <div><span class="label">납기</span><strong><%= o.due_date || '-' %></strong></div>
         <div><span class="label">발송기한</span><strong><%= s.shipDue ? kst(s.shipDue) : '-' %></strong><% if (s.today) { %> <span class="flag">오늘출발</span><% } %></div>
+        <div><span class="label">배송 방법</span><strong><%= s.way ? s.way.text : '-' %></strong></div>
       </div>
     </section>
 

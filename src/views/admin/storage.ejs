@@ -36,7 +36,7 @@
     <p class="<%= nas.stale ? 'error' : 'muted' %>">연결은 해 두었는데 NAS 가 아직 한 번도 가져가지 않았어요. NAS 의 작업 스케줄러에서 '인트라넷 백업 가져오기' 를 한 번 실행해 보세요.</p>
   <% } else { %>
     <dl class="info">
-      <dt>마지막으로 가져감</dt><dd><strong class="<%= nas.stale ? 'error' : '' %>"><%= kst(nas.last) %></strong> <span class="muted small">(<%= nas.days === 0 ? '오늘' : `${nas.days}일 전` %>)</span></dd>
+      <dt>가져간 시각</dt><dd><strong class="<%= nas.stale ? 'error' : '' %>"><%= kst(nas.last) %></strong> <span class="muted small">(<%= nas.days === 0 ? '오늘' : `${nas.days}일 전` %>)</span></dd>
     </dl>
     <% if (nas.stale) { %>
       <p class="error"><%= info.NAS_STALE_DAYS %>일 넘게 가져가지 않았어요. NAS 가 켜져 있는지, 인터넷이 되는지 확인해 주세요.</p>

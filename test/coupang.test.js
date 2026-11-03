@@ -18,6 +18,8 @@ function sheet(id, status = 'ACCEPT', extra = {}) {
     status,
     orderer: { name: '홍길동', safeNumber: '0502-9999-0000' },
     parcelPrintMessage: '경비실에 맡겨 주세요',
+    shippingPrice: 3000,
+    remotePrice: 0,
     receiver: { name: '김수령', safeNumber: '0502-1234-5678', addr1: '서울 강남구 테헤란로 1', addr2: '2층', postCode: '06236' },
     orderItems: [
       { vendorItemId: `30000000${id}1`, sellerProductName: '명함 주문제작', sellerProductItemName: '양면 / 200매', shippingCount: 2, cancelCount: 0, holdCountForCancel: 0, salesPrice: 15000, orderPrice: 30000, productId: 7012345678 },
@@ -84,6 +86,7 @@ test('쿠팡 발주서 → 인트라넷 주문 (상태는 공통 상태로)', ()
     receiver_address: '(06236) 서울 강남구 테헤란로 1 2층', paid_at: '2026-10-16T10:00:05+09:00',
     channel_status: 'PAYED', channel_confirmed: 1, claim_type: null, claim_status: null, pay_amount: 30000,
     ship_memo: '경비실에 맡겨 주세요', product_no: '7012345678',
+    delivery_method: 'DELIVERY', ship_fee: 3000, ship_pkg: '642538970006401',
   });
   assert.deepStrictEqual([normalize(sheet(1, 'ACCEPT'))[0].channel_status, normalize(sheet(1, 'ACCEPT'))[0].channel_confirmed], ['PAYED', 0]);
   assert.strictEqual(normalize(sheet(1, 'FINAL_DELIVERY'))[0].channel_status, 'DELIVERED');

@@ -65,6 +65,11 @@ function normalize(item) {
     ship_delayed: po.delayedDispatchReason || null,
     // 이 상품주문의 결제 금액 (할인 뒤, 배송비 제외)
     pay_amount: money(po.totalPaymentAmount),
+    // 고객이 주문할 때 고른 배송 방법 (DELIVERY 택배 · GDFW_ISSUE_SVC 굿스플로 택배 · QUICK_SVC 퀵 · VISIT_RECEIPT 방문수령)
+    delivery_method: po.expectedDeliveryMethod || (item.delivery && item.delivery.deliveryMethod) || null,
+    // 배송비: 같은 묶음배송(packageNumber)의 상품마다 같은 값이 반복해서 온다 → 화면에서는 묶음마다 한 번만 센다
+    ship_fee: money(po.deliveryFeeAmount),
+    ship_pkg: po.packageNumber ? String(po.packageNumber) : String(order.orderId || po.orderId || '') || null,
     // 고객이 주문할 때 남긴 배송 메모 (예: 부재 시 문 앞)
     ship_memo: memo(po.shippingMemo),
     // 상품 번호 (상품 페이지 링크: 스마트스토어주소/products/번호)
@@ -113,6 +118,7 @@ function createSmartstoreSource(options = {}) {
     label: '스마트스토어',
     fillsDeliveryType: true, // 주문에 오늘출발·발송기한이 들어 있다 (모르는 주문은 다시 읽어 채운다)
     fillsBuyerPhone: true, // 주문자 연락처가 들어 있다 (이 기능 전에 받은 발송 전 주문은 다시 읽어 채운다)
+    fillsShipWay: true, // 배송 방법·배송비가 들어 있다 (이 기능 전에 받은 발송 전 주문은 다시 읽어 채운다)
     async fetchChanges({ from, to }) {
       const ids = await changedIds(from, to);
       if (ids.length === 0) return [];

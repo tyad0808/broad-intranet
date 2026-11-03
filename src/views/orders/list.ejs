@@ -208,7 +208,8 @@
   <%# 표 머리 (넓은 화면에서만 보임). 체크박스는 처리할 수 있는 주문 모두 선택 %>
   <div class="order-head">
     <span class="oi-check"><% if (anyAction) { %><label class="check-all" title="처리할 수 있는 주문 모두 선택"><input type="checkbox" data-check-all><span class="check-all-text">처리할 수 있는 주문 모두 선택</span></label><% } %></span>
-    <span>주문</span><span>단계 · 디자인</span><span>담당</span><span>납기 · 발송</span><span>상태</span>
+    <%# 왼쪽은 보는 칸(상태·배송·납기), 오른쪽은 직원이 고르는 칸(디자인·담당) %>
+    <span>주문</span><span>상태</span><span>배송 · 금액</span><span>납기 · 발송</span><span class="head-pick">디자인</span><span class="head-pick">담당</span>
   </div>
   <ul class="order-list">
     <% groups.forEach(g => {
@@ -255,8 +256,14 @@
             <span class="st-badge <%= status.cls %>" <% if (status.title) { %>title="<%= status.title %>"<% } %>><%= status.text %></span>
             <% if (status.sub) { %><span class="st-sub" title="<%= status.sub %>"><%= status.sub %></span><% } %>
           </span>
-          <%# 주문 단계: 채널 처리에 따라 자동 (발주·발주확인·발송) %>
-          <span class="cell c-stage"><span class="pill stage" title="주문 단계 (자동)"><%= o.stage_name || '단계 없음' %></span>
+          <%# 배송 방법(고객이 고른 것) + 고객이 낸 금액(배송비 포함). 발주·발주확인·발송 단계는 상태 칸에 이미 나와서 따로 안 보여 준다 %>
+          <% const way = shipWay(orderShipWay(g.items)); const money = orderMoney(g.items); %>
+          <span class="cell c-ship">
+            <% if (way) { %><span class="ship-way <%= way.cls %>" title="고객이 고른 배송 방법"><%= way.text %></span><% } %>
+            <% if (money.total != null) { %><span class="oi-amount" title="<%= money.fee ? `상품 ${won(money.goods)} + 배송비 ${won(money.fee)}` : money.fee === 0 ? '배송비 무료' : '고객이 낸 금액' %>"><%= won(money.total) %></span><% } %>
+            <% if (!way && money.total == null) { %><span class="muted small">-</span><% } %>
+          </span>
+          <span class="cell c-stage"><span class="cell-cap">디자인</span>
           <%# 디자인 단계: 디자이너·관리자가 고른다 (비어 있으면 첫 단계) %>
           <% const curDesign = o.design_stage_id || firstDesign; const curDesignName = (designStages.find(s => s.id === curDesign) || {}).name || '-'; %>
           <% if (canPickStage && o.channel_status !== 'CANCELED') { %>
@@ -274,7 +281,7 @@
             <span class="pill design"><%= curDesignName %></span>
           <% } %>
           </span>
-          <span class="cell c-assign">
+          <span class="cell c-assign"><span class="cell-cap">담당</span>
           <form method="post" action="/orders/<%= o.id %>/assign" class="inline" data-autosubmit>
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= currentUrl %>">

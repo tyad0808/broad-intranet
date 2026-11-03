@@ -12,6 +12,8 @@ const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../
 const CHANNEL = 'manual';
 const PAY_METHODS = { BANK: '계좌이체', CARD: '카드', CASH: '현금', ETC: '기타' };
 const MAX_ITEMS = 20;
+// 수기 주문에서 고르는 배송 방법 (코드는 채널 주문과 같게)
+const MANUAL_SHIP_WAYS = { DELIVERY: '택배', QUICK_SVC: '퀵', VISIT_RECEIPT: '방문수령' };
 
 function manualRoutes(db, notifier) {
   const router = express.Router();
@@ -40,7 +42,7 @@ function manualRoutes(db, notifier) {
     res.status(status).render('orders/manual-form', {
       title: mode === 'new' ? '수기 주문 등록' : '수기 주문 수정',
       mode, order, values, items, error, back,
-      designers: designers(), PAY_METHODS,
+      designers: designers(), PAY_METHODS, MANUAL_SHIP_WAYS,
       sources: sources(order && order.source_id),
     });
   }
@@ -69,8 +71,8 @@ function manualRoutes(db, notifier) {
     const insert = db.prepare(`
       INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
         buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
-        stage_id, assignee_id, due_date, memo, pay_method, amount, depositor, source_id, source_order_no, receiver_address_detail, ship_memo)
-      VALUES (?, ?, ?, 'main', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        stage_id, assignee_id, due_date, memo, pay_method, amount, depositor, source_id, source_order_no, receiver_address_detail, ship_memo, delivery_method)
+      VALUES (?, ?, ?, 'main', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const ids = transaction(db, () => {
       const created = input.items.map((it, n) => Number(insert.run(
@@ -78,7 +80,7 @@ function manualRoutes(db, notifier) {
         input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address,
         nowIso, input.pay_status === 'paid' ? 'PAYED' : 'PAYMENT_WAITING',
         stageNew, input.assignee_id, input.due_date, input.memo, input.pay_method, input.amount, input.depositor,
-        input.source_id, input.source_order_no, input.receiver_address_detail, input.ship_memo
+        input.source_id, input.source_order_no, input.receiver_address_detail, input.ship_memo, input.delivery_method
       ).lastInsertRowid));
       const order = { channel_order_id: orderId };
       const items = created.map(id => findOrder(id));
@@ -131,12 +133,12 @@ function manualRoutes(db, notifier) {
     }
     transaction(db, () => {
       db.prepare(`
-        UPDATE orders SET buyer_name = ?, buyer_phone = ?, receiver_name = ?, receiver_phone = ?, receiver_address = ?, receiver_address_detail = ?, ship_memo = ?,
+        UPDATE orders SET buyer_name = ?, buyer_phone = ?, receiver_name = ?, receiver_phone = ?, receiver_address = ?, receiver_address_detail = ?, ship_memo = ?, delivery_method = ?,
           pay_method = ?, amount = ?, depositor = ?, assignee_id = ?, due_date = ?, memo = ?,
           source_id = ?, source_order_no = ?,
           version = version + 1, updated_at = datetime('now')
         WHERE channel = ? AND channel_order_id = ?
-      `).run(input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address, input.receiver_address_detail, input.ship_memo,
+      `).run(input.buyer_name, input.buyer_phone, input.receiver_name, input.receiver_phone, input.receiver_address, input.receiver_address_detail, input.ship_memo, input.delivery_method,
         input.pay_method, input.amount, input.depositor, input.assignee_id, input.due_date, input.memo,
         input.source_id, input.source_order_no,
         CHANNEL, order.channel_order_id);
@@ -147,10 +149,10 @@ function manualRoutes(db, notifier) {
         INSERT INTO orders (channel, channel_order_id, channel_item_id, item_type, product_name, option_text, quantity,
           buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address, paid_at, channel_status, channel_confirmed,
           stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id,
-          source_id, source_order_no, receiver_address_detail, ship_memo)
+          source_id, source_order_no, receiver_address_detail, ship_memo, delivery_method)
         SELECT channel, channel_order_id, ?, 'main', ?, ?, ?, buyer_name, buyer_phone, receiver_name, receiver_phone, receiver_address,
           paid_at, channel_status, 1, stage_id, assignee_id, due_date, memo, nas_path, pay_method, amount, depositor, version, design_stage_id,
-          source_id, source_order_no, receiver_address_detail, ship_memo
+          source_id, source_order_no, receiver_address_detail, ship_memo, delivery_method
         FROM orders WHERE id = ?
       `);
       let seq = Math.max(0, ...items.map(i => Number(String(i.channel_item_id).split('-').pop()) || 0));
@@ -359,6 +361,8 @@ function parseInput(body, { designerIds, sourceIds = new Set(), isNew, itemIds =
     receiver_address: [text(body.receiver_address, 250), text(body.receiver_address_detail, 50)].filter(Boolean).join(' ').slice(0, 300) || null,
     receiver_address_detail: text(body.receiver_address_detail, 50) || null,
     ship_memo: text(body.ship_memo, 500),
+    // 배송 방법: 택배·퀵·방문수령 중 하나 (모르는 값이면 택배)
+    delivery_method: MANUAL_SHIP_WAYS[body.delivery_method] ? body.delivery_method : 'DELIVERY',
     pay_method: payMethod,
     pay_status: body.pay_status === 'paid' ? 'paid' : 'waiting',
     amount: amountText ? Number(amountText) : null,

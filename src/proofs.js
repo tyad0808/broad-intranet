@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const { DB_PATH } = require('./db');
 const { imageType } = require('./brand');
 const { getSetting } = require('./collector');
+const { orderShipWay } = require('./channels/shipping');
 
 const MAX_IMAGE = 20 * 1024 * 1024;
 const EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
@@ -291,13 +292,20 @@ function sheetView(db, { order, items, proof, channelName, sourceName, now = new
     addons: addonLines(items),
     requests: memoLines,
     due: dueView(order, items, now),
-    ship: proof && proof.ship_method ? proof.ship_method : '',
+    // 저장한 배송방법이 없으면 고객이 주문할 때 고른 방법
+    ship: proof && proof.ship_method ? proof.ship_method : shipChoiceFor(items),
     hasImage: Boolean(proof && proof.image_file),
   };
 }
 
+// 고객이 고른 배송 방법(채널 코드) → 시안확정서·작업지시서에 쓰는 이름 (SHIP_CHOICES 중 하나, 모르면 '')
+const SHIP_CHOICE_OF = { DELIVERY: '택배', GDFW_ISSUE_SVC: '택배', QUICK_SVC: '퀵서비스', VISIT_RECEIPT: '방문수령', DIRECT_DELIVERY: '직접전달' };
+function shipChoiceFor(items) {
+  return SHIP_CHOICE_OF[orderShipWay(items)] || '';
+}
+
 module.exports = {
-  createProofs, sheetView, proofDirOf,
+  createProofs, sheetView, proofDirOf, shipChoiceFor,
   cleanLabel, splitLabel, optionParts, addonLines, guessMaterial, guessSize, customerRequests, dueView, cleanSize, isNone,
   SHIP_CHOICES, DEFAULT_PHONE, MAX_IMAGE,
   DEFAULT_TERMS, phoneOf, termsOf, saveProofSettings,

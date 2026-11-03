@@ -27,7 +27,7 @@ const { loadGuide } = require('./guide');
 const { createProofs } = require('./proofs');
 const { createOrderActions, canDispatch, DELAY_REASONS } = require('./actions');
 const { channelStatusLabel, channelInfo, channelInfoWith, claimLabel, claimLevel, productUrl } = require('./channels/labels');
-const { shipMethodLabel, courierLabel } = require('./channels/shipping');
+const { shipMethodLabel, courierLabel, shipWay, orderMoney, orderShipWay, dispatchMethodFor, won } = require('./channels/shipping');
 
 const MAX_LOGIN_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -67,6 +67,12 @@ function createApp({
   app.locals.claimLevel = claimLevel;
   app.locals.shipMethodLabel = shipMethodLabel;
   app.locals.courierLabel = courierLabel;
+  // 배송 방법 표시 · 주문 금액(배송비 포함) · 원 단위 글자
+  app.locals.shipWay = shipWay;
+  app.locals.orderMoney = orderMoney;
+  app.locals.orderShipWay = orderShipWay;
+  app.locals.dispatchMethodFor = dispatchMethodFor;
+  app.locals.won = won;
   app.locals.actionMode = actions.mode;
   // 채널별 연습/실제 모드 { smartstore: 'live', coupang: 'practice' }
   app.locals.actionModes = actions.modes || { smartstore: actions.mode };

@@ -10,8 +10,8 @@ const { buildWeek } = require('./calendar');
 const { historyForOrder } = require('../customer');
 const { fileLabel } = require('../fileLabel');
 const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, describeShipping, hasOpenClaim, DELAY_REASONS, DELAY_DEFAULT_TEXT } = require('../actions');
-const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER } = require('../channels/shipping');
-const { sheetView, SHIP_CHOICES, termsOf, phoneOf } = require('../proofs');
+const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER, orderShipWay, shipWay } = require('../channels/shipping');
+const { sheetView, SHIP_CHOICES, termsOf, phoneOf, shipChoiceFor } = require('../proofs');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
@@ -322,6 +322,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     const lastRun = db.prepare('SELECT started_at, ok FROM collect_runs ORDER BY id DESC LIMIT 1').get() || null;
 
     res.render('orders/list', {
+      bodyClass: 'orders-wide', // 가로 여백을 줄이고 주문 줄을 넓게
       ds: true, // 새 디자인 규칙(.ds-v2) — 지금은 이 화면에만
       title: '주문',
       logenOn: Boolean(logen && logen.hasKey),
@@ -566,6 +567,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
         today: items.some(i => i.channel_status === 'PAYED' && (i.delivery_type === 'TODAY' || i.delivery_type === 'OPTION_TODAY')),
         shipDue: items.filter(i => i.channel_status === 'PAYED' && i.ship_due).map(i => i.ship_due).sort()[0] || null,
         totalQty: items.reduce((n, i) => n + (Number(i.quantity) || 0), 0),
+        way: shipWay(orderShipWay(items)),
       });
     }
     if (!sheets.length) return res.status(404).render('error', { title: '발주서', message: '주문을 찾을 수 없습니다.' });
@@ -865,17 +867,18 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       canPickStage: canPickStage(req.user),
       back: safeBack(req.query.back),
       today: kstToday(),
-      ...proofLocals(order),
+      ...proofLocals(order, items),
     });
   });
 
   // 주문 카드의 '시안 · 작업지시서' 칸: 수정 횟수·배송방법
-  function proofLocals(order) {
+  // 시안확정서에 적을 배송방법: 저장한 값이 없으면 고객이 고른 방법으로 미리 골라 둔다
+  function proofLocals(order, items = [order]) {
     if (!proofs) return { proof: null, proofForm: null };
     const proof = proofs.get(order);
     return {
       proof,
-      proofForm: { revision: proof ? proof.revision : 0, ship_method: (proof && proof.ship_method) || '택배' },
+      proofForm: { revision: proof ? proof.revision : 0, ship_method: (proof && proof.ship_method) || shipChoiceFor(items) || '택배' },
       SHIP_CHOICES,
     };
   }

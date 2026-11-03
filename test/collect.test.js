@@ -38,6 +38,9 @@ function naverItem(id, { confirmed = false, status = 'PAYED' } = {}) {
       productOrderStatus: status,
       placeOrderStatus: confirmed ? 'OK' : 'NOT_YET',
       shippingMemo: '  부재 시 문 앞 ',
+      expectedDeliveryMethod: 'QUICK_SVC',
+      deliveryFeeAmount: 3000,
+      packageNumber: `PK${id}`,
       productId: 5551234567,
       shippingAddress: { name: '김수령', tel1: '010-1234-5678', zipCode: '06236', baseAddress: '서울 강남구 테헤란로 1', detailedAddress: '2층' },
     },
@@ -157,6 +160,9 @@ test('바뀐 주문 목록 → 상세 조회 → 인트라넷 형식으로 바�
     pay_amount: null,
     ship_memo: '부재 시 문 앞',
     product_no: '5551234567',
+    delivery_method: 'QUICK_SVC',
+    ship_fee: 3000,
+    ship_pkg: 'PK1',
   });
   assert.strictEqual(orders[1].channel_confirmed, 1);
 

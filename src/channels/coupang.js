@@ -44,6 +44,9 @@ function normalize(sheet) {
   const receiver = sheet.receiver || {};
   // 고객이 남긴 배송 메시지 (쿠팡 이름: parcelPrintMessage)
   const shipMemo = String(sheet.parcelPrintMessage || '').trim().slice(0, 500) || null;
+  // 배송비 (발주서 = 배송 묶음 하나): 기본 배송비 + 도서산간 추가 배송비. 칸이 없으면 모름(null)
+  const fee = money(sheet.shippingPrice);
+  const shipFee = fee === null ? null : fee + (money(sheet.remotePrice) || 0);
   const address = [receiver.postCode ? `(${receiver.postCode})` : null, receiver.addr1, receiver.addr2].filter(Boolean).join(' ') || null;
   return (sheet.orderItems || []).map(item => {
     // 취소가 끝나면 쿠팡이 출고 수량(shippingCount)을 0 으로 준다 (WING 주문상세의 '수량 0') → 취소된 상품
@@ -75,6 +78,10 @@ function normalize(sheet) {
       // 결제 금액 (orderPrice = 판매가 × 수량, 쿠팡이 준 값). 없으면 판매가 × 수량
       pay_amount: money(item.orderPrice) ?? (money(item.salesPrice) !== null ? money(item.salesPrice) * quantity : null),
       ship_memo: shipMemo,
+      // 쿠팡은 택배 배송만 있다
+      delivery_method: 'DELIVERY',
+      ship_fee: shipFee,
+      ship_pkg: sheet.shipmentBoxId ? String(sheet.shipmentBoxId) : null,
       // 쿠팡 상품 번호 (상품 페이지 링크: coupang.com/vp/products/번호)
       product_no: item.productId ? String(item.productId) : null,
     };

@@ -44,7 +44,7 @@
           </div>
           <div class="ship-inputs">
             <%- include('../partials/ship-pick', { inline: true, suffix: `_${id}`, onlyDelivery: main.channel === 'coupang',
-                 method: values[`method_${id}`], company: values[`company_${id}`] || (slip ? 'KGB' : undefined), tracking: values[`tracking_${id}`] || slip || '' }) %>
+                 method: values[`method_${id}`] || (slip || main.channel === 'coupang' ? undefined : dispatchMethodFor(orderShipWay(items))), company: values[`company_${id}`] || (slip ? 'KGB' : undefined), tracking: values[`tracking_${id}`] || slip || '' }) %>
           </div>
         </div>
       <% }) %>

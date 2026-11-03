@@ -10,7 +10,7 @@
 //
 // 수집: '상태가 바뀐 날짜(dateType=modified)' 기준으로 최근 주문을 읽는다 (날짜 단위라 매번 오늘 것을 다시 읽음 →
 //       상태가 그대로인 주문은 '바뀐 주문' 으로 세지 않는다)
-const { courierLabel } = require('./shipping');
+const { courierLabel, shipWayCode } = require('./shipping');
 
 const CHANNEL = 'godo';
 const DEFAULT_URL = 'http://127.0.0.1:3100/mall-api/v1';
@@ -163,6 +163,11 @@ function normalize(order, now = new Date()) {
   const address = [receiver.zipcode ? `(${receiver.zipcode})` : null, receiver.address, receiver.addressDetail]
     .filter(Boolean).join(' ') || null;
   // 배송 메시지: 자사몰 API 의 칸 이름을 아직 확인하지 못해 흔히 쓰는 이름을 차례로 본다 (없으면 비워 둠)
+  // 배송 방법: 자사몰 API 가 보내 주면 받는다 (코드 DELIVERY·QUICK_SVC·VISIT_RECEIPT 또는 한글 '택배'·'퀵'·'방문수령')
+  const delivery = order.delivery && typeof order.delivery === 'object' ? order.delivery : {};
+  const deliveryMethod = shipWayCode(order.deliveryMethod || delivery.method || order.deliveryMethodName || delivery.methodName);
+  // 배송비: 주문 전체에 한 번 (totalDeliveryCharge)
+  const shipFee = money(order.totalDeliveryCharge);
   const shipMemo = String(receiver.memo || receiver.message || order.orderMemo || order.shippingMemo || order.memo || '').trim().slice(0, 500) || null;
   return (order.items || []).map(item => {
     const map = mapStatus(item.status || order.status, Boolean(item.shippedAt), { stale });
@@ -191,6 +196,9 @@ function normalize(order, now = new Date()) {
       // 결제 금액: (상품가 + 옵션가 + 텍스트옵션가) × 수량 − 할인
       pay_amount: money(item.amount) !== null ? money(item.amount) - (money(item.discount) || 0) : null,
       ship_memo: shipMemo,
+      delivery_method: deliveryMethod,
+      ship_fee: shipFee,
+      ship_pkg: order.orderNo ? String(order.orderNo) : null,
       // 자사몰 상품 번호 (상품 페이지 링크: goods_view.php?goodsNo=번호)
       product_no: item.goodsNo ? String(item.goodsNo) : null,
     };

@@ -48,6 +48,11 @@ function addMissingColumns(db) {
   addColumn(db, 'orders', 'amount', 'INTEGER');
   addColumn(db, 'orders', 'depositor', 'TEXT');
   addColumn(db, 'orders', 'buyer_phone', 'TEXT');
+  // 고객이 고른 배송 방법 (DELIVERY 택배 · QUICK_SVC 퀵 · VISIT_RECEIPT 방문수령 …, 채널 값 그대로)
+  addColumn(db, 'orders', 'delivery_method', 'TEXT');
+  // 배송비: 같은 묶음배송(ship_pkg)의 상품마다 같은 값이 반복해서 들어 있다 → 금액은 묶음마다 한 번만 센다
+  addColumn(db, 'orders', 'ship_fee', 'INTEGER');
+  addColumn(db, 'orders', 'ship_pkg', 'TEXT');
   widenOrderActions(db);
   // 디자인 단계 (비어 있으면 첫 번째 디자인 단계로 본다)
   addColumn(db, 'orders', 'design_stage_id', 'INTEGER REFERENCES design_stages(id)');
