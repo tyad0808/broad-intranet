@@ -113,7 +113,7 @@
         <% if (order.source_order_no) { %><dt>판매처 주문번호</dt><dd><%= order.source_order_no %></dd><% } %>
       <% } %>
       <% if (!isManual) { %>
-        <dt>결제 금액</dt><dd><% if (money.total != null) { %><strong class="oi-amount"><%= won(money.total) %></strong> <span class="muted small"><%= money.fee ? `상품 ${won(money.goods)} + 배송비 ${won(money.fee)}` : money.fee === 0 ? '배송비 무료' : '배송비 모름' %></span><% } else { %><span class="muted">-</span><% } %></dd>
+        <dt>상품 금액</dt><dd><% if (money.goods != null) { %><strong class="oi-amount"><%= won(money.goods) %></strong> <span class="muted small">배송비 빼고 (통계와 같은 기준)</span><% } else { %><span class="muted">-</span><% } %></dd>
       <% } %>
       <dt><%= isManual ? '등록일' : '결제일' %></dt><dd><%= kst(order.paid_at) %></dd>
     </dl>

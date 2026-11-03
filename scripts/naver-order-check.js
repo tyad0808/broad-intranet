@@ -54,29 +54,5 @@ const PRIVATE = /address|name|tel|phone|memo|zip|base|detail|city|state/i;
     const future = delayed.filter(po => Date.parse(po.shippingDueDate) > now).length;
     console.log(`\n▶ 발송지연 처리한 주문 ${delayed.length}건: 발송기한이 앞으로인 것 ${future}건 / 이미 지난 것 ${delayed.length - future}건`);
   }
-  // 배송비 계산 확인: 인트라넷 계산(상품 결제 금액 합 + 묶음배송마다 배송비 한 번)이 고객이 낸 총액과 맞는지
-  //   고객이 낸 총액 = order 의 ○○PaymentAmount(일반·포인트·충전금·후불 …)를 모두 더한 값
-  const byOrder = new Map();
-  for (const it of items) {
-    const id = it.order && it.order.orderId;
-    if (!id) continue;
-    if (!byOrder.has(id)) byOrder.set(id, { order: it.order, list: [] });
-    byOrder.get(id).list.push(it.productOrder || {});
-  }
-  let same = 0;
-  const diff = [];
-  for (const { order, list } of byOrder.values()) {
-    const paid = Object.entries(order).filter(([k, v]) => /PaymentAmount$/.test(k) && Number.isFinite(Number(v))).reduce((t, [, v]) => t + Number(v), 0);
-    const fees = new Map();
-    for (const po of list) fees.set(po.packageNumber || 'x', Math.max(fees.get(po.packageNumber || 'x') || 0, Number(po.deliveryFeeAmount) || 0));
-    const goods = list.reduce((t, po) => t + (Number(po.initialPaymentAmount ?? po.totalPaymentAmount) || 0), 0);
-    const mine = goods + [...fees.values()].reduce((t, v) => t + v, 0);
-    if (mine === paid) same += 1; else diff.push(`인트라넷 계산 ${mine} / 실제 결제 ${paid} (상품 ${list.length}개, 묶음 ${fees.size}개)`);
-  }
-  console.log(`\n▶ 배송비 포함 금액 계산 확인: 주문 ${byOrder.size}건 중 ${same}건 일치`);
-  if (diff.length) {
-    console.log('  맞지 않는 주문 (일부 상품만 확인했거나 다른 계산이 필요한 경우):');
-    diff.slice(0, 8).forEach(d => console.log(`    ${d}`));
-  }
   console.log('\n위 결과를 그대로 보여 주세요. (고객 정보는 출력되지 않습니다)');
 })().catch(e => console.log(`실패: ${e.message}`));

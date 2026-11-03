@@ -256,12 +256,12 @@
             <span class="st-badge <%= status.cls %>" <% if (status.title) { %>title="<%= status.title %>"<% } %>><%= status.text %></span>
             <% if (status.sub) { %><span class="st-sub" title="<%= status.sub %>"><%= status.sub %></span><% } %>
           </span>
-          <%# 배송 방법(고객이 고른 것) + 고객이 낸 금액(배송비 포함). 발주·발주확인·발송 단계는 상태 칸에 이미 나와서 따로 안 보여 준다 %>
+          <%# 배송 방법(고객이 고른 것) + 상품 금액(배송비 빼고, 통계와 같은 기준). 발주·발주확인·발송 단계는 상태 칸에 이미 나와서 따로 안 보여 준다 %>
           <% const way = shipWay(orderShipWay(g.items)); const money = orderMoney(g.items); %>
           <span class="cell c-ship">
             <% if (way) { %><span class="ship-way <%= way.cls %>" title="고객이 고른 배송 방법"><%= way.text %></span><% } %>
-            <% if (money.total != null) { %><span class="oi-amount" title="<%= money.fee ? `상품 ${won(money.goods)} + 배송비 ${won(money.fee)}` : money.fee === 0 ? '배송비 무료' : '고객이 낸 금액' %>"><%= won(money.total) %></span><% } %>
-            <% if (!way && money.total == null) { %><span class="muted small">-</span><% } %>
+            <% if (money.goods != null) { %><span class="oi-amount" title="상품 금액 (배송비 빼고)"><%= won(money.goods) %></span><% } %>
+            <% if (!way && money.goods == null) { %><span class="muted small">-</span><% } %>
           </span>
           <span class="cell c-stage"><span class="cell-cap">디자인</span>
           <%# 디자인 단계: 디자이너·관리자가 고른다 (비어 있으면 첫 단계) %>

@@ -103,7 +103,7 @@ test('스마트스토어 수집: 배송 방법·배송비를 모르는 발송 �
   assert.strictEqual(db.prepare("SELECT delivery_method FROM orders WHERE channel_item_id = 'P1'").get().delivery_method, 'VISIT_RECEIPT');
 });
 
-test('목록: 배송 방법 표시와 고객이 낸 금액(배송비 포함), 휴대폰용 디자인·담당 이름표', async t => {
+test('목록: 배송 방법 표시와 상품 금액(배송비 빼고 = 통계 기준), 휴대폰용 디자인·담당 이름표', async t => {
   const { db, kim } = await setup(t);
   applyOrders(db, [
     order(1, { delivery_method: 'QUICK_SVC', pay_amount: 32000, ship_fee: 3000, ship_pkg: 'K1' }),
@@ -113,20 +113,20 @@ test('목록: 배송 방법 표시와 고객이 낸 금액(배송비 포함), �
   const list = (await kim.request('/')).text;
   assert.match(list, /class="ship-way sw-quick"[^>]*>퀵</);
   assert.match(list, /class="ship-way sw-parcel"[^>]*>택배</);
-  assert.match(list, />39,500원</, '32,000 + 4,500 + 배송비 3,000 한 번');
-  assert.match(list, /title="상품 36,500원 \+ 배송비 3,000원"/);
-  assert.match(list, />11,900원</);
+  assert.match(list, />36,500원</, '32,000 + 4,500 (배송비는 빼고)');
+  assert.match(list, />8,900원</);
+  assert.doesNotMatch(list, />39,500원</, '배송비를 더하지 않는다');
   assert.match(list, /class="cell-cap">디자인</);
   assert.match(list, /class="cell-cap">담당</);
   assert.match(list, /<body[^>]*class="[^"]*orders-wide/, '주문 목록은 넓게');
 });
 
-test('상세: 배송 방법·결제 금액을 보여 주고, 발송처리 칸은 고객이 고른 방법(퀵)으로 미리 골라 둔다', async t => {
+test('상세: 배송 방법·상품 금액(배송비 빼고)을 보여 주고, 발송처리 칸은 고객이 고른 방법(퀵)으로 미리 골라 둔다', async t => {
   const { db, kim, idOf } = await setup(t);
   applyOrders(db, [order(1, { delivery_method: 'QUICK_SVC', pay_amount: 32000, ship_fee: 3000, ship_pkg: 'K1', channel_confirmed: 1 })]);
   const page = (await kim.request(`/orders/${idOf('P1')}`)).text;
   assert.match(page, /<dt>배송 방법<\/dt><dd><span class="ship-way sw-quick">퀵<\/span>/);
-  assert.match(page, /<dt>결제 금액<\/dt><dd><strong class="oi-amount">35,000원<\/strong> <span class="muted small">상품 32,000원 \+ 배송비 3,000원<\/span>/);
+  assert.match(page, /<dt>상품 금액<\/dt><dd><strong class="oi-amount">32,000원<\/strong> <span class="muted small">배송비 빼고/);
   assert.match(page, /<option value="QUICK_SVC:" selected>퀵서비스<\/option>/, '퀵 주문은 발송처리도 퀵서비스로');
   assert.match(page, /name="method" value="QUICK_SVC"/);
   // 발주서에도 배송 방법
