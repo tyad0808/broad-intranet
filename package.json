@@ -26,7 +26,8 @@
     "logen-check": "node --disable-warning=ExperimentalWarning scripts/logen-check.js",
     "order-trace": "node --disable-warning=ExperimentalWarning scripts/order-trace.js",
     "option-sample": "node --disable-warning=ExperimentalWarning scripts/option-sample.js",
-    "mail-backfill": "node --disable-warning=ExperimentalWarning scripts/mail-backfill.js"
+    "mail-backfill": "node --disable-warning=ExperimentalWarning scripts/mail-backfill.js",
+    "godo-shipway-backfill": "node --disable-warning=ExperimentalWarning scripts/godo-shipway-backfill.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
