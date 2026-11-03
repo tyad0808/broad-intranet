@@ -22,7 +22,8 @@ function fakeClient(byNo) {
       calls.push(`${method} ${path}`);
       const no = path.split('/').pop();
       if (!byNo[no]) throw Object.assign(new Error('자사몰 API 오류 (HTTP 404): 주문이 없습니다.'), { status: 404 });
-      return { orderNo: no, status: 's1', items: [{ itemNo: '1', status: 's1', name: '상품' }], ...byNo[no] };
+      const order = { orderNo: no, status: 's1', items: [{ itemNo: '1', status: 's1', name: '상품' }], ...byNo[no] };
+      return no === '1002' ? { item: order } : order; // 감싼 응답도 읽는지
     },
   };
 }

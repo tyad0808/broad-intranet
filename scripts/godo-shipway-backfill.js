@@ -27,7 +27,9 @@ async function fillGodoShipWay(db, { client = createGodoClient(), apply = false,
   for (const [i, orderNo] of orderNos.entries()) {
     let code = null;
     try {
-      code = shipWayOf(await client.request('GET', `/orders/${orderNo}`));
+      // 한 건 조회 응답은 { item: 주문 } 처럼 감싸서 올 수도 있다 (수집의 verifyOpen 과 같은 방법으로 꺼냄)
+      const body = await client.request('GET', `/orders/${orderNo}`);
+      code = shipWayOf((body && (body.item || body.order)) || body);
       if (!code) out.unknown += 1; // 자사몰도 모르는 방법 → 비워 둠
     } catch (e) {
       out.failed.push({ orderNo, message: e.message }); // 자사몰에서 지워진 주문 등 → 건너뜀
