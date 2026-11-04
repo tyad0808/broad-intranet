@@ -59,20 +59,8 @@ function channelRoutes(registry, { godo = null } = {}) {
   router.post('/channels/:ch/delete', (req, res) => {
     if (!known(req.params.ch)) return res.redirect(back);
     const out = registry.remove(req.params.ch, req.user.id);
-    flash(req, out.error ? 'error' : 'ok', out.error || (out.backToEnv
-      ? '키를 지웠어요. 서버를 다시 켜면 서버 설정(.env) 키로 돌아가요. 이미 가져온 주문·문의는 그대로 남아요.'
-      : '키를 지웠어요. 이미 가져온 주문·문의는 그대로 남아요.'));
+    flash(req, out.error ? 'error' : 'ok', out.error || '키를 지웠어요. 이미 가져온 주문·문의는 그대로 남아요.');
     res.redirect(back);
-  });
-
-  // 서버 설정(.env) 키를 관리자 화면으로 옮기기 (관리자 비밀번호 다시 확인, 연결 시험)
-  router.post('/channels/:ch/adopt', (req, res, next) => {
-    if (!known(req.params.ch)) return res.redirect(back);
-    return once(`adopt${req.params.ch}`, res, async () => {
-      const out = await registry.adopt(req.params.ch, req.body.password, req.user);
-      flash(req, out.error ? 'error' : 'ok', out.error || `${registry.CHANNELS[req.params.ch].label}를 관리자 화면으로 옮겼어요. 지금 동작은 그대로이고, 이제 여기서 관리해요.`);
-      res.redirect(back);
-    }).catch(next);
   });
 
   // '실제로 보내기' 켜기 (관리자 비밀번호 다시 확인) / 끄기 (바로)

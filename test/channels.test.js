@@ -178,35 +178,3 @@ test('개발용 가짜 주문 수집기는 키가 없으면 그대로, 화면에
   assert.ok(!s.collectors.includes(mock));
   assert.strictEqual(s.collectors.filter(c => c.source.channel === 'smartstore').length, 1);
 });
-
-test('서버 설정 키를 관리자 화면으로 옮기기: 비밀번호·연결 시험, 실제로 보내기 상태 그대로, 서버 설정 수집기·처리를 화면 것으로 바꿔 끼움', async () => {
-  const env = { ORDER_SOURCE: 'naver', NAVER_CLIENT_ID: 'envApp', NAVER_CLIENT_SECRET: 'goodEnvSecret9876', NAVER_WRITE: 'on' };
-  const s = setup({ env });
-  // server.js 가 .env 로 끼워 둔 것들 흉내
-  const envCollector = { source: { channel: 'smartstore', label: '스마트스토어' } };
-  s.collectors.push(envCollector);
-  s.actions.setWriter('smartstore', { env: true });
-  s.inbox.collectorSources.push({ source: 'smartstore_qna', env: true });
-  assert.strictEqual(s.registry.view().find(c => c.channel === 'smartstore').fromEnv, true);
-
-  assert.match((await s.registry.adopt('smartstore', 'wrong', s.admin)).error, /비밀번호가 맞지 않/);
-  assert.strictEqual(s.db.prepare('SELECT COUNT(*) AS n FROM channel_keys').get().n, 0);
-  assert.match((await s.registry.adopt('coupang', 'password123', s.admin)).error, /옮길 서버 설정 키가 없/);
-
-  assert.deepStrictEqual(await s.registry.adopt('smartstore', 'password123', s.admin), { ok: true });
-  const v = s.registry.view().find(c => c.channel === 'smartstore');
-  assert.deepStrictEqual([v.fromEnv, v.envAvailable, v.values.clientId, v.tails.clientSecret, v.on.write, v.on.answer], [false, true, 'envApp', '9876', true, false], '실제로 보내기 상태 그대로');
-  assert.ok(!s.collectors.includes(envCollector), '서버 설정 수집기는 빼고');
-  assert.strictEqual(s.collectors.filter(c => c.source.channel === 'smartstore').length, 1, '화면 것 하나만');
-  assert.strictEqual(s.actions.modes.smartstore, 'live', '발주확인·발송처리는 그대로 실제로');
-  assert.ok(!s.inbox.collectorSources.some(x => x.env), '서버 설정 문의 받기도 화면 것으로');
-  assert.strictEqual(s.inbox.collectorSources.filter(x => x.source === 'smartstore_qna').length, 1);
-  assert.match(s.registry.history()[0].action, /서버 설정에서 옮김/);
-
-  // 옮긴 뒤에는 화면에서 끄고 켤 수 있다
-  s.registry.switchOff('smartstore', 'write', s.admin.id);
-  assert.strictEqual(s.actions.modes.smartstore, 'practice');
-  // 지우면 다음에 서버를 켤 때 서버 설정으로 돌아간다
-  assert.deepStrictEqual(s.registry.remove('smartstore', s.admin.id), { ok: true, backToEnv: true });
-  assert.strictEqual(s.registry.view().find(c => c.channel === 'smartstore').fromEnv, true);
-});

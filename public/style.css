@@ -1878,9 +1878,6 @@ pre.cmd { margin: 8px 0; padding: 10px 12px; overflow-x: auto; border-radius: 8p
 .sw-confirm[open] > summary { display: none; }
 .sw-confirm-box { display: grid; gap: 10px; max-width: 560px; margin: 4px 0 0 42px; padding: 16px; border: 1px solid #f3c3c8; border-radius: 12px; background: #fff8f8; }
 .sw-confirm-box input { margin: 0; }
-.ch-adopt[open] > summary { display: none; }
-.adopt-box { margin-left: 0; border-color: #c9dafc; background: var(--primary-weak); }
-.adopt-go { justify-self: start; min-height: 44px; padding: 0 18px; }
 .danger-fill { justify-self: start; width: auto; min-height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: var(--error); color: #fff; font-weight: 700; }
 @media (max-width: 760px) {
   .ch-body, .ch-edit { margin-left: 0; }

@@ -40,28 +40,8 @@
     </div>
 
     <% if (c.fromEnv) { %>
-      <div class="ch-body">
-        <p class="muted small">서버 설정 키로 연결돼 있어요. 아래 [관리자 화면으로 옮기기]를 누르면 이 화면에서 키 바꾸기·끄기·실제로 보내기를 관리할 수 있어요.</p>
-        <%# 옮기기: 서버 설정 키로 연결 시험 → 성공하면 키를 암호화해 화면 관리로. 실제로 보내기 상태는 지금 그대로 %>
-        <details class="sw-confirm ch-adopt">
-          <summary class="btn-sm sw-on">관리자 화면으로 옮기기</summary>
-          <form method="post" action="/admin/channels/<%= c.channel %>/adopt" class="sw-confirm-box adopt-box" data-once>
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <strong><%= c.label %> 키를 관리자 화면으로 옮길까요?</strong>
-            <ul class="plain-list">
-              <li>서버 설정 키로 연결 시험을 하고, 성공하면 그 키를 암호화해서 이 화면으로 옮겨요.</li>
-              <li>'실제로 보내기' 는 지금 상태 그대로예요 (<%= Object.entries(c.switches).map(([k, n]) => `${n}: ${c.on[k] ? '실제로 보냄' : '연습 모드'}`).join(' · ') %>). <strong>옮겨도 동작은 바뀌지 않아요.</strong></li>
-              <li>옮긴 뒤에는 서버 .env 의 키는 쓰이지 않아요. 나중에 지워도 돼요.</li>
-            </ul>
-            <label class="acct-field">확인을 위해 관리자 비밀번호를 넣어 주세요
-              <input type="password" name="password" required autocomplete="current-password" <%= ready ? '' : 'disabled' %>>
-            </label>
-            <button type="submit" class="btn-sm primary adopt-go" <%= ready ? '' : 'disabled' %>>연결 시험하고 옮기기</button>
-          </form>
-        </details>
-      </div>
+      <div class="ch-body"><p class="muted small">서버 설정 키라 여기서는 바꿀 수 없어요. 서버 .env 에서 지우면 여기서 넣을 수 있어요.</p></div>
     <% } else { %>
-      <% if (c.envAvailable) { %><div class="ch-body"><p class="muted small">관리자 화면에서 관리하는 중이에요. 서버 .env 에도 키가 있지만 쓰이지 않아요 (지워도 돼요).</p></div><% } %>
       <% if (c.saved && !c.locked) { %>
         <div class="ch-body">
           <% c.fields.forEach(fl => { %>
@@ -80,7 +60,7 @@
               <button type="submit" class="btn-sm"><%= c.enabled ? '수집 끄기' : '수집 켜기' %></button>
             </form>
             <form method="post" action="/admin/channels/<%= c.channel %>/delete" class="inline" data-once
-                  data-confirm="<%= c.label %> 키를 지울까요?&#10;<%= c.envAvailable ? '서버를 다시 켜면 서버 설정(.env) 키로 돌아가요. 그 전까지는 주문·문의를 가져오지 않아요.' : '주문·문의를 더 가져오지 않아요.' %> 이미 가져온 주문·문의는 그대로 남아요.">
+                  data-confirm="<%= c.label %> 키를 지울까요?&#10;주문·문의를 더 가져오지 않아요. 이미 가져온 주문·문의는 그대로 남아요.">
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <button type="submit" class="btn-sm danger">키 지우기</button>
             </form>

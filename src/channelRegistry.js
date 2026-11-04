@@ -28,7 +28,6 @@ const CHANNELS = {
       { key: 'clientSecret', label: '애플리케이션 시크릿', secret: true, required: true },
     ],
     envReady: env => env.ORDER_SOURCE === 'naver' && Boolean(env.NAVER_CLIENT_ID && env.NAVER_CLIENT_SECRET),
-    envKeys: env => ({ clientId: env.NAVER_CLIENT_ID, clientSecret: env.NAVER_CLIENT_SECRET }),
     envOn: { write: env => env.NAVER_WRITE === 'on', answer: env => env.NAVER_ANSWER === 'on' && env.NAVER_QNA !== 'off' },
     switches: { write: '발주확인 · 발송처리', answer: '상품 문의 답변' },
     qna: { source: QNA_SOURCE, label: QNA_LABEL, off: env => env.NAVER_QNA === 'off' },
@@ -43,7 +42,6 @@ const CHANNELS = {
       { key: 'wingId', label: 'WING 로그인 아이디', secret: false, required: false, note: '문의 답변에 "누가 답했는지" 로만 써요 · 비밀번호 아님' },
     ],
     envReady: env => ['COUPANG_VENDOR_ID', 'COUPANG_ACCESS_KEY', 'COUPANG_SECRET_KEY'].every(k => env[k]) && env.COUPANG !== 'off',
-    envKeys: env => ({ vendorId: env.COUPANG_VENDOR_ID, accessKey: env.COUPANG_ACCESS_KEY, secretKey: env.COUPANG_SECRET_KEY, wingId: env.COUPANG_WING_ID || '' }),
     envOn: { write: env => env.COUPANG_WRITE === 'on', answer: env => env.COUPANG_ANSWER === 'on' && env.COUPANG_QNA !== 'off' },
     switches: { write: '상품준비중 · 송장', answer: '문의 답변' },
     qna: { source: CQ_SOURCE, label: CQ_LABEL, off: env => env.COUPANG_QNA === 'off' },
@@ -111,8 +109,7 @@ function createChannelRegistry({
   const rowOf = ch => db.prepare('SELECT * FROM channel_keys WHERE channel = ?').get(ch) || null;
   const log = (ch, userId, action) => db.prepare('INSERT INTO channel_log (channel, user_id, action) VALUES (?, ?, ?)').run(ch, userId || null, action);
   const parse = text => { try { return JSON.parse(text || '{}') || {}; } catch { return {}; } };
-  // 서버 설정(.env) 판매처: .env 에 키가 있고, 아직 관리자 화면으로 옮기지 않은 것 (화면에 저장된 키가 있으면 화면이 우선)
-  const envManaged = ch => CHANNELS[ch].envReady(env) && !rowOf(ch);
+  const envManaged = ch => CHANNELS[ch].envReady(env);
   // 저장된 키 전부 (비밀 키는 풀어서). 못 풀면 null
   function keysOf(row) {
     if (!row) return null;
@@ -142,16 +139,10 @@ function createChannelRegistry({
       added.delete(ch);
     }
     const row = rowOf(ch);
-    if (!row) return; // 화면에 키가 없으면 다른 수집기(개발용 가짜 주문 등)는 그대로
-    // 화면이 맡은 판매처: 서버 설정으로 끼워 둔 것(옮기기 전)·개발용 가짜 주문 수집기를 모두 뺀다
-    for (let i = collectors.length - 1; i >= 0; i--) if (collectors[i].source.channel === ch) collectors.splice(i, 1);
-    if (inbox) {
-      for (let i = inbox.collectorSources.length - 1; i >= 0; i--) if (inbox.collectorSources[i].source === def.qna.source) inbox.collectorSources.splice(i, 1);
-      delete inbox.senders[def.qna.source];
-    }
-    if (actions) actions.setWriter(ch, null);
-    const keys = row.enabled ? keysOf(row) : null;
+    const keys = row && row.enabled ? keysOf(row) : null;
     if (!keys) return;
+    // 화면에서 넣은 키가 있으면 같은 판매처의 다른 수집기(개발용 가짜 주문)는 뺀다
+    for (let i = collectors.length - 1; i >= 0; i--) if (collectors[i].source.channel === ch) collectors.splice(i, 1);
     const now = { collector: makeCollector(f.source(keys)) };
     collectors.push(now.collector);
     added.set(ch, now);
@@ -184,7 +175,6 @@ function createChannelRegistry({
       const keysOk = Boolean(row && keysOf(row));
       return {
         channel: ch, label: def.label, api: def.api, fields: def.fields, switches: def.switches, fromEnv,
-        envAvailable: def.envReady(env), // .env 에도 키가 있음 (옮긴 뒤에는 쓰이지 않음)
         saved: Boolean(row && row.secret_sealed), locked: Boolean(row && row.secret_sealed && !keysOk),
         values: pub.values || {}, tails: pub.tails || {},
         enabled: row ? Boolean(row.enabled) : false,
@@ -282,38 +272,9 @@ function createChannelRegistry({
     },
     // 지우기: 키를 지우고 수집·처리도 뺀다 (이미 가져온 주문·문의는 그대로)
     remove(ch, userId) {
-      if (!CHANNELS[ch] || !rowOf(ch)) return { error: '판매처를 찾을 수 없어요.' };
+      if (!rowOf(ch) || envManaged(ch)) return { error: '판매처를 찾을 수 없어요.' };
       db.prepare('DELETE FROM channel_keys WHERE channel = ?').run(ch);
       log(ch, userId, '키 지움');
-      // 지금 끼워 둔 것을 뺀다. .env 에 키가 있으면 서버를 다시 켤 때 서버 설정으로 돌아간다
-      const before = added.get(ch);
-      if (before) {
-        drop(collectors, before.collector);
-        if (inbox && before.qna) drop(inbox.collectorSources, before.qna);
-        if (inbox && before.sender) delete inbox.senders[CHANNELS[ch].qna.source];
-        if (actions && before.writer) actions.setWriter(ch, null);
-        added.delete(ch);
-      }
-      return { ok: true, backToEnv: CHANNELS[ch].envReady(env) };
-    },
-    // 서버 설정(.env) 키를 관리자 화면으로 옮기기: 연결 시험 + 관리자 비밀번호. '실제로 보내기' 상태는 지금 그대로 가져간다
-    async adopt(ch, password, user) {
-      const def = CHANNELS[ch];
-      if (!def || !envManaged(ch)) return { error: '옮길 서버 설정 키가 없어요.' };
-      if (!box.ready) return { error: box.keyProblem || '서버 .env 에 SETTINGS_KEY 가 없어 키를 저장할 수 없어요.' };
-      if (!verifyAdminPassword(user, password)) return { error: '관리자 비밀번호가 맞지 않아요.' };
-      const keys = def.envKeys(env);
-      const error = await tryKeys(ch, keys);
-      if (error) return { error };
-      const values = Object.fromEntries(def.fields.filter(fl => !fl.secret).map(fl => [fl.key, keys[fl.key] || '']));
-      const tails = Object.fromEntries(def.fields.filter(fl => fl.secret).map(fl => [fl.key, String(keys[fl.key]).slice(-4)]));
-      const secret = Object.fromEntries(def.fields.filter(fl => fl.secret).map(fl => [fl.key, keys[fl.key]]));
-      db.prepare(`
-        INSERT INTO channel_keys (channel, public_json, secret_sealed, enabled, write_on, answer_on, test_ok_at, updated_by, updated_at)
-        VALUES (?, ?, ?, 1, ?, ?, datetime('now'), ?, datetime('now'))
-      `).run(ch, JSON.stringify({ values, tails }), box.seal(JSON.stringify(secret)),
-        def.envOn.write(env) ? 1 : 0, def.envOn.answer(env) && !def.qna.off(env) ? 1 : 0, (user && user.id) || null);
-      log(ch, user && user.id, '서버 설정에서 옮김');
       applyChannel(ch);
       return { ok: true };
     },
