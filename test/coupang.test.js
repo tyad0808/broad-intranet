@@ -279,3 +279,14 @@ test('쿠팡에서 취소돼 목록에서 사라진 주문은 취소로, 7일 �
   await createCollector({ db, now, source: createCoupangSource({ ...KEYS, fetchFn: flaky, minGapMs: 0, now }) }).run();
   assert.deepStrictEqual(db.prepare("SELECT channel_status FROM orders WHERE channel = 'coupang'").all().map(r => r.channel_status), ['PAYED', 'PAYED']);
 });
+
+test('쿠팡 상품 링크: 옵션 번호(vendorItemId)를 붙여 고객이 고른 옵션이 보이게', () => {
+  const { productUrl } = require('../src/channels/labels');
+  assert.strictEqual(
+    productUrl({ channel: 'coupang', product_no: '8082903311', channel_item_id: '750164956168195-89834135240' }),
+    'https://www.coupang.com/vp/products/8082903311?vendorItemId=89834135240'
+  );
+  // 옵션 번호를 모르면 예전처럼 상품 번호만
+  assert.strictEqual(productUrl({ channel: 'coupang', product_no: '8082903311', channel_item_id: null }), 'https://www.coupang.com/vp/products/8082903311');
+  assert.strictEqual(productUrl({ channel: 'coupang', product_no: null, channel_item_id: '1-2' }), null);
+});

@@ -493,7 +493,7 @@ test('주문 상세: 상품 이름을 누르면 손님이 보는 상품 페이�
   addUser(db, { email: 'boss@broad.test', role: 'admin' });
   const boss = await loginAs(baseUrl, 'boss@broad.test');
   const page = async id => (await boss.request(`/orders/${id}`)).text;
-  assert.match(await page(cp), /href="https:\/\/www\.coupang\.com\/vp\/products\/7012345678" target="_blank" rel="noopener noreferrer" class="product-link"/);
+  assert.match(await page(cp), /href="https:\/\/www\.coupang\.com\/vp\/products\/7012345678\?vendorItemId=1" target="_blank" rel="noopener noreferrer" class="product-link"/);
   assert.match(await page(gd), /href="https:\/\/broadstore\.co\.kr\/goods\/goods_view\.php\?goodsNo=1000701702"/);
   assert.match(await page(ss), /href="https:\/\/smartstore\.naver\.com\/main\/products\/5551234567"/, '가게 주소를 저장하기 전');
   assert.doesNotMatch(await page(none), /class="product-link"/, '상품 번호를 모르면 링크 없음');

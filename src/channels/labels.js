@@ -95,7 +95,12 @@ function productUrl(order, { smartstoreUrl } = {}) {
   const no = order && order.product_no ? encodeURIComponent(String(order.product_no)) : null;
   if (!no) return null;
   if (order.channel === 'smartstore') return `${(smartstoreUrl || SMARTSTORE_DEFAULT).replace(/\/$/, '')}/products/${no}`;
-  if (order.channel === 'coupang') return `https://www.coupang.com/vp/products/${no}`;
+  if (order.channel === 'coupang') {
+    // 쿠팡은 한 상품 페이지에 옵션이 여러 개 → 옵션 번호(vendorItemId)를 붙여야 고객이 고른 옵션이 보인다 (없으면 대표 옵션)
+    //   옵션 번호는 상품주문번호(channel_item_id = '배송번호-옵션번호') 뒷부분
+    const vendorItemId = String(order.channel_item_id || '').split('-')[1];
+    return `https://www.coupang.com/vp/products/${no}${/^\d+$/.test(vendorItemId || '') ? `?vendorItemId=${vendorItemId}` : ''}`;
+  }
   if (order.channel === 'godo') return `${GODO_SHOP_URL}/goods/goods_view.php?goodsNo=${no}`;
   return null;
 }
