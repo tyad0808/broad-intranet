@@ -1741,6 +1741,13 @@ body.talk-list-page .container { max-width: none; }
 .talk-row .talk-prev { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; }
 .talk-row .clip { flex: none; color: var(--text-2); font-size: 14px; }
 .talk-tag.src { background: var(--line-2); color: var(--text-2); }
+/* 메일 꼬리표: 네이버메일 = 초록, 지메일 = 파랑 (계정이 여러 개여도 종류별로 같은 색) */
+.talk-tag.src[class*="src-naver_mail"] { background: #e3f6ea; color: #03873f; font-weight: 700; }
+.talk-tag.src[class*="src-gmail"] { background: var(--primary-weak); color: var(--primary-dark); font-weight: 700; }
+/* 목록 줄: 꼬리표는 줄이지 않고, 길면 이름을 줄인다 */
+.mail-list .talk-name { flex: 0 1 auto; min-width: 4.5em; }
+.mail-list .talk-tag.src { flex: none; }
+.mail-list .talk-tag.who-tag, .mail-list .talk-tag.done-tag { flex: 0 1 auto; min-width: 0; }
 .talk-tag.done-tag { flex: none; background: var(--ok-bg); color: var(--ok); }
 .talk-tag.who-tag { flex: none; background: var(--purple-bg); color: var(--purple); }
 .talk-avatar.ch-avatar { color: #fff; font-size: 20px; font-weight: 800; }
