@@ -3,35 +3,34 @@
   // 지금 걸린 조건을 유지한 채 하나만 바꾼 주소
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { box: box === defaultBox ? '' : box, tab: tab === defaultTab ? '' : tab, src, q, from, to, ...changes };
+    const merged = { box: box === 'shop' ? '' : box, src, q, who, from, to, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/inbox?${s}` : '/inbox';
   };
+  const isMailBox = box === 'mail';
+  const word = isMailBox ? '메일' : '문의';
+  const filtered = q || periodText || src || who;
+  // 고르기 칸: 메일은 모든 줄(삭제), 쇼핑몰 문의는 미답변만(처리 완료)
+  const canDelete = isMailBox;
+  const canPick = rows.some(r => r.status === 'open') || (canDelete && rows.length > 0);
+  // 아이콘
+  const ICON_MAIL = '<rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/>';
+  const ICON_ASK = '<path d="M4 5h16v11H8.5L4 20z"/><path d="M8 9h8M8 12.5h5"/>';
 %>
 <% const practice = Object.entries(modes).filter(([, m]) => m !== 'live').map(([s]) => labelOf(s)); %>
 <div class="page-head sticky-glass">
   <div class="title-row">
     <h1 class="page-title"><%= pageTitle %></h1>
-    <%# 문의함의 큰 탭 (숫자는 미답변). 메일·톡톡은 왼쪽 메뉴 '메일함'·'톡톡' 으로 따로 %>
-    <% if (box === 'shop' && inquiryBoxes.length > 1) { %>
-    <nav class="box-tabs" aria-label="문의 종류" data-sortable data-url="/me/inbox-order" data-csrf="<%= csrfToken %>">
-      <% inquiryBoxes.forEach(key => { %>
-        <a href="<%= link({ box: key === defaultBox ? '' : key, src: '', tab: '', q: '', from: '', to: '' }) %>" class="<%= box === key ? 'on' : '' %>"
-           draggable="true" data-key="<%= key %>" title="끌어서 순서를 바꿀 수 있습니다 (맨 앞 탭이 처음 열립니다)">
-          <%= BOXES[key] %><% if (boxCounts[key]) { %> <span class="badge"><%= boxCounts[key] %></span><% } %>
-        </a>
-      <% }) %>
-    </nav>
-    <% } %>
   </div>
   <div class="page-actions">
     <% if (practice.length) { %>
       <span class="practice-pill" title="연습 모드: <%= practice.join(' · ') %> 답변을 보내도 실제로 나가지 않고 기록만 남깁니다.">연습 모드 <span class="muted"><%= practice.join(' · ') %></span></span>
     <% } %>
-    <%# 톡톡은 바로 들어오고 답장은 파트너센터에서 해서 '답장 문구'·'지금 받기' 가 필요 없다 %>
-    <% if (box !== 'chat') { %><a href="/templates" class="btn-sm ghost">답장 문구</a><% } %>
-    <% if (canCollect && box !== 'chat') { %>
+    <%# 여러 개 골라서 처리 완료·삭제: 누르면 줄마다 체크 칸이 나온다 (평소엔 숨겨서 목록을 깔끔하게) %>
+    <% if (canPick) { %><label for="pick-mode" class="btn-sm pick-toggle">☑ 여러 개 선택</label><% } %>
+    <a href="/templates" class="btn-sm ghost">답장 문구</a>
+    <% if (canCollect) { %>
       <form method="post" action="/inbox/collect" class="collect-form" data-once>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= currentUrl %>">
@@ -43,53 +42,9 @@
 </div>
 
 <% if (noSources) { %>
-  <section class="card"><p class="muted"><%= box === 'mail'
+  <section class="card"><p class="muted"><%= isMailBox
     ? '아직 연결된 메일이 없습니다. 서버의 .env 에 네이버메일·지메일 계정(앱 비밀번호)을 넣으면 여기로 모입니다.'
     : '아직 연결된 쇼핑몰 문의가 없습니다. 스마트스토어(ORDER_SOURCE=naver)를 쓰면 상품문의가 여기로 모입니다.' %></p></section>
-<% } %>
-<div id="live-tabs">
-  <%# 출처(메일 계정·쇼핑몰) 알약 탭 %>
-  <% if (sources.length > 1) { %>
-    <nav class="channel-chips src-chips" aria-label="출처">
-      <a href="<%= link({ src: '' }) %>" class="chip <%= src ? '' : 'on' %>">전체 출처</a>
-      <% sources.forEach(s => { const n = sourceCounts[s] || 0; %>
-        <a href="<%= link({ src: s }) %>" class="chip <%= src === s ? 'on' : '' %> <%= n ? '' : 'zero' %>"><span class="src-mark src-<%= s %>"></span><%= chipLabel(s) %> <span class="count"><%= n %></span></a>
-      <% }) %>
-    </nav>
-  <% } %>
-</div>
-
-<%# 거르기: 보기(미답변·내 담당·답변완료·전체)·검색·기간. 새로 검색하면 '전체' 탭에서 찾는다 (탭은 넘기지 않음) %>
-<form method="get" action="/inbox" class="filters" data-autosubmit>
-  <% if (box !== defaultBox) { %><input type="hidden" name="box" value="<%= box %>"><% } %>
-  <% if (src) { %><input type="hidden" name="src" value="<%= src %>"><% } %>
-  <nav class="view-seg" id="live-views" aria-label="보기">
-    <% Object.entries(TABS).forEach(([key, label]) => { %>
-      <a href="<%= link({ tab: key === defaultTab ? '' : key }) %>" class="<%= tab === key ? 'on' : '' %>"><%= label %> <span class="count"><%= tabCounts[key] %></span></a>
-    <% }) %>
-  </nav>
-  <input type="search" name="q" value="<%= q %>" placeholder="<%= box === 'mail' ? '제목, 내용, 보낸 사람, 메일 주소 검색' : '상품명, 문의 내용, 작성자, 주문번호 검색' %>" aria-label="검색">
-  <button type="submit" class="btn-sm search-btn">검색</button>
-  <input type="checkbox" id="more-filters" class="visually-hidden" <%= periodText ? 'checked' : '' %>>
-  <label for="more-filters" class="btn-sm filters-more-toggle">기간<%= periodText ? ' · 1' : '' %> ▾</label>
-  <div class="filters-more">
-    <% if (q || periodText) { %><a href="<%= link({ q: '', from: '', to: '', tab: '' }) %>" class="btn-sm ghost" title="검색·기간 지우기">✕ 지우기</a><% } %>
-    <div class="filters-period">
-      <span class="chips-label">기간</span>
-      <%- include('../partials/period-inputs', { from, to }) %>
-      <%- include('../partials/period-quick', { quick, from, to, link: changes => link({ tab: '', ...changes }) }) %>
-    </div>
-  </div>
-</form>
-<% if (periodText) { %>
-  <p class="muted small hide-note"><strong><%= periodText %></strong> 받은 문의를 답변한 것까지 모두 보여줍니다.</p>
-<% } else if (hidingOld) { %>
-  <p class="muted small hide-note">답변한 문의는 <%= hideDays %>일이 지나면 여기서 숨겨요. 지난 문의는 <strong>기간</strong>이나 <strong>검색</strong>으로 찾으세요.</p>
-<% } %>
-<% if (q && otherHits.length) { %>
-  <p class="search-elsewhere muted small">다른 곳에도 있어요:
-    <% otherHits.forEach(h => { %><a href="<%= link({ box: h.box === defaultBox ? '' : h.box, src: '', tab: '' }) %>"><%= BOXES[h.box] %> <%= h.n %>건</a> <% }) %>
-  </p>
 <% } %>
 
 <form id="bulk-form" method="post" action="/inbox/bulk/close" data-once>
@@ -97,74 +52,127 @@
   <input type="hidden" name="back" value="<%= currentUrl %>">
 </form>
 
-<%# 넓은 화면: 왼쪽 목록 + 오른쪽 내용(누르면 이 칸에 열림). 좁은 화면은 목록만 (누르면 내용 화면으로) %>
-<div class="inbox-split" data-inbox-split>
-<div id="live-list" data-feed="inbox">
-<%# 메일은 모든 줄을 체크할 수 있다 (삭제). 그 밖에는 미답변만 (처리 완료) %>
-<% const canDelete = box === 'mail'; %>
-<% const anyOpen = rows.some(r => r.status === 'open') || (canDelete && rows.length > 0); %>
-<% if (anyOpen) { %>
-  <div class="list-toolbar"><label class="check-all"><input type="checkbox" data-check-all> <%= canDelete ? '모두 선택' : '미답변 모두 선택' %></label></div>
-<% } %>
-<% if (rows.length === 0) { %>
-  <% const filtered = q || periodText || src || tab !== defaultTab; %>
-  <section class="card empty">
-    <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 5h16v11H8.5L4 20z"/><path d="M8 9h8M8 12.5h5"/></svg></div>
-    <p class="empty-title"><%= filtered ? (box === 'mail' ? '조건에 맞는 메일이 없어요' : '조건에 맞는 문의가 없어요') : (box === 'mail' ? '새 메일이 없어요' : '미답변 문의가 없어요') %></p>
-    <p class="empty-text"><%= filtered ? '검색어나 기간을 바꿔 보세요.' : '새로 오면 여기에 바로 나타나요.' %><% if (hideDays && !periodText) { %> 답변한 <%= box === 'mail' ? '메일' : '문의' %>은 <%= hideDays %>일이 지나면 숨겨져요.<% } %></p>
-    <div class="empty-actions">
-      <% if (filtered) { %><a href="<%= link({ q: '', from: '', to: '', src: '', tab: 'all' }) %>" class="btn-sm">전체 보기</a><% } %>
+<%# 톡톡과 같은 창: 넓은 화면은 왼쪽(검색·거르기·목록) + 오른쪽 내용, 좁은 화면은 목록만 (누르면 내용 화면으로).
+    상태 탭은 없다 — 한 목록에 최근 순, 답하지 않은 것만 파란 점 + 굵은 글씨 %>
+<input type="checkbox" id="pick-mode" class="visually-hidden" aria-label="여러 개 선택">
+<div class="inbox-split talk-split mail-split" data-inbox-split>
+  <div class="talk-side">
+    <form method="get" action="/inbox" class="talk-search" role="search">
+      <% [['box', box === 'shop' ? '' : box], ['src', src], ['who', who], ['from', from], ['to', to]].forEach(([k, v]) => { if (v) { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% } }) %>
+      <input type="search" name="q" value="<%= q %>" placeholder="<%= isMailBox ? '제목, 내용, 보낸 사람, 메일 주소 검색' : '상품명, 문의 내용, 작성자, 주문번호 검색' %>" aria-label="검색">
+      <% if (q) { %><a href="<%= link({ q: '' }) %>" class="talk-search-clear" aria-label="검색어 지우기">✕</a><% } %>
+      <button type="submit" class="talk-search-btn" aria-label="검색"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
+    </form>
+
+    <%# 거르기: 담당 · 받은 메일함(판매처) · 기간. 고르면 바로 바뀐다 %>
+    <form method="get" action="/inbox" class="talk-filters mail-filters" data-autosubmit>
+      <% if (box !== 'shop') { %><input type="hidden" name="box" value="<%= box %>"><% } %>
+      <% if (q) { %><input type="hidden" name="q" value="<%= q %>"><% } %>
+      <% if (per === 'custom') { %><input type="hidden" name="from" value="<%= from %>"><input type="hidden" name="to" value="<%= to %>"><% } %>
+      <select name="who" aria-label="담당" class="<%= who ? 'picked' : '' %>">
+        <option value="">담당 전체</option>
+        <option value="mine" <%= who === 'mine' ? 'selected' : '' %>>내 담당<%= mineOpen ? ` (${mineOpen})` : '' %></option>
+        <option value="none" <%= who === 'none' ? 'selected' : '' %>>담당 없음</option>
+        <% staff.forEach(s => { if (s.id === user.id) return; %><option value="<%= s.id %>" <%= who === String(s.id) ? 'selected' : '' %>><%= s.name %></option><% }) %>
+      </select>
+      <% if (sources.length > 1) { %>
+        <select name="src" aria-label="<%= isMailBox ? '받은 메일함' : '판매처' %>" class="<%= src ? 'picked' : '' %>">
+          <option value=""><%= isMailBox ? '메일함 전체' : '판매처 전체' %></option>
+          <% sources.forEach(s => { %><option value="<%= s %>" <%= src === s ? 'selected' : '' %>><%= chipLabel(s) %></option><% }) %>
+        </select>
+      <% } %>
+      <select name="per" aria-label="기간" class="<%= per ? 'picked' : '' %>">
+        <option value="">기간 전체</option>
+        <% quick.forEach(p => { %><option value="<%= p.key %>" <%= per === p.key ? 'selected' : '' %>><%= p.label %></option><% }) %>
+        <% if (per === 'custom') { %><option value="custom" selected><%= periodText %></option><% } %>
+      </select>
+      <noscript><button type="submit" class="btn-sm">보기</button></noscript>
+    </form>
+
+    <%# 지금 조건의 미답변 수 (실시간으로 새로 그림) · 숨김 안내 · 다른 곳 검색 결과 %>
+    <div class="mail-summary" id="live-views">
+      <span><span class="mail-dot" aria-hidden="true"></span> 미답변 <strong><%= openCount %></strong><%= isMailBox ? '통' : '건' %></span>
+      <% if (filtered) { %><a href="<%= link({ q: '', from: '', to: '', src: '', who: '' }) %>" class="mail-clear">✕ 거르기 지우기</a><% } %>
     </div>
-  </section>
-<% } else { %>
-  <ul class="order-list inbox-list">
-    <% rows.forEach(r => { let files = []; try { files = JSON.parse(r.attachments || '[]'); } catch { files = []; } %>
-      <li class="order-item inbox-item <%= r.status === 'open' ? 'unread' : '' %>">
-        <% if (anyOpen) { %>
-          <span class="oi-check">
-            <% if (r.status === 'open' || canDelete) { %><input type="checkbox" name="ids" value="<%= r.id %>" form="bulk-form" data-can="<%= [r.status === 'open' ? 'close' : '', canDelete ? 'delete' : ''].join(' ').trim() %>" aria-label="선택: <%= r.subject %>"><% } %>
-          </span>
-        <% } %>
-        <a class="oi-main" data-id="<%= r.id %>" href="/inbox/<%= r.id %>?back=<%= encodeURIComponent(currentUrl) %>">
-          <div class="oi-head">
-            <span class="src-tag src-<%= r.source %>"><%= labelOf(r.source) %></span>
-            <span class="muted"><strong class="buyer"><% hl(r.from_name || r.from_addr || '-').forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></strong><% if (r.from_name && r.from_addr) { %> &lt;<%= r.from_addr %>&gt;<% } %> · <%= kst(r.received_at) %></span>
-          </div>
-          <div class="oi-name"><% if (r.prev_id) { %><span class="reply-tag" title="앞 메일에 대한 고객 답장 (담당자를 이어받음)">↩ 고객 답장</span> <% } %><% hl(r.subject).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %><% if (files.length) { %> <span class="clip" title="첨부 <%= files.length %>개">📎<%= files.length %></span><% } %></div>
-          <div class="muted inbox-preview"><%= r.preview_cut ? '…' : '' %><% hl((r.preview || '').replace(/\s+/g, ' ')).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></div>
-        </a>
-        <div class="oi-meta">
-          <form method="post" action="/inbox/<%= r.id %>/assign" class="inline" data-autosubmit>
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="back" value="<%= currentUrl %>">
-            <select name="assignee_id" class="assign-select <%= r.assignee_id ? staffColor(r.assignee_id) : 'unassigned' %>" aria-label="담당자">
-              <option value="">담당 미지정</option>
-              <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === r.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
-            </select>
-            <noscript><button type="submit" class="btn-sm">지정</button></noscript>
-          </form>
-          <span class="st-badge <%= r.status === 'open' ? 'sb-new' : r.status === 'answered' ? 'sb-done' : 'sb-wait' %>"><%= STATUS_LABELS[r.status] %></span>
-        </div>
-      </li>
-    <% }) %>
-  </ul>
-  <% if (rows.length >= 300) { %><p class="muted">최근 300건까지만 보입니다. 검색이나 출처로 좁혀 보세요.</p><% } %>
-<% } %>
-</div>
-<aside class="inbox-pane" aria-label="문의 내용">
-  <iframe name="inbox-pane" title="문의 내용" hidden></iframe>
-  <div class="pane-empty" data-pane-empty>
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H8.5L4 20z"/></svg>
-    <p>왼쪽에서 문의를 고르면 여기에서 읽고 바로 답할 수 있어요.</p>
+    <% if (periodText) { %>
+      <p class="muted small hide-note"><strong><%= periodText %></strong> 받은 <%= word %>을 답변한 것까지 모두 보여줍니다.</p>
+    <% } else if (hidingOld) { %>
+      <p class="muted small hide-note">답변한 <%= word %>은 <%= hideDays %>일 뒤 숨겨요 · 지난 <%= word %>은 검색·기간으로</p>
+    <% } %>
+    <% if (q && otherHits.length) { %>
+      <p class="search-elsewhere muted small">다른 곳에도 있어요:
+        <% otherHits.forEach(h => { %><a href="<%= link({ box: h.box === 'shop' ? '' : h.box, src: '', who: '' }) %>"><%= BOXES[h.box] %> <%= h.n %>건</a> <% }) %>
+      </p>
+    <% } %>
+
+    <div id="live-list" data-feed="inbox">
+    <% if (canPick) { %>
+      <div class="list-toolbar pick-only"><label class="check-all"><input type="checkbox" data-check-all> <%= canDelete ? '모두 선택' : '미답변 모두 선택' %></label></div>
+    <% } %>
+    <% if (rows.length === 0) { %>
+      <div class="card empty talk-empty">
+        <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><%- isMailBox ? ICON_MAIL : ICON_ASK %></svg></div>
+        <p class="empty-title"><%= filtered ? `조건에 맞는 ${word}이 없어요` : `새 ${word}이 없어요` %></p>
+        <p class="empty-text"><%= filtered ? '검색어나 거르기를 바꿔 보세요.' : '새로 오면 여기에 바로 나타나요.' %></p>
+        <% if (filtered) { %><div class="empty-actions"><a href="<%= link({ q: '', from: '', to: '', src: '', who: '' }) %>" class="btn-sm">전체 보기</a></div><% } %>
+      </div>
+    <% } else { %>
+      <ul class="talk-list mail-list">
+        <% rows.forEach(r => { let files = []; try { files = JSON.parse(r.attachments || '[]'); } catch { files = []; }
+             const name = r.from_name || r.from_addr || (isMailBox ? '(보낸 사람 없음)' : '작성자 정보 없음');
+             const ch = isMailBox ? null : shopChannel(r.source);
+             const open = r.status === 'open'; %>
+          <li class="talk-item inbox-item <%= open ? 'unread' : '' %>">
+            <% if (canPick) { %>
+              <span class="oi-check pick-only">
+                <% if (open || canDelete) { %><input type="checkbox" name="ids" value="<%= r.id %>" form="bulk-form" data-can="<%= [open ? 'close' : '', canDelete ? 'delete' : ''].join(' ').trim() %>" aria-label="선택: <%= r.subject %>"><% } %>
+              </span>
+            <% } %>
+            <a class="oi-main talk-row" data-id="<%= r.id %>" href="/inbox/<%= r.id %>?back=<%= encodeURIComponent(currentUrl) %>">
+              <% if (ch) { %>
+                <span class="talk-avatar ch-avatar ch-<%= channelInfo(ch).cls %>" aria-hidden="true"><%= channelInfo(ch).mark %></span>
+              <% } else { %>
+                <span class="talk-avatar av-<%= r.id % 4 %>" aria-hidden="true"><%= String(name).replace(/^[("'\s]+/, '').charAt(0).toUpperCase() %></span>
+              <% } %>
+              <span class="talk-body">
+                <span class="talk-top">
+                  <% if (open) { %><span class="mail-dot" title="미답변"></span><% } %>
+                  <strong class="talk-name" title="<%= r.from_addr || '' %>"><% hl(name).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></strong>
+                  <% if (sources.length > 1 || !isMailBox) { %><span class="talk-tag src src-tag src-<%= r.source %>" title="<%= labelOf(r.source) %>"><%= chipLabel(r.source) %></span><% } %>
+                  <% if (r.prev_id) { %><span class="talk-tag linked reply-tag" title="앞 메일에 대한 고객 답장 (담당자를 이어받음)">↩ 고객 답장</span><% } %>
+                  <% if (r.assignee_name) { %><span class="talk-tag who-tag <%= staffColor(r.assignee_id) %>" title="담당"><%= r.assignee_name %></span><% } %>
+                  <% if (!open) { %><span class="talk-tag done-tag"><%= STATUS_LABELS[r.status] %></span><% } %>
+                  <span class="talk-time" title="<%= kst(r.received_at) %>"><%= talkTime(r.received_at) %></span>
+                </span>
+                <span class="talk-subj"><% hl(r.subject || '(제목 없음)').forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></span>
+                <span class="talk-last">
+                  <span class="talk-prev"><%= r.preview_cut ? '…' : '' %><% hl((r.preview || '').replace(/\s+/g, ' ')).forEach(p => { %><% if (p.hit) { %><mark><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></span>
+                  <% if (files.length) { %><span class="clip" title="첨부 <%= files.length %>개">📎<%= files.length %></span><% } %>
+                </span>
+              </span>
+            </a>
+          </li>
+        <% }) %>
+      </ul>
+      <% if (rows.length >= 300) { %><p class="muted small talk-more">최근 300건까지만 보여요. 검색이나 거르기로 좁혀 보세요.</p><% } %>
+    <% } %>
+    </div>
   </div>
-</aside>
+
+  <aside class="inbox-pane" aria-label="<%= word %> 내용">
+    <iframe name="inbox-pane" title="<%= word %> 내용" hidden></iframe>
+    <div class="pane-empty" data-pane-empty>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><%- isMailBox ? ICON_MAIL : ICON_ASK %></svg>
+      <p>왼쪽에서 <%= word %>을 고르면 여기에서 읽고 바로 답할 수 있어요.</p>
+    </div>
+  </aside>
 </div>
 
 <div id="bulk-bar" class="bulk-bar" hidden>
   <span><strong data-bulk-count>0</strong>건 선택</span>
   <button type="submit" form="bulk-form" data-bulk-kind="close"
-          data-confirm="체크한 문의를 '처리 완료'(답변 필요 없음)로 바꿀까요?&#10;메일로는 아무것도 보내지 않습니다.">처리 완료 <span data-n>0</span>건</button>
-  <% if (box === 'mail') { %>
+          data-confirm="체크한 <%= word %>을 '처리 완료'(답변 필요 없음)로 바꿀까요?&#10;<%= isMailBox ? '메일로는' : '고객에게는' %> 아무것도 보내지 않습니다.">처리 완료 <span data-n>0</span>건</button>
+  <% if (isMailBox) { %>
     <span class="bulk-sep" aria-hidden="true"></span>
     <button type="submit" form="bulk-form" formaction="/inbox/bulk/delete" class="danger" data-bulk-kind="delete"
             data-confirm="체크한 메일 {n}통을 인트라넷에서 삭제할까요?&#10;되돌릴 수 없습니다. (네이버메일·지메일의 원본은 그대로 남아요)">🗑 삭제 <span data-n>0</span>통</button>
@@ -176,5 +184,4 @@
 <script src="/orders.js"></script>
 <script src="/inbox-pane.js"></script>
 <script src="/modal.js"></script>
-<script src="/chip-order.js"></script>
 <%- include('../partials/footer') %>

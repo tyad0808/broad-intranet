@@ -94,7 +94,7 @@ test('화면: 쿠팡 문의는 쇼핑몰 문의 탭에, 관련 주문 보기 버
   const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   const id = Number(ctx.db.prepare(`INSERT INTO inquiries (source, external_id, subject, body, attachments, received_at, order_no)
     VALUES ('coupang_qna', 'c:4001', '[쿠팡 고객센터] 주문 910004186322', '배송 언제', '[]', '2026-10-19T01:00:00Z', '910004186322')`).run().lastInsertRowid);
-  assert.match((await kim.request('/inbox')).text, /class="src-tag src-coupang_qna">쿠팡</);
+  assert.match((await kim.request('/inbox')).text, /src-tag src-coupang_qna"[^>]*>쿠팡</);
   const detail = (await kim.request(`/inbox/${id}`)).text;
   assert.match(detail, /쿠팡에 이 답변을 등록할까요/);
   assert.match(detail, /href="\/\?view=all&q=910004186322"[^>]*>관련 주문 보기/);

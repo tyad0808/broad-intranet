@@ -57,9 +57,9 @@ test('메일 계정이 여러 개면 메일 탭에 주소별로 칩이 나오고
   add.run('naver_mail', '1:1', '첫 번째 계정 메일');
   add.run('naver_mail2', '1:1', '두 번째 계정 메일');
   const mail = (await kim.request('/inbox?box=mail')).text;
-  assert.match(mail, /네이버메일 · a <span class="count">1<\/span>/, '같은 종류가 둘이면 칩에 아이디를 붙여 구분');
-  assert.match(mail, /네이버메일 · bro_ad <span class="count">1<\/span>/);
-  assert.match(mail, /class="src-tag src-naver_mail2">bro_ad@naver\.com</);
+  assert.match(mail, /<option value="naver_mail"\s*>네이버메일 · a<\/option>/, '같은 종류가 둘이면 메일함 고르기에 아이디를 붙여 구분');
+  assert.match(mail, /<option value="naver_mail2"\s*>네이버메일 · bro_ad<\/option>/);
+  assert.match(mail, /src-tag src-naver_mail2" title="bro_ad@naver\.com">네이버메일 · bro_ad</, '목록 줄에도 짧은 이름, 전체 주소는 풍선 도움말');
   const second = (await kim.request('/inbox?src=naver_mail2')).text;
   assert.ok(second.includes('두 번째 계정 메일') && !second.includes('첫 번째 계정 메일'));
   assert.ok(!(await kim.request('/inbox')).text.includes('계정 메일'), '쇼핑몰 탭엔 안 나옴');
@@ -205,14 +205,16 @@ async function setupInbox(t, { senders = {} } = {}) {
   return ctx;
 }
 
-test('문의함 목록: 위쪽 메뉴에 미답변 건수, 출처 칩·탭, 본문은 글자로만', async t => {
+test('메일함 목록: 위쪽 메뉴에 미답변 건수, 메일함 고르기, 상태 탭 없이 한 목록(미답변은 파란 점), 본문은 글자로만', async t => {
   const { kim, id1 } = await setupInbox(t);
   const home = (await kim.request('/')).text;
   assert.match(home, /메일함 <span class="badge">2<\/span>/);
   assert.ok(!home.includes('문의함 <span class="badge">'), '메일은 문의함 숫자에 넣지 않는다');
   const list = (await kim.request('/inbox?box=mail')).text;
-  assert.match(list, /미답변 <span class="count">2<\/span>/);
-  assert.match(list, /네이버메일 <span class="count">1<\/span>/);
+  assert.match(list, /미답변 <strong>2<\/strong>통/);
+  assert.match(list, /<option value="naver_mail"\s*>네이버메일<\/option>/);
+  assert.doesNotMatch(list, /class="view-seg"|>답변완료 <span class="count">/, '상태 탭(미답변·내 담당·답변완료·전체)은 없다');
+  assert.strictEqual((list.match(/class="mail-dot" title="미답변"/g) || []).length, 2, '답하지 않은 메일만 파란 점');
   assert.match(list, /견적 문의/);
   assert.match(list, /연습 모드/);
   const gmailOnly = (await kim.request('/inbox?src=gmail')).text;
@@ -226,7 +228,7 @@ test('문의함 목록: 위쪽 메뉴에 미답변 건수, 출처 칩·탭, 본�
   assert.match(detail, /시안\.ai/);
 });
 
-test('문의함 검색: 처음엔 전체 탭, 띄어쓰기 단어 모두 포함, 주문번호, 찾은 단어 칠하기, 다른 큰 탭 결과 안내', async t => {
+test('문의함 검색: 처리한 것까지 찾고, 띄어쓰기 단어 모두 포함, 주문번호, 찾은 단어 칠하기, 다른 칸 결과 안내', async t => {
   const { kim, db, id2 } = await setupInbox(t);
   db.prepare("UPDATE inquiries SET status = 'closed' WHERE id = ?").run(id2);
   db.prepare(`INSERT INTO inquiries (source, external_id, from_name, subject, body, order_no, received_at)
@@ -235,11 +237,9 @@ test('문의함 검색: 처음엔 전체 탭, 띄어쓰기 단어 모두 포함,
 
   const done = await q('특가');
   assert.ok(done.includes('광고입니다'), '이미 처리한 메일도 찾는다 (전체 탭)');
-  assert.match(done, /<a href="[^"]*" class="on">전체 /);
   assert.match(done, /<mark>특가<\/mark> 안내/);
   assert.match(done, /다른 곳에도 있어요:[\s\S]*쇼핑몰 문의 1건/);
-  assert.match(done, /href="\/inbox\?box=mail&amp;tab=open&amp;q=%ED%8A%B9%EA%B0%80"/, '검색 중 미답변 탭은 tab=open 으로');
-  assert.match(done, /✕ 지우기/);
+  assert.match(done, /✕ 거르기 지우기/);
 
   const both = await q('현수막 알려주세요');
   assert.ok(both.includes('견적 문의'), '두 단어가 다른 줄에 있어도');
@@ -270,8 +270,8 @@ test('메일 삭제: 여러 통·한 통, 내용·답변 기록은 지우고 표
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM inquiry_replies WHERE inquiry_id = ?').get(id1).n, 0);
   assert.strictEqual(db.prepare('SELECT deleted_at FROM inquiries WHERE id = ?').get(shopId).deleted_at, null, '쇼핑몰 문의는 그대로');
   assert.strictEqual((await kim.request(`/inbox/${id1}`)).status, 404);
-  const after = (await kim.request('/inbox?box=mail&tab=all')).text;
-  assert.match(after, /전체 <span class="count">1<\/span>/);
+  const after = (await kim.request('/inbox?box=mail')).text;
+  assert.ok(after.includes('특가 안내') && !after.includes('견적 문의'), '지운 메일은 목록에서 빠짐');
   const nav = (await kim.request('/')).text;
   assert.match(nav, /메일함 <span class="badge">1<\/span>/, '왼쪽 메뉴 미답변 건수에서도 빠짐 (특가 안내만)');
   assert.match(nav, /문의함 <span class="badge">1<\/span>/, '쇼핑몰 문의 1');
@@ -340,7 +340,7 @@ test('실제 답변: 보낸 메일이 성공하면 답변완료, 실패면 미�
   await kim.submit(`/inbox/${id1}`, `/inbox/${id1}/reply`, { body: '견적 보내드립니다', version: String(row(id1).version) });
   assert.deepStrictEqual(replies[1], ['hong@example.com', '견적 보내드립니다']);
   assert.deepStrictEqual([row(id1).status, row(id1).handled_by], ['answered', kimId]);
-  assert.match((await kim.request('/inbox?box=mail&tab=done')).text, /견적 문의/);
+  assert.match((await kim.request('/inbox?box=mail')).text, /답변완료<\/span>/, '답한 메일도 같은 목록에 (답변완료 꼬리표)');
 });
 
 test('담당자 지정·처리 완료·다시 열기·여러 건 처리 완료', async t => {
@@ -477,7 +477,7 @@ test('답장에 파일 첨부: 메일로 함께 보내고 기록엔 이름만, 2
   assert.deepStrictEqual(got[0].map(f => [f.name, f.type, f.content.toString()]), [['시안1.png', 'image/png', 'AAAA'], ['시안2.png', 'image/png', 'BB']]);
   const rec = db.prepare('SELECT attachments FROM inquiry_replies').get();
   assert.deepStrictEqual(JSON.parse(rec.attachments), [{ name: '시안1.png', size: 4 }, { name: '시안2.png', size: 2 }]);
-  assert.match((await kim.request(`/inbox/${id1}`)).text, /📎 시안1\.png, 시안2\.png/);
+  assert.match((await kim.request(`/inbox/${id1}`)).text, /<span class="mail-file">📎 시안1\.png<\/span><span class="mail-file">📎 시안2\.png<\/span>/, '보낸 답장 말풍선에 첨부 이름');
 
   const big = await send([['큰파일.png', Buffer.alloc(21 * 1024 * 1024)]], 1);
   assert.strictEqual(big.status, 302);
@@ -579,7 +579,7 @@ test('고객 답장 메일은 앞 메일과 이어지고 담당자를 이어받�
   assert.deepStrictEqual([row('m4').prev_id, row('m4').assignee_id, row('m5').prev_id], [null, null, null]);
 });
 
-test('메일 머리의 In-Reply-To 도 답장 번호로 기억하고, 화면에 ↩ 고객 답장·이전 메일 링크', async t => {
+test('메일 머리의 In-Reply-To 도 답장 번호로 기억하고, 화면에 ↩ 고객 답장, 열면 앞 메일부터 이어서', async t => {
   const m = await parseMail('naver_mail', raw({ subject: 'Re: 견적 문의드립니다', extra: 'In-Reply-To: <m1@example.com>' }), { uidKey: '1:9' });
   assert.match(m.references_hdr, /<m1@example.com>/);
 
@@ -587,7 +587,41 @@ test('메일 머리의 In-Reply-To 도 답장 번호로 기억하고, 화면에 
   const ins = db.prepare(`INSERT INTO inquiries (source, external_id, from_addr, subject, body, received_at, prev_id) VALUES ('naver_mail', ?, 'hong@example.com', ?, '', ?, ?)`);
   const first = Number(ins.run('t1', '견적 문의드립니다', '2026-10-20T01:00:00Z', null).lastInsertRowid);
   const reply = Number(ins.run('t2', 'Re: 견적 문의드립니다', '2026-10-21T01:00:00Z', first).lastInsertRowid);
-  assert.match((await kim.request('/inbox?box=mail')).text, /↩ 고객 답장<\/span> Re: 견적 문의드립니다/);
+  const list = (await kim.request('/inbox?box=mail')).text;
+  assert.match(list, /↩ 고객 답장<\/span>/);
+  assert.match(list, /<span class="talk-subj">Re: 견적 문의드립니다<\/span>/);
   const detail = (await kim.request(`/inbox/${reply}`)).text;
-  assert.match(detail, new RegExp(`<dt>이전 메일</dt><dd><a href="/inbox/${first}[^"]*">↩ 견적 문의드립니다</a>`));
+  const thread = detail.slice(detail.indexOf('mail-thread'));
+  assert.match(thread, new RegExp(`<span class="mail-subj"><a href="/inbox/${first}[^"]*">견적 문의드립니다</a></span>`), '앞 메일이 위에 (누르면 그 메일로)');
+  assert.ok(thread.indexOf('견적 문의드립니다</a>') < thread.indexOf('Re: 견적 문의드립니다'), '오래된 것부터');
+  assert.match((await kim.request(`/inbox/${first}`)).text, new RegExp(`이 뒤에 온 고객 답장이 있어요:[\\s\\S]*href="/inbox/${reply}[?"]`), '앞 메일을 열면 뒤에 온 답장을 알려 준다');
+});
+
+test('메일함 담당 거르기: 내 담당만 · 담당 없음 · 직원별, 담당 칸에 내 미답변 수, 기간은 고르기 칸 하나로', async t => {
+  const { kim, db, id1, id2, kimId, leeId } = await setupInbox(t);
+  db.prepare('UPDATE inquiries SET assignee_id = ? WHERE id = ?').run(kimId, id1);
+  db.prepare('UPDATE inquiries SET assignee_id = ? WHERE id = ?').run(leeId, id2);
+  const page = url => kim.request(url).then(r => r.text);
+
+  const all = await page('/inbox?box=mail');
+  assert.match(all, /<option value="mine"\s*>내 담당 \(1\)<\/option>/, '내 담당에 남은 미답변 수');
+  assert.match(all, /<span class="talk-tag who-tag[^"]*" title="담당">이디자</, '목록 줄에 담당자 이름표');
+
+  const mine = await page('/inbox?box=mail&who=mine');
+  assert.ok(mine.includes('견적 문의') && !mine.includes('특가 안내'), '내 담당만');
+  assert.match(mine, /<option value="mine" selected>/);
+  assert.match(mine, /미답변 <strong>1<\/strong>통/);
+  const lee = await page(`/inbox?box=mail&who=${leeId}`);
+  assert.ok(lee.includes('특가 안내') && !lee.includes('견적 문의'), '직원별');
+  db.prepare('UPDATE inquiries SET assignee_id = NULL WHERE id = ?').run(id2);
+  const none = await page('/inbox?box=mail&who=none');
+  assert.ok(none.includes('특가 안내') && !none.includes('견적 문의'), '담당 없음');
+  assert.match(await page('/inbox?box=mail&who=__proto__'), /<option value="" >|<option value="">담당 전체/, '이상한 값은 전체로');
+
+  // 기간: 빠른 선택(per) · 직접 주소(from·to) · 기간 전체(per=)
+  assert.match(await page('/inbox?box=mail&per=today'), /<option value="today" selected>오늘<\/option>/);
+  const custom = await page('/inbox?box=mail&from=2020-01-01&to=2020-01-31');
+  assert.match(custom, /<option value="custom" selected>2020-01-01 ~ 2020-01-31<\/option>/);
+  assert.ok(!custom.includes('견적 문의'), '기간 밖은 빼고');
+  assert.ok((await page('/inbox?box=mail&from=2020-01-01&to=2020-01-31&per=')).includes('견적 문의'), 'per= 은 기간 지우기');
 });

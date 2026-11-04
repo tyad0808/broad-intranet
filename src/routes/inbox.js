@@ -9,7 +9,10 @@ const { templatesFor } = require('./templates');
 const { ordersForInquiry } = require('../customer');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
-const TABS = { open: '미답변', mine: '내 담당', done: '답변완료', all: '전체' };
+// 기간 빠른 선택 이름 (quickPeriods 순서: 오늘 · 어제 · 최근 7일 · 이번 달 · 지난달)
+const QUICK_KEYS = ['today', 'yesterday', '7d', 'month', 'lastmonth'];
+// 쇼핑몰 문의 얼굴 자리: 판매처 표시 (N 스마트스토어 · 자사몰 · C 쿠팡). 메일은 보낸 사람 이름 첫 글자
+const SHOP_CHANNEL = { smartstore_qna: 'smartstore', naver_qna: 'smartstore', godo_qna: 'godo', coupang_qna: 'coupang' };
 // 위쪽 큰 탭: 쇼핑몰 문의 / 메일 / 채팅 (섞여 있으면 헷갈려서 나눈다)
 const BOXES = { shop: '쇼핑몰 문의', mail: '메일', chat: '채팅' };
 // 화면 제목 = 왼쪽 메뉴 이름
@@ -47,6 +50,15 @@ function talkTime(value, now = new Date()) {
   }
   const md = `${pad(k.getUTCMonth() + 1)}.${pad(k.getUTCDate())}`;
   return k.getUTCFullYear() === n.getUTCFullYear() ? md : `${String(k.getUTCFullYear()).slice(2)}.${md}`;
+}
+// 대화 속 날짜 구분: '11월 4일 (화)' (한국 날짜)
+//   DB 시각은 '2026-11-04T01:00:00Z' 또는 '2026-11-04 01:00:00'(UTC, 끝에 Z 없음) 두 모양
+function dayLabel(value) {
+  const text = String(value || '');
+  const t = Date.parse(/[zZ]|[+-]\d\d:\d\d$/.test(text) ? text : text.replace(' ', 'T') + 'Z');
+  if (!Number.isFinite(t)) return '';
+  const k = new Date(t + 9 * 3600 * 1000);
+  return `${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일 (${'일월화수목금토'[k.getUTCDay()]})`;
 }
 const metaOf = row => { try { return JSON.parse((row && row.meta) || '{}') || {}; } catch { return {}; } };
 const MAX_REPLY = 10_000;
@@ -106,25 +118,21 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const src = String(req.query.src || '');
     const q = String(req.query.q || '').trim().slice(0, 50);
     const terms = searchTerms(q);
-    // 기간 보기 (from·to=YYYY-MM-DD, 받은 날 기준): 그 기간 문의를 답변한 것까지 모두
-    const period = periodRange(req.query.from, req.query.to);
-    // 검색·기간 보기는 처음에 '전체' 탭 (이미 답한 메일도 찾을 수 있게)
-    const defaultTab = terms.length || period ? 'all' : 'open';
-    const tab = Object.hasOwn(TABS, String(req.query.tab)) ? req.query.tab : defaultTab;
-    // 출처를 골랐으면 그 출처의 탭, 아니면 고른 탭 (처음엔 쇼핑몰 문의)
-    // 큰 탭 순서는 직원마다 (끌어다 놓아 바꿈). 맨 앞 탭이 처음 열린다
-    // 채팅 탭은 톡톡을 연결했거나 채팅이 있을 때만
+    // 기간: 빠른 선택(per=today·yesterday·7d·month·lastmonth) 또는 from·to (YYYY-MM-DD, 받은 날 기준). per='' 은 기간 없음
+    const quick = quickPeriods().map((p, i) => ({ ...p, key: QUICK_KEYS[i] }));
+    const per = String(req.query.per ?? '');
+    const picked = quick.find(p => p.key === per);
+    const period = picked ? periodRange(picked.from, picked.to)
+      : Object.hasOwn(req.query, 'per') && per !== 'custom' ? null : periodRange(req.query.from, req.query.to);
+    const perKey = !period ? '' : (quick.find(p => p.from === period.from && p.to === period.to) || { key: 'custom' }).key;
+    // 담당: 전체('') · 내 담당(mine) · 담당 없음(none) · 직원 번호
+    const who = ['mine', 'none'].includes(req.query.who) || /^\d+$/.test(String(req.query.who || '')) ? String(req.query.who) : '';
+    // 왼쪽 메뉴가 '문의함'(쇼핑몰 문의), '톡톡'(/inbox?box=chat), '메일함'(/inbox?box=mail)으로 나뉜다. 그냥 /inbox 는 문의함
+    // 채팅 칸은 톡톡을 연결했거나 채팅이 있을 때만
     const shown = Object.keys(BOXES).filter(b => b !== 'chat' || Object.keys(sourceLabels).some(isChatSource)
       || db.prepare(`SELECT 1 FROM inquiries q WHERE ${CHAT_SQL} LIMIT 1`).get());
-    const boxOrder = userBoxOrder(req.user).filter(b => shown.includes(b));
-    // 왼쪽 메뉴가 '문의함'(쇼핑몰 문의), '톡톡'(/inbox?box=chat), '메일함'(/inbox?box=mail)으로 나뉜다. 그냥 /inbox 는 문의함
-    const inquiryBoxes = boxOrder.filter(b => b !== 'mail' && b !== 'chat');
-    const box = src ? boxOf(src) : shown.includes(req.query.box) ? req.query.box : inquiryBoxes[0];
+    const box = src ? boxOf(src) : shown.includes(req.query.box) && req.query.box !== 'chat' ? req.query.box : 'shop';
     const boxSql = b => BOX_SQL[b];
-
-    // 큰 탭에 붙일 미답변 건수
-    const boxCounts = Object.fromEntries(shown.map(b => [b,
-      db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE q.status = 'open' AND ${boxSql(b)}`).get().n]));
 
     const search = searchWhere(terms);
     const base = [boxSql(box), ...search.sql];
@@ -133,38 +141,29 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       base.push(`${INQUIRY_TIME} >= ? AND ${INQUIRY_TIME} < ?`);
       params.push(period.start, period.end);
     }
-    // 검색할 때: 다른 큰 탭에서 찾은 건수 (메일에서 찾았는데 쇼핑몰 문의에 있는 경우 알려주기)
+    // 검색할 때: 다른 칸에서 찾은 건수 (메일에서 찾았는데 쇼핑몰 문의에 있는 경우 알려주기)
     const otherHits = terms.length
       ? shown.filter(b => b !== box).map(b => ({
         box: b,
         n: db.prepare(`SELECT COUNT(*) AS n FROM inquiries q WHERE ${[boxSql(b), ...search.sql].join(' AND ')}`).get(...search.params).n,
       })).filter(h => h.n)
       : [];
-    // 답변한 문의는 N일(기본 14일)이 지나면 '답변완료'·'전체' 에서 숨긴다 (검색·월별 보기로는 보임)
+    // 상태 탭 없이 한 목록: 미답변은 늘, 답변한 문의는 N일(기본 14일)까지만 (검색·기간 보기로는 모두 보임)
     const hidingOld = !terms.length && !period;
     const recent = `${INQUIRY_TIME} >= '${hideCutoff(db)}'`;
-    const tabWhere = {
-      open: ["q.status = 'open'"],
-      mine: ["q.status = 'open'", 'q.assignee_id = ?'],
-      done: ["q.status IN ('answered', 'closed')", ...(hidingOld ? [recent] : [])],
-      all: hidingOld ? [`(q.status = 'open' OR ${recent})`] : [],
-    };
-    const tabParams = { mine: [req.user.id] };
-    const whereSql = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
-
-    // 탭 건수 (출처 칩 조건 포함), 출처 칩 건수 (탭 조건 포함)
+    const keep = hidingOld ? [`(q.status = 'open' OR ${recent})`] : [];
+    const whoWhere = who === 'mine' || /^\d+$/.test(who) ? ['q.assignee_id = ?'] : who === 'none' ? ['q.assignee_id IS NULL'] : [];
+    const whoParams = who === 'mine' ? [req.user.id] : /^\d+$/.test(who) ? [Number(who)] : [];
     const srcWhere = src ? ['q.source = ?'] : [];
     const srcParams = src ? [src] : [];
-    const tabCounts = {};
-    for (const key of Object.keys(TABS)) {
-      tabCounts[key] = db.prepare(`SELECT COUNT(*) AS n FROM inquiries q ${whereSql([...base, ...srcWhere, ...tabWhere[key]])}`)
-        .get(...params, ...srcParams, ...(tabParams[key] || [])).n;
-    }
-    const sourceCounts = Object.fromEntries(db.prepare(`
-      SELECT q.source, COUNT(*) AS n FROM inquiries q ${whereSql([...base, ...tabWhere[tab]])} GROUP BY q.source
-    `).all(...params, ...(tabParams[tab] || [])).map(r => [r.source, r.n]));
-    const sources = [...new Set([...Object.keys(sourceLabels), ...Object.keys(sourceCounts)])].filter(s => boxOf(s) === box);
-    // 출처 칩 이름: 메일은 '네이버메일 / 지메일' 로 짧게. 같은 종류가 여러 개면 아이디를 붙여 구분 (네이버메일 · bro_ad)
+    const whereSql = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
+    const count = (extra, extraParams = []) => db.prepare(`SELECT COUNT(*) AS n FROM inquiries q ${whereSql([...base, ...extra])}`).get(...params, ...extraParams).n;
+    // 미답변 건수: 지금 보는 조건 그대로 / 내 담당 (담당 칸에 같이 보여 준다)
+    const openCount = count([...srcWhere, ...whoWhere, "q.status = 'open'"], [...srcParams, ...whoParams]);
+    const mineOpen = count([...srcWhere, 'q.assignee_id = ?', "q.status = 'open'"], [...srcParams, req.user.id]);
+    const sources = [...new Set([...Object.keys(sourceLabels), ...db.prepare(`SELECT DISTINCT q.source FROM inquiries q WHERE ${boxSql(box)}`).all().map(r => r.source)])]
+      .filter(s => boxOf(s) === box);
+    // 출처 이름: 메일은 '네이버메일 / 지메일' 로 짧게. 같은 종류가 여러 개면 아이디를 붙여 구분 (네이버메일 · bro_ad)
     const kindOf = s => (/^naver_mail/.test(s) ? '네이버메일' : /^gmail/.test(s) ? '지메일' : null);
     const chipLabel = s => {
       const kind = kindOf(s);
@@ -174,33 +173,32 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     };
 
     const rows = db.prepare(`
-      SELECT q.id, q.source, q.from_name, q.from_addr, q.subject, q.received_at,
+      SELECT q.id, q.source, q.from_name, q.from_addr, q.subject, q.received_at, q.order_no,
         substr(q.body, max(1, instr(lower(q.body), lower(?1)) - 40), 160) AS preview,
         instr(lower(q.body), lower(?1)) > 41 AS preview_cut,
         q.status, q.assignee_id, q.attachments, q.prev_id, u.name AS assignee_name
       FROM inquiries q LEFT JOIN users u ON u.id = q.assignee_id
-      ${whereSql([...base, ...srcWhere, ...tabWhere[tab]])}
+      ${whereSql([...base, ...srcWhere, ...whoWhere, ...keep])}
       ORDER BY q.received_at DESC, q.id DESC LIMIT 300
-    `).all(terms[0] || '', ...params, ...srcParams, ...(tabParams[tab] || []));
+    `).all(terms[0] || '', ...params, ...srcParams, ...whoParams);
 
     let lastRun = null;
     try { lastRun = JSON.parse((db.prepare("SELECT value FROM settings WHERE key = 'inbox_last_run'").get() || {}).value || 'null'); } catch { lastRun = null; }
 
     res.render('inbox/list', {
+      bodyClass: 'talk-list-page',
       title: PAGE_TITLES[box] || '문의함',
-      navSection: box === 'mail' || box === 'chat' ? box : 'inbox',
+      navSection: box === 'mail' ? 'mail' : 'inbox',
       pageTitle: PAGE_TITLES[box] || '문의함',
-      inquiryBoxes,
-      rows, tab, defaultTab, TABS, tabCounts, src, sources, sourceCounts, q, labelOf, STATUS_LABELS,
-      hl: text => highlightParts(text, terms), otherHits,
-      from: period ? period.from : '', to: period ? period.to : '', periodText: periodLabel(period), quick: quickPeriods(), hidingOld: hidingOld && tab !== 'open' && tab !== 'mine', hideDays: hideDays(db),
-      box, BOXES: Object.fromEntries(shown.map(b => [b, BOXES[b]])), boxCounts, chipLabel, boxOrder, defaultBox: inquiryBoxes[0],
+      rows, src, sources, q, who, per: perKey, labelOf, STATUS_LABELS, openCount, mineOpen,
+      hl: text => highlightParts(text, terms), otherHits, talkTime, shopChannel: source => SHOP_CHANNEL[source] || null,
+      from: period ? period.from : '', to: period ? period.to : '', periodText: periodLabel(period), quick, hidingOld, hideDays: hideDays(db),
+      box, BOXES, chipLabel,
       staff: staff(),
       canCollect: Boolean(collector),
       noSources: !Object.keys(sourceLabels).some(s => boxOf(s) === box),
       lastRun,
       currentUrl: req.originalUrl,
-      // 채팅(톡톡)은 답장을 파트너센터에서 하므로 연습 모드 안내에서 뺀다
       modes: Object.fromEntries(Object.keys(sourceLabels).filter(s => boxOf(s) === box && !isChatSource(s)).map(s => [s, modeOf(s)])),
     });
   });
@@ -381,10 +379,31 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       회사명: brandName(),
     });
     const custOrders = ordersForInquiry(db, inquiry);
-    // 톡톡은 메신저 모양의 대화방 화면 (답장 칸 늘 아래), 메일·쇼핑몰 문의는 예전 화면
+    // 메일·쇼핑몰 문의: 같은 대화의 앞 메일(고객 답장 이음, prev_id)을 거슬러 올라가 오래된 것부터 한 화면에 (최대 20통)
+    let thread = null;
+    let laterMails = [];
+    if (!chat) {
+      const parse = text => { try { return JSON.parse(text || '[]'); } catch { return []; } };
+      const repliesOf = id => db.prepare(`
+        SELECT r.*, u.name AS user_name FROM inquiry_replies r LEFT JOIN users u ON u.id = r.user_id
+        WHERE r.inquiry_id = ? ORDER BY r.id
+      `).all(id);
+      const chain = [];
+      const seen = new Set();
+      for (let m = inquiry; m && chain.length < 20 && !seen.has(m.id);) {
+        seen.add(m.id);
+        chain.unshift(m);
+        m = m.prev_id ? db.prepare('SELECT * FROM inquiries WHERE id = ? AND deleted_at IS NULL').get(m.prev_id) : null;
+      }
+      thread = chain.map(m => ({ mail: m, files: m.id === inquiry.id ? attachments : parse(m.attachments), replies: m.id === inquiry.id ? replies : repliesOf(m.id) }));
+      // 이 메일 뒤에 온 고객 답장 (열어 보라고 알려 준다)
+      laterMails = db.prepare('SELECT id, subject, received_at FROM inquiries WHERE prev_id = ? AND deleted_at IS NULL ORDER BY id').all(inquiry.id);
+    }
+    // 톡톡·메일·쇼핑몰 문의 모두 메신저 모양의 대화방 화면 (답장 칸 늘 아래)
     res.render(chat ? 'inbox/chat' : 'inbox/detail', {
       linkedBy: chat ? metaOf(inquiry).linkedBy || null : null,
-      bodyClass: chat ? 'talk-page' : '',
+      bodyClass: 'talk-page',
+      thread, laterMails, dayLabel, shopChannel: source => SHOP_CHANNEL[source] || null,
       title: inquiry.subject || '문의',
       templates,
       customer: { orders: custOrders.orders, nameOrders: custOrders.nameOrders, inquiries: [], nameInquiries: [], total: 1 },
@@ -623,17 +642,10 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
   return router;
 }
 
-// 직원이 정한 큰 탭 순서 (저장된 게 없거나 빠진 탭은 기본 순서로 뒤에)
-function userBoxOrder(user) {
-  let saved = [];
-  try { saved = JSON.parse((user && user.inbox_order) || '[]'); } catch { saved = []; }
-  return [...new Set([...saved.filter(b => BOXES[b]), ...Object.keys(BOXES)])];
-}
-
 // 돌아갈 주소는 문의함 목록만 허용
 function safeBack(value, fallback = '/inbox') {
   const v = String(value || '');
   return /^\/inbox(\?[^\s]*)?$/.test(v) ? v : fallback;
 }
 
-module.exports = { inboxRoutes, TABS, withRo };
+module.exports = { inboxRoutes, withRo };

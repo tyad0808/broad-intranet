@@ -1,256 +1,200 @@
 <%- include('../partials/header') %>
-<% if (!locals.embed) { %>
-  <p class="back-row"><a href="<%= back %>" class="btn-back">← <%= isMail ? '메일함으로' : chat ? '톡톡으로' : '문의함으로' %></a></p>
-<% } %>
-<% const backQs = back !== '/inbox' ? `?back=${encodeURIComponent(back)}` : ''; %>
-
-<%# 머리: 출처·상태 + 제목 %>
-<div class="detail-head">
-  <div class="detail-head-main">
-    <p class="detail-channel"><span class="src-tag src-<%= inquiry.source %>"><%= label %></span> <span class="st-badge <%= inquiry.status === 'open' ? 'sb-new' : inquiry.status === 'answered' ? 'sb-done' : 'sb-wait' %>"><%= (chat ? CHAT_STATUS : STATUS_LABELS)[inquiry.status] %></span> <span class="muted"><%= kst(inquiry.received_at) %></span></p>
-    <h1 class="detail-title"><% if (chat) { %><%= (linkedOrder && linkedOrder.buyer_name) || inquiry.from_name || '톡톡 고객' %><% if (inquiry.cust_memo) { %> <span class="muted">· <%= inquiry.cust_memo %></span><% } %><% } else { %><%= inquiry.subject || '(제목 없음)' %><% } %></h1>
-  </div>
-</div>
-
-<div class="detail" data-inquiry-id="<%= inquiry.id %>">
-  <section class="card">
-    <dl class="info">
-      <dt>보낸 사람</dt><dd><% if (chat && linkedOrder && linkedOrder.buyer_name) { %><strong><%= linkedOrder.buyer_name %></strong> <span class="muted small">(연결된 주문의 주문자)</span> · <% } %><%= inquiry.from_name || '' %><% if (!inquiry.from_name && !inquiry.from_addr) { %><span class="muted">알 수 없음 (채널이 이름을 알려주지 않아요)</span><% } %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
-      <% if (inquiry.reply_to) { %><dt>답장 주소</dt><dd><%= inquiry.reply_to %></dd><% } %>
-      <% if (locals.prevMail) { %><dt>이전 메일</dt><dd><a href="/inbox/<%= prevMail.id %><%= backQs %>">↩ <%= prevMail.subject || '(제목 없음)' %></a> <span class="muted small"><%= kst(prevMail.received_at) %> · 이 메일은 그 메일에 대한 고객 답장이에요</span></dd><% } %>
-      <dt><%= chat ? '마지막 말' : '받은 시각' %></dt><dd><%= kst(inquiry.received_at) %></dd>
-      <% if (chat && chatProduct) { %>
-        <dt>문의 상품</dt><dd><% if (chatProduct.url) { %><a href="<%= chatProduct.url %>" target="_blank" rel="noopener noreferrer"><%= chatProduct.name %> ↗</a><% } else { %><%= chatProduct.name %><% } %></dd>
-      <% } %>
-      <% if (attachments.length) { %>
-        <dt>첨부</dt>
-        <dd>
-          <% attachments.forEach((a, n) => { %>
-            <div class="file-row">
-              <% if (canOpenFiles) { %><a href="/inbox/<%= inquiry.id %>/files/<%= n %>">📎 <%= a.name %></a><% } else { %>📎 <%= a.name %><% } %>
-              <span class="muted small">(<%= a.size >= 1024 * 1024 ? `${(a.size / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(a.size / 1024))}KB` %>)</span>
-            </div>
-          <% }) %>
-          <div class="muted small">눌러서 내려받습니다. 파일은 서버에 저장하지 않고 <%= label %>에서 그때그때 가져옵니다.</div>
-        </dd>
-      <% } %>
-    </dl>
-    <%# 본문은 글자로만 보여준다 (메일 속 스크립트·추적 이미지가 실행되지 않게) %>
-    <% if (chat) { %>
-      <%# 채팅: 고객은 왼쪽, 우리(파트너센터)는 오른쪽 말풍선 %>
-      <div class="chat-thread">
-        <% chat.forEach(m => { %>
-          <div class="chat-msg <%= m.direction %>">
-            <% if (m.kind === 'image' && m.image_url) { %>
-              <a href="/inbox/<%= inquiry.id %>/chat-image/<%= m.id %>" target="_blank" rel="noopener"><img src="/inbox/<%= inquiry.id %>/chat-image/<%= m.id %>" alt="사진" loading="lazy"></a>
-            <% } else { %>
-              <div class="chat-text"><%= m.text %></div>
-            <% } %>
-            <span class="chat-time muted small"><%= m.direction === 'out' ? `${m.who || '우리'} · ` : '' %><%= kst(m.created_at).slice(5) %></span>
-          </div>
-        <% }) %>
-        <% if (!chat.length) { %><p class="muted">주고받은 말이 없습니다.</p><% } %>
+<%# 메일·쇼핑몰 문의 대화방: 톡톡과 같은 창 — 위 머리 줄(보낸 사람·상태·담당) 고정, 가운데 주고받은 글만 스크롤, 아래 답장 칸 고정.
+    손님 글은 왼쪽, 우리 답장은 오른쪽 말풍선. 같은 대화의 앞 메일(고객 답장 이음)도 위에 이어서 보여 준다.
+    고객·주문 정보는 넓으면 오른쪽 칸, 좁으면 [주문·고객] 버튼으로 펼친다 (public/talk-room.js).
+    폼·칸 이름은 예전 화면과 같다 (inbox.js 파일 넣기, macro-picker.js, live.js 실시간 갱신이 그대로 동작) %>
+<%
+  const word = isMail ? '메일' : '문의';
+  const who = inquiry.from_name || inquiry.from_addr || (isMail ? '(보낸 사람 없음)' : '작성자 정보 없음');
+  const sizeText = n => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
+  const backQs = back !== '/inbox' ? `?back=${encodeURIComponent(back)}` : '';
+  // 답장 결과: 보냄 · 연습(보내지 않음) · 실패 …
+  const sentWord = r => (r.result === 'ok' ? '보냄' : r.result === 'practice' ? '연습 · 보내지 않음' : RESULT_LABELS[r.result] || r.result);
+  // 날짜가 바뀌는 곳에 '11월 4일 (수)' 구분 줄
+  let lastDay = '';
+  const dayBreak = at => { const d = dayLabel(at); if (!d || d === lastDay) return ''; lastDay = d; return d; };
+  const confirmText = isMail
+    ? `${inquiry.reply_to || inquiry.from_addr} 에게 답변을 보낼까요?\n보낸 메일은 되돌릴 수 없습니다.`
+    : `${label}에 이 답변을 등록할까요?\n고객에게 바로 보입니다.`;
+%>
+<div class="talk-room mail-room" data-talk-room data-inquiry-id="<%= inquiry.id %>">
+  <header class="talk-room-head">
+    <div class="detail-head talk-head-main">
+      <% if (!locals.embed) { %><a href="<%= back %>" class="btn-back talk-back" aria-label="<%= isMail ? '메일함으로' : '문의함으로' %>">←</a><% } %>
+      <div class="talk-head-text">
+        <h1 class="talk-title"><%= who %></h1>
+        <p class="talk-sub">
+          <span class="st-badge <%= inquiry.status === 'open' ? 'sb-new' : inquiry.status === 'answered' ? 'sb-done' : 'sb-wait' %>"><%= STATUS_LABELS[inquiry.status] %></span>
+          <% if (isMail && inquiry.from_name && inquiry.from_addr) { %><span class="muted small"><%= inquiry.from_addr %></span><% } %>
+          <span class="talk-tag src src-tag src-<%= inquiry.source %>"><%= label %></span>
+          <% if (inquiry.order_no) { %><a class="talk-order-chip" href="/?view=all&q=<%= encodeURIComponent(inquiry.order_no) %>" target="_top" title="이 문의의 주문 찾기">주문 <%= inquiry.order_no %></a><% } %>
+        </p>
       </div>
-    <% } else { %>
-    <div class="inquiry-body"><%= inquiry.body || '(내용 없음)' %></div>
-    <% } %>
-    <%# 그림 첨부 미리보기 (5MB 이하, 최대 6장) — 누르면 크게 %>
-    <% const images = canOpenFiles ? attachments.map((a, n) => ({ ...a, n })).filter(a => previewType(a) && a.size <= 5 * 1024 * 1024).slice(0, 6) : []; %>
-    <% if (images.length) { %>
-      <div class="image-previews">
-        <% images.forEach(a => { %>
-          <a href="/inbox/<%= inquiry.id %>/files/<%= a.n %>?view=1" target="_blank" rel="noopener" title="<%= a.name %>">
-            <img src="/inbox/<%= inquiry.id %>/files/<%= a.n %>?view=1" alt="<%= a.name %>" loading="lazy">
-          </a>
-        <% }) %>
-      </div>
-    <% } %>
-  </section>
-
-  <div class="detail-side">
-    <section class="card process-card">
-      <h2>답변</h2>
-      <% if (mode !== 'live') { %>
-        <p class="practice-note"><strong>연습 모드</strong> 보내기를 눌러도 <%= chat ? '손님에게' : withRo(label) %> 나가지 않고 기록만 남깁니다.</p>
-      <% } %>
+    </div>
+    <div class="talk-head-actions">
       <form method="post" action="/inbox/<%= inquiry.id %>/assign" class="inline assign-row" data-autosubmit>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="from" value="detail">
-        <label>담당
-          <select name="assignee_id" class="assign-select <%= inquiry.assignee_id ? staffColor(inquiry.assignee_id) : 'unassigned' %>">
-            <option value="">담당 미지정</option>
-            <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === inquiry.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
-          </select>
-        </label>
+        <select name="assignee_id" aria-label="담당" class="assign-select <%= inquiry.assignee_id ? staffColor(inquiry.assignee_id) : 'unassigned' %>">
+          <option value="">담당 미지정</option>
+          <% staff.forEach(s => { %><option value="<%= s.id %>" <%= s.id === inquiry.assignee_id ? 'selected' : '' %>><%= s.name %><%= s.id === user.id ? ' (나)' : '' %></option><% }) %>
+        </select>
         <noscript><button type="submit" class="btn-sm">지정</button></noscript>
       </form>
+      <% if (inquiry.status === 'open') { %>
+        <form method="post" action="/inbox/<%= inquiry.id %>/close" class="inline" data-once>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="back" value="<%= back %>">
+          <button type="submit" class="btn-sm" title="광고·알림처럼 답변이 필요 없는 <%= word %>">답변 없이 완료</button>
+        </form>
+      <% } else { %>
+        <form method="post" action="/inbox/<%= inquiry.id %>/reopen" class="inline" data-once>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="back" value="<%= back %>">
+          <button type="submit" class="btn-sm">다시 미답변으로</button>
+        </form>
+      <% } %>
+      <button type="button" class="btn-sm talk-side-toggle" data-talk-side-toggle aria-expanded="false">주문·고객</button>
+    </div>
+  </header>
 
-      <% const confirmText = isMail
-           ? `${inquiry.reply_to || inquiry.from_addr} 에게 답변을 보낼까요?\n보낸 메일은 되돌릴 수 없습니다.`
-           : `${label}에 이 답변을 등록할까요?\n고객에게 바로 보입니다.`; %>
-      <%# 톡톡은 메신저처럼 Enter 로 바로 보낸다 (확인창 없음). 메일·쇼핑몰 문의는 보내기 전에 확인 %>
-      <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form" enctype="multipart/form-data" data-once
-            <% if (!chat) { %>data-confirm="<%= confirmText %>"<% } %>>
+  <div class="talk-room-body">
+    <div class="talk-room-main">
+      <%# 주고받은 글. 본문은 글자로만 보여준다 (메일 속 스크립트·추적 이미지가 실행되지 않게) %>
+      <div class="chat-thread talk-thread mail-thread">
+        <% thread.forEach(t => { const m = t.mail; const day = dayBreak(m.received_at); %>
+          <% if (day) { %><span class="thread-day"><%= day %></span><% } %>
+          <div class="mail-msg in <%= m.id === inquiry.id ? 'current' : '' %>">
+            <div class="mail-card">
+              <% if (m.subject) { %><span class="mail-subj"><% if (m.id !== inquiry.id) { %><a href="/inbox/<%= m.id %><%= backQs %>"><%= m.subject %></a><% } else { %><%= m.subject %><% } %></span><% } %>
+              <div class="mail-text"><%= m.body || '(내용 없음)' %></div>
+              <% if (t.files.length) { %>
+                <span class="mail-files">
+                  <% t.files.forEach((a, n) => { %>
+                    <% if (canOpenFiles) { %><a class="mail-file" href="/inbox/<%= m.id %>/files/<%= n %>">📎 <%= a.name %> · <%= sizeText(a.size) %></a><% } else { %><span class="mail-file">📎 <%= a.name %> · <%= sizeText(a.size) %></span><% } %>
+                  <% }) %>
+                </span>
+                <%# 그림 첨부 미리보기 (5MB 이하, 최대 6장) — 누르면 크게 %>
+                <% const images = canOpenFiles ? t.files.map((a, n) => ({ ...a, n })).filter(a => previewType(a) && a.size <= 5 * 1024 * 1024).slice(0, 6) : []; %>
+                <% if (images.length) { %>
+                  <div class="image-previews">
+                    <% images.forEach(a => { %>
+                      <a href="/inbox/<%= m.id %>/files/<%= a.n %>?view=1" target="_blank" rel="noopener" title="<%= a.name %>"><img src="/inbox/<%= m.id %>/files/<%= a.n %>?view=1" alt="<%= a.name %>" loading="lazy"></a>
+                    <% }) %>
+                  </div>
+                <% } %>
+              <% } %>
+            </div>
+            <span class="mail-meta"><%= m.from_name || m.from_addr || '고객' %> · <%= kst(m.received_at).slice(5) %><% if (m.id !== inquiry.id) { %> · <%= STATUS_LABELS[m.status] %><% } %></span>
+          </div>
+          <% t.replies.forEach(r => { const rday = dayBreak(r.created_at); let sentFiles = []; try { sentFiles = JSON.parse(r.attachments || '[]'); } catch { sentFiles = []; } %>
+            <% if (rday) { %><span class="thread-day"><%= rday %></span><% } %>
+            <div class="mail-msg out res-<%= r.result %>">
+              <div class="mail-card">
+                <div class="mail-text"><%= r.body %></div>
+                <% if (sentFiles.length) { %><span class="mail-files"><% sentFiles.forEach(f => { %><span class="mail-file">📎 <%= f.name %></span><% }) %></span><% } %>
+              </div>
+              <span class="mail-meta"><%= r.user_name || '-' %> · <%= kst(r.created_at).slice(5) %> · <span class="result r-<%= r.result %>"><%= sentWord(r) %></span></span>
+              <% if (!['ok', 'practice'].includes(r.result) && r.message) { %><span class="mail-meta mail-fail"><%= r.message %></span><% } %>
+            </div>
+          <% }) %>
+        <% }) %>
+        <% if (laterMails.length) { %>
+          <p class="mail-later">이 뒤에 온 고객 답장이 있어요:
+            <% laterMails.forEach(l => { %><a href="/inbox/<%= l.id %><%= backQs %>">↪ <%= l.subject || '(제목 없음)' %> <span class="muted small"><%= kst(l.received_at).slice(5) %></span></a> <% }) %>
+          </p>
+        <% } %>
+      </div>
+
+      <%# 답장 칸: 늘 아래에. 메일·문의 답변은 길어서 Enter 는 줄바꿈, 보내기는 버튼으로 (보내기 전에 확인) %>
+      <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form talk-composer" enctype="multipart/form-data" data-once data-confirm="<%= confirmText %>">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
         <input type="hidden" name="back" value="<%= back %>">
         <input type="hidden" name="version" value="<%= inquiry.version %>">
-        <%# 매크로(자주 쓰는 답장 문구): 찾아서 고르면 답장 칸에 들어간다 (그 뒤에 고쳐 써도 됨). public/macro-picker.js %>
         <% const macroCount = templates.reduce((n, g) => n + g.items.length, 0); %>
-        <div class="template-row macro-picker" data-macro-picker data-csrf="<%= csrfToken %>">
-          <button type="button" class="btn-sm" data-macro-open aria-expanded="false" aria-haspopup="listbox" <%= macroCount ? '' : 'disabled' %>>＋ 매크로 넣기<%= macroCount ? '' : ' (저장된 문구 없음)' %></button>
-          <a href="/templates" target="_top" class="btn-sm ghost">문구 관리</a>
-          <% if (macroCount) { %>
-          <div class="macro-panel" data-macro-panel hidden>
-            <input type="search" class="macro-search" placeholder="제목·내용으로 찾기 (예: 환불, 송장)" aria-label="매크로 찾기" data-macro-search autocomplete="off">
-            <div class="macro-list" role="listbox" aria-label="매크로" data-macro-list>
-              <% templates.forEach(g => { %>
-                <div class="macro-group" data-macro-group>
-                  <div class="macro-cat"><%= g.name %></div>
-                  <% g.items.forEach(t => { %>
-                    <button type="button" class="macro-item" role="option" data-macro-item data-id="<%= t.id %>" data-body="<%= t.body %>" data-subject="<%= t.subject %>"
-                      data-search="<%= [t.title, t.hint, t.body, g.name].join(' ').toLowerCase() %>">
-                      <strong><%= t.title %></strong><% if (t.hint) { %><span class="macro-hint"><%= t.hint %></span><% } %><span class="macro-tag"><%= g.name %></span>
-                    </button>
-                  <% }) %>
-                </div>
-              <% }) %>
-              <p class="macro-none" data-macro-none hidden>찾는 매크로가 없어요</p>
+        <div class="composer-tools">
+          <div class="template-row macro-picker" data-macro-picker data-csrf="<%= csrfToken %>">
+            <button type="button" class="btn-sm" data-macro-open aria-expanded="false" aria-haspopup="listbox" <%= macroCount ? '' : 'disabled' %>>＋ 매크로 넣기<%= macroCount ? '' : ' (저장된 문구 없음)' %></button>
+            <% if (macroCount) { %>
+            <div class="macro-panel" data-macro-panel hidden>
+              <input type="search" class="macro-search" placeholder="제목·내용으로 찾기 (예: 환불, 송장)" aria-label="매크로 찾기" data-macro-search autocomplete="off">
+              <div class="macro-list" role="listbox" aria-label="매크로" data-macro-list>
+                <% templates.forEach(g => { %>
+                  <div class="macro-group" data-macro-group>
+                    <div class="macro-cat"><%= g.name %></div>
+                    <% g.items.forEach(t => { %>
+                      <button type="button" class="macro-item" role="option" data-macro-item data-id="<%= t.id %>" data-body="<%= t.body %>" data-subject="<%= t.subject %>"
+                        data-search="<%= [t.title, t.hint, t.body, g.name].join(' ').toLowerCase() %>">
+                        <strong><%= t.title %></strong><% if (t.hint) { %><span class="macro-hint"><%= t.hint %></span><% } %><span class="macro-tag"><%= g.name %></span>
+                      </button>
+                    <% }) %>
+                  </div>
+                <% }) %>
+                <p class="macro-none" data-macro-none hidden>찾는 매크로가 없어요</p>
+              </div>
             </div>
+            <% } %>
           </div>
-          <% } %>
+          <% if (isMail) { %><label for="reply-files" class="btn-sm attach-btn" title="파일 넣기 (답장 칸에 끌어다 놓아도 돼요)">📎 파일</label><% } %>
+          <% if (mode !== 'live') { %><span class="practice-chip" title="보내기를 눌러도 <%= withRo(label) %> 나가지 않고 기록만 남깁니다">연습 모드</span><% } %>
+          <a href="/templates" target="_top" class="composer-link">문구 관리</a>
         </div>
-        <% if (chat) { %>
-          <label>톡톡 답장 <span class="muted small">(손님에게 바로 보입니다)</span>
-            <textarea name="body" rows="4" maxlength="10000" data-enter-send placeholder="손님에게 보낼 말을 적어 주세요. 사진만 보내도 돼요."></textarea>
-          </label>
-          <p class="muted small enter-hint"><kbd>Enter</kbd> 보내기 · <kbd>Shift</kbd>+<kbd>Enter</kbd> 줄바꿈</p>
-        <% } else if (isMail) { %>
-          <label>받는 사람 <span class="muted small"><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></span>
-            <textarea name="body" rows="8" maxlength="10000" required placeholder="답변 내용을 적어 주세요. 제목은 'Re: 원래 제목' 으로 보냅니다."></textarea>
-          </label>
-        <% } else { %>
-          <label><%= label %> 문의 답변 <span class="muted small">(고객에게 그대로 보입니다)</span>
-            <textarea name="body" rows="8" maxlength="10000" required placeholder="고객에게 보일 답변을 적어 주세요."></textarea>
-          </label>
-        <% } %>
-        <%# 톡톡 사진: 끌어다 놓기 · 붙여넣기(Ctrl+V) · 눌러서 고르기. 보내기 전에 작게 미리 보기 %>
-        <% if (chat) { %>
-        <div class="drop-zone" data-drop-zone data-images>
-          <input type="file" name="files" id="reply-files" multiple accept="image/jpeg,image/png,image/gif" data-max-total="20971520" class="visually-hidden">
-          <label for="reply-files" class="drop-hint">📷 사진을 끌어다 놓거나 붙여넣기(Ctrl+V), 또는 <span class="link-like">눌러서 고르세요</span></label>
-          <ul class="drop-list drop-thumbs" data-drop-list></ul>
-          <span class="muted small">JPG·PNG·GIF · 합계 20MB · 10장까지</span>
-        </div>
-        <% } %>
-        <%# 파일 첨부(메일만): 끌어다 놓거나 눌러서 고르기 (답변 칸에 놓아도 됨) %>
         <% if (isMail) { %>
-        <div class="drop-zone" data-drop-zone>
-          <input type="file" name="files" id="reply-files" multiple data-max-total="20971520" class="visually-hidden">
-          <label for="reply-files" class="drop-hint">📎 파일을 여기로 끌어다 놓거나 <span class="link-like">눌러서 고르세요</span></label>
-          <ul class="drop-list" data-drop-list></ul>
-          <span class="muted small">합계 20MB까지 · 큰 파일은 웹하드 링크로 보내 주세요</span>
-        </div>
+          <%# 파일 첨부(메일만): 끌어다 놓거나 📎 파일로 고르기. 합계 20MB %>
+          <div class="talk-attach" data-drop-zone>
+            <input type="file" name="files" id="reply-files" multiple data-max-total="20971520" class="visually-hidden">
+            <ul class="drop-list" data-drop-list></ul>
+          </div>
+          <p class="composer-to">받는 사람 <b><%= inquiry.reply_to || inquiry.from_addr || '(주소 없음)' %></b> · 제목 <b>Re: <%= String(inquiry.subject || '').replace(/^(re:\s*)+/i, '') %></b></p>
+        <% } else { %>
+          <p class="composer-to"><%= label %> 문의 답변 <b>(고객에게 그대로 보입니다)</b></p>
         <% } %>
-        <button type="submit" class="wide"><%= chat ? '보내기' : '답변 보내기' %></button>
+        <div class="composer-row">
+          <textarea name="body" rows="3" maxlength="10000" required aria-label="<%= isMail ? '메일 답장' : `${label} 문의 답변` %>"
+            placeholder="<%= isMail ? '답장 내용을 적어 주세요 · 파일은 끌어다 놓아도 돼요' : '고객에게 보일 답변을 적어 주세요' %>"></textarea>
+          <button type="submit" class="composer-send">답변 보내기</button>
+        </div>
       </form>
+    </div>
 
-      <div class="form-actions inquiry-actions">
-        <% if (chat) { %>
-          <a class="btn-sm ghost" href="<%= PARTNER_CENTER_URL %>" target="_blank" rel="noopener">파트너센터 ↗</a>
-          <%# 톡톡: 보류(나중에 볼 대화) / 보류 풀기. 손님이 새로 말하면 저절로 대기로 돌아온다 %>
-          <form method="post" action="/inbox/<%= inquiry.id %>/<%= inquiry.status === 'closed' ? 'unhold' : 'hold' %>" class="inline" data-once>
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="back" value="<%= back %>">
-            <button type="submit" class="btn-sm"><%= inquiry.status === 'closed' ? '보류 풀기' : '⏸ 보류' %></button>
-          </form>
-          <span class="muted small"><%= CHAT_STATUS[inquiry.status] %><%= inquiry.status === 'closed' && inquiry.handled_name ? ` · ${inquiry.handled_name}` : '' %></span>
-        <% } else if (inquiry.status === 'open') { %>
-          <form method="post" action="/inbox/<%= inquiry.id %>/close" class="inline" data-once>
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="back" value="<%= back %>">
-            <button type="submit" class="btn-sm" title="광고·알림처럼 답변이 필요 없는 문의">답변 없이 완료</button>
-          </form>
-        <% } else { %>
-          <form method="post" action="/inbox/<%= inquiry.id %>/reopen" class="inline" data-once>
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="back" value="<%= back %>">
-            <button type="submit" class="btn-sm">다시 미답변으로</button>
-          </form>
-          <span class="muted small"><%= STATUS_LABELS[inquiry.status] %><%= inquiry.handled_name ? ` · ${inquiry.handled_name}` : '' %><%= inquiry.handled_at ? ` · ${kst(inquiry.handled_at)}` : '' %></span>
-        <% } %>
-        <% if (inquiry.order_no && !chat) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.order_no) %>" target="_top">관련 주문 보기</a><% } %>
-        <% if (isMail && inquiry.from_name) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.from_name) %>" target="_top">이 이름으로 주문 찾기</a><% } %>
-        <% if (isMail) { %>
+    <%# 고객·주문 정보: 넓은 화면은 오른쪽 칸, 좁으면 [주문·고객] 으로 펼치는 서랍 %>
+    <aside class="talk-room-side" data-talk-side aria-label="고객·주문 정보">
+      <div class="talk-side-head">
+        <strong>고객 · 주문</strong>
+        <button type="button" class="btn-sm ghost talk-side-close" data-talk-side-close aria-label="닫기">✕</button>
+      </div>
+      <section class="talk-cust-card mail-who">
+        <dl class="info">
+          <dt><%= isMail ? '보낸 사람' : '작성자' %></dt><dd><%= inquiry.from_name || '' %><% if (!inquiry.from_name && !inquiry.from_addr) { %><span class="muted">알 수 없음 (채널이 이름을 알려주지 않아요)</span><% } %><% if (inquiry.from_addr) { %> &lt;<%= inquiry.from_addr %>&gt;<% } %></dd>
+          <% if (inquiry.reply_to) { %><dt>답장 주소</dt><dd><%= inquiry.reply_to %></dd><% } %>
+          <dt><%= isMail ? '받은 메일함' : '판매처' %></dt><dd><%= label %></dd>
+          <dt>받은 시각</dt><dd><%= kst(inquiry.received_at) %></dd>
+          <% if (inquiry.status !== 'open') { %><dt>처리</dt><dd><%= STATUS_LABELS[inquiry.status] %><%= inquiry.handled_name ? ` · ${inquiry.handled_name}` : '' %><%= inquiry.handled_at ? ` · ${kst(inquiry.handled_at)}` : '' %></dd><% } %>
+        </dl>
+        <div class="mail-who-actions">
+          <% if (inquiry.order_no) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.order_no) %>" target="_top">관련 주문 보기</a><% } %>
+          <% if (isMail && inquiry.from_name) { %><a class="btn-sm" href="/?view=all&q=<%= encodeURIComponent(inquiry.from_name) %>" target="_top">이 이름으로 주문 찾기</a><% } %>
+        </div>
+      </section>
+      <%- include('../partials/customer-history', { cust: customer, firstNote: `이 ${word}과 이어진 주문을 찾지 못했어요.` }) %>
+      <% if (isMail) { %>
+        <div class="talk-side-foot">
           <form method="post" action="/inbox/<%= inquiry.id %>/delete" class="inline" data-once target="_top"
                 data-confirm="이 메일을 인트라넷에서 삭제할까요?&#10;되돌릴 수 없습니다. (네이버메일·지메일의 원본은 그대로 남아요)">
             <input type="hidden" name="_csrf" value="<%= csrfToken %>">
             <input type="hidden" name="back" value="<%= back %>">
             <button type="submit" class="btn-sm danger">🗑 삭제</button>
           </form>
-        <% } %>
-      </div>
-
-      <% if (replies.length) { %>
-        <h3>답변 기록</h3>
-        <ul class="history">
-          <% replies.forEach(r => { %>
-            <li>
-              <span class="result r-<%= r.result %>"><%= RESULT_LABELS[r.result] %></span>
-              <span class="muted">· <%= r.user_name || '-' %> · <%= kst(r.created_at) %></span>
-              <% if (r.result !== 'ok') { %><div class="muted small"><%= r.message %></div><% } %>
-              <div class="reply-body"><%= r.body %></div>
-              <% let sentFiles = []; try { sentFiles = JSON.parse(r.attachments || '[]'); } catch { sentFiles = []; } %>
-              <% if (sentFiles.length) { %><div class="muted small">📎 <%= sentFiles.map(f => f.name).join(', ') %></div><% } %>
-            </li>
-          <% }) %>
-        </ul>
+          <span class="muted small">원본은 <%= label %>에 그대로 남아요</span>
+        </div>
       <% } %>
-    </section>
-    <% if (chat) { %>
-      <%# 톡톡: 고객 메모(목록에서 이름 옆) · 주문 연결(손님이 주문번호를 말하면 자동) %>
-      <section class="card talk-cust-card">
-        <h2>고객 · 주문 연결</h2>
-        <form method="post" action="/inbox/<%= inquiry.id %>/memo" class="talk-inline-form">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-          <input type="hidden" name="back" value="<%= back %>">
-          <label for="cust-memo">고객 메모 <span class="muted small">(목록에서 이름 옆에 보여요)</span></label>
-          <div class="talk-inline-row">
-            <input type="text" id="cust-memo" name="cust_memo" value="<%= inquiry.cust_memo || '' %>" maxlength="30" placeholder="예: 실사-김대성">
-            <button type="submit" class="btn-sm">저장</button>
-          </div>
-        </form>
-        <% if (linkedOrder) { %>
-          <div class="talk-linked">
-            <span class="muted small">연결된 주문</span>
-            <a href="/orders/<%= linkedOrder.id %>" target="_top" class="talk-linked-order"><span class="ch ch-<%= channelInfo(linkedOrder.channel).cls %>"><%= channelInfo(linkedOrder.channel).mark %></span><span><strong><%= linkedOrder.product_name %></strong><span class="muted small">주문번호 <%= linkedOrder.channel_order_id %></span></span></a>
-            <form method="post" action="/inbox/<%= inquiry.id %>/unlink-order" class="inline" data-confirm="이 대화와 주문의 연결을 풀까요?">
-              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-              <input type="hidden" name="back" value="<%= back %>">
-              <button type="submit" class="btn-sm ghost">연결 풀기</button>
-            </form>
-          </div>
-        <% } else { %>
-          <form method="post" action="/inbox/<%= inquiry.id %>/link-order" class="talk-inline-form">
-            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-            <input type="hidden" name="back" value="<%= back %>">
-            <label for="link-order">주문 연결 <span class="muted small">(손님이 대화에 주문번호를 쓰면 자동으로 연결돼요)</span></label>
-            <% if (saidNo) { %>
-              <p class="talk-said-note">손님이 말한 번호 <strong><%= saidNo %></strong> 와 맞는 주문이 아직 인트라넷에 없어요. 방금 한 주문이면 수집되는 대로(몇 분 안) <strong>자동으로 연결</strong>돼요. 번호가 틀렸거나 다른 판매처 주문일 수도 있어요.</p>
-            <% } %>
-            <div class="talk-inline-row">
-              <input type="text" id="link-order" name="order_no" maxlength="40" inputmode="numeric" value="<%= saidNo || '' %>" placeholder="주문번호 또는 상품주문번호">
-              <button type="submit" class="btn-sm">연결</button>
-            </div>
-          </form>
-        <% } %>
-      </section>
-      <% if (linkedOrder) { %><%- include('../partials/customer-history', { cust: customer, firstNote: '' }) %><% } %>
-    <% } else { %><%- include('../partials/customer-history', { cust: customer, firstNote: '이 문의와 이어진 주문을 찾지 못했어요.' }) %><% } %>
+    </aside>
   </div>
 </div>
 <script src="/confirm.js"></script>
 <script src="/orders.js"></script>
 <script src="/inbox.js"></script>
 <script src="/macro-picker.js"></script>
+<script src="/talk-room.js"></script>
 <%- include('../partials/footer') %>

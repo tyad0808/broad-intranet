@@ -87,7 +87,7 @@ test('화면: 자사몰 문의는 쇼핑몰 문의 탭에, 관련 주문 보기 
   const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
   const id = Number(ctx.db.prepare(`INSERT INTO inquiries (source, external_id, subject, body, attachments, received_at, order_no)
     VALUES ('godo_qna', 'inquiry:501', '[자사몰 1:1문의] 배송 문의', '언제 받나요', '[]', '2026-10-19T01:00:00Z', '2610191234567890')`).run().lastInsertRowid);
-  assert.match((await kim.request('/inbox?box=shop')).text, /class="src-tag src-godo_qna">자사몰</);
+  assert.match((await kim.request('/inbox?box=shop')).text, /src-tag src-godo_qna"[^>]*>자사몰</);
   const detail = (await kim.request(`/inbox/${id}`)).text;
   assert.match(detail, /href="\/\?view=all&q=2610191234567890"[^>]*>관련 주문 보기/);
   assert.match(detail, /눌러도 자사몰로 나가지/);

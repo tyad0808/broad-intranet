@@ -80,7 +80,7 @@ test('화면: 스마트스토어 문의는 출처 칩에 나오고, 답변 칸�
   const id = Number(ctx.db.prepare(`INSERT INTO inquiries (source, external_id, from_name, subject, body, attachments, received_at)
     VALUES ('smartstore_qna', '123456', 'abc***', '[상품문의] 포맥스 안내판', '사이즈 맞춤 되나요?', '[]', '2026-10-19T01:00:00Z')`).run().lastInsertRowid);
   const list = (await kim.request('/inbox')).text;
-  assert.match(list, /class="src-tag src-smartstore_qna">스마트스토어</);
+  assert.match(list, /src-tag src-smartstore_qna"[^>]*>스마트스토어</);
   const detail = (await kim.request(`/inbox/${id}`)).text;
   assert.match(detail, /스마트스토어에 이 답변을 등록할까요/);
   assert.ok(!detail.includes('data-drop-zone'), '파일 첨부 없음');
