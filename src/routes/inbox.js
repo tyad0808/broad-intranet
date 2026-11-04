@@ -151,7 +151,8 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     // 상태 탭 없이 한 목록: 미답변은 늘, 답변한 문의는 N일(기본 14일)까지만 (검색·기간 보기로는 모두 보임)
     const hidingOld = !terms.length && !period;
     const recent = `${INQUIRY_TIME} >= '${hideCutoff(db)}'`;
-    const keep = hidingOld ? [`(q.status = 'open' OR ${recent})`] : [];
+    // 보기: 미답변(open, 처음) · 답변완료(done = 답변함·처리 완료). 답변완료는 N일 지난 것을 숨긴다 (검색·기간 보기로는 모두)
+    const TAB_SQL = { open: ["q.status = 'open'"], done: ["q.status IN ('answered', 'closed')", ...(hidingOld ? [recent] : [])] };
     const whoWhere = who === 'mine' || /^\d+$/.test(who) ? ['q.assignee_id = ?'] : who === 'none' ? ['q.assignee_id IS NULL'] : [];
     const whoParams = who === 'mine' ? [req.user.id] : /^\d+$/.test(who) ? [Number(who)] : [];
     const srcWhere = src ? ['q.source = ?'] : [];
@@ -159,7 +160,9 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const whereSql = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
     const count = (extra, extraParams = []) => db.prepare(`SELECT COUNT(*) AS n FROM inquiries q ${whereSql([...base, ...extra])}`).get(...params, ...extraParams).n;
     // 미답변 건수: 지금 보는 조건 그대로 / 내 담당 (담당 칸에 같이 보여 준다)
-    const openCount = count([...srcWhere, ...whoWhere, "q.status = 'open'"], [...srcParams, ...whoParams]);
+    const tabCounts = Object.fromEntries(Object.keys(TAB_SQL).map(k => [k, count([...srcWhere, ...whoWhere, ...TAB_SQL[k]], [...srcParams, ...whoParams])]));
+    // 검색했는데 미답변엔 없고 답변완료에만 있으면 답변완료 칸을 바로 보여 준다 (칸을 직접 고르면 그대로)
+    const tab = req.query.tab === 'done' || (!req.query.tab && terms.length && !tabCounts.open && tabCounts.done) ? 'done' : 'open';
     const mineOpen = count([...srcWhere, 'q.assignee_id = ?', "q.status = 'open'"], [...srcParams, req.user.id]);
     const sources = [...new Set([...Object.keys(sourceLabels), ...db.prepare(`SELECT DISTINCT q.source FROM inquiries q WHERE ${boxSql(box)}`).all().map(r => r.source)])]
       .filter(s => boxOf(s) === box);
@@ -178,7 +181,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
         instr(lower(q.body), lower(?1)) > 41 AS preview_cut,
         q.status, q.assignee_id, q.attachments, q.prev_id, u.name AS assignee_name
       FROM inquiries q LEFT JOIN users u ON u.id = q.assignee_id
-      ${whereSql([...base, ...srcWhere, ...whoWhere, ...keep])}
+      ${whereSql([...base, ...srcWhere, ...whoWhere, ...TAB_SQL[tab]])}
       ORDER BY q.received_at DESC, q.id DESC LIMIT 300
     `).all(terms[0] || '', ...params, ...srcParams, ...whoParams);
 
@@ -190,7 +193,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       title: PAGE_TITLES[box] || '문의함',
       navSection: box === 'mail' ? 'mail' : 'inbox',
       pageTitle: PAGE_TITLES[box] || '문의함',
-      rows, src, sources, q, who, per: perKey, labelOf, STATUS_LABELS, openCount, mineOpen,
+      rows, tab, tabCounts, src, sources, q, who, per: perKey, labelOf, STATUS_LABELS, mineOpen,
       hl: text => highlightParts(text, terms), otherHits, talkTime, shopChannel: source => SHOP_CHANNEL[source] || null,
       from: period ? period.from : '', to: period ? period.to : '', periodText: periodLabel(period), quick, hidingOld, hideDays: hideDays(db),
       box, BOXES, chipLabel,

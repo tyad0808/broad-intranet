@@ -205,15 +205,15 @@ async function setupInbox(t, { senders = {} } = {}) {
   return ctx;
 }
 
-test('메일함 목록: 위쪽 메뉴에 미답변 건수, 메일함 고르기, 상태 탭 없이 한 목록(미답변은 파란 점), 본문은 글자로만', async t => {
+test('메일함 목록: 위쪽 메뉴에 미답변 건수, 메일함 고르기, 미답변/답변완료 두 칸(처음은 미답변), 본문은 글자로만', async t => {
   const { kim, id1 } = await setupInbox(t);
   const home = (await kim.request('/')).text;
   assert.match(home, /메일함 <span class="badge">2<\/span>/);
   assert.ok(!home.includes('문의함 <span class="badge">'), '메일은 문의함 숫자에 넣지 않는다');
   const list = (await kim.request('/inbox?box=mail')).text;
-  assert.match(list, /미답변 <strong>2<\/strong>통/);
+  assert.match(list, /class="on"><span class="mail-dot" aria-hidden="true"><\/span> 미답변 <b>2<\/b><\/a>/, '처음엔 미답변 칸');
+  assert.match(list, />답변완료 <b>0<\/b><\/a>/);
   assert.match(list, /<option value="naver_mail"\s*>네이버메일<\/option>/);
-  assert.doesNotMatch(list, /class="view-seg"|>답변완료 <span class="count">/, '상태 탭(미답변·내 담당·답변완료·전체)은 없다');
   assert.strictEqual((list.match(/class="mail-dot" title="미답변"/g) || []).length, 2, '답하지 않은 메일만 파란 점');
   assert.match(list, /견적 문의/);
   assert.match(list, /연습 모드/);
@@ -340,7 +340,8 @@ test('실제 답변: 보낸 메일이 성공하면 답변완료, 실패면 미�
   await kim.submit(`/inbox/${id1}`, `/inbox/${id1}/reply`, { body: '견적 보내드립니다', version: String(row(id1).version) });
   assert.deepStrictEqual(replies[1], ['hong@example.com', '견적 보내드립니다']);
   assert.deepStrictEqual([row(id1).status, row(id1).handled_by], ['answered', kimId]);
-  assert.match((await kim.request('/inbox?box=mail')).text, /답변완료<\/span>/, '답한 메일도 같은 목록에 (답변완료 꼬리표)');
+  assert.ok(!(await kim.request('/inbox?box=mail')).text.includes('견적 문의'), '답한 메일은 미답변 칸에서 빠지고');
+  assert.match((await kim.request('/inbox?box=mail&tab=done')).text, /견적 문의[\s\S]*답변완료<\/span>|답변완료<\/span>[\s\S]*견적 문의/, '답변완료 칸에 (꼬리표와 함께)');
 });
 
 test('담당자 지정·처리 완료·다시 열기·여러 건 처리 완료', async t => {
@@ -610,7 +611,7 @@ test('메일함 담당 거르기: 내 담당만 · 담당 없음 · 직원별, �
   const mine = await page('/inbox?box=mail&who=mine');
   assert.ok(mine.includes('견적 문의') && !mine.includes('특가 안내'), '내 담당만');
   assert.match(mine, /<option value="mine" selected>/);
-  assert.match(mine, /미답변 <strong>1<\/strong>통/);
+  assert.match(mine, / 미답변 <b>1<\/b><\/a>/);
   const lee = await page(`/inbox?box=mail&who=${leeId}`);
   assert.ok(lee.includes('특가 안내') && !lee.includes('견적 문의'), '직원별');
   db.prepare('UPDATE inquiries SET assignee_id = NULL WHERE id = ?').run(id2);

@@ -60,18 +60,21 @@ test('주문: 끝난 지 2주 지난 주문은 전체·배송완료에서 숨기
   assert.ok((await admin.request('/?view=all&q=' + encodeURIComponent('작년현수막'))).text.includes('작년현수막'), '검색은 지난 주문까지');
 });
 
-test('문의: 답변한 지 2주 지난 문의는 답변완료·전체에서 숨기고, 월별 보기·검색으로는 보인다. 미답변은 계속', async t => {
+test('문의: 답변한 지 2주 지난 문의는 답변완료 칸에서 숨기고, 기간 보기·검색으로는 보인다. 미답변은 계속', async t => {
   const { admin, inquiry } = await setup(t);
   const old = daysAgo(30);
   inquiry('naver_mail', '7:1', '지난달견적', 'closed', old);
   inquiry('naver_mail', '7:2', '오래된미답변', 'open', old);
   inquiry('naver_mail', '7:3', '최근처리', 'answered', daysAgo(2));
 
-  const all = (await admin.request('/inbox?box=mail&tab=all')).text;
-  assert.ok(all.includes('오래된미답변') && all.includes('최근처리') && !all.includes('지난달견적'));
-  assert.ok(!(await admin.request('/inbox?box=mail&tab=done')).text.includes('지난달견적'));
-  const range = (await admin.request(`/inbox?box=mail&from=${kstDay(daysAgo(40))}&to=${kstDay(daysAgo(20))}`)).text;
-  assert.ok(range.includes('지난달견적') && range.includes('오래된미답변') && !range.includes('최근처리'), '기간 보기는 전체 탭에서 모두');
+  assert.ok((await admin.request('/inbox?box=mail')).text.includes('오래된미답변'), '미답변은 오래돼도 계속');
+  const done = (await admin.request('/inbox?box=mail&tab=done')).text;
+  assert.ok(done.includes('최근처리') && !done.includes('지난달견적'), '답변완료는 2주 지난 것 숨김');
+  const span = `from=${kstDay(daysAgo(40))}&to=${kstDay(daysAgo(20))}`;
+  const range = (await admin.request(`/inbox?box=mail&${span}`)).text;
+  const rangeDone = (await admin.request(`/inbox?box=mail&tab=done&${span}`)).text;
+  assert.ok(range.includes('오래된미답변') && rangeDone.includes('지난달견적'), '기간 보기는 오래된 답변완료까지');
+  assert.ok(!range.includes('최근처리') && !rangeDone.includes('최근처리'), '기간 밖은 빼고');
   assert.ok((await admin.request('/inbox?box=mail&q=' + encodeURIComponent('지난달견적'))).text.includes('지난달견적'));
 });
 

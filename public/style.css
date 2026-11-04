@@ -1726,7 +1726,13 @@ body.talk-list-page .container { max-width: none; }
 /* 목록: 상태 탭 없이 한 목록. 답하지 않은 것만 파란 점 + 굵은 글씨 */
 .mail-filters { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
 .mail-dot { flex: none; display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--primary); vertical-align: middle; }
-.mail-summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 14px; }
+.mail-tabs { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line); }
+.mail-tabs a { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; color: var(--text-2); font-size: 15px; font-weight: 600; text-decoration: none; border-bottom: 3px solid transparent; }
+.mail-tabs a:hover { background: var(--surface-2); text-decoration: none; }
+.mail-tabs a.on { color: var(--primary-dark); border-bottom-color: var(--primary); }
+.mail-tabs a:not(.on) .mail-dot { background: var(--muted); }
+.mail-tabs b { font-weight: 700; }
+.mail-summary { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 16px; border-bottom: 1px solid var(--line); color: var(--text-2); font-size: 14px; }
 .mail-summary strong { color: var(--text); }
 .mail-clear { color: var(--text-2); font-size: 14px; }
 .talk-side .hide-note, .talk-side .search-elsewhere { margin: 0; padding: 8px 16px; border-bottom: 1px solid var(--line-2); }

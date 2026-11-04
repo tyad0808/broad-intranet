@@ -3,7 +3,7 @@
   // 지금 걸린 조건을 유지한 채 하나만 바꾼 주소
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { box: box === 'shop' ? '' : box, src, q, who, from, to, ...changes };
+    const merged = { box: box === 'shop' ? '' : box, tab: tab === 'open' ? '' : tab, src, q, who, from, to, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/inbox?${s}` : '/inbox';
@@ -53,12 +53,12 @@
 </form>
 
 <%# 톡톡과 같은 창: 넓은 화면은 왼쪽(검색·거르기·목록) + 오른쪽 내용, 좁은 화면은 목록만 (누르면 내용 화면으로).
-    상태 탭은 없다 — 한 목록에 최근 순, 답하지 않은 것만 파란 점 + 굵은 글씨 %>
+    보기는 미답변 / 답변완료 두 칸 (처음은 미답변) %>
 <input type="checkbox" id="pick-mode" class="visually-hidden" aria-label="여러 개 선택">
 <div class="inbox-split talk-split mail-split" data-inbox-split>
   <div class="talk-side">
     <form method="get" action="/inbox" class="talk-search" role="search">
-      <% [['box', box === 'shop' ? '' : box], ['src', src], ['who', who], ['from', from], ['to', to]].forEach(([k, v]) => { if (v) { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% } }) %>
+      <% [['box', box === 'shop' ? '' : box], ['tab', tab === 'open' ? '' : tab], ['src', src], ['who', who], ['from', from], ['to', to]].forEach(([k, v]) => { if (v) { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% } }) %>
       <input type="search" name="q" value="<%= q %>" placeholder="<%= isMailBox ? '제목, 내용, 보낸 사람, 메일 주소 검색' : '상품명, 문의 내용, 작성자, 주문번호 검색' %>" aria-label="검색">
       <% if (q) { %><a href="<%= link({ q: '' }) %>" class="talk-search-clear" aria-label="검색어 지우기">✕</a><% } %>
       <button type="submit" class="talk-search-btn" aria-label="검색"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></button>
@@ -67,6 +67,7 @@
     <%# 거르기: 담당 · 받은 메일함(판매처) · 기간. 고르면 바로 바뀐다 %>
     <form method="get" action="/inbox" class="talk-filters mail-filters" data-autosubmit>
       <% if (box !== 'shop') { %><input type="hidden" name="box" value="<%= box %>"><% } %>
+      <% if (tab !== 'open') { %><input type="hidden" name="tab" value="<%= tab %>"><% } %>
       <% if (q) { %><input type="hidden" name="q" value="<%= q %>"><% } %>
       <% if (per === 'custom') { %><input type="hidden" name="from" value="<%= from %>"><input type="hidden" name="to" value="<%= to %>"><% } %>
       <select name="who" aria-label="담당" class="<%= who ? 'picked' : '' %>">
@@ -89,14 +90,15 @@
       <noscript><button type="submit" class="btn-sm">보기</button></noscript>
     </form>
 
-    <%# 지금 조건의 미답변 수 (실시간으로 새로 그림) · 숨김 안내 · 다른 곳 검색 결과 %>
-    <div class="mail-summary" id="live-views">
-      <span><span class="mail-dot" aria-hidden="true"></span> 미답변 <strong><%= openCount %></strong><%= isMailBox ? '통' : '건' %></span>
-      <% if (filtered) { %><a href="<%= link({ q: '', from: '', to: '', src: '', who: '' }) %>" class="mail-clear">✕ 거르기 지우기</a><% } %>
-    </div>
+    <%# 보기: 미답변 / 답변완료 (숫자는 지금 거르기 조건 그대로, 실시간으로 새로 그림) · 숨김 안내 · 다른 곳 검색 결과 %>
+    <nav class="mail-tabs" id="live-views" aria-label="보기">
+      <a href="<%= link({ tab: '' }) %>" class="<%= tab === 'open' ? 'on' : '' %>"><span class="mail-dot" aria-hidden="true"></span> 미답변 <b><%= tabCounts.open %></b></a>
+      <a href="<%= link({ tab: 'done' }) %>" class="<%= tab === 'done' ? 'on' : '' %>">답변완료 <b><%= tabCounts.done %></b></a>
+    </nav>
+    <% if (filtered) { %><p class="mail-summary"><span class="muted small">거르기 적용 중</span><a href="<%= link({ q: '', from: '', to: '', src: '', who: '' }) %>" class="mail-clear">✕ 거르기 지우기</a></p><% } %>
     <% if (periodText) { %>
       <p class="muted small hide-note"><strong><%= periodText %></strong> 받은 <%= word %>을 답변한 것까지 모두 보여줍니다.</p>
-    <% } else if (hidingOld) { %>
+    <% } else if (hidingOld && tab === 'done') { %>
       <p class="muted small hide-note">답변한 <%= word %>은 <%= hideDays %>일 뒤 숨겨요 · 지난 <%= word %>은 검색·기간으로</p>
     <% } %>
     <% if (q && otherHits.length) { %>
@@ -112,7 +114,7 @@
     <% if (rows.length === 0) { %>
       <div class="card empty talk-empty">
         <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><%- isMailBox ? ICON_MAIL : ICON_ASK %></svg></div>
-        <p class="empty-title"><%= filtered ? `조건에 맞는 ${word}이 없어요` : `새 ${word}이 없어요` %></p>
+        <p class="empty-title"><%= filtered ? `조건에 맞는 ${word}이 없어요` : tab === 'open' ? `답하지 않은 ${word}이 없어요` : `답변한 ${word}이 없어요` %></p>
         <p class="empty-text"><%= filtered ? '검색어나 거르기를 바꿔 보세요.' : '새로 오면 여기에 바로 나타나요.' %></p>
         <% if (filtered) { %><div class="empty-actions"><a href="<%= link({ q: '', from: '', to: '', src: '', who: '' }) %>" class="btn-sm">전체 보기</a></div><% } %>
       </div>
