@@ -493,7 +493,7 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
 
   router.post('/logen/settings', (req, res) => {
     if (!logen) return res.redirect('/admin/logen');
-    const r = logen.saveSettings({ name: req.body.name, addr: req.body.addr, tel: req.body.tel, box: req.body.box });
+    const r = logen.saveSettings({ name: req.body.name, addr: req.body.addr, tel: req.body.tel, box: req.body.box, fare: req.body.fare });
     flash(req, r.error ? 'error' : 'ok', r.error || '로젠 설정을 저장했습니다.');
     res.redirect('/admin/logen');
   });

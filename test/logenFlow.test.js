@@ -330,3 +330,25 @@ test('자동 발송처리: 켜면 송장번호가 들어온 주문을 로젠택�
   assert.deepStrictEqual(JSON.parse(a.detail), { method: 'DELIVERY', company: 'KGB', tracking: '38010101111' });
   assert.strictEqual(a.user_id, null);
 });
+
+test('송장 운임: 관리자가 정한 금액으로 등록 (iLOGEN 실제 운임), 비우면 계약 운임, 이상한 값은 막는다', async () => {
+  const db = openDb(':memory:');
+  const client = fakeClient();
+  const logen = await ready(db, client);
+  assert.deepStrictEqual([logen.settings().fare, logen.settings().fareSet], [4000, null], '처음엔 계약 운임');
+
+  const base = { name: '브로애드', addr: '경기 양주시 1', tel: '031-000-0000', box: 'ZW002' };
+  assert.match(logen.saveSettings({ ...base, fare: '2650.5' }).error, /송장 운임/);
+  assert.match(logen.saveSettings({ ...base, fare: '200000' }).error, /송장 운임/);
+  assert.deepStrictEqual(logen.saveSettings({ ...base, fare: '2,650원' }), { ok: true }, '쉼표·원은 빼고');
+  assert.deepStrictEqual([logen.settings().fare, logen.settings().fareSet], [2650, 2650]);
+  await logen.register(groupsFor(db, seedOrders(db, 1)), null);
+  const reg = client.calls.find(c => c.name === 'registerOrderData');
+  assert.strictEqual(reg.rows[0].dlvFare, 2650, '로젠에 2,650원으로 등록');
+
+  logen.saveSettings({ ...base, fare: '' });
+  assert.deepStrictEqual([logen.settings().fare, logen.settings().fareSet], [4000, null], '비우면 다시 계약 운임');
+  logen.saveSettings({ ...base, fare: '3000' });
+  logen.saveSettings({ ...base });
+  assert.strictEqual(logen.settings().fare, 3000, '운임 칸 없이 저장하면(다른 화면) 그대로');
+});

@@ -60,6 +60,15 @@
         </select>
         <% if (!c) { %><span class="muted small">① 계약 정보를 먼저 불러오면 고를 수 있어요.</span><% } %>
       </label>
+      <%# 송장 운임: iLOGEN 에서 실제로 쓰는 금액이 계약 운임과 다르면 여기에 (예: 계약 2,500원 → 실제 2,650원). 비우면 계약 운임 %>
+      <label>송장 운임 (원)
+        <input type="text" name="fare" value="<%= logen.fareSet || '' %>" inputmode="numeric" maxlength="7" placeholder="<%= logen.box ? `비우면 계약 운임 ${logen.box.fare.toLocaleString('ko-KR')}원` : '비우면 계약 운임' %>">
+        <span class="muted small">
+          로젠에 등록할 때 이 금액으로 보내요.
+          <% if (logen.fare != null) { %>지금: <strong><%= logen.fare.toLocaleString('ko-KR') %>원</strong><% if (logen.fareSet && logen.box) { %> (계약 운임 <%= logen.box.fare.toLocaleString('ko-KR') %>원)<% } else if (!logen.fareSet) { %> (계약 운임 그대로)<% } %><% } %>
+          · 금액이 바뀌면 여기서 고치고 저장하면 다음 등록부터 적용돼요.
+        </span>
+      </label>
       <button type="submit" class="btn-sm">저장</button>
     </form>
   </section>

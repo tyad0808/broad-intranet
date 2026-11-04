@@ -63,6 +63,8 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
   const sender = () => readJson(db, 'logen_sender', { name: '', addr: '', tel: '' });
   const contract = () => readJson(db, 'logen_contract', null);
   const boxCd = () => getSetting(db, 'logen_box') || '';
+  // 송장 운임: 관리자가 정한 금액(예: iLOGEN 에서 실제로 쓰는 2,650원). 비어 있으면 계약 운임 그대로
+  const customFare = () => { const n = Number(getSetting(db, 'logen_fare')); return Number.isInteger(n) && n > 0 ? n : null; };
   function settings() {
     const c = contract();
     const box = c && c.env === env ? (c.boxes || []).find(b => b.cd === boxCd()) || null : null;
@@ -71,7 +73,8 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
     if (!c || c.env !== env) missing.push('계약 정보 불러오기');
     if (!s.name || !s.addr || !s.tel) missing.push('보내는 분');
     if (!box) missing.push('기본 박스');
-    return { env, sender: s, contract: c && c.env === env ? c : null, box, ready: missing.length === 0, missing };
+    const fareSet = customFare();
+    return { env, sender: s, contract: c && c.env === env ? c : null, box, fareSet, fare: fareSet || (box ? box.fare : null), ready: missing.length === 0, missing };
   }
 
   // 계약정보 → 계약운임 (관리자 › 로젠 설정의 [계약 정보 불러오기])
@@ -91,7 +94,7 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
     return saved;
   }
 
-  function saveSettings({ name, addr, tel, box }) {
+  function saveSettings({ name, addr, tel, box, fare }) {
     name = clip(String(name || '').trim(), 50);
     addr = clip(String(addr || '').trim(), 300);
     tel = digits(tel);
@@ -99,8 +102,12 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
     if (tel.length < 9 || tel.length > 12) return { error: '보내는 분 전화번호를 확인해 주세요 (숫자 9~12자리).' };
     const c = contract();
     if (box && !(c && (c.boxes || []).some(b => b.cd === box))) return { error: '박스 종류를 다시 골라 주세요.' };
+    // 송장 운임: 비우면 계약 운임. 쉼표·'원' 은 빼고 숫자만 (10원 ~ 10만 원)
+    const fareText = String(fare ?? '').replace(/[,\s원]/g, '');
+    if (fareText && !(/^\d+$/.test(fareText) && Number(fareText) >= 10 && Number(fareText) <= 100000)) return { error: '송장 운임은 10원 ~ 100,000원 사이 숫자로 넣어 주세요 (비우면 계약 운임).' };
     setSetting(db, 'logen_sender', JSON.stringify({ name, addr, tel }));
     if (box) setSetting(db, 'logen_box', box);
+    if (fare !== undefined) setSetting(db, 'logen_fare', fareText);
     return { ok: true };
   }
 
@@ -150,7 +157,7 @@ function createLogen({ db, client = clientFromEnv(), gapMs = GAP_MS, now = () =>
       fareTy: s.contract.fareTy,
       boxTyCd: s.box.cd,
       qty: 1,
-      dlvFare: s.box.fare,
+      dlvFare: s.fare, // 관리자가 정한 송장 운임 (없으면 계약 운임)
       goodsNm: clip(`${main.product_name}${items.length > 1 ? ` 외 ${items.length - 1}건` : ''}`, 200),
       goodsOpt: clip(main.option_text, 200),
       // 배송메세지 (송장에 찍힘). 개발 서버에는 실제 메시지 대신 연습 문구
