@@ -17,7 +17,8 @@ cd "$APP_DIR"
 
 NOW=$(git rev-parse HEAD)
 # 지금 버전을 가져온 업데이트(pull) 기록을 찾아, 그 바로 전 버전
-PREV=$(git reflog --format='%H %gs' | awk -v now="$NOW" 'found { print $1; exit } $1 == now && $2 ~ /^pull/ { found = 1 }')
+# (awk 가 중간에 끝나면 git 이 '파이프 끊김' 으로 실패해 set -e 가 말없이 멈춘다 → 끝까지 읽고 한 번만 출력)
+PREV=$(git reflog --format='%H %gs' | awk -v now="$NOW" 'found == 1 { print $1; found = 2 } $1 == now && $2 ~ /^pull/ && !found { found = 1 }')
 if [ -z "$PREV" ]; then
   echo "되돌릴 이전 버전 기록이 없습니다. (업데이트를 한 번 한 뒤부터 쓸 수 있어요)"
   exit 1
