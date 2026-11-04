@@ -4,8 +4,8 @@
 <section class="card">
   <h2>주문 수집</h2>
   <% if (!source) { %>
-    <p class="notice">주문 수집이 <strong>꺼져</strong> 있습니다 (.env 의 ORDER_SOURCE=off).
-      네이버 커머스 API 키를 .env 에 넣고 ORDER_SOURCE=naver 로 바꾼 뒤 서버를 다시 시작하면 수집이 시작됩니다.</p>
+    <p class="notice">아직 연결된 판매처가 없어서 주문을 가져오지 않아요.
+      <a href="/admin/channels">관리자 › 판매처 연결</a> 에서 스마트스토어·쿠팡 키를 넣으면 바로 시작돼요.</p>
   <% } else { %>
     <p>
       출처: <strong><%= source.label %></strong>

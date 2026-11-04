@@ -582,7 +582,7 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
     res.render('admin/collect', {
       title: '주문 수집',
       tab: 'collect',
-      source: collector ? collector.source : null,
+      source: collector && !(collector.isEmpty && collector.isEmpty()) ? collector.source : null,
       orderInterval: intervalMinutes(db, 'order_interval_minutes'),
       inboxInterval: intervalMinutes(db, 'inbox_interval_minutes'),
       MIN_MINUTES, MAX_MINUTES,

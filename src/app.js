@@ -11,6 +11,7 @@ const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { mailAccountRoutes } = require('./routes/mailAccounts');
+const { channelRoutes } = require('./routes/channels');
 const { orderRoutes } = require('./routes/orders');
 const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
@@ -53,6 +54,7 @@ function createApp({
   // 주간 매출 보고: 보낼 회사 메일 계정 (테스트는 weeklyTransport 로 가짜 발송)
   weeklyAccount = null,
   weeklyTransport = null,
+  channelRegistry = null, // 관리자 › 판매처 연결 (스마트스토어·쿠팡 키를 화면에서)
   logen = null, // 로젠 송장 (없으면 .env 로 만든다)
   proofDir = undefined, // 시안 그림 폴더 (테스트는 임시 폴더)
 }) {
@@ -319,6 +321,14 @@ function createApp({
 
   // 관리자 › 메일 계정 (앱 비밀번호 등록). 메일 계정 모음(mailRegistry)이 없으면 '쓸 수 없음' 안내
   app.use('/admin', requireAdmin, mailAccountRoutes(inbox.mailRegistry || null));
+  // 관리자 › 판매처 연결. 자사몰은 서버 설정(.env)만 — 화면에는 상태만
+  app.use('/admin', requireAdmin, channelRoutes(channelRegistry, {
+    godo: {
+      ready: Boolean(process.env.GODO_API_KEY) && process.env.GODO !== 'off',
+      write: process.env.GODO_WRITE === 'on' && Boolean(process.env.GODO_WRITE_KEY),
+      answer: process.env.GODO_ANSWER === 'on' && Boolean(process.env.GODO_WRITE_KEY) && process.env.GODO_QNA !== 'off',
+    },
+  }));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));
   app.use('/stats', requireAdmin, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다

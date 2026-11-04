@@ -288,4 +288,26 @@ function createMultiCollector(collectors) {
   };
 }
 
-module.exports = { createCollector, createMultiCollector, applyOrders, getSetting, setSetting, lastStageId, isClaimRequest, ALREADY_DONE, CANCELED, ENDED, ENDED_SQL };
+// 판매처를 관리자 화면에서 더하고 뺄 수 있는 수집기 묶음: collectors 목록을 바꾸면 다음 수집부터 반영
+//   source.label 은 그때그때 지금 목록으로 (화면·로그용)
+function createChannelCollector(collectors = []) {
+  let running = null;
+  return {
+    collectors,
+    get source() {
+      return { label: collectors.map(c => c.source.label).join(' + ') || '연결된 판매처 없음', isMock: collectors.some(c => c.source.isMock) };
+    },
+    isEmpty: () => collectors.length === 0,
+    async run() {
+      if (running) return running; // 자동 수집과 [지금 받기] 가 겹치면 한 번만
+      running = (async () => {
+        const list = [...collectors];
+        if (!list.length) return { ok: false, error: '연결된 판매처가 없어요 (관리자 › 판매처 연결)', created: 0, createdOrders: 0, updated: 0, archived: 0, createdIds: [], claims: [] };
+        return list.length === 1 ? list[0].run() : createMultiCollector(list).run();
+      })();
+      try { return await running; } finally { running = null; }
+    },
+  };
+}
+
+module.exports = { createCollector, createMultiCollector, createChannelCollector, applyOrders, getSetting, setSetting, lastStageId, isClaimRequest, ALREADY_DONE, CANCELED, ENDED, ENDED_SQL };

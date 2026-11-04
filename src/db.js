@@ -401,6 +401,28 @@ function migrate(db) {
       updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
       deleted_at  TEXT
     );
+    -- 관리자 › 판매처 연결 에서 넣은 판매처 API 키 (스마트스토어·쿠팡). 비밀 키는 SETTINGS_KEY 로 암호화해 secret_sealed 에.
+    -- public_json: 보여도 되는 값(애플리케이션 ID·업체코드·WING 아이디)과 비밀 키 끝 4자리
+    -- write_on / answer_on: '실제로 보내기' 스위치 (켤 때 관리자 비밀번호 다시 확인). test_ok_at: 마지막 연결 시험 성공 시각
+    CREATE TABLE IF NOT EXISTS channel_keys (
+      channel       TEXT    PRIMARY KEY CHECK (channel IN ('smartstore', 'coupang')),
+      public_json   TEXT    NOT NULL DEFAULT '{}',
+      secret_sealed TEXT,
+      enabled       INTEGER NOT NULL DEFAULT 1,
+      write_on      INTEGER NOT NULL DEFAULT 0,
+      answer_on     INTEGER NOT NULL DEFAULT 0,
+      test_ok_at    TEXT,
+      updated_by    INTEGER REFERENCES users(id),
+      updated_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    -- 판매처 키·스위치를 누가 언제 바꿨는지
+    CREATE TABLE IF NOT EXISTS channel_log (
+      id          INTEGER PRIMARY KEY,
+      channel     TEXT    NOT NULL,
+      user_id     INTEGER REFERENCES users(id),
+      action      TEXT    NOT NULL,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
     -- 메일 계정을 누가 언제 추가·바꾸기·끄기·지우기 했는지
     CREATE TABLE IF NOT EXISTS mail_account_log (
       id          INTEGER PRIMARY KEY,

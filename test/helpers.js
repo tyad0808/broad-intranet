@@ -38,11 +38,11 @@ function browser(baseUrl) {
   return { request, submit, cookie: () => cookie };
 }
 
-async function startServer({ db = openDb(':memory:'), collector = null, actions, notifier, inbox, weeklyAccount, weeklyTransport, logen, proofDir } = {}) {
+async function startServer({ db = openDb(':memory:'), collector = null, actions, notifier, inbox, weeklyAccount, weeklyTransport, logen, proofDir, channelRegistry } = {}) {
   // 시안 그림은 테스트마다 임시 폴더에 (진짜 data/proofs 를 건드리지 않게)
   const dir = proofDir || fs.mkdtempSync(path.join(os.tmpdir(), 'proofs-'));
   const app = createApp({ db, collector, secret: 'test-secret', proofDir: dir, ...(actions ? { actions } : {}), ...(notifier ? { notifier } : {}), ...(inbox ? { inbox } : {}),
-    ...(weeklyAccount ? { weeklyAccount, weeklyTransport } : {}), ...(logen ? { logen } : {}) });
+    ...(weeklyAccount ? { weeklyAccount, weeklyTransport } : {}), ...(logen ? { logen } : {}), ...(channelRegistry ? { channelRegistry } : {}) });
   const server = await new Promise(resolve => {
     const s = app.listen(0, () => resolve(s));
   });

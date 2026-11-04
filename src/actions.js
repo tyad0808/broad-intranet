@@ -279,7 +279,14 @@ function createOrderActions({ db, writer = null, writers = {}, now = () => new D
     });
   }
 
-  return { mode, modes, modeOf, confirm, dispatch, delay };
+  // 관리자 › 판매처 연결 에서 '실제로 보내기' 를 켜고 끌 때: 그 채널의 보내는 곳을 바꿔 끼운다 (null = 연습 모드)
+  //   modes 는 화면(app.locals.actionModes)이 같은 물건을 보고 있어서 그 안의 값만 고친다
+  function setWriter(channel, w) {
+    allWriters[channel] = w || null;
+    if (Object.hasOwn(modes, channel)) modes[channel] = modeOf(channel);
+  }
+
+  return { mode, modes, modeOf, confirm, dispatch, delay, setWriter };
 }
 
 module.exports = {

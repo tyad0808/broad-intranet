@@ -368,7 +368,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       designers: designers(),
       today: kstToday(),
       currentUrl: req.originalUrl,
-      canCollect: Boolean(collector),
+      canCollect: Boolean(collector && !(collector.isEmpty && collector.isEmpty())),
       // 넓은 PC 화면에서만 오른쪽에 보이는 회사 일정 달력
       week: buildWeek(db),
       lastRun,

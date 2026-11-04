@@ -1,0 +1,172 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-tabs') %>
+<%
+  const MARK = { smartstore: ['mk-naver', 'N'], coupang: ['mk-coupang', 'C'], godo: ['mk-own', 'B'] };
+  const mark = (ch, small) => `<span class="mk ${MARK[ch][0]}${small ? ' mk-sm' : ''}" aria-hidden="true">${MARK[ch][1]}</span>`;
+  const stateOf = c => {
+    if (c.fromEnv) return { cls: 'ok', text: '연결됨' };
+    if (c.locked) return { cls: 'bad', text: '키 다시 넣기' };
+    if (!c.saved) return { cls: 'off', text: '연결 안 됨' };
+    if (!c.enabled) return { cls: 'off', text: '꺼짐' };
+    return { cls: 'ok', text: '연결됨' };
+  };
+  const HOWTO = {
+    smartstore: ['네이버 커머스API센터(apicenter.commerce.naver.com) › 애플리케이션 등록', '주문·문의 API 그룹을 고르고, API 호출 IP 에 이 서버 주소를 넣기', '애플리케이션 ID·시크릿을 위 칸에 붙여 넣기'],
+    coupang: ['WING › 판매자 정보 › 추가판매정보 › OPEN API 키 발급', '업체코드·Access Key·Secret Key 를 위 칸에 붙여 넣기', '쿠팡이 서버 주소(IP)를 물으면 이 서버 주소를 넣기'],
+  };
+%>
+
+<% if (!ready) { %>
+  <section class="card notice-card">
+    <h2>먼저 서버에 열쇠를 하나 넣어 주세요</h2>
+    <p>키를 암호화해서 저장하려면 서버 <code>.env</code> 에 <code>SETTINGS_KEY</code> 가 있어야 해요 (메일 계정과 같은 열쇠). 인트라넷 서버에서 아래 두 줄을 차례로 실행하면 돼요.</p>
+    <% if (keyProblem) { %><p class="error"><%= keyProblem %></p><% } %>
+    <pre class="cmd">grep -q '^SETTINGS_KEY=.\+' /opt/broad-intranet/app/.env || echo "SETTINGS_KEY=$(openssl rand -hex 32)" &gt;&gt; /opt/broad-intranet/app/.env</pre>
+    <pre class="cmd">systemctl restart broad-intranet</pre>
+  </section>
+<% } %>
+
+<section class="card">
+  <h2>판매처 연결</h2>
+  <p class="muted">판매처에서 받은 <strong>API 키</strong>를 넣으면 주문과 문의를 자동으로 가져와요. 키는 암호화해서 저장하고, 저장한 뒤에는 화면에 다시 보이지 않아요 (끝 4자리만).</p>
+</section>
+
+<% channels.forEach(c => { const st = stateOf(c); %>
+  <section class="card ch-card" id="ch-<%= c.channel %>">
+    <div class="ch-head"><%- mark(c.channel) %>
+      <div class="acct-text"><strong><%= c.label %></strong>
+        <span class="muted small"><%= c.api %> · <%= c.fromEnv ? '서버 설정(.env)에서 넣은 키' : c.saved ? `관리자 화면에서 등록 · ${kst(c.updatedAt).slice(5, 16)}` : '아직 연결 안 됨' %></span></div>
+      <span class="acct-state <%= st.cls %>">● <%= st.text %></span>
+    </div>
+
+    <% if (c.fromEnv) { %>
+      <div class="ch-body"><p class="muted small">서버 설정 키라 여기서는 바꿀 수 없어요. 서버 .env 에서 지우면 여기서 넣을 수 있어요.</p></div>
+    <% } else { %>
+      <% if (c.saved && !c.locked) { %>
+        <div class="ch-body">
+          <% c.fields.forEach(fl => { %>
+            <div class="key-row"><span class="key-label"><%= fl.label %></span>
+              <span class="key-val"><% if (fl.secret) { %><span class="key-dots">●●●●●●●● <span class="muted small">저장됨 · 끝 4자리 <%= c.tails[fl.key] %></span></span><% } else if (c.values[fl.key]) { %><code><%= c.values[fl.key] %></code><% } else { %><span class="muted small">비어 있음</span><% } %></span></div>
+          <% }) %>
+          <p class="muted small"><%= c.testOkAt ? `마지막 연결 시험 성공 ${kst(c.testOkAt).slice(5, 16)}` : '연결 시험 기록 없음' %><%= c.enabled ? '' : ' · 수집 꺼짐' %></p>
+          <div class="acct-actions flush">
+            <form method="post" action="/admin/channels/<%= c.channel %>/test" class="inline" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn-sm">연결 시험</button>
+            </form>
+            <form method="post" action="/admin/channels/<%= c.channel %>/enable" class="inline" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="on" value="<%= c.enabled ? '0' : '1' %>">
+              <button type="submit" class="btn-sm"><%= c.enabled ? '수집 끄기' : '수집 켜기' %></button>
+            </form>
+            <form method="post" action="/admin/channels/<%= c.channel %>/delete" class="inline" data-once
+                  data-confirm="<%= c.label %> 키를 지울까요?&#10;주문·문의를 더 가져오지 않아요. 이미 가져온 주문·문의는 그대로 남아요.">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn-sm danger">키 지우기</button>
+            </form>
+          </div>
+        </div>
+      <% } %>
+      <%# 키 넣기 / 바꾸기 (저장돼 있으면 접어 둠). 비밀 키 칸을 비우면 저장된 값 그대로 %>
+      <details class="ch-edit" <%= c.saved && !c.locked ? '' : 'open' %>>
+        <summary class="btn-sm"><%= c.saved && !c.locked ? '키 바꾸기' : '키 넣기' %></summary>
+        <form method="post" action="/admin/channels/<%= c.channel %>/save" class="acct-form ch-form" data-once>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <% c.fields.forEach(fl => { %>
+            <label class="acct-field"><%= fl.label %><% if (fl.note) { %> <span class="muted small">(<%= fl.note %>)</span><% } %><% if (fl.secret && c.saved && !c.locked) { %> <span class="muted small">(비우면 그대로)</span><% } %>
+              <input type="<%= fl.secret ? 'password' : 'text' %>" name="<%= fl.key %>" maxlength="300" autocomplete="<%= fl.secret ? 'new-password' : 'off' %>"
+                value="<%= fl.secret ? '' : c.values[fl.key] || '' %>" <%= fl.required && !(fl.secret && c.saved && !c.locked) ? 'required' : '' %> <%= ready ? '' : 'disabled' %>>
+            </label>
+          <% }) %>
+          <div class="form-row-end">
+            <button type="submit" <%= ready ? '' : 'disabled' %>>연결 시험하고 저장</button>
+            <span class="muted small"><%= c.label %>에 주문 목록을 한 번 물어보고(조회만), 되면 저장해요. 서버를 다시 켤 필요 없이 몇 분 안에 들어와요.</span>
+          </div>
+        </form>
+        <div class="howto"><strong>키 받는 법</strong><ol><% HOWTO[c.channel].forEach(t => { %><li><%= t %></li><% }) %></ol></div>
+      </details>
+    <% } %>
+  </section>
+<% }) %>
+
+<section class="card ch-card">
+  <div class="ch-head"><%- mark('godo') %>
+    <div class="acct-text"><strong>자사몰</strong><span class="muted small">브로애드 견적 프로그램 API · 서버 설정(.env)</span></div>
+    <span class="acct-state <%= godo && godo.ready ? 'ok' : 'off' %>">● <%= godo && godo.ready ? '연결됨' : '연결 안 됨' %></span>
+  </div>
+  <div class="ch-body">
+    <p class="ch-warn">자사몰 연결은 <b>우리 견적 프로그램에 직접 만든 API</b>라 서버 설정으로만 넣어요. 다른 회사는 쓰는 쇼핑몰(고도몰 등)에 맞춰 연결을 새로 만들어야 해요.</p>
+  </div>
+</section>
+
+<section class="card">
+  <h2>실제로 보내기</h2>
+  <p class="muted">켜면 인트라넷에서 누른 처리가 <strong>판매처와 고객에게 실제로</strong> 가요 (발송 알림톡·문자 등). 꺼져 있으면 연습 모드: 기록만 남고 보내지 않아요.</p>
+  <ul class="sw-list">
+    <% channels.forEach(c => { Object.entries(c.switches).forEach(([kind, name]) => { const on = c.on[kind];
+         const why = c.fromEnv ? '서버 설정(.env)이라 여기서는 못 바꿔요'
+           : !c.saved || c.locked || !c.enabled ? '먼저 키를 넣고 수집을 켜 주세요'
+           : !c.testOkAt ? '연결 시험에 성공해야 켤 수 있어요'
+           : kind === 'answer' && c.qnaOff ? '서버 설정에서 문의 받기가 꺼져 있어요'
+           : kind === 'answer' && c.channel === 'coupang' && !c.values.wingId ? 'WING 로그인 아이디를 넣어야 켤 수 있어요'
+           : ''; %>
+      <li class="sw-row">
+        <div class="sw-name"><%- mark(c.channel, true) %> <span><strong><%= c.label %></strong><span class="muted small"><%= name %></span></span></div>
+        <span class="sw-state <%= on ? 'live' : 'off' %>"><%= on ? '실제로 보냄' : '연습 모드' %></span>
+        <% if (!c.fromEnv && on) { %>
+          <form method="post" action="/admin/channels/<%= c.channel %>/switch" class="inline" data-once>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="kind" value="<%= kind %>">
+            <input type="hidden" name="on" value="0">
+            <button type="submit" class="btn-sm">끄기</button>
+          </form>
+        <% } else if (!c.fromEnv && !why) { %>
+          <%# 켜기: 누르면 설명 + 관리자 비밀번호 칸이 펼쳐진다 %>
+          <details class="sw-confirm">
+            <summary class="btn-sm sw-on">실제로 켜기</summary>
+            <form method="post" action="/admin/channels/<%= c.channel %>/switch" class="sw-confirm-box" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="kind" value="<%= kind %>">
+              <input type="hidden" name="on" value="1">
+              <strong><%= c.label %> <%= name %>을(를) 실제로 켤까요?</strong>
+              <ul class="plain-list">
+                <% if (kind === 'write') { %>
+                  <li>켜면 [<%= c.channel === 'coupang' ? '상품준비중' : '발주확인' %>]·[발송처리]를 누를 때 <strong><%= c.label %>에 바로 반영</strong>되고, 고객에게 발송 알림이 가요.</li>
+                  <li>로젠 자동 발송처리가 켜져 있으면 송장번호가 들어올 때 사람 확인 없이 보내져요.</li>
+                <% } else { %>
+                  <li>켜면 인트라넷에서 쓴 답변이 <strong><%= c.label %>에 바로 등록</strong>되고, 고객에게 그대로 보여요.</li>
+                <% } %>
+                <li>잘못 켰으면 언제든 [끄기]로 연습 모드로 돌아갈 수 있어요.</li>
+              </ul>
+              <label class="acct-field">확인을 위해 관리자 비밀번호를 넣어 주세요
+                <input type="password" name="password" required autocomplete="current-password">
+              </label>
+              <button type="submit" class="danger-fill">실제로 켜기</button>
+            </form>
+          </details>
+        <% } else if (!c.fromEnv) { %>
+          <button type="button" class="btn-sm" disabled>실제로 켜기</button>
+        <% } %>
+        <% if (why) { %><span class="sw-who muted small"><%= why %></span><% } %>
+      </li>
+    <% }) }) %>
+    <% if (godo && godo.ready) { %>
+      <% [['write', '발주확인 · 송장'], ['answer', '문의 답변']].forEach(([kind, name]) => { %>
+        <li class="sw-row">
+          <div class="sw-name"><%- mark('godo', true) %> <span><strong>자사몰</strong><span class="muted small"><%= name %></span></span></div>
+          <span class="sw-state <%= godo[kind] ? 'live' : 'off' %>"><%= godo[kind] ? '실제로 보냄' : '연습 모드' %></span>
+          <span class="sw-who muted small">서버 설정(.env)이라 여기서는 못 바꿔요</span>
+        </li>
+      <% }) %>
+    <% } %>
+  </ul>
+  <% if (history.length) { %>
+    <h3 class="acct-log-title">바뀐 기록</h3>
+    <ul class="history acct-log">
+      <% history.forEach(h => { %><li><span class="muted"><%= kst(h.created_at) %></span> · <%= h.user_name || '-' %> · <strong><%= h.action %></strong> · <%= (channels.find(c => c.channel === h.channel) || {}).label || h.channel %></li><% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<script src="/confirm.js"></script>
+<%- include('../partials/footer') %>

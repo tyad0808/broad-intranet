@@ -4,7 +4,8 @@ require('dotenv').config({ quiet: true });
 const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
-const { createCollector, createMultiCollector } = require('./collector');
+const { createCollector, createChannelCollector } = require('./collector');
+const { createChannelRegistry, CHANNELS } = require('./channelRegistry');
 const { createCoupangSource, createCoupangWriter } = require('./channels/coupang');
 const { createGodoSource, createGodoWriter } = require('./channels/godo');
 const { createNotifier } = require('./notifier');
@@ -27,8 +28,11 @@ const { intervalMinutes, startLoop } = require('./schedule');
 
 const db = openDb();
 const notifier = createNotifier({ db });
-const source = createOrderSource();
-// 채널별 수집기: 스마트스토어(ORDER_SOURCE) + 쿠팡(.env 에 쿠팡 키 3개가 모두 있으면)
+// 스마트스토어 키가 .env 에 있으면 서버 설정, 없으면 관리자 › 판매처 연결 에서 넣은 키 (channelRegistry)
+const naverEnvReady = CHANNELS.smartstore.envReady(process.env);
+const source = process.env.ORDER_SOURCE === 'naver' && !naverEnvReady ? null : createOrderSource();
+// 채널별 수집기: 스마트스토어(ORDER_SOURCE) + 쿠팡(.env 에 쿠팡 키 3개가 모두 있으면) + 자사몰
+// 관리자 화면에서 판매처를 더하고 빼면 이 목록이 바뀐다 (서버를 다시 켤 필요 없음)
 const collectors = [];
 if (source) collectors.push(createCollector({ db, source, onResult: notifier.afterCollect }));
 const coupangReady = ['COUPANG_VENDOR_ID', 'COUPANG_ACCESS_KEY', 'COUPANG_SECRET_KEY'].every(k => process.env[k]);
@@ -40,10 +44,10 @@ const godoReady = Boolean(process.env.GODO_API_KEY) && process.env.GODO !== 'off
 if (godoReady) {
   collectors.push(createCollector({ db, source: createGodoSource(), onResult: notifier.afterCollect }));
 }
-const collector = collectors.length ? createMultiCollector(collectors) : null; // 아무 채널도 없으면 수집 꺼짐
+const collector = createChannelCollector(collectors); // 판매처가 하나도 없으면 '연결된 판매처 없음'
 // 발주확인·발송처리를 실제로 네이버에 보내는지: NAVER_WRITE=on 이고 실제 스마트스토어(ORDER_SOURCE=naver)일 때만.
 // 그 밖에는 연습 모드 (버튼은 보이지만 네이버로 보내지 않고 기록만 남김)
-const liveWrite = process.env.NAVER_WRITE === 'on' && process.env.ORDER_SOURCE === 'naver';
+const liveWrite = process.env.NAVER_WRITE === 'on' && naverEnvReady;
 if (process.env.NAVER_WRITE === 'on' && !liveWrite) {
   console.warn('[주의] NAVER_WRITE=on 이지만 ORDER_SOURCE 가 naver 가 아니라서 연습 모드로 실행합니다.');
 }
@@ -68,7 +72,7 @@ const mailAccounts = mailAccountsFromEnv();
 const mailLive = process.env.MAIL_SEND === 'on';
 // 4-2 스마트스토어 상품문의: 실제 스마트스토어(ORDER_SOURCE=naver)를 쓸 때. 끄려면 NAVER_QNA=off
 // 답변 등록은 NAVER_ANSWER=on 일 때만 실제로 (그 밖에는 연습 모드)
-const qnaReady = process.env.ORDER_SOURCE === 'naver' && process.env.NAVER_QNA !== 'off';
+const qnaReady = naverEnvReady && process.env.NAVER_QNA !== 'off';
 const qnaLive = qnaReady && process.env.NAVER_ANSWER === 'on';
 // 4-3 쿠팡 문의: 쿠팡 키가 있으면. 끄려면 COUPANG_QNA=off, 답변은 COUPANG_ANSWER=on 일 때만 (WING 아이디 COUPANG_WING_ID 필요)
 const cqReady = coupangReady && process.env.COUPANG !== 'off' && process.env.COUPANG_QNA !== 'off';
@@ -120,9 +124,17 @@ const inbox = {
   files: {},
 };
 // 메일 계정: .env 계정 + 관리자 화면 계정(앱 비밀번호는 .env 의 SETTINGS_KEY 로 암호화해 DB 에). 바꾸면 바로 반영
-inbox.mailRegistry = createMailRegistry({ db, box: createSecretBox(), inbox, collectorSources: inboxSources, live: mailLive, envAccounts: mailAccounts });
+const secretBox = createSecretBox();
+inbox.mailRegistry = createMailRegistry({ db, box: secretBox, inbox, collectorSources: inboxSources, live: mailLive, envAccounts: mailAccounts });
 inbox.mailRegistry.apply();
-const app = createApp({ db, collector, notifier, actions, inbox, weeklyAccount: mailAccounts[0] || null });
+// 판매처 연결: .env 에 키가 없는 스마트스토어·쿠팡은 관리자 화면에서 넣은 키로 (수집·처리·문의를 바로 바꿔 끼움)
+const channelRegistry = createChannelRegistry({
+  db, box: secretBox, collectors, actions,
+  makeCollector: src => createCollector({ db, source: src, onResult: notifier.afterCollect }),
+  inbox: { sourceLabels: inbox.sourceLabels, senders: inbox.senders, collectorSources: inboxSources },
+});
+channelRegistry.apply();
+const app = createApp({ db, collector, notifier, actions, inbox, channelRegistry, weeklyAccount: mailAccounts[0] || null });
 
 // 주간 매출 보고: 5분마다 '금요일 18시가 지났고 이번 주 아직 안 보냈는지' 확인
 // 로젠: 송장번호를 기다리는 주문이 있으면 5분마다 가져온다 (10건씩·차례대로·쉬면서)
@@ -163,6 +175,7 @@ setInterval(() => app.locals.sessionStore.cleanup(), 60 * 60 * 1000).unref();
 
 // 주문 자동 수집: 켜자마자 한 번, 이후 몇 분마다
 async function collect() {
+  if (collector.isEmpty()) return; // 연결된 판매처가 없으면 조용히 (관리자 화면에서 넣으면 다음 차례부터)
   const result = await collector.run();
   const time = new Date().toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul' });
   if (result.ok) {
@@ -172,7 +185,7 @@ async function collect() {
     console.error(`[${time}] 주문 수집 실패: ${result.error}${counts}`);
   }
 }
-if (collector) startLoop(collect, () => intervalMinutes(db, 'order_interval_minutes'));
+startLoop(collect, () => intervalMinutes(db, 'order_interval_minutes'));
 
 // 문의함 자동 받기: 간격은 따로 정한다
 async function collectInbox() {
@@ -203,10 +216,10 @@ app.listen(PORT, HOST, () => {
     if (gqReady) console.log(`  자사몰 문의 답변: ${gqLive ? '실제로 등록 (GODO_ANSWER=on)' : '연습 모드 (등록하지 않음)'}`);
     collectInbox();
   }
-  if (collector) {
+  if (!collector.isEmpty()) {
     console.log(`주문 출처: ${collector.source.label}, ${intervalMinutes(db, 'order_interval_minutes')}분마다 자동 수집`);
     collect();
   } else {
-    console.log('주문 수집: 꺼짐 (ORDER_SOURCE=off)');
+    console.log('주문 수집: 연결된 판매처 없음 (관리자 › 판매처 연결 에서 넣으면 바로 시작)');
   }
 });
