@@ -324,3 +324,17 @@ sudo -u intranet npm run godo-shipway-backfill -- --apply      # 실제로 채�
 ```
 
 - `읽지 못함` 은 자사몰 관리자에서 지워진 주문 등입니다. 그대로 비워 둡니다.
+
+## 18. 메일 계정을 관리자 화면에서 넣기 (한 번만 준비)
+
+관리자 › **메일 계정** 에서 네이버메일·지메일을 앱 비밀번호로 추가·바꾸기·끄기·지우기 할 수 있다 (서버를 다시 켤 필요 없음).
+앱 비밀번호는 DB 에 암호화해서 두고, 푸는 열쇠는 `.env` 의 `SETTINGS_KEY` 에만 둔다. 처음 한 번만 열쇠를 넣는다 (값은 화면에 나오지 않음):
+
+```bash
+grep -q '^SETTINGS_KEY=.\+' /opt/broad-intranet/app/.env || echo "SETTINGS_KEY=$(openssl rand -hex 32)" >> /opt/broad-intranet/app/.env
+systemctl restart broad-intranet
+```
+
+- 이미 `.env` 에 넣은 메일 계정(`NAVER_MAIL_USER` 등)은 그대로 동작하고, 화면에는 "서버 설정 계정" 으로 보인다.
+- `SETTINGS_KEY` 를 지우거나 바꾸면 관리자 화면에서 넣은 비밀번호를 다시 넣어야 한다.
+

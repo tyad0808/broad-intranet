@@ -10,6 +10,7 @@ const { SqliteSessionStore } = require('./sessionStore');
 const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
+const { mailAccountRoutes } = require('./routes/mailAccounts');
 const { orderRoutes } = require('./routes/orders');
 const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
@@ -316,6 +317,8 @@ function createApp({
     res.render('guide', { title: '사용 방법', navSection: 'guide', guide });
   });
 
+  // 관리자 › 메일 계정 (앱 비밀번호 등록). 메일 계정 모음(mailRegistry)이 없으면 '쓸 수 없음' 안내
+  app.use('/admin', requireAdmin, mailAccountRoutes(inbox.mailRegistry || null));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));
   app.use('/stats', requireAdmin, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다

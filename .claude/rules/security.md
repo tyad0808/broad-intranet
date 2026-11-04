@@ -1,6 +1,7 @@
 # 비밀값·보안
 
 - API 키·비밀번호는 **서버의 `.env` 에만** 둔다. 코드에 쓰거나 git 에 올리지 않는다 (`.env` 는 `.gitignore` 에 있음). 새 키가 생기면 `.env.example` 에 빈 칸과 설명만 더한다.
+- **예외 (사용자 허락, 2026-11): 메일 앱 비밀번호**는 관리자 › 메일 계정 화면에서 넣고, DB(`mail_accounts.pass_sealed`)에 **암호화해서** 저장한다 (`src/secretBox.js`, AES-256-GCM). 암호를 푸는 열쇠 `SETTINGS_KEY` 는 `.env` 에만. 저장한 비밀번호는 화면·기록·로그에 다시 내보내지 않는다. 다른 비밀값을 이 방식으로 옮길 때는 사용자에게 먼저 묻는다.
 - 키·비밀번호를 채팅으로 받지 않는다. 사용자에게 `.env` 화면을 캡처하지 말라고 안내한다.
 - **자사몰 서버는 건드리지 않는다.** 자사몰 API 는 견적 프로젝트 쪽에서 만든 것을 읽기만 한다.
 - 바깥 API 는 허용 목록에 있는 주소만 부른다 (`src/channels/naverClient.js` `ALLOWED`, `coupangClient.js`, `logen.js`). 주소를 더하면 `test/collect.test.js` 의 허용 목록 테스트도 함께 고친다.

@@ -1,0 +1,142 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-tabs') %>
+<%
+  const GMAIL = '<span class="mk mk-gmail" aria-hidden="true">G</span>';
+  const NAVER = '<span class="mk mk-naver" aria-hidden="true">N</span>';
+  const markOf = kind => (kind === 'gmail' ? GMAIL : NAVER);
+  // 상태: 연결됨 · 받기 실패 · 꺼짐 · 비밀번호를 풀 수 없음 · 아직 받기 전
+  const stateOf = a => {
+    if (a.locked) return { cls: 'bad', text: '비밀번호 다시 넣기', note: '서버 열쇠(SETTINGS_KEY)가 바뀌어 저장된 비밀번호를 풀 수 없어요. 비밀번호를 다시 넣어 주세요.' };
+    if (!a.enabled) return { cls: 'off', text: '꺼짐', note: '' };
+    if (!a.status) return { cls: 'off', text: '받기 전', note: '' };
+    return a.status.ok ? { cls: 'ok', text: '연결됨', note: '' } : { cls: 'bad', text: '로그인 실패', note: friendly(a.status.error) };
+  };
+%>
+
+<% if (!ready) { %>
+  <section class="card notice-card">
+    <h2>먼저 서버에 열쇠를 하나 넣어 주세요</h2>
+    <p>앱 비밀번호를 암호화해서 저장하려면 서버 <code>.env</code> 에 <code>SETTINGS_KEY</code> 가 있어야 해요. 인트라넷 서버에서 아래 두 줄을 차례로 실행하면 돼요.</p>
+    <% if (keyProblem) { %><p class="error"><%= keyProblem %></p><% } %>
+    <pre class="cmd">echo "SETTINGS_KEY=$(openssl rand -hex 32)" &gt;&gt; /opt/broad-intranet/app/.env</pre>
+    <pre class="cmd">systemctl restart broad-intranet</pre>
+    <p class="muted small">열쇠 값은 화면에 나오지 않아요. 이 열쇠를 지우거나 바꾸면 여기서 넣은 비밀번호를 다시 넣어야 해요.</p>
+  </section>
+<% } %>
+
+<section class="card">
+  <h2>메일 계정</h2>
+  <p class="muted">네이버메일·지메일을 <strong>앱 비밀번호</strong>로 연결하면 메일함으로 들어오고, 답장도 인트라넷에서 보낼 수 있어요.</p>
+  <dl class="info compact">
+    <dt>답장 보내기</dt>
+    <dd><% if (live) { %><strong>실제로 보냄</strong><% } else { %><strong class="text-bad">연습 모드</strong> <span class="muted small">· 서버 .env 의 MAIL_SEND=on 일 때만 실제로 보내요</span><% } %></dd>
+  </dl>
+  <% if (!accounts.length) { %>
+    <p class="empty-text acct-empty">아직 연결된 메일이 없어요. 아래 <strong>계정 추가</strong>에서 넣어 주세요.</p>
+  <% } else { %>
+  <ul class="acct-list">
+    <% accounts.forEach(a => { const st = stateOf(a); %>
+      <li class="acct">
+        <div class="acct-main"><%- markOf(a.kind) %>
+          <div class="acct-text">
+            <strong><%= a.address %></strong>
+            <span class="muted small"><%= a.kindLabel %> · <%= a.fromEnv ? '서버 설정(.env)에서 넣은 계정' : `관리자 화면에서 등록 · ${kst(a.created_at).slice(5, 10)}` %><% if (a.status && a.status.at && !a.status.test) { %> · 마지막 받기 <%= kst(a.status.at).slice(11) %><% } %></span>
+          </div>
+          <span class="acct-state <%= st.cls %>">● <%= st.text %></span>
+        </div>
+        <% if (a.fromEnv) { %>
+          <div class="acct-actions"><span class="muted small">서버 설정 계정이라 여기서는 바꿀 수 없어요</span></div>
+        <% } else { %>
+          <div class="acct-actions">
+            <details class="acct-pw" <%= a.locked || (st.cls === 'bad') ? 'open' : '' %>>
+              <summary class="btn-sm <%= st.cls === 'bad' ? 'primary-ghost' : '' %>">비밀번호 바꾸기</summary>
+              <form method="post" action="/admin/mail/<%= a.id %>/password" class="acct-pw-form" data-once>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="password" name="pass" required maxlength="200" autocomplete="new-password" aria-label="<%= a.address %> 새 앱 비밀번호" placeholder="새 앱 비밀번호">
+                <button type="submit" class="btn-sm">시험하고 바꾸기</button>
+              </form>
+            </details>
+            <% if (!a.locked) { %>
+              <form method="post" action="/admin/mail/<%= a.id %>/test" class="inline" data-once>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn-sm">연결 시험</button>
+              </form>
+            <% } %>
+            <form method="post" action="/admin/mail/<%= a.id %>/enable" class="inline" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="on" value="<%= a.enabled ? '0' : '1' %>">
+              <button type="submit" class="btn-sm"><%= a.enabled ? '끄기' : '켜기' %></button>
+            </form>
+            <form method="post" action="/admin/mail/<%= a.id %>/delete" class="inline" data-once
+                  data-confirm="<%= a.address %> 연결을 지울까요?&#10;저장한 앱 비밀번호도 지워져요. 이미 받은 메일은 메일함에 그대로 남아요.">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn-sm danger">지우기</button>
+            </form>
+          </div>
+        <% } %>
+        <% if (st.note) { %><p class="acct-error"><%= st.note %></p><% } %>
+      </li>
+    <% }) %>
+  </ul>
+  <% } %>
+</section>
+
+<section class="card">
+  <h2>계정 추가</h2>
+  <form method="post" action="/admin/mail/add" class="acct-form" data-once>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <fieldset class="kind-pick" <%= ready ? '' : 'disabled' %>>
+      <legend>종류</legend>
+      <label class="kind"><input type="radio" name="kind" value="gmail" required checked> <%- GMAIL %> 지메일</label>
+      <label class="kind"><input type="radio" name="kind" value="naver_mail" required> <%- NAVER %> 네이버메일</label>
+    </fieldset>
+    <label class="acct-field">메일 주소
+      <input type="email" name="address" required maxlength="200" autocomplete="off" placeholder="예: broad.print@gmail.com" <%= ready ? '' : 'disabled' %>>
+    </label>
+    <label class="acct-field">앱 비밀번호 <span class="muted small">(지메일은 16자리 · 띄어쓰기는 있어도 없어도 돼요)</span>
+      <input type="password" name="pass" required maxlength="200" autocomplete="new-password" <%= ready ? '' : 'disabled' %>>
+    </label>
+    <div class="form-row-end">
+      <button type="submit" <%= ready ? '' : 'disabled' %>>연결 시험하고 저장</button>
+      <span class="muted small">메일 서버에 실제로 로그인해 보고, 성공해야 저장돼요. 서버를 다시 켤 필요 없이 몇 분 안에 메일이 들어와요.</span>
+    </div>
+  </form>
+  <details class="howto">
+    <summary>앱 비밀번호 만드는 법</summary>
+    <div class="howto-cols">
+      <div><strong><%- GMAIL %> 지메일</strong>
+        <ol>
+          <li>구글 계정 › 보안 › <b>2단계 인증</b> 켜기</li>
+          <li><a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noopener noreferrer">myaccount.google.com/apppasswords ↗</a> 에서 이름을 "인트라넷" 으로 만들기</li>
+          <li>나온 16자리를 위 칸에 붙여 넣기</li>
+        </ol>
+      </div>
+      <div><strong><%- NAVER %> 네이버메일</strong>
+        <ol>
+          <li>네이버 메일 › 환경설정 › <b>POP3/IMAP 설정</b> › IMAP 사용함</li>
+          <li>네이버 내정보 › 보안설정 › 2단계 인증 › <b>애플리케이션 비밀번호</b> 만들기</li>
+          <li>나온 비밀번호를 위 칸에 붙여 넣기</li>
+        </ol>
+      </div>
+    </div>
+  </details>
+</section>
+
+<section class="card">
+  <h2>보안</h2>
+  <ul class="plain-list">
+    <li>앱 비밀번호는 <strong>암호화해서</strong> 저장하고, 저장한 뒤에는 화면에 다시 보이지 않아요.</li>
+    <li>암호를 푸는 열쇠는 서버 .env 에만 있어서, DB·NAS 백업 파일만으로는 비밀번호를 알 수 없어요.</li>
+    <li>관리자만 이 화면을 볼 수 있고, 추가·바꾸기·끄기·지우기는 아래 기록에 남아요.</li>
+    <li>계정을 지워도 이미 받은 메일은 메일함에 그대로 남아요.</li>
+  </ul>
+  <% if (history.length) { %>
+    <h3 class="acct-log-title">바뀐 기록</h3>
+    <ul class="history acct-log">
+      <% history.forEach(h => { %><li><span class="muted"><%= kst(h.created_at) %></span> · <%= h.user_name || '-' %> · <strong><%= h.action %></strong> · <%= h.address %></li><% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<script src="/confirm.js"></script>
+<%- include('../partials/footer') %>

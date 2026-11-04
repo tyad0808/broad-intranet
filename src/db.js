@@ -385,6 +385,31 @@ function migrate(db) {
       order_id   INTEGER REFERENCES orders(id),
       created_at TEXT    NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- 관리자 화면에서 넣은 메일 계정 (앱 비밀번호는 SETTINGS_KEY 로 암호화해서 pass_sealed 에).
+    -- 출처 이름(source)은 gmail101 처럼 한 번 정하면 바꾸지 않는다 → 비밀번호를 바꿔도 받은 메일·첨부가 그대로 이어진다
+    -- 지우면 deleted_at 만 남기고 비밀번호는 지운다 (받은 메일에 계정 이름이 계속 보이게)
+    CREATE TABLE IF NOT EXISTS mail_accounts (
+      id          INTEGER PRIMARY KEY,
+      kind        TEXT    NOT NULL CHECK (kind IN ('naver_mail', 'gmail')),
+      address     TEXT    NOT NULL,
+      source      TEXT    UNIQUE,
+      pass_sealed TEXT,
+      enabled     INTEGER NOT NULL DEFAULT 1,
+      created_by  INTEGER REFERENCES users(id),
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      deleted_at  TEXT
+    );
+    -- 메일 계정을 누가 언제 추가·바꾸기·끄기·지우기 했는지
+    CREATE TABLE IF NOT EXISTS mail_account_log (
+      id          INTEGER PRIMARY KEY,
+      account_id  INTEGER REFERENCES mail_accounts(id),
+      user_id     INTEGER REFERENCES users(id),
+      action      TEXT    NOT NULL,
+      address     TEXT,
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 }
 

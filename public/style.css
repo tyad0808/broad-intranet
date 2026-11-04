@@ -1785,3 +1785,51 @@ a.mail-file:hover { border-color: var(--primary); text-decoration: none; }
   .mail-msg { max-width: 94%; }
   .mail-summary { padding: 8px 14px; }
 }
+
+/* ═════ 관리자 › 메일 계정 ═════ */
+.acct-list { list-style: none; margin: 14px 0 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.acct { padding: 14px 16px; border-top: 1px solid var(--line); }
+.acct:first-child { border-top: 0; }
+.acct-main { display: flex; align-items: center; gap: 12px; }
+.acct-text { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.acct-text strong { font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.acct-state { flex: none; padding: 4px 10px; border-radius: 8px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.acct-state.ok { background: var(--ok-bg); color: var(--ok); }
+.acct-state.bad { background: var(--error-bg); color: var(--error); }
+.acct-state.off { background: var(--line-2); color: var(--text-2); }
+.acct-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin: 10px 0 0 52px; }
+.acct-actions form { margin: 0; }
+.acct-error { margin: 8px 0 0 52px; padding: 8px 12px; border-radius: 8px; background: var(--error-bg); color: var(--error); font-size: 14px; }
+.acct-empty { margin: 14px 0 0; }
+.acct-pw > summary { list-style: none; cursor: pointer; }
+.acct-pw > summary::-webkit-details-marker { display: none; }
+.acct-pw[open] { flex-basis: 100%; }
+.acct-pw-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.acct-pw-form input { flex: 1 1 220px; max-width: 360px; margin: 0; }
+.mk { display: inline-grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; color: #fff; font-size: 17px; font-weight: 800; }
+.kind .mk, .howto .mk { width: 24px; height: 24px; font-size: 13px; vertical-align: middle; }
+.mk-gmail { background: #4e5968; }
+.mk-naver { background: #03c75a; }
+.acct-form { display: grid; gap: 14px; max-width: 560px; }
+.kind-pick { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; border: 0; }
+.kind-pick legend { margin-bottom: 6px; padding: 0; font-weight: 600; }
+.kind-pick label.kind { display: inline-flex; flex-direction: row; align-items: center; gap: 8px; width: auto; height: 44px; margin: 0; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
+.kind-pick label.kind:has(input:checked) { border-color: var(--primary); background: var(--primary-weak); color: var(--primary-dark); font-weight: 600; }
+.kind-pick input[type=radio] { flex: none; width: 18px; height: 18px; margin: 0; }
+.acct-field { display: grid; gap: 6px; font-weight: 600; }
+.acct-field input { margin: 0; font-weight: 400; }
+.form-row-end { display: grid; gap: 6px; }
+.form-row-end button { justify-self: start; min-height: 44px; padding: 0 22px; }
+.howto { margin-top: 16px; }
+.howto summary { cursor: pointer; font-weight: 600; }
+.howto-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 24px; margin-top: 10px; }
+.howto ol { display: grid; gap: 4px; margin: 6px 0 0; padding-left: 20px; }
+.plain-list { display: grid; gap: 6px; margin: 0; padding-left: 20px; }
+.btn-sm.primary-ghost { border-color: var(--primary); color: var(--primary-dark); }
+.info.compact { margin-top: 10px; }
+.acct-log-title { margin: 18px 0 8px; }
+.acct-log li { font-size: 14px; }
+pre.cmd { margin: 8px 0; padding: 10px 12px; overflow-x: auto; border-radius: 8px; background: var(--navy); color: #fff; font-size: 14px; white-space: pre; }
+@media (max-width: 760px) {
+  .acct-actions, .acct-error { margin-left: 0; }
+}

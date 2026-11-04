@@ -63,11 +63,18 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
   `);
   let running = null;
 
+  // 출처별 마지막 받기 결과 (관리자 › 메일 계정 화면의 '연결됨 / 로그인 실패')
+  const setStatus = (source, status) => db.prepare(
+    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).run(`inbox_status_${source}`, JSON.stringify(status));
+
   async function runOnce() {
     const result = { ok: true, created: 0, answered: 0, errors: [] };
     const createdRows = [];
+    // 받는 도중 관리자가 계정을 바꿔도 이번 받기는 시작할 때의 목록으로 (sources 는 바뀔 수 있다)
+    const list = [...sources];
     // 메일 계정들을 동시에 받는다 (걸리는 시간 = 가장 느린 계정 하나만큼)
-    const fetched = await Promise.allSettled(sources.map(src => {
+    const fetched = await Promise.allSettled(list.map(src => {
       const open = db.prepare("SELECT external_id, received_at FROM inquiries WHERE source = ? AND status = 'open' AND deleted_at IS NULL")
         .all(src.source);
       const openIds = open.map(r => r.external_id);
@@ -75,7 +82,7 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
       const openSince = open.map(r => Date.parse(r.received_at)).filter(Number.isFinite).sort((a, b) => a - b)[0];
       return src.fetch({ state: getState(src.source), openIds, openSince: Number.isFinite(openSince) ? new Date(openSince) : null });
     }));
-    for (const [n, src] of sources.entries()) {
+    for (const [n, src] of list.entries()) {
       try {
         if (fetched[n].status === 'rejected') throw fetched[n].reason;
         const out = fetched[n].value;
@@ -99,9 +106,11 @@ function createInboxCollector({ db, sources = [], notifier = null, now = () => n
           for (const id of out.answeredIds || []) result.answered += markAnswered.run(src.source, id).changes;
           setState(src.source, out.state);
         });
+        setStatus(src.source, { ok: true, at: now().toISOString() });
       } catch (e) {
         result.ok = false;
         result.errors.push(`${src.label}: ${e.message}`);
+        setStatus(src.source, { ok: false, at: now().toISOString(), error: `${e.message || e}${e.responseText ? ` / ${e.responseText}` : ''}`.slice(0, 300) });
       }
     }
     fillNames.run();

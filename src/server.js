@@ -10,7 +10,9 @@ const { createGodoSource, createGodoWriter } = require('./channels/godo');
 const { createNotifier } = require('./notifier');
 const { createOrderActions } = require('./actions');
 const { createSmartstoreWriter } = require('./channels/smartstore');
-const { mailAccountsFromEnv, createMailSource, createMailSender, createMailFiles } = require('./inbox/mail');
+const { mailAccountsFromEnv } = require('./inbox/mail');
+const { createMailRegistry } = require('./inbox/mailRegistry');
+const { createSecretBox } = require('./secretBox');
 const { createInboxCollector } = require('./inbox/collector');
 const { createNaverQnaSource, createNaverQnaSender, SOURCE: QNA_SOURCE, LABEL: QNA_LABEL } = require('./inbox/naverQna');
 const { createCoupangInquirySource, createCoupangInquirySender, SOURCE: CQ_SOURCE, LABEL: CQ_LABEL } = require('./inbox/coupangInquiry');
@@ -78,8 +80,8 @@ const gqLive = gqReady && process.env.GODO_ANSWER === 'on' && Boolean(process.en
 if (gqReady && process.env.GODO_ANSWER === 'on' && !gqLive) {
   console.warn('[주의] GODO_ANSWER=on 이지만 GODO_WRITE_KEY 가 없어서 자사몰 문의 답변은 연습 모드로 실행합니다.');
 }
+// 메일 계정 받기는 아래 mailRegistry 가 넣는다 (.env 계정 + 관리자 › 메일 계정에서 넣은 계정)
 const inboxSources = [
-  ...mailAccounts.map(a => createMailSource(a)),
   ...(qnaReady ? [createNaverQnaSource()] : []),
   ...(cqReady ? [createCoupangInquirySource()] : []),
   ...(gqReady ? [createGodoInquirySource()] : []),
@@ -93,7 +95,8 @@ if (talkReady && process.env.TALKTALK_WEBHOOK_TOKEN.length < 24) {
 // 인트라넷에서 톡톡 답장: 보내기 API 키 + TALKTALK_ANSWER=on 일 때만 실제로 보낸다 (아니면 연습 모드)
 const talkLive = talkReady && Boolean(process.env.TALKTALK_SEND_KEY) && process.env.TALKTALK_ANSWER === 'on';
 const talkImages = createTalkImages();
-const inboxCollector = inboxSources.length ? createInboxCollector({ db, sources: inboxSources, notifier }) : null;
+// 관리자 화면에서 메일 계정을 언제든 더할 수 있어서 받기는 늘 켜 둔다 (출처가 없으면 아무것도 안 함)
+const inboxCollector = createInboxCollector({ db, sources: inboxSources, notifier });
 const inbox = {
   collector: inboxCollector,
   talktalk: talkReady ? {
@@ -102,22 +105,23 @@ const inbox = {
     images: talkImages,
   } : null,
   sourceLabels: Object.fromEntries([
-    ...mailAccounts.map(a => [a.source, a.label]),
     ...(qnaReady ? [[QNA_SOURCE, QNA_LABEL]] : []),
     ...(cqReady ? [[CQ_SOURCE, CQ_LABEL]] : []),
     ...(gqReady ? [[GQ_SOURCE, GQ_LABEL]] : []),
     ...(talkReady ? [[TALK_SOURCE, TALK_LABEL]] : []),
   ]),
   senders: {
-    ...(mailLive ? Object.fromEntries(mailAccounts.map(a => [a.source, createMailSender(a)])) : {}),
     ...(qnaLive ? { [QNA_SOURCE]: createNaverQnaSender() } : {}),
     ...(cqLive ? { [CQ_SOURCE]: createCoupangInquirySender() } : {}),
     ...(gqLive ? { [GQ_SOURCE]: createGodoInquirySender() } : {}),
     ...(talkLive ? { [TALK_SOURCE]: createTalktalkSender({ images: talkImages }) } : {}),
   },
-  // 첨부파일 열기는 연습 모드여도 된다 (읽기만)
-  files: Object.fromEntries(mailAccounts.map(a => [a.source, createMailFiles(a)])),
+  // 첨부파일 열기는 연습 모드여도 된다 (읽기만). 메일 계정 것은 mailRegistry 가 채운다
+  files: {},
 };
+// 메일 계정: .env 계정 + 관리자 화면 계정(앱 비밀번호는 .env 의 SETTINGS_KEY 로 암호화해 DB 에). 바꾸면 바로 반영
+inbox.mailRegistry = createMailRegistry({ db, box: createSecretBox(), inbox, collectorSources: inboxSources, live: mailLive, envAccounts: mailAccounts });
+inbox.mailRegistry.apply();
 const app = createApp({ db, collector, notifier, actions, inbox, weeklyAccount: mailAccounts[0] || null });
 
 // 주간 매출 보고: 5분마다 '금요일 18시가 지났고 이번 주 아직 안 보냈는지' 확인
@@ -183,7 +187,7 @@ async function collectInbox() {
   if (result.ok) console.log(`[${time}] 문의함: 새 문의 ${result.created}건${result.answered ? `, 메일 사이트에서 답장 ${result.answered}건` : ''}`);
   else console.error(`[${time}] 문의함 받기 실패: ${result.errors.join(' / ')}`);
 }
-if (inboxCollector) startLoop(collectInbox, () => intervalMinutes(db, 'inbox_interval_minutes'));
+startLoop(collectInbox, () => intervalMinutes(db, 'inbox_interval_minutes'));
 
 app.listen(PORT, HOST, () => {
   console.log(`브로애드 인트라넷 실행 중: http://${HOST || 'localhost'}:${PORT}`);
