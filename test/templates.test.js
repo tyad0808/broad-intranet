@@ -204,7 +204,16 @@ test('관리자 메뉴에 답장 문구·매크로 바로가기가 있다', asyn
   t.after(() => server.close());
   addUser(db, { email: 'boss@broad.test', name: '사장', role: 'admin' });
   const boss = await loginAs(baseUrl, 'boss@broad.test');
-  assert.match((await boss.request('/admin/users')).text, /<a href="\/templates" class="chip">답장 문구·매크로<\/a>/);
+  assert.match((await boss.request('/admin/users')).text, /<a href="\/templates" class="chip ">답장 문구·매크로<\/a>/);
+  // 답장 문구 화면으로 가도 관리자 탭이 그대로 (그 칸이 선택된 채), 직원에게는 관리자 탭이 없다
+  const page = (await boss.request('/templates')).text;
+  assert.match(page, /<a href="\/templates" class="chip on">답장 문구·매크로<\/a>/);
+  assert.match(page, /class="page-title sub-title">답장 문구 · 매크로/);
+  addUser(db, { email: 'kim@broad.test', name: '김직원' });
+  const kim = await loginAs(baseUrl, 'kim@broad.test');
+  const staffPage = (await kim.request('/templates')).text;
+  assert.ok(!staffPage.includes('admin-chips'));
+  assert.match(staffPage, /<h1 class="page-title">답장 문구 · 매크로/);
 });
 
 test('화면에서 지운 번호는 엑셀을 다시 올려도 기본으로 다시 넣지 않는다 (체크하면 다시 넣음)', async t => {

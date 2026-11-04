@@ -60,7 +60,7 @@ function templateRoutes(db) {
     const byUsage = isAdmin(req) && req.query.sort === 'usage'
       ? [...templates].sort((a, b) => b.use_count - a.use_count || String(b.last_used_at || '').localeCompare(String(a.last_used_at || '')) || (a.macro_no ?? 1e9) - (b.macro_no ?? 1e9))
       : null;
-    res.render('templates', { title: '답장 문구', navSection: 'templates', templates, groups: groupByCategory(templates), SCOPES, VARIABLES,
+    res.render('templates', { title: '답장 문구', navSection: isAdmin(req) ? 'admin' : 'templates', templates, groups: groupByCategory(templates), SCOPES, VARIABLES,
       CATEGORIES: categories(), OTHER, edit: Number(req.query.edit) || null, isAdmin: isAdmin(req), byUsage });
   });
 
@@ -98,7 +98,7 @@ function templateRoutes(db) {
     if (adminOnly(req, res)) return;
     const up = req.session.macroUpload;
     if (!up) { flash(req, 'error', '올린 엑셀이 없어요. 다시 올려 주세요.'); return res.redirect('/templates'); }
-    res.render('templates-upload', { title: '엑셀 올리기 미리보기', navSection: 'templates', up, preview: previewUpload(db, up.macros) });
+    res.render('templates-upload', { title: '엑셀 올리기 미리보기', navSection: 'admin', up, preview: previewUpload(db, up.macros) });
   });
   // 올리기 ②: 체크한 것만 반영 (새로 추가 · 고침). 엑셀에 없는 매크로·예전 문구는 그대로
   router.post('/templates/upload/apply', (req, res) => {

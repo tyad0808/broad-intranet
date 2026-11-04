@@ -1,7 +1,9 @@
 <%- include('partials/header') %>
+<%# 관리자는 관리자 메뉴(위 탭)에서 들어오므로 탭을 그대로 보여 준다. 직원은 문의함 답장 칸의 [문구 관리] 로 들어온다 %>
+<% if (isAdmin) { %><%- include('partials/admin-tabs', { tab: 'templates' }) %><% } %>
 <div class="page-head">
   <div class="title-row wrap-head">
-    <h1 class="page-title">답장 문구 · 매크로</h1>
+    <% if (isAdmin) { %><h2 class="page-title sub-title">답장 문구 · 매크로</h2><% } else { %><h1 class="page-title">답장 문구 · 매크로</h1><% } %>
     <div class="page-actions">
       <% if (isAdmin) { %>
         <a href="<%= byUsage ? '/templates' : '/templates?sort=usage' %>" class="btn-sm ghost"><%= byUsage ? '카테고리별로 보기' : '사용 횟수 순' %></a>

@@ -149,6 +149,7 @@ body.no-sidebar .card.narrow { margin-top: 24px; }
 
 /* ───────── 글자 ───────── */
 .page-title { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.03em; }
+.page-title.sub-title { font-size: 22px; } /* 관리자 탭 아래 화면 제목 (탭 위 '관리자' 가 큰 제목) */
 h1 { font-size: 24px; letter-spacing: -0.03em; }
 h2 { font-size: 17px; letter-spacing: -0.02em; }
 h3 { font-size: 15px; }

@@ -1,8 +1,9 @@
 <%- include('partials/header') %>
 <%# 매크로 엑셀 올리기 미리보기: 번호로 짝을 맞춰 새로 추가 / 고침 / 그대로 / 엑셀에 없음 을 보여 준다. 체크한 것만 반영 %>
 <% const p = preview; const overlapCount = p.add.filter(a => a.overlaps.length || a.deleted).length; %>
+<%- include('partials/admin-tabs', { tab: 'templates' }) %>
 <div class="page-head">
-  <div class="title-row"><h1 class="page-title">엑셀 올리기 미리보기</h1></div>
+  <div class="title-row"><h2 class="page-title sub-title">엑셀 올리기 미리보기</h2></div>
   <p class="muted small"><%= up.name %> · '<%= up.sheet %>' 시트 · 매크로 <%= up.macros.length %>개. <strong>아직 아무것도 바뀌지 않았어요.</strong> 확인하고 아래 [반영하기]를 눌러야 바뀌어요.</p>
 </div>
 
