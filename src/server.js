@@ -19,6 +19,7 @@ const { createNaverQnaSource, createNaverQnaSender, SOURCE: QNA_SOURCE, LABEL: Q
 const { createCoupangInquirySource, createCoupangInquirySender, SOURCE: CQ_SOURCE, LABEL: CQ_LABEL } = require('./inbox/coupangInquiry');
 const { createTalktalkHandler, createTalktalkClient, createTalktalkSender, createTalkImages, SOURCE: TALK_SOURCE, LABEL: TALK_LABEL } = require('./inbox/talktalk');
 const { createGodoInquirySource, createGodoInquirySender, SOURCE: GQ_SOURCE, LABEL: GQ_LABEL } = require('./inbox/godoInquiry');
+const { createAiDrafter } = require('./inbox/aiDraft');
 
 const PORT = process.env.PORT || 3000;
 // 운영 서버에서는 같은 서버의 Caddy(HTTPS)만 접속할 수 있게 내부 주소에서만 연다
@@ -123,6 +124,8 @@ const inbox = {
   // 첨부파일 열기는 연습 모드여도 된다 (읽기만). 메일 계정 것은 mailRegistry 가 채운다
   files: {},
 };
+// AI 답변 초안: .env 에 ANTHROPIC_API_KEY 가 있을 때만 (없으면 버튼에 '꺼져 있음' 안내)
+inbox.aiDrafter = createAiDrafter();
 // 메일 계정: .env 계정 + 관리자 화면 계정(앱 비밀번호는 .env 의 SETTINGS_KEY 로 암호화해 DB 에). 바꾸면 바로 반영
 const secretBox = createSecretBox();
 inbox.mailRegistry = createMailRegistry({ db, box: secretBox, inbox, collectorSources: inboxSources, live: mailLive, envAccounts: mailAccounts });

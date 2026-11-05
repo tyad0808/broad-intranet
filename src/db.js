@@ -364,6 +364,28 @@ function migrate(db) {
       updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
 
+    -- AI 답변 초안 (문의마다 [AI 초안 만들기] 를 누를 때마다 한 줄). AI 는 보내지 않는다 — 직원이 확인 후 보낸다
+    --   decision: draft 초안 · ask_info 되묻는 초안 · needs_staff 직원 확인 필요(초안 없음)
+    --   토큰 수는 비용 계산용
+    CREATE TABLE IF NOT EXISTS ai_drafts (
+      id                 INTEGER PRIMARY KEY,
+      inquiry_id         INTEGER NOT NULL REFERENCES inquiries(id),
+      user_id            INTEGER REFERENCES users(id),
+      category           TEXT    NOT NULL,
+      decision           TEXT    NOT NULL,
+      reason             TEXT,
+      draft              TEXT,
+      missing            TEXT,
+      sources            TEXT,
+      model              TEXT,
+      input_tokens       INTEGER,
+      output_tokens      INTEGER,
+      cache_read_tokens  INTEGER,
+      cache_write_tokens INTEGER,
+      created_at         TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_ai_drafts ON ai_drafts(inquiry_id, id);
+
     -- 회사 일정 (주문 목록 옆 달력). 승인된 직원 누구나 넣고, 넣은 사람과 관리자만 고치거나 지운다
     CREATE TABLE IF NOT EXISTS events (
       id          INTEGER PRIMARY KEY,

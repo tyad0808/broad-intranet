@@ -7,6 +7,7 @@ const { previewType, isMailSource } = require('../inbox/mail');
 const { IMAGE_HOSTS, PARTNER_CENTER_URL, MAX_IMAGE, findOrderInText, orderByPhone, setLinked, linkSaidOrders, imageKind } = require('../inbox/talktalk');
 const { templatesFor } = require('./templates');
 const { ordersForInquiry } = require('../customer');
+const { saveDraft, latestDraft } = require('../inbox/aiDraft');
 const { INQUIRY_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
 
 // 기간 빠른 선택 이름 (quickPeriods 순서: 오늘 · 어제 · 최근 7일 · 이번 달 · 지난달)
@@ -92,9 +93,11 @@ function withRo(word) {
 }
 
 // files: { naver_mail: 첨부파일 열기 } (메일함에서 그때그때 가져온다)
-function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLabels = {}, notifier, brandName = () => '' }) {
+// aiDrafter: AI 답변 초안 (서버 .env 에 ANTHROPIC_API_KEY 가 있을 때만, 없으면 null)
+function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLabels = {}, notifier, brandName = () => '', aiDrafter = null }) {
   const router = express.Router();
   const busy = new Set(); // 같은 문의에 답변을 두 번 연달아 보내는 것 방지
+  const drafting = new Set(); // 같은 문의에 AI 초안을 두 번 연달아 만드는 것 방지
 
   const labelOf = source => sourceLabels[source] || source;
   const findInquiry = id => db.prepare(`
@@ -307,6 +310,7 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     const tm = targets.map(() => '?').join(',');
     transaction(db, () => {
       db.prepare(`DELETE FROM inquiry_replies WHERE inquiry_id IN (${tm})`).run(...targets);
+      db.prepare(`DELETE FROM ai_drafts WHERE inquiry_id IN (${tm})`).run(...targets);
       db.prepare(`
         UPDATE inquiries SET deleted_at = datetime('now'), deleted_by = ?, subject = NULL, body = NULL, from_name = NULL, from_addr = NULL,
           reply_to = NULL, attachments = '[]', message_id = NULL, references_hdr = NULL, order_no = NULL, meta = NULL, assignee_id = NULL,
@@ -405,6 +409,8 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
     // 톡톡·메일·쇼핑몰 문의 모두 메신저 모양의 대화방 화면 (답장 칸 늘 아래)
     res.render(chat ? 'inbox/chat' : 'inbox/detail', {
       linkedBy: chat ? metaOf(inquiry).linkedBy || null : null,
+      aiDraft: latestDraft(db, inquiry.id),
+      aiReady: Boolean(aiDrafter),
       bodyClass: 'talk-page',
       thread, laterMails, dayLabel, shopChannel: source => SHOP_CHANNEL[source] || null,
       title: inquiry.subject || '문의',
@@ -489,6 +495,27 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       next(e);
     } finally {
       busy.delete(inquiry.id);
+    }
+  });
+
+  // AI 답변 초안 만들기: 초안만 만들어 화면에 보여 준다 (고객에게 보내지 않음 — 직원이 답장 칸에 넣고 고쳐서 보낸다)
+  router.post('/inbox/:id/ai-draft', async (req, res, next) => {
+    const b = back(req);
+    const inquiry = findInquiry(req.params.id);
+    if (!inquiry) return flashTo(req, res, b, 'error', '문의를 찾을 수 없습니다.');
+    const url = `${selfUrl(inquiry.id, b)}#ai-draft`;
+    if (!aiDrafter) return flashTo(req, res, url, 'error', 'AI 초안이 꺼져 있습니다. 관리자가 서버 .env 에 ANTHROPIC_API_KEY 를 넣어야 합니다.');
+    if (drafting.has(inquiry.id)) return flashTo(req, res, url, 'error', '이미 초안을 만드는 중입니다. 잠시 후 새로고침해 보세요.');
+    drafting.add(inquiry.id);
+    try {
+      const d = await aiDrafter.draft(db, inquiry, { brandName: brandName() });
+      saveDraft(db, inquiry.id, req.user.id, d);
+      flashTo(req, res, url, 'ok', d.decision === 'needs_staff' ? `AI 판단: 직원 확인 필요 (${d.category})` : `AI 초안을 만들었습니다 (${d.category}). 확인하고 고쳐서 보내세요.`);
+    } catch (e) {
+      if (e && e.friendly) return flashTo(req, res, url, 'error', e.message);
+      next(e);
+    } finally {
+      drafting.delete(inquiry.id);
     }
   });
 

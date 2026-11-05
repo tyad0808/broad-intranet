@@ -1,0 +1,39 @@
+<%# AI 답변 초안 (문의 화면, 답장 칸 바로 위). AI 는 보내지 않는다 — [답장 칸에 넣기] 로 가져가 직원이 고쳐서 보낸다
+    빨간 글자 = 금액·날짜·"가능합니다"·"당일" 같은 확답 (맞는지 꼭 확인) %>
+<details class="ai-draft" id="ai-draft" <%= aiDraft ? 'open' : '' %>>
+  <summary class="ai-draft-head">
+    <strong>AI 답변 초안</strong>
+    <% if (aiDraft) { %>
+      <span class="ai-chip"><%= aiDraft.category %></span>
+      <span class="ai-chip ai-<%= aiDraft.decision %>"><%= aiDraft.decisionLabel %></span>
+    <% } else { %>
+      <span class="muted small">문의 유형을 고르고 답장 초안을 만들어요</span>
+    <% } %>
+  </summary>
+  <div class="ai-draft-body">
+    <% if (aiDraft) { %>
+      <% if (aiDraft.decision === 'needs_staff') { %>
+        <div class="ai-staff" role="note"><strong>직원 확인 필요</strong> — 초안을 만들지 않았어요.<% if (aiDraft.reason) { %><br><%= aiDraft.reason %><% } %></div>
+      <% } else { %>
+        <div class="ai-text" data-ai-text="<%= aiDraft.draft %>"><% aiDraft.parts.forEach(p => { %><% if (p.risk) { %><mark class="ai-risk"><%= p.text %></mark><% } else { %><%= p.text %><% } %><% }) %></div>
+        <% if (aiDraft.hasRisk) { %><p class="ai-risk-note"><mark class="ai-risk">빨간 글자</mark>는 금액·날짜·확답이에요. 맞는지 꼭 확인하고 보내세요.</p><% } %>
+        <% if (aiDraft.missing.length) { %><p class="small"><strong>고객에게 물어볼 것:</strong> <%= aiDraft.missing.join(' · ') %></p><% } %>
+        <% if (aiDraft.reason) { %><p class="small muted-2"><strong>AI 판단:</strong> <%= aiDraft.reason %></p><% } %>
+      <% } %>
+      <% if (aiDraft.sources.length) { %><p class="small muted-2"><strong>근거:</strong> <%= aiDraft.sources.join(' · ') %></p><% } %>
+    <% } %>
+    <div class="ai-actions">
+      <% if (aiDraft && aiDraft.decision !== 'needs_staff' && aiDraft.draft) { %>
+        <button type="button" class="btn-sm primary" data-ai-insert>답장 칸에 넣기</button>
+      <% } %>
+      <form method="post" action="/inbox/<%= inquiry.id %>/ai-draft" class="ai-make" data-once>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <input type="hidden" name="back" value="<%= back %>">
+        <button type="submit" class="btn-sm" <%= aiReady ? '' : 'disabled' %>><%= aiDraft ? '다시 만들기' : 'AI 초안 만들기' %></button>
+      </form>
+      <% if (aiDraft) { %><span class="muted small"><%= aiDraft.user_name || '' %> · <%= kst(aiDraft.created_at).slice(5) %></span><% } %>
+    </div>
+    <% if (!aiReady) { %><p class="small muted-2">AI 초안이 꺼져 있어요. 관리자가 서버 설정(.env)에 AI 키를 넣으면 켜져요.</p><% } %>
+    <p class="small muted-2">AI 는 고객에게 보내지 않아요. 초안을 확인하고 고쳐서 직접 보내세요. 만드는 데 10~30초 걸려요.</p>
+  </div>
+</details>

@@ -107,6 +107,8 @@
         <% } %>
       </div>
 
+      <%- include('../partials/ai-draft') %>
+
       <%# 답장 칸: 늘 아래에. 메일·문의 답변은 길어서 Enter 는 줄바꿈, 보내기는 버튼으로 (보내기 전에 확인) %>
       <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form talk-composer" enctype="multipart/form-data" data-once data-confirm="<%= confirmText %>">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -196,5 +198,6 @@
 <script src="/orders.js"></script>
 <script src="/inbox.js"></script>
 <script src="/macro-picker.js"></script>
+<script src="/ai-draft.js"></script>
 <script src="/talk-room.js"></script>
 <%- include('../partials/footer') %>

@@ -58,6 +58,8 @@
         <% if (!chat.length) { %><p class="muted">주고받은 말이 없습니다.</p><% } %>
       </div>
 
+      <%- include('../partials/ai-draft') %>
+
       <%# 답장 칸: 늘 아래에. Enter 보내기 · Shift+Enter 줄바꿈 · 사진은 📷 / 붙여넣기 / 끌어다 놓기 %>
       <form method="post" action="/inbox/<%= inquiry.id %>/reply" class="reply-form talk-composer" enctype="multipart/form-data" data-once>
         <input type="hidden" name="_csrf" value="<%= csrfToken %>">
@@ -170,5 +172,6 @@
 <script src="/orders.js"></script>
 <script src="/inbox.js"></script>
 <script src="/macro-picker.js"></script>
+<script src="/ai-draft.js"></script>
 <script src="/talk-room.js"></script>
 <%- include('../partials/footer') %>

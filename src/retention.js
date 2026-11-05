@@ -134,6 +134,7 @@ function runCleanup(db, { orderMonths = keepMonths(db, 'orders'), inquiryMonths 
     }
     const delReplies = db.prepare('DELETE FROM inquiry_replies WHERE inquiry_id = ?');
     const delChat = db.prepare('DELETE FROM chat_messages WHERE inquiry_id = ?');
+    const delDrafts = db.prepare('DELETE FROM ai_drafts WHERE inquiry_id = ?');
     const delInquiry = db.prepare('DELETE FROM inquiries WHERE id = ?');
     const tombstone = db.prepare(`
       UPDATE inquiries SET deleted_at = datetime('now'), deleted_by = ?, subject = NULL, body = NULL, from_name = NULL, from_addr = NULL,
@@ -143,6 +144,7 @@ function runCleanup(db, { orderMonths = keepMonths(db, 'orders'), inquiryMonths 
     for (const q of inquiryIds) {
       delReplies.run(q.id);
       delChat.run(q.id);
+      delDrafts.run(q.id); // AI 초안에도 고객 글이 들어 있다
       if (isMail(q.source)) tombstone.run(userId, q.id);
       else delInquiry.run(q.id);
     }

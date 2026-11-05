@@ -1885,3 +1885,24 @@ pre.cmd { margin: 8px 0; padding: 10px 12px; overflow-x: auto; border-radius: 8p
   .sw-who { padding-left: 0; }
   .sw-confirm-box { margin-left: 0; }
 }
+
+/* ───────── AI 답변 초안 (문의 화면, 답장 칸 위) ───────── */
+.ai-draft { flex: none; margin: 0; border-top: 1px solid var(--line); background: var(--surface-2); }
+.ai-draft-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 44px; padding: 8px 16px; cursor: pointer; font-size: 15px; list-style: none; }
+.ai-draft-head::-webkit-details-marker { display: none; }
+.ai-draft-head::before { content: '▸'; color: var(--text-2); transition: transform 0.15s; }
+.ai-draft[open] > .ai-draft-head::before { transform: rotate(90deg); }
+.ai-draft-body { display: grid; gap: 8px; padding: 0 16px 12px; max-height: 45vh; overflow: auto; }
+.ai-draft .muted-2 { color: var(--text-2); margin: 0; }
+.ai-draft p { margin: 0; }
+.ai-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 2px 10px; border-radius: 6px; font-size: 14px; background: var(--primary-weak); color: var(--primary-dark); }
+.ai-chip.ai-ask_info { background: var(--calm-bg); color: var(--text); }
+.ai-chip.ai-needs_staff { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.ai-text { white-space: pre-wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--card); font-size: 16px; line-height: 1.6; }
+mark.ai-risk { background: var(--warn-bg); color: var(--warn); text-decoration: underline; text-underline-offset: 3px; font-weight: 700; padding: 0 2px; border-radius: 3px; }
+.ai-risk-note { font-size: 14px; }
+.ai-staff { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--warn-bg); color: var(--warn); font-size: 15px; line-height: 1.5; }
+.ai-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ai-actions .ai-make { margin: 0; }
+.ai-actions .btn-sm { min-height: 40px; }
+@media (max-width: 640px) { .ai-actions .btn-sm { min-height: 44px; } .ai-draft-body { max-height: 38vh; } }
