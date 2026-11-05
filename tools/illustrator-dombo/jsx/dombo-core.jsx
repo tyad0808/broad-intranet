@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.17.4'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.18.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -1182,6 +1182,107 @@ function domboHebe(opts) {
   return domboHebeText(pick, scale, factor);
 }
 
+// ---- 대지 맞추기 ----
+// 선택한 것의 기준(맨 바깥 클리핑 마스크 > 그룹 > 가장 큰 개체, 크기·헤베와 같음)에 대지를 딱 맞춘다.
+// 고치는 대지는 그 기준의 가운데가 들어 있는 대지 (없으면 지금 대지). save 면 바탕화면에 JPG 로 저장.
+
+var DOMBO_ARTBOARD_MAX_PT = 16383; // 일러스트 대지 최대 크기 (스크립트 좌표)
+var DOMBO_JPG_MAX_SCALE = 776;     // JPG 내보내기 최대 배율(%)
+var DOMBO_JPG_MAX_PX = 30000;      // 이보다 크면 해상도를 낮춰 저장 (파일이 너무 커지지 않게)
+// JPG 에 넣지 않을 작업용 레이어 (저장할 때만 잠깐 숨김)
+var DOMBO_WORK_LAYERS = [DOMBO_CUT_LAYER, DOMBO_LAYER, '치수', '사이즈', '넘버링', '아일렛', '분할'];
+
+// 범위(b)의 가운데가 들어 있는 대지 번호, 없으면 fallback
+function domboArtboardIndexFor(rects, b, fallback) {
+  var cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+  for (var i = 0; i < rects.length; i++) {
+    var r = rects[i];
+    if (cx >= r[0] && cx <= r[2] && cy <= r[1] && cy >= r[3]) return i;
+  }
+  return fallback;
+}
+
+// JPG 배율: dpi 해상도(문서 크기 기준). 너무 크면 낮춘다. 결과 { scale(%), dpi, w, h(px) }
+function domboJpgScale(bounds, dpi) {
+  var wPt = bounds[2] - bounds[0], hPt = bounds[1] - bounds[3];
+  var scale = dpi / 72 * 100;
+  if (scale > DOMBO_JPG_MAX_SCALE) scale = DOMBO_JPG_MAX_SCALE;
+  var longPt = Math.max(wPt, hPt);
+  if (longPt * scale / 100 > DOMBO_JPG_MAX_PX) scale = DOMBO_JPG_MAX_PX / longPt * 100;
+  return { scale: scale, dpi: Math.round(scale * 72 / 100), w: Math.round(wPt * scale / 100), h: Math.round(hPt * scale / 100) };
+}
+
+// 바탕화면에 겹치지 않는 파일 이름 (이름.jpg, 이름_2.jpg …)
+function domboJpgFileName(docName, exists) {
+  var base = String(docName || '대지').replace(/\.[^.]+$/, '').replace(/[\\\/:*?"<>|]/g, '_') || '대지';
+  var name = base + '.jpg', n = 2;
+  while (exists(name)) { name = base + '_' + n + '.jpg'; n++; }
+  return name;
+}
+
+function domboArtboardFit(opts) {
+  var doSave = !!(opts && opts.save);
+  var dpi = Number(opts && opts.dpi) || 150;
+  if (!(dpi >= 36 && dpi <= 600)) throw new Error('해상도는 36 ~ 600 dpi 사이로 넣으세요.');
+  var hideWork = !(opts && opts.keepWork);
+  var doc = domboDoc();
+  if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  if (!domboHasSelection(doc)) throw new Error('대지를 맞출 작업물을 선택하세요.');
+  var items = [], i;
+  for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
+  var pick = domboHebePick(items);
+  if (!pick) throw new Error('선택한 개체에 보이는 모양이 없습니다.');
+  var b = pick.bounds;
+  var w = b[2] - b[0], h = b[1] - b[3];
+  if (!(w > 0) || !(h > 0)) throw new Error('크기가 0인 개체에는 대지를 맞출 수 없습니다.');
+  if (w > DOMBO_ARTBOARD_MAX_PT || h > DOMBO_ARTBOARD_MAX_PT) throw new Error('대지 최대 크기(약 5.78m)보다 큽니다. 10:1 로 줄여 작업하세요.');
+
+  var rects = [];
+  for (i = 0; i < doc.artboards.length; i++) rects.push(doc.artboards[i].artboardRect);
+  var idx = domboArtboardIndexFor(rects, b, doc.artboards.getActiveArtboardIndex());
+  var ab = doc.artboards[idx];
+  ab.artboardRect = [b[0], b[1], b[2], b[3]];
+  doc.artboards.setActiveArtboardIndex(idx);
+
+  var factor = 1;
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
+  var k = DOMBO_PT_PER_MM;
+  var msg = '대지 ' + (idx + 1) + ' (' + ab.name + ') 를 ' + pick.kind + ' 크기 ' +
+    domboMmLabel(w / k * factor, false) + ' × ' + domboMmLabel(h / k * factor, false) + ' mm 로 맞췄습니다.';
+  if (!doSave) return msg;
+
+  // JPG 저장: 작업용 레이어(칼선·돔보·치수 등)는 잠깐 숨겼다가 되돌린다
+  var hidden = [];
+  if (hideWork) {
+    for (i = 0; i < doc.layers.length; i++) {
+      var ly = doc.layers[i];
+      for (var j = 0; j < DOMBO_WORK_LAYERS.length; j++) {
+        if (ly.name === DOMBO_WORK_LAYERS[j] && ly.visible) { ly.visible = false; hidden.push(ly); }
+      }
+    }
+  }
+  var js = domboJpgScale(b, dpi);
+  var desk = Folder.desktop;
+  var name = domboJpgFileName(doc.name, function (n) { return new File(desk.fsName + '/' + n).exists; });
+  var file = new File(desk.fsName + '/' + name);
+  try {
+    doc.selection = null;
+    var eo = new ExportOptionsJPEG();
+    eo.artBoardClipping = true;
+    eo.antiAliasing = true;
+    eo.qualitySetting = 90;
+    eo.horizontalScale = js.scale;
+    eo.verticalScale = js.scale;
+    doc.exportFile(file, ExportType.JPEG, eo);
+  } finally {
+    for (i = 0; i < hidden.length; i++) hidden[i].visible = true;
+  }
+  msg += '\n바탕화면에 ' + name + ' (' + js.w + ' × ' + js.h + ' px, ' + js.dpi + ' dpi) 로 저장했습니다.';
+  if (js.dpi < Math.round(dpi)) msg += ' 크기가 커서 해상도를 낮췄습니다.';
+  if (hidden.length) msg += ' 칼선·돔보 등 작업용 레이어는 빼고 저장했습니다.';
+  return msg;
+}
+
 // ---- 사이즈 표시 ----
 // 작업물마다 위쪽에 '103*105cm(가로*세로)' 글자를 쓴다. 작업물 안의 기준은 크기·헤베와 같다 (맨 바깥 마스크 > 그룹 > 가장 큰 개체)
 
@@ -1492,3 +1593,4 @@ function domboPanelSize(opts) { return domboCall(domboSize, opts); }
 function domboPanelSizeRemove() { return domboCall(domboSizeRemove); }
 function domboPanelNumber(opts) { return domboCall(domboNumber, opts); }
 function domboPanelNumberRemove() { return domboCall(domboNumberRemove); }
+function domboPanelArtboardFit(opts) { return domboCall(domboArtboardFit, opts); }

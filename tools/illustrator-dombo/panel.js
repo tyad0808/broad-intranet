@@ -1,8 +1,8 @@
 // 패널 화면: 입력값을 모아 일러스트레이터 쪽 함수(jsx/dombo-core.jsx)를 부른다
 (function () {
   var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'numTextMm', 'numGapMm'];
-  var CHECKS = ['numGroup', 'numBox', 'numPieces', 'orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
-  var SELECTS = ['numCorner', 'orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
+  var CHECKS = ['abSave', 'abKeepWork', 'numGroup', 'numBox', 'numPieces', 'orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
+  var SELECTS = ['abDpi', 'numCorner', 'orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
   var STORE_KEY = 'broad-dombo-settings';
 
   function $(id) { return document.getElementById(id); }
@@ -118,6 +118,11 @@
     call('domboPanelSize', { scale: Number(o.hebeScale), textMm: o.sizeTextMm });
   });
   $('sizeRemove').addEventListener('click', function () { call('domboPanelSizeRemove'); });
+  $('artboardFit').addEventListener('click', function () {
+    var o = readOptions();
+    save(o);
+    call('domboPanelArtboardFit', { save: o.abSave, dpi: Number(o.abDpi), keepWork: o.abKeepWork });
+  });
   $('number').addEventListener('click', function () {
     var o = readOptions();
     save(o);

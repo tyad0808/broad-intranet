@@ -644,3 +644,61 @@ test('넘버링 자리 고르기: 상단 왼쪽·오른쪽, 하단 왼쪽·오�
   assert.deepStrictEqual(at('bl'), [0, -3, 6, -7]);
   assert.deepStrictEqual(at(undefined), at('tr'), '기본은 상단 오른쪽');
 });
+
+test('대지 맞추기: 가운데가 들어 있는 대지, JPG 배율·파일 이름', () => {
+  const rects = [[0, 100, 100, 0], [200, 100, 300, 0]];
+  assert.strictEqual(core.domboArtboardIndexFor(rects, [210, 90, 260, 10], 0), 1);
+  assert.strictEqual(core.domboArtboardIndexFor(rects, [500, 90, 560, 10], 0), 0, '어디에도 없으면 지금 대지');
+  // 100mm x 50mm 를 150dpi → 591 x 295 px
+  let s = core.domboJpgScale([0, 50 * MM, 100 * MM, 0], 150);
+  near(s.scale, 150 / 72 * 100);
+  assert.deepStrictEqual([s.w, s.h, s.dpi], [591, 295, 150]);
+  // 아주 큰 대지는 3만 px 를 넘지 않게 해상도를 낮춘다
+  s = core.domboJpgScale([0, 1000 * MM, 5000 * MM, 0], 300);
+  assert.ok(s.w <= 30000 && s.dpi < 300);
+  const taken = ['포맥스.jpg', '포맥스_2.jpg'];
+  assert.strictEqual(core.domboJpgFileName('포맥스.ai', n => taken.includes(n)), '포맥스_3.jpg');
+  assert.strictEqual(core.domboJpgFileName('a/b:c.ai', () => false), 'a_b_c.jpg');
+});
+
+test('대지 맞추기: 마스크 크기로 대지를 고치고, 저장하면 작업용 레이어를 숨겼다 되돌린다', () => {
+  const mask = pathItem([210 * MM, 80 * MM, 310 * MM, 30 * MM], { clipping: true });
+  const clip = group([mask, pathItem([150 * MM, 999, 400 * MM, -999])], { clipped: true });
+  const artboards = [{ name: '대지 1', artboardRect: [0, 100 * MM, 100 * MM, 0] }, { name: '대지 2', artboardRect: [200 * MM, 100 * MM, 400 * MM, 0] }];
+  let active = 0;
+  artboards.getActiveArtboardIndex = () => active;
+  artboards.setActiveArtboardIndex = i => { active = i; };
+  const cut = { name: '칼선', visible: true }, art = { name: '레이어 1', visible: true }, dim = { name: '치수', visible: false };
+  const exported = [];
+  const doc = { name: '간판.ai', selection: [clip], artboards, layers: [cut, art, dim],
+    exportFile(f, type, o) { exported.push({ f: f.path, type, o: { ...o }, cutVisible: cut.visible }); } };
+  core.app = { documents: { length: 1 }, activeDocument: doc };
+  core.Folder = { desktop: { fsName: '/desk' } };
+  core.File = function (p) { this.path = p; this.exists = p === '/desk/간판.jpg'; };
+  core.ExportOptionsJPEG = function () {};
+  core.ExportType = { JPEG: 'JPEG' };
+
+  let msg = core.domboArtboardFit({ save: false });
+  assert.deepStrictEqual(Array.from(artboards[1].artboardRect), Array.from(mask.geometricBounds), '대지 2 를 마스크 크기로');
+  assert.deepStrictEqual(Array.from(artboards[0].artboardRect), [0, 100 * MM, 100 * MM, 0], '다른 대지는 그대로');
+  assert.strictEqual(active, 1);
+  assert.match(msg, /클리핑 마스크 크기 100 × 50 mm/);
+  assert.strictEqual(exported.length, 0, '저장 안 함');
+
+  doc.selection = [clip];
+  msg = core.domboArtboardFit({ save: true, dpi: 300 });
+  assert.strictEqual(exported.length, 1);
+  assert.strictEqual(exported[0].f, '/desk/간판_2.jpg', '같은 이름이 있으면 _2');
+  assert.strictEqual(exported[0].type, 'JPEG');
+  assert.strictEqual(exported[0].o.artBoardClipping, true);
+  near(exported[0].o.horizontalScale, 300 / 72 * 100);
+  assert.strictEqual(exported[0].cutVisible, false, '저장할 때 칼선 레이어는 숨김');
+  assert.strictEqual(cut.visible, true, '저장 뒤 다시 보임');
+  assert.strictEqual(dim.visible, false, '원래 숨긴 레이어는 그대로');
+  assert.match(msg, /바탕화면에 간판_2\.jpg/);
+
+  doc.selection = [];
+  assert.throws(() => core.domboArtboardFit({}), /선택하세요/);
+  doc.selection = [clip];
+  assert.throws(() => core.domboArtboardFit({ save: true, dpi: 5000 }), /해상도/);
+});
