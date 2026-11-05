@@ -7,7 +7,7 @@ const session = require('express-session');
 const helmet = require('helmet');
 
 const { SqliteSessionStore } = require('./sessionStore');
-const { loadUser, requireActive, requireAdmin, csrf } = require('./auth');
+const { loadUser, requireActive, requireAdmin, requireManager, isManager, roleLabel, csrf } = require('./auth');
 const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { mailAccountRoutes } = require('./routes/mailAccounts');
@@ -118,6 +118,9 @@ function createApp({
   };
   // 화면에 시각을 한국 시간으로 보여준다 (DB 에는 UTC 로 저장)
   // 직원마다 고유 색 (담당자 칸·이름 표시). 직원 번호로 정해서 늘 같은 색, 미지정은 색 없음
+  // 관리자·부관리자인지 (화면에서 기능 버튼을 보여 줄지), 역할 이름
+  app.locals.isManager = isManager;
+  app.locals.roleLabel = roleLabel;
   app.locals.staffColor = id => (id ? `staff-c${Number(id) % 10}` : '');
   app.locals.kst = value => {
     if (!value) return '-';
@@ -330,7 +333,7 @@ function createApp({
     },
   }));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));
-  app.use('/stats', requireAdmin, statsRoutes(db, { staffReport: require('./stats').staffReport }));
+  app.use('/stats', requireManager, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
   app.use(requireActive, calendarRoutes(db, notifier));
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier, brandName: () => brand.view().name }));

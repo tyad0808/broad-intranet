@@ -62,6 +62,8 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'inbox_order', 'TEXT');
   // 직원마다 끈 알림 (JSON 목록: 'mail' 메일함, 'inbox' 문의함) — 끄면 왼쪽 메뉴 숫자와 새 메일·문의 알림이 안 보인다
   addColumn(db, 'users', 'notify_off', 'TEXT');
+  // 부관리자: role 은 'staff' 그대로 두고 이 칸만 1 (예전 코드로 되돌려도 그냥 직원으로 보여서 안전). 관리자 설정 화면만 빼고 다 쓴다
+  addColumn(db, 'users', 'sub_admin', 'INTEGER NOT NULL DEFAULT 0');
   // 채널이 쓰는 상태 이름 그대로 (예: 자사몰 '고객취소요청'). 공통 상태와 함께 보여줘서 헷갈리지 않게
   addColumn(db, 'orders', 'channel_status_label', 'TEXT');
   // 수기 주문 출처 (계좌·전화 주문, G마켓, 옥션 …)와 그 판매처의 주문번호

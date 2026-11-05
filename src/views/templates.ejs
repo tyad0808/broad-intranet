@@ -5,7 +5,7 @@
   <div class="title-row wrap-head">
     <% if (isAdmin) { %><h2 class="page-title sub-title">답장 문구 · 매크로</h2><% } else { %><h1 class="page-title">답장 문구 · 매크로</h1><% } %>
     <div class="page-actions">
-      <% if (isAdmin) { %>
+      <% if (canManage) { %>
         <a href="<%= byUsage ? '/templates' : '/templates?sort=usage' %>" class="btn-sm ghost"><%= byUsage ? '카테고리별로 보기' : '사용 횟수 순' %></a>
         <a href="/templates/export.xlsx" class="btn-sm">엑셀 받기</a>
         <form method="post" action="/templates/upload" enctype="multipart/form-data" class="inline" data-once>

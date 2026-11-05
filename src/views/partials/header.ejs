@@ -53,8 +53,11 @@
           <% } %>
           </div>
         <% }) %>
-        <% if (user.role === 'admin') { %>
+        <%# 통계는 관리자·부관리자, 관리자 설정은 관리자만 %>
+        <% if (isManager(user)) { %>
           <a href="/stats" class="<%= section === 'stats' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('stats') %></svg><span>통계</span></a>
+        <% } %>
+        <% if (user.role === 'admin') { %>
           <a href="/admin/users" class="<%= section === 'admin' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('admin') %></svg><span>관리자<% if (locals.pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></span></a>
         <% } %>
       </nav>

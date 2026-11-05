@@ -20,7 +20,7 @@ function notifyOff(user) {
 }
 
 function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
-  const activeUserStmt = db.prepare("SELECT id, role, notify_off FROM users WHERE id = ? AND status = 'active'");
+  const activeUserStmt = db.prepare("SELECT id, role, sub_admin, notify_off FROM users WHERE id = ? AND status = 'active'");
   const setting = key => {
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
     return row ? row.value : null;
@@ -34,8 +34,9 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
   };
   const everyone = receivers(() => true);
   const admins = receivers(u => u.role === 'admin');
+  // 담당 없는 주문이 쌓였을 때: 관리자·부관리자 + 알림 설정에서 고른 직원
   const isUnassignedRecipient = u => {
-    if (u.role === 'admin') return true;
+    if (u.role === 'admin' || u.sub_admin) return true;
     try {
       return JSON.parse(setting('unassigned_recipients') || '[]').includes(u.id);
     } catch {
@@ -149,7 +150,7 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
         title: `${label}: 확인이 필요합니다`,
         body: `${main.product_name} (주문번호 ${order.channel_order_id})`,
         url: `/orders/${main.id}`,
-      }, receivers(u => u.role === 'admin' || u.id === order.assignee_id));
+      }, receivers(u => u.role === 'admin' || u.sub_admin || u.id === order.assignee_id)); // 관리자·부관리자·담당자
     }
   }
 

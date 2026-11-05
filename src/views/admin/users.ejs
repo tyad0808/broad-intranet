@@ -36,6 +36,7 @@
 
 <section class="card">
   <h2>직원 목록 <span class="muted"><%= others.length %>명</span></h2>
+  <p class="muted small">역할: <strong>직원</strong> 기본 기능 · <strong>부관리자</strong> 통계·주문 단계 바꾸기·남의 일정 고치기·답장 문구 엑셀까지 다 쓰고, 관리자 설정(이 관리자 메뉴)만 못 들어와요 · <strong>관리자</strong> 전부</p>
   <ul class="rows">
     <% others.forEach(u => { const isMe = u.id === user.id; const locked = u.locked_until && new Date(u.locked_until) > now; %>
       <li class="row">
@@ -53,11 +54,14 @@
               <option value="<%= j.id %>" <%= u.job_id === j.id ? 'selected' : '' %>><%= j.name %><%= j.active ? '' : ' (숨김)' %></option>
             <% }) %>
           </select>
+          <%# 역할: 직원 · 부관리자(관리자 설정만 빼고 다 씀) · 관리자 %>
+          <% const roleKey = u.role === 'admin' ? 'admin' : u.sub_admin ? 'sub' : 'staff'; %>
           <select name="role" aria-label="역할" <%= isMe ? 'disabled' : '' %>>
-            <option value="staff" <%= u.role === 'staff' ? 'selected' : '' %>>직원</option>
-            <option value="admin" <%= u.role === 'admin' ? 'selected' : '' %>>관리자</option>
+            <option value="staff" <%= roleKey === 'staff' ? 'selected' : '' %>>직원</option>
+            <option value="sub" <%= roleKey === 'sub' ? 'selected' : '' %>>부관리자</option>
+            <option value="admin" <%= roleKey === 'admin' ? 'selected' : '' %>>관리자</option>
           </select>
-          <% if (isMe) { %><input type="hidden" name="role" value="<%= u.role %>"><% } %>
+          <% if (isMe) { %><input type="hidden" name="role" value="<%= roleKey %>"><% } %>
           <button type="submit" class="btn-sm">저장</button>
         </form>
         <div class="row-actions">

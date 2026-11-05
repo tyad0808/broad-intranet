@@ -59,7 +59,7 @@ function attemptLogin(db, email, password, now = new Date()) {
 // 로그인할 때만 확인하면, 정지된 직원이 이미 열어 둔 창으로 계속 쓸 수 있기 때문이다.
 function loadUser(db) {
   const stmt = db.prepare(
-    'SELECT u.id, u.email, u.name, u.role, u.status, u.channel_order, u.inbox_order, u.notify_off, j.name AS job_name ' +
+    'SELECT u.id, u.email, u.name, u.role, u.sub_admin, u.status, u.channel_order, u.inbox_order, u.notify_off, j.name AS job_name ' +
     'FROM users u LEFT JOIN jobs j ON j.id = u.job_id WHERE u.id = ?'
   );
   return (req, res, next) => {
@@ -82,6 +82,20 @@ function loadUser(db) {
 function requireActive(req, res, next) {
   if (!req.user) return res.redirect('/login');
   if (req.user.status === 'pending') return res.redirect('/pending');
+  next();
+}
+
+// 관리자 또는 부관리자: 통계·주문 단계 바꾸기·남의 일정 고치기·답장 문구 엑셀 등 '기능' 은 다 쓴다
+// (관리자 설정 화면 /admin 은 관리자만 — requireAdmin)
+const isManager = user => Boolean(user) && user.status === 'active' && (user.role === 'admin' || Boolean(user.sub_admin));
+// 화면에 보여 줄 역할 이름
+const roleLabel = user => (user && user.role === 'admin' ? '관리자' : user && user.sub_admin ? '부관리자' : '직원');
+
+function requireManager(req, res, next) {
+  if (!req.user) return res.redirect('/login');
+  if (!isManager(req.user)) {
+    return res.status(403).render('error', { title: '권한 없음', message: '관리자·부관리자만 볼 수 있는 화면입니다.' });
+  }
   next();
 }
 
@@ -123,6 +137,9 @@ module.exports = {
   loadUser,
   requireActive,
   requireAdmin,
+  requireManager,
+  isManager,
+  roleLabel,
   csrf,
   MAX_FAILED_LOGINS,
   LOCK_MINUTES,

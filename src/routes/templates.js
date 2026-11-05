@@ -1,6 +1,7 @@
 // 자주 쓰는 답장 문구: 직원 누구나 만들고 고치고 지운다. 답장 칸 위 [문구 넣기] 로 넣는다
 //   문구 안의 {고객명} {상품명} {주문번호} {회사명} 은 넣을 때 그 문의의 값으로 바뀐다 (모르는 값은 그대로 남겨 직접 고치게)
 const express = require('express');
+const { isManager } = require('../auth');
 const { CATEGORIES, OTHER, groupByCategory, parseMacroWorkbook, previewUpload, applyUpload, exportWorkbook, rememberDeleted } = require('../macros');
 
 const SCOPES = { all: '메일·쇼핑몰 문의 모두', mail: '메일만', shop: '쇼핑몰 문의만' };
@@ -41,13 +42,15 @@ function templateRoutes(db) {
     if (text.length > MAX_BODY) return { error: `문구는 ${MAX_BODY}자까지 쓸 수 있습니다.` };
     return { title, text, scope, category, hint, subject };
   };
+  // 관리자 화면 탭은 관리자만, 엑셀 올리기·받기·사용 횟수 순은 관리자·부관리자
   const isAdmin = req => req.user && req.user.role === 'admin';
+  const canManage = req => isManager(req.user);
   // 고를 수 있는 카테고리: 정해진 8개 + 엑셀로 새로 생긴 것
   const categories = () => [...new Set([...CATEGORIES,
     ...db.prepare("SELECT DISTINCT category FROM reply_templates WHERE category IS NOT NULL AND category != '' ORDER BY category").all().map(r => r.category)])];
   const adminOnly = (req, res) => {
-    if (isAdmin(req)) return false;
-    res.status(403).render('error', { title: '권한 없음', message: '관리자만 쓸 수 있습니다.' });
+    if (canManage(req)) return false;
+    res.status(403).render('error', { title: '권한 없음', message: '관리자·부관리자만 쓸 수 있습니다.' });
     return true;
   };
 
@@ -57,11 +60,11 @@ function templateRoutes(db) {
       ORDER BY ${LIST_ORDER.replace(/(macro_no|use_count|title)/g, 't.$1')}
     `).all();
     // 관리자: '사용 횟수 순' 으로 보기 (1~2달 뒤 점검용)
-    const byUsage = isAdmin(req) && req.query.sort === 'usage'
+    const byUsage = canManage(req) && req.query.sort === 'usage'
       ? [...templates].sort((a, b) => b.use_count - a.use_count || String(b.last_used_at || '').localeCompare(String(a.last_used_at || '')) || (a.macro_no ?? 1e9) - (b.macro_no ?? 1e9))
       : null;
     res.render('templates', { title: '답장 문구', navSection: isAdmin(req) ? 'admin' : 'templates', templates, groups: groupByCategory(templates), SCOPES, VARIABLES,
-      CATEGORIES: categories(), OTHER, edit: Number(req.query.edit) || null, isAdmin: isAdmin(req), byUsage });
+      CATEGORIES: categories(), OTHER, edit: Number(req.query.edit) || null, isAdmin: isAdmin(req), canManage: canManage(req), byUsage });
   });
 
   router.post('/templates', (req, res) => {
@@ -98,7 +101,7 @@ function templateRoutes(db) {
     if (adminOnly(req, res)) return;
     const up = req.session.macroUpload;
     if (!up) { flash(req, 'error', '올린 엑셀이 없어요. 다시 올려 주세요.'); return res.redirect('/templates'); }
-    res.render('templates-upload', { title: '엑셀 올리기 미리보기', navSection: 'admin', up, preview: previewUpload(db, up.macros) });
+    res.render('templates-upload', { title: '엑셀 올리기 미리보기', navSection: isAdmin(req) ? 'admin' : 'templates', isAdmin: isAdmin(req), up, preview: previewUpload(db, up.macros) });
   });
   // 올리기 ②: 체크한 것만 반영 (새로 추가 · 고침). 엑셀에 없는 매크로·예전 문구는 그대로
   router.post('/templates/upload/apply', (req, res) => {

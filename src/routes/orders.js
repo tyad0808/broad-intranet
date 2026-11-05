@@ -4,6 +4,7 @@
 // 본상품에 딸린 추가상품(무료 양면테이프, 누끼 작업 등)이 따로 흩어지지 않게 하기 위해서다.
 // 담당자·작업 단계·납기·메모는 주문 단위로 함께 바뀐다.
 const express = require('express');
+const { isManager } = require('../auth');
 const { CHANNELS } = require('../channels/labels');
 const { ENDED_SQL } = require('../collector');
 const { buildWeek } = require('./calendar');
@@ -84,7 +85,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
   `).all();
   // 실제 주문이 있는 채널만 골라 보기 목록에 보여준다
   // 디자인 단계를 고를 수 있는 사람: 디자이너 + 관리자
-  const canPickStage = user => user.role === 'admin' || designers().some(d => d.id === user.id);
+  const canPickStage = user => isManager(user) || designers().some(d => d.id === user.id);
   // 실제 주문이 있는 채널만, 직원이 끌어다 놓은 순서대로 (저장 안 했으면 기본 순서)
   const channelsInUse = user => {
     const inUse = db.prepare('SELECT DISTINCT channel FROM orders ORDER BY channel').all().map(r => r.channel);
@@ -930,10 +931,10 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       return { error: '담당 디자이너로 지정할 수 없는 직원입니다.' };
     }
 
-    // 주문 단계(발주·발주확인·발송)는 보통 자동. 손으로 고치는 건 관리자만 (판매자센터에서 직접 처리한 주문 맞추기)
+    // 주문 단계(발주·발주확인·발송)는 보통 자동. 손으로 고치는 건 관리자·부관리자만 (판매자센터에서 직접 처리한 주문 맞추기)
     const stage = body.stage_id ? Number(body.stage_id) : order.stage_id;
     if (stage !== order.stage_id) {
-      if (user.role !== 'admin') return { error: '주문 단계는 관리자만 바꿀 수 있습니다.' };
+      if (!isManager(user)) return { error: '주문 단계는 관리자·부관리자만 바꿀 수 있습니다.' };
       if (!stages().some(s => s.active && s.id === stage)) return { error: '고를 수 없는 주문 단계입니다.' };
     }
     // 디자인 단계: 디자이너·관리자만

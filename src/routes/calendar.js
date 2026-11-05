@@ -4,6 +4,7 @@
 // - 고치기·지우기는 넣은 사람과 관리자만
 // - 달을 넘길 때는 /calendar?month=YYYY-MM 으로 달력 칸만 새로 받아 바꿔 끼운다 (목록은 그대로)
 const express = require('express');
+const { isManager } = require('../auth');
 const { lastStageId, ENDED_SQL } = require('../collector');
 
 const COLORS = { blue: '파랑', green: '초록', orange: '청록', red: '빨강', purple: '보라' };
@@ -36,7 +37,7 @@ function buildMonth(db, monthParam, user) {
     ORDER BY e.start_date, e.time IS NOT NULL, e.time, e.id
   `).all(gridEnd, gridStart).map(e => ({
     ...e,
-    canEdit: Boolean(user) && (user.role === 'admin' || e.created_by === user.id),
+    canEdit: Boolean(user) && (isManager(user) || e.created_by === user.id),
   }));
 
   const dueCounts = dueCountsBetween(db, gridStart, gridEnd);
@@ -150,11 +151,11 @@ function calendarRoutes(db, notifier) {
     res.redirect(back);
   });
 
-  // 넣은 사람이거나 관리자일 때만 일정을 돌려준다
+  // 넣은 사람이거나 관리자·부관리자일 때만 일정을 돌려준다
   function editable(req) {
     const event = db.prepare('SELECT * FROM events WHERE id = ?').get(Number(req.params.id));
     if (!event) return null;
-    return req.user.role === 'admin' || event.created_by === req.user.id ? event : null;
+    return isManager(req.user) || event.created_by === req.user.id ? event : null;
   }
 
   return router;

@@ -57,7 +57,7 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
   // ───────── 직원 관리 ─────────
   router.get('/users', (req, res) => {
     const users = db.prepare(`
-      SELECT u.id, u.email, u.name, u.role, u.status, u.job_id, u.created_at, u.locked_until, j.name AS job_name
+      SELECT u.id, u.email, u.name, u.role, u.sub_admin, u.status, u.job_id, u.created_at, u.locked_until, j.name AS job_name
       FROM users u LEFT JOIN jobs j ON j.id = u.job_id
       ORDER BY CASE u.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 WHEN 'suspended' THEN 2 ELSE 3 END,
                u.created_at DESC
@@ -167,20 +167,24 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       flash(req, 'error', '없는 직무입니다.');
       return res.redirect('/admin/users');
     }
-    const role = req.body.role === 'admin' ? 'admin' : 'staff';
+    // 역할: 직원(staff) · 부관리자(sub = staff + sub_admin 1) · 관리자(admin)
+    const picked = ['admin', 'sub'].includes(req.body.role) ? req.body.role : 'staff';
+    const role = picked === 'admin' ? 'admin' : 'staff';
+    const subAdmin = picked === 'sub' ? 1 : 0;
+    const current = user.role === 'admin' ? 'admin' : user.sub_admin ? 'sub' : 'staff';
 
-    if (role !== user.role) {
+    if (picked !== current) {
       if (user.id === req.user.id) {
         flash(req, 'error', '자기 자신의 역할은 바꿀 수 없습니다.');
         return res.redirect('/admin/users');
       }
       if (role === 'staff' && wouldRemoveLastAdmin(user)) {
-        flash(req, 'error', '마지막 관리자는 직원으로 바꿀 수 없습니다.');
+        flash(req, 'error', '마지막 관리자는 직원·부관리자로 바꿀 수 없습니다.');
         return res.redirect('/admin/users');
       }
     }
 
-    db.prepare('UPDATE users SET job_id = ?, role = ? WHERE id = ?').run(jobId, role, user.id);
+    db.prepare('UPDATE users SET job_id = ?, role = ?, sub_admin = ? WHERE id = ?').run(jobId, role, subAdmin, user.id);
     flash(req, 'ok', `${user.name} 님의 정보를 저장했습니다.`);
     res.redirect('/admin/users');
   });

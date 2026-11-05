@@ -157,7 +157,7 @@
           <input type="date" name="due_date" value="<%= order.due_date || '' %>">
         </label>
         <label>주문 단계 <span class="muted small">(자동)</span>
-          <% if (user.role === 'admin') { %>
+          <% if (isManager(user)) { %>
             <select name="stage_id">
               <% stages.forEach(s => { if (!s.active && s.id !== order.stage_id) return; %>
                 <option value="<%= s.id %>" <%= s.id === order.stage_id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %></option>
