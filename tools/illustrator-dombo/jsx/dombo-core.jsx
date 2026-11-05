@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.17.3'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.17.4'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -322,7 +322,8 @@ function domboStyleCutPath(p, color) {
 
 // 개체에서 칼선이 될 패스만 '칼선' 레이어로 복제한다. 원본은 건드리지 않는다.
 // 클리핑 마스크 그룹은 안쪽 내용은 빼고 마스크 모양 하나만 칼선으로 만든다.
-// 살아있는 글자는 복제본을 아웃라인으로 바꾼다. 이미지 등은 건너뛰고 개수를 센다.
+// 살아있는 글자는 복제본을 아웃라인으로 바꾼다. 이미지(가져온 그림·포함된 그림)는 그림 크기대로 네모 칼선을 만든다.
+// 그 밖(심볼 등)은 건너뛰고 개수를 센다.
 function domboCollectCut(item, layer, color, stat) {
   if (item.hidden || item.guides) return;
   var t = item.typename, dup, i;
@@ -346,9 +347,24 @@ function domboCollectCut(item, layer, color, stat) {
   } else if (t === 'TextFrame') {
     domboStyleCutDeep(item.duplicate(layer, ElementPlacement.PLACEATEND).createOutline(), color);
     stat.paths++;
+  } else if (t === 'PlacedItem' || t === 'RasterItem') {
+    var r = domboImageRect(item, layer);
+    if (r) {
+      domboStyleCutPath(r, color);
+      stat.paths++;
+      stat.images = (stat.images || 0) + 1;
+    }
   } else {
     stat.skipped++;
   }
+}
+
+// 이미지 크기(보이는 범위) 그대로의 네모 패스를 layer 에 만든다. 크기가 0이면 null
+function domboImageRect(item, layer) {
+  var b = item.geometricBounds; // [왼, 위, 오른, 아래]
+  var w = b[2] - b[0], h = b[1] - b[3];
+  if (!(w > 0) || !(h > 0)) return null;
+  return layer.pathItems.rectangle(b[1], b[0], w, h);
 }
 
 function domboStyleCutDeep(item, color) {
@@ -467,12 +483,13 @@ function domboCutContour() {
   var targets = domboSizeTargets(sel);
   var layer = domboGetLayer(doc, DOMBO_CUT_LAYER);
   var color = domboCutColor(doc);
-  var stat = { paths: 0, skipped: 0 };
+  var stat = { paths: 0, skipped: 0, images: 0 };
   for (i = 0; i < targets.length; i++) domboCutOne(targets[i], layer, color, stat, domboUnite);
   if (stat.paths === 0) throw new Error('칼선으로 만들 패스가 없습니다.');
   doc.selection = null;
   var msg = '칼선 ' + stat.paths + '개를 만들었습니다.';
-  if (stat.skipped > 0) msg += ' 패스가 아닌 ' + stat.skipped + '개(이미지 등)는 뺐습니다.';
+  if (stat.images > 0) msg += ' 이미지 ' + stat.images + '개는 이미지 크기대로 네모 칼선을 넣었습니다.';
+  if (stat.skipped > 0) msg += ' 칼선을 만들 수 없는 ' + stat.skipped + '개(심볼 등)는 뺐습니다.';
   return msg;
 }
 

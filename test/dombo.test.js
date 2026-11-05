@@ -139,7 +139,8 @@ test('선택도 없고 개체도 없으면 알려준다', () => {
 test('칼선: 클리핑 마스크는 안쪽 내용 없이 마스크 모양 하나만 만든다', () => {
   core.ElementPlacement = { PLACEATEND: 'end' };
   const out = [];
-  const cutLayer = { items: out };
+  const rects = [];
+  const cutLayer = { items: out, pathItems: { rectangle: (t, l, w, h) => { const r = { typename: 'PathItem', geometricBounds: [l, t, l + w, t - h] }; rects.push(r); return r; } } };
   const dupable = (item) => Object.assign(item, {
     duplicate(target) { const c = { ...this }; target.items.push(c); return c; },
   });
@@ -148,14 +149,20 @@ test('칼선: 클리핑 마스크는 안쪽 내용 없이 마스크 모양 하�
   const innerClip = group([dupable(pathItem([1, 2, 3, 0], { clipping: true })), inner], { clipped: true });
   const clip = group([mask, inner, innerClip], { clipped: true });
   const loose = dupable(pathItem([200, 50, 250, 0]));
-  // 글자는 복제본을 아웃라인으로, 이미지는 건너뛴다
+  // 글자는 복제본을 아웃라인으로, 이미지는 그림 크기대로 네모 칼선, 심볼은 건너뛴다
   const outlined = pathItem([300, 20, 340, 0]);
   const text = dupable({ typename: 'TextFrame', createOutline() { return outlined; } });
-  const image = { typename: 'PlacedItem', geometricBounds: [0, 1, 1, 0] };
+  const image = { typename: 'PlacedItem', geometricBounds: [400, 80, 460, 20] };
+  const raster = { typename: 'RasterItem', geometricBounds: [500, 30, 530, 0] };
+  const flat = { typename: 'RasterItem', geometricBounds: [600, 0, 610, 0] };
+  const symbol = { typename: 'SymbolItem', geometricBounds: [0, 1, 1, 0] };
   const stat = { paths: 0, skipped: 0 };
-  [clip, group([loose, text, image])].forEach(it => core.domboCollectCut(it, cutLayer, 'SPOT', stat));
+  [clip, group([loose, text, image, raster, flat, symbol])].forEach(it => core.domboCollectCut(it, cutLayer, 'SPOT', stat));
 
-  assert.deepStrictEqual({ ...stat }, { paths: 3, skipped: 1 });
+  assert.deepStrictEqual({ ...stat }, { paths: 5, skipped: 1, images: 2 });
+  assert.deepStrictEqual(rects.map(r => Array.from(r.geometricBounds)), [[400, 80, 460, 20], [500, 30, 530, 0]], '이미지 크기 그대로 네모 (높이 0 인 것은 뺌)');
+  assert.ok(rects.every(r => r.strokeColor === 'SPOT' && r.filled === false && r.strokeWidth === 0.25), '이미지 칼선도 CutContour 선');
+  assert.strictEqual(image.strokeColor, undefined, '원본 이미지는 그대로');
   assert.deepStrictEqual(out.slice(0, 2).map(o => Array.from(o.geometricBounds)), [[0, 50, 100, 0], [200, 50, 250, 0]]);
   assert.strictEqual(outlined.strokeColor, 'SPOT', '아웃라인한 글자도 칼선');
   assert.strictEqual(out[0].clipping, false);
@@ -452,7 +459,9 @@ test('칼선: 작업물마다 하나 — 마스크는 마스크 모양, 마스�
   });
   const mkLayer = () => {
     const l = { items: [] };
-    l.groupItems = { add() { const g = { typename: 'GroupItem', items: [], removed: false, remove() { this.removed = true; } }; g.pageItems = g.items; l.items.push(g); return g; } };
+    const rectFor = (box) => ({ rectangle: (t, lf, w, h) => { const r = { typename: 'PathItem', geometricBounds: [lf, t, lf + w, t - h] }; box.items.push(r); return r; } });
+    l.pathItems = rectFor(l);
+    l.groupItems = { add() { const g = { typename: 'GroupItem', items: [], removed: false, remove() { this.removed = true; } }; g.pageItems = g.items; g.pathItems = rectFor(g); l.items.push(g); return g; } };
     return l;
   };
   const stat = { paths: 0, skipped: 0 };
@@ -485,9 +494,24 @@ test('칼선: 작업물마다 하나 — 마스크는 마스크 모양, 마스�
   assert.strictEqual(l.items[0].strokeColor, 'SPOT');
   assert.strictEqual(l.items[0].filled, false);
 
-  // 이미지만 있는 그룹은 칼선 없음
+  // 이미지 하나: 이미지 크기대로 네모 칼선
   l = mkLayer();
-  assert.strictEqual(core.domboCutOne(group([{ typename: 'PlacedItem', geometricBounds: [0, 1, 1, 0] }]), l, 'SPOT', stat, unite), null);
+  p = core.domboCutOne({ typename: 'PlacedItem', geometricBounds: [10, 90, 70, 20] }, l, 'SPOT', stat, unite);
+  assert.ok(p, '이미지도 칼선이 생김');
+  assert.deepStrictEqual(Array.from(l.items[0].geometricBounds), [10, 90, 70, 20]);
+  assert.strictEqual(l.items[0].strokeColor, 'SPOT');
+
+  // 이미지 + 도형 그룹: 같이 모아 합치기 → 칼선 1개
+  l = mkLayer();
+  const u0 = united.length;
+  p = core.domboCutOne(group([{ typename: 'RasterItem', geometricBounds: [0, 50, 40, 0] }, dupable(pathItem([30, 20, 90, 0]))]), l, 'SPOT', stat, unite);
+  assert.strictEqual(p.kind, '그룹');
+  assert.strictEqual(united.length - u0, 1);
+  assert.strictEqual(united[united.length - 1].items.length, 2, '이미지 네모 + 도형을 모아서 합침');
+
+  // 칼선을 만들 수 없는 것(심볼)만 있는 그룹은 칼선 없음
+  l = mkLayer();
+  assert.strictEqual(core.domboCutOne(group([{ typename: 'SymbolItem', geometricBounds: [0, 1, 1, 0] }]), l, 'SPOT', stat, unite), null);
   assert.ok(l.items[0].removed, '빈 임시 그룹은 지운다');
 });
 
