@@ -91,7 +91,7 @@ function normalize(sheet) {
 // ── 취소·반품(출고중지) 요청 ── 송장을 올린 뒤의 취소·반품은 발주서 목록에서 상태가 바뀌지 않고 이 목록으로만 온다
 // 쿠팡 접수 상태(receiptStatus) → 인트라넷 요청 상태 (스마트스토어와 같은 이름으로 화면·알림이 그대로 동작)
 const RECEIPT_STATUS = {
-  RELEASE_STOP_UNCHECKED: 'REQUEST', // 출고중지 요청
+  RELEASE_STOP_UNCHECKED: 'RELEASE_STOP', // 출고중지 요청 (고객이 취소 → 보내면 안 됨)
   RETURNS_UNCHECKED: 'REQUEST',      // 반품 접수
   REQUEST_COUPANG_CHECK: 'REQUEST',  // 쿠팡 확인 요청
   VENDOR_WAREHOUSE_CONFIRM: 'COLLECT_DONE', // 입고(회수) 완료
@@ -102,13 +102,16 @@ const CLAIM_WINDOW_DAYS = 3; // 한 번에 묻는 기간 (쿠팡이 긴 기간�
 
 // 접수 한 건 → 상품별 요청 상태 [{ channel_order_id, shipmentBoxId, vendorItemId, claim_type, claim_status, channel_status? }]
 function claimPatches(receipt) {
-  const kind = RECEIPT_STATUS[receipt.receiptStatus];
+  // 출고중지 처리를 아직 안 했으면(releaseStopStatus '미처리') 접수 상태와 상관없이 출고중지 요청
+  const stopPending = /미처리|UNCHECKED|UNPROCESSED/i.test(String(receipt.releaseStopStatus || ''));
+  const kind = stopPending && RECEIPT_STATUS[receipt.receiptStatus] !== 'DONE' ? 'RELEASE_STOP' : RECEIPT_STATUS[receipt.receiptStatus];
   if (!kind || !receipt.orderId) return [];
   const isCancel = String(receipt.receiptType || '').toUpperCase() === 'CANCEL';
   const type = isCancel ? 'CANCEL' : 'RETURN';
   const patch = kind === 'DONE'
     ? { claim_status: `${type}_DONE`, channel_status: isCancel ? 'CANCELED' : 'RETURNED', channel_status_label: isCancel ? '쿠팡에서 취소됨' : '쿠팡에서 반품됨' }
-    : kind === 'COLLECT_DONE' ? { claim_status: 'COLLECT_DONE' } : { claim_status: `${type}_REQUEST` };
+    : kind === 'COLLECT_DONE' ? { claim_status: 'COLLECT_DONE' }
+      : kind === 'RELEASE_STOP' ? { claim_status: 'RELEASE_STOP_REQUEST' } : { claim_status: `${type}_REQUEST` };
   const items = receipt.returnItems || receipt.returnItemList || receipt.returnItemDtos || [];
   const base = { channel_order_id: String(receipt.orderId), claim_type: type, ...patch };
   if (!items.length) return [{ ...base }];

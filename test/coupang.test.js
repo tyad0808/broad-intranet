@@ -335,3 +335,28 @@ test('송장을 올린 뒤 쿠팡에서 반품·취소하면: 반품·취소 요
   const r = await createCollector({ db, now, source: createCoupangSource({ ...KEYS, fetchFn: broken, minGapMs: 0, now }) }).run();
   assert.strictEqual(r.ok, true);
 });
+
+test('쿠팡 출고중지 요청(고객이 취소, 아직 안 보냄): 출고중지 요청으로 표시하고 알림, 발송처리·로젠 등록이 막힌다', async () => {
+  const { claimPatches } = require('../src/channels/coupang');
+  const { claimLabel, claimLevel } = require('../src/channels/labels');
+  const stop = claimPatches({ orderId: 7, receiptType: 'CANCEL', receiptStatus: 'RELEASE_STOP_UNCHECKED', returnItems: [{ vendorItemId: '11', shipmentBoxId: '22' }] });
+  assert.deepStrictEqual(stop, [{ channel_order_id: '7', claim_type: 'CANCEL', claim_status: 'RELEASE_STOP_REQUEST', vendorItemId: '11', shipmentBoxId: '22' }]);
+  assert.strictEqual(claimPatches({ orderId: 7, receiptType: 'RETURN', receiptStatus: 'RETURNS_UNCHECKED', releaseStopStatus: '미처리' })[0].claim_status, 'RELEASE_STOP_REQUEST', '출고중지 미처리면');
+  assert.strictEqual(claimPatches({ orderId: 7, receiptType: 'RETURN', receiptStatus: 'RETURNS_UNCHECKED', releaseStopStatus: '비대상' })[0].claim_status, 'RETURN_REQUEST');
+  assert.strictEqual(claimLabel('RELEASE_STOP_REQUEST'), '출고중지 요청');
+  assert.strictEqual(claimLevel('RELEASE_STOP_REQUEST'), 'open', '빨간 표시 · 발송처리·로젠 등록 막힘');
+
+  const db = openDb(':memory:');
+  const now = () => new Date('2026-11-05T09:00:00Z');
+  const fetchFn = async url => {
+    const u = new URL(url);
+    const data = u.pathname.endsWith('/returnRequests')
+      ? (u.searchParams.get('cancelType') === 'CANCEL' ? [{ orderId: '910004186321', receiptType: 'CANCEL', receiptStatus: 'RELEASE_STOP_UNCHECKED' }] : [])
+      : (u.searchParams.get('status') === 'DEPARTURE' ? [sheet(1, 'DEPARTURE')] : []);
+    return new Response(JSON.stringify({ code: 200, data, nextToken: '' }));
+  };
+  const r = await createCollector({ db, now, source: createCoupangSource({ ...KEYS, fetchFn, minGapMs: 0, now }) }).run();
+  const row = db.prepare("SELECT channel_status, claim_status FROM orders WHERE channel_order_id = '910004186321'").get();
+  assert.deepStrictEqual({ ...row }, { channel_status: 'DELIVERING', claim_status: 'RELEASE_STOP_REQUEST' });
+  assert.ok(r.ok);
+});

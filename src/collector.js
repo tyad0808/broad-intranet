@@ -22,7 +22,7 @@ function lastStageId(db) {
 }
 
 // 고객이 취소·반품·교환을 '요청'한 상태 (알림을 보낼 시점)
-const CLAIM_REQUESTS = new Set(['CANCEL_REQUEST', 'RETURN_REQUEST', 'EXCHANGE_REQUEST']);
+const CLAIM_REQUESTS = new Set(['CANCEL_REQUEST', 'RETURN_REQUEST', 'EXCHANGE_REQUEST', 'RELEASE_STOP_REQUEST']);
 function isClaimRequest(status) {
   return CLAIM_REQUESTS.has(status);
 }
@@ -237,15 +237,17 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
           console.warn(`[${source.label}] 취소·반품 목록 읽기 실패 (다음 수집 때 다시): ${err.message}`);
         }
         const groupRows = db.prepare('SELECT * FROM orders WHERE channel = ? AND channel_order_id = ?');
+        const matches = c => r => !c.vendorItemId
+          || r.channel_item_id === `${c.shipmentBoxId}-${c.vendorItemId}` || String(r.channel_item_id).endsWith(`-${c.vendorItemId}`);
         for (const c of claims) {
-          const rows = groupRows.all(source.channel, c.channel_order_id).filter(r => !c.vendorItemId
-            || r.channel_item_id === `${c.shipmentBoxId}-${c.vendorItemId}` || String(r.channel_item_id).endsWith(`-${c.vendorItemId}`));
-          for (const r of rows) {
-            const patch = { claim_type: c.claim_type, claim_status: c.claim_status,
-              ...(c.channel_status ? { channel_status: c.channel_status, channel_status_label: c.channel_status_label || null } : {}) };
-            const listed = orders.find(o => o.channel_item_id === r.channel_item_id);
-            if (listed) Object.assign(listed, patch);
-            else orders.push({ ...r, ...patch, refreshOnly: true });
+          const patch = { claim_type: c.claim_type, claim_status: c.claim_status,
+            ...(c.channel_status ? { channel_status: c.channel_status, channel_status_label: c.channel_status_label || null } : {}) };
+          // 이번에 읽은 주문(처음 들어오는 주문 포함)에 덮고, 이번 목록에 없는 저장된 주문은 저장된 값에 덮어서 넣는다
+          const listed = orders.filter(o => o.channel_order_id === c.channel_order_id).filter(matches(c));
+          listed.forEach(o => Object.assign(o, patch));
+          const seenItems = new Set(listed.map(o => o.channel_item_id));
+          for (const r of groupRows.all(source.channel, c.channel_order_id).filter(matches(c))) {
+            if (!seenItems.has(r.channel_item_id)) orders.push({ ...r, ...patch, refreshOnly: true });
           }
         }
       }

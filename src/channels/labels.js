@@ -61,6 +61,7 @@ const CLAIM_STATUS = {
   ADMIN_CANCEL_DONE: '직권취소 완료',
   ADMIN_CANCEL_REJECT: '직권취소 거부됨',
   RETURN_REQUEST: '반품 요청',
+  RELEASE_STOP_REQUEST: '출고중지 요청', // 쿠팡: 고객이 취소해서 '보내지 말아 주세요' (WING 에서 출고중지 처리 필요)
   EXCHANGE_REQUEST: '교환 요청',
   COLLECTING: '수거중',
   COLLECT_DONE: '수거 완료',
