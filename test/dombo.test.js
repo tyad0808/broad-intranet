@@ -686,7 +686,7 @@ test('대지 맞추기: 마스크 크기로 대지를 고치고, 저장하면 �
   assert.deepStrictEqual(Array.from(artboards[1].artboardRect), Array.from(mask.geometricBounds), '대지 2 를 마스크 크기로');
   assert.deepStrictEqual(Array.from(artboards[0].artboardRect), [0, 100 * MM, 100 * MM, 0], '다른 대지는 그대로');
   assert.strictEqual(active, 1);
-  assert.match(msg, /클리핑 마스크 크기 100 × 50 mm/);
+  assert.match(msg, /클리핑 마스크 크기 → 100 × 50 mm/);
   assert.strictEqual(exported.length, 0, '저장 안 함');
 
   doc.selection = [clip];
@@ -705,4 +705,14 @@ test('대지 맞추기: 마스크 크기로 대지를 고치고, 저장하면 �
   assert.throws(() => core.domboArtboardFit({}), /선택하세요/);
   doc.selection = [clip];
   assert.throws(() => core.domboArtboardFit({ save: true, dpi: 5000 }), /해상도/);
+  // 여백 10cm: 상하좌우 100mm 씩 넓힘
+  doc.selection = [clip];
+  msg = core.domboArtboardFit({ marginCm: 10 });
+  const r = Array.from(artboards[1].artboardRect);
+  [210 - 100, 80 + 100, 310 + 100, 30 - 100].forEach((v, i) => near(r[i], v * MM));
+  assert.match(msg, /여백 10cm → 300 × 250 mm/);
+  // 큰 캔버스(배율 10)는 스크립트 좌표가 1/10
+  const fr = core.domboArtboardFitRect([0, 0, 0, 0], 10, 10);
+  near(fr[2], 10 * MM);
+  assert.throws(() => core.domboArtboardFit({ marginCm: -1 }), /여백/);
 });

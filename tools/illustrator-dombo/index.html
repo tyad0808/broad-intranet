@@ -186,11 +186,12 @@
     <summary>대지 맞추기</summary>
     <button id="artboardFit">대지 맞추기</button>
     <div class="grid">
+      <div class="f">여백 (cm) <input id="abMarginCm" type="number" step="1" min="0" value="0"></div>
       <label class="full"><input id="abSave" type="checkbox">JPG 로 바탕화면에 저장</label>
       <div class="f">해상도 <select id="abDpi"><option value="72">72 dpi</option><option value="150" selected>150 dpi</option><option value="300">300 dpi</option></select></div>
       <label><input id="abKeepWork" type="checkbox">칼선·돔보도 같이</label>
     </div>
-    <p class="hint">선택한 것의 맨 바깥 클리핑 마스크 &gt; 그룹 &gt; 가장 큰 개체 크기에 대지를 딱 맞춥니다 (그 작업물이 있는 대지). 저장을 켜면 그 대지를 바탕화면에 '파일이름.jpg' 로 (같은 이름이 있으면 _2, _3 …). 칼선·돔보·치수·사이즈·넘버링 레이어는 빼고 저장합니다. 아주 큰 대지는 해상도를 자동으로 낮춥니다.</p>
+    <p class="hint">선택한 것의 맨 바깥 클리핑 마스크 &gt; 그룹 &gt; 가장 큰 개체 크기에 대지를 맞춥니다 (그 작업물이 있는 대지). 여백 0 = 딱 맞춤, 10 = 상하좌우 10cm 씩 (파일 크기 기준). 저장을 켜면 그 대지를 바탕화면에 '파일이름.jpg' 로 (같은 이름이 있으면 _2, _3 …). 칼선·돔보·치수·사이즈·넘버링 레이어는 빼고 저장합니다. 아주 큰 대지는 해상도를 자동으로 낮춥니다.</p>
   </details>
 
   <details open data-id="number">

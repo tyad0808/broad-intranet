@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.18.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.18.2'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -1185,7 +1185,8 @@ function domboHebe(opts) {
 }
 
 // ---- 대지 맞추기 ----
-// 선택한 것의 기준(맨 바깥 클리핑 마스크 > 그룹 > 가장 큰 개체, 크기·헤베와 같음)에 대지를 딱 맞춘다.
+// 선택한 것의 기준(맨 바깥 클리핑 마스크 > 그룹 > 가장 큰 개체, 크기·헤베와 같음)에 대지를 맞춘다.
+// marginCm: 상하좌우 여백(cm, 0 이면 딱 맞춤)
 // 고치는 대지는 그 기준의 가운데가 들어 있는 대지 (없으면 지금 대지). save 면 바탕화면에 JPG 로 저장.
 
 var DOMBO_ARTBOARD_MAX_PT = 16383; // 일러스트 대지 최대 크기 (스크립트 좌표)
@@ -1202,6 +1203,12 @@ function domboArtboardIndexFor(rects, b, fallback) {
     if (cx >= r[0] && cx <= r[2] && cy <= r[1] && cy >= r[3]) return i;
   }
   return fallback;
+}
+
+// 기준 범위(pt)를 사방 marginCm 만큼 넓힌 대지 범위. factor = 큰 캔버스 문서 배율 (스크립트 좌표가 1/factor)
+function domboArtboardFitRect(b, marginCm, factor) {
+  var m = (marginCm || 0) * 10 * DOMBO_PT_PER_MM / (factor || 1);
+  return [b[0] - m, b[1] + m, b[2] + m, b[3] - m];
 }
 
 // JPG 배율: dpi 해상도(문서 크기 기준). 너무 크면 낮춘다. 결과 { scale(%), dpi, w, h(px) }
@@ -1227,6 +1234,8 @@ function domboArtboardFit(opts) {
   var dpi = Number(opts && opts.dpi) || 150;
   if (!(dpi >= 36 && dpi <= 600)) throw new Error('해상도는 36 ~ 600 dpi 사이로 넣으세요.');
   var hideWork = !(opts && opts.keepWork);
+  var marginCm = Number(opts && opts.marginCm) || 0;
+  if (!(marginCm >= 0 && marginCm <= 500)) throw new Error('여백은 0 ~ 500 cm 사이로 넣으세요.');
   var doc = domboDoc();
   if (doc.selection && doc.selection.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
   if (!domboHasSelection(doc)) throw new Error('대지를 맞출 작업물을 선택하세요.');
@@ -1234,22 +1243,24 @@ function domboArtboardFit(opts) {
   for (i = 0; i < doc.selection.length; i++) items.push(doc.selection[i]);
   var pick = domboHebePick(items);
   if (!pick) throw new Error('선택한 개체에 보이는 모양이 없습니다.');
-  var b = pick.bounds;
+  var pb = pick.bounds;
+  if (!(pb[2] - pb[0] > 0) || !(pb[1] - pb[3] > 0)) throw new Error('크기가 0인 개체에는 대지를 맞출 수 없습니다.');
+  var factor = 1;
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
+  var b = domboArtboardFitRect(pb, marginCm, factor);
   var w = b[2] - b[0], h = b[1] - b[3];
-  if (!(w > 0) || !(h > 0)) throw new Error('크기가 0인 개체에는 대지를 맞출 수 없습니다.');
-  if (w > DOMBO_ARTBOARD_MAX_PT || h > DOMBO_ARTBOARD_MAX_PT) throw new Error('대지 최대 크기(약 5.78m)보다 큽니다. 10:1 로 줄여 작업하세요.');
+  if (w > DOMBO_ARTBOARD_MAX_PT || h > DOMBO_ARTBOARD_MAX_PT) throw new Error('대지 최대 크기(약 5.78m)보다 큽니다. 여백을 줄이거나 10:1 로 줄여 작업하세요.');
 
   var rects = [];
   for (i = 0; i < doc.artboards.length; i++) rects.push(doc.artboards[i].artboardRect);
-  var idx = domboArtboardIndexFor(rects, b, doc.artboards.getActiveArtboardIndex());
+  var idx = domboArtboardIndexFor(rects, pb, doc.artboards.getActiveArtboardIndex());
   var ab = doc.artboards[idx];
   ab.artboardRect = [b[0], b[1], b[2], b[3]];
   doc.artboards.setActiveArtboardIndex(idx);
 
-  var factor = 1;
-  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
   var k = DOMBO_PT_PER_MM;
-  var msg = '대지 ' + (idx + 1) + ' (' + ab.name + ') 를 ' + pick.kind + ' 크기 ' +
+  var msg = '대지 ' + (idx + 1) + ' (' + ab.name + ') 를 ' + pick.kind + ' 크기' +
+    (marginCm > 0 ? ' + 여백 ' + marginCm + 'cm' : '') + ' → ' +
     domboMmLabel(w / k * factor, false) + ' × ' + domboMmLabel(h / k * factor, false) + ' mm 로 맞췄습니다.';
   if (!doSave) return msg;
 
