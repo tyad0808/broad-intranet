@@ -150,6 +150,21 @@ function createCoupangSource(options = {}) {
       // 매번 최근 주문 전체를 다시 읽으므로, 상태가 그대로인 주문은 '바뀐 주문' 으로 세지 않는다 (refreshOnly)
       return all.flatMap(normalize).filter(o => o.channel_order_id && o.channel_item_id).map(o => ({ ...o, refreshOnly: true }));
     },
+    // 7일이 지나 목록으로 다시 읽지 않는 '배송중' 주문: 주문번호로 하나씩 지금 상태를 물어본다 (collector 가 몇 건씩 돌아가며 부른다)
+    //   취소·반품된 주문은 쿠팡이 오류(400 '취소 또는 반품')로 답한다 → 건너뜀 (최근 것은 반품·취소 목록이 맡는다)
+    async refreshOrders(orderIds) {
+      const out = [];
+      for (const id of orderIds) {
+        try {
+          const body = await client.request('GET', `/v2/providers/openapi/apis/api/v4/vendors/${client.vendorId}/${encodeURIComponent(id)}/ordersheets`);
+          const list = Array.isArray(body && body.data) ? body.data : body && body.data ? [body.data] : [];
+          out.push(...list.flatMap(normalize).filter(o => o.channel_order_id && o.channel_item_id));
+        } catch {
+          // 다음 차례에 다시
+        }
+      }
+      return out;
+    },
     // 최근 7일의 취소·반품(출고중지) 요청 → 상품별 요청 상태 (collector 가 저장된 주문에 덮어 쓴다)
     async fetchClaims() {
       const to = now();

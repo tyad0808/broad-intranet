@@ -360,3 +360,31 @@ test('쿠팡 출고중지 요청(고객이 취소, 아직 안 보냄): 출고중
   assert.deepStrictEqual({ ...row }, { channel_status: 'DELIVERING', claim_status: 'RELEASE_STOP_REQUEST' });
   assert.ok(r.ok);
 });
+
+test('7일이 지난 쿠팡 배송중 주문은 주문번호로 10건씩 돌아가며 다시 물어 배송완료로 바꾼다 (목록은 최근 7일만 읽어서)', async () => {
+  const db = openDb(':memory:');
+  const daysAgo = n => new Date(Date.now() - n * 24 * 3600e3).toISOString();
+  const ins = db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, channel_status, channel_confirmed, paid_at) VALUES ('coupang', ?, ?, '안내판', 'DELIVERING', 1, ?)");
+  for (let n = 1; n <= 12; n++) ins.run(`5000${String(n).padStart(2, '0')}`, `box${n}-1`, daysAgo(10));
+  ins.run('600001', 'box-new-1', daysAgo(2)); // 최근 주문은 목록이 맡는다
+  const asked = [];
+  const fetchFn = async url => {
+    const u = new URL(url);
+    const m = u.pathname.match(/\/vendors\/A00012345\/(\d+)\/ordersheets$/);
+    if (m) {
+      asked.push(m[1]);
+      const n = Number(m[1].slice(-2));
+      return new Response(JSON.stringify({ code: 200, data: [{ ...sheet(1, 'FINAL_DELIVERY'), orderId: m[1], shipmentBoxId: `box${n}`, orderItems: [{ vendorItemId: '1', sellerProductName: '안내판', shippingCount: 1 }] }] }));
+    }
+    return new Response(JSON.stringify({ code: 200, data: [], nextToken: '' }));
+  };
+  const collector = createCollector({ db, source: createCoupangSource({ ...KEYS, fetchFn, minGapMs: 0 }) });
+  await collector.run();
+  assert.strictEqual(asked.length, 10, '한 번에 10건');
+  assert.ok(!asked.includes('600001'));
+  assert.ok(asked.every(p => isAllowed('GET', `/v2/providers/openapi/apis/api/v4/vendors/A00012345/${p}/ordersheets`)));
+  await collector.run();
+  assert.deepStrictEqual(asked.slice(10).sort(), ['500011', '500012'], '다음 차례에는 남은 것부터');
+  const left = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE channel_status = 'DELIVERING' AND channel_order_id LIKE '5000%'").get().n;
+  assert.strictEqual(left, 0, '모두 배송완료로');
+});

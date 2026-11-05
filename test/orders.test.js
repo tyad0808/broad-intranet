@@ -565,3 +565,16 @@ test('주문자 연락처: 받은 주문에 채워지고(이 기능 전 주문�
   assert.doesNotMatch(page, /href="tel:/, '번호를 눌러도 전화 링크가 타지 않음');
   assert.doesNotMatch(page, /주문자와 같음/);
 });
+
+test('배송중 칸: 숫자와 눌렀을 때 목록 건수가 같다 (오래된 배송중 주문도 숨기지 않음)', async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  addUser(db, { email: 'kim@broad.test', name: '김직원' });
+  const kim = await loginAs(baseUrl, 'kim@broad.test');
+  const daysAgo = n => new Date(Date.now() - n * 24 * 3600e3).toISOString();
+  const ins = db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, channel_status, channel_confirmed, paid_at) VALUES ('coupang', ?, ?, ?, 'DELIVERING', 1, ?)");
+  ins.run('C-OLD', 'C-OLD-1', '오래된배송중', daysAgo(30));
+  ins.run('C-NEW', 'C-NEW-1', '최근배송중', daysAgo(2));
+  const page = (await kim.request('/?st=shipping')).text;
+  assert.ok(page.includes('오래된배송중') && page.includes('최근배송중'));
+});

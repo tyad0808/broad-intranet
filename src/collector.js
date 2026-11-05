@@ -22,6 +22,7 @@ function lastStageId(db) {
 }
 
 // 고객이 취소·반품·교환을 '요청'한 상태 (알림을 보낼 시점)
+const STALE_PER_RUN = 10; // 오래된 배송중 주문을 한 번에 다시 묻는 수
 const CLAIM_REQUESTS = new Set(['CANCEL_REQUEST', 'RETURN_REQUEST', 'EXCHANGE_REQUEST', 'RELEASE_STOP_REQUEST']);
 function isClaimRequest(status) {
   return CLAIM_REQUESTS.has(status);
@@ -225,6 +226,25 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
         if (rows.length) {
           const checked = await source.verifyOpen(rows);
           orders = orders.concat(checked.map(o => ({ ...o, refreshOnly: true })));
+        }
+      }
+      // 오래된 '배송중' 주문 다시 확인 (쿠팡: 목록은 최근 7일만 다시 읽어서, 그 뒤에 배송완료돼도 모른다)
+      //   한 번에 10건씩 돌아가며 (주문번호 순, 지난번 다음부터) — 쿠팡에 한꺼번에 많이 묻지 않게
+      if (source.refreshOrders) {
+        const seen = new Set(orders.map(o => o.channel_order_id));
+        const stale = db.prepare(`
+          SELECT DISTINCT channel_order_id FROM orders WHERE channel = ? AND channel_status = 'DELIVERING'
+            AND datetime(paid_at) < datetime('now', '-6 days') AND datetime(paid_at) >= datetime('now', '-90 days')
+          ORDER BY channel_order_id
+        `).all(source.channel).map(r => r.channel_order_id).filter(id => !seen.has(id));
+        if (stale.length) {
+          const cursorKey = `stale_cursor_${source.channel}`;
+          const after = getSetting(db, cursorKey) || '';
+          const next = stale.filter(id => id > after);
+          const picked = (next.length >= STALE_PER_RUN ? next : [...next, ...stale.filter(id => id <= after)]).slice(0, STALE_PER_RUN);
+          setSetting(db, cursorKey, picked[picked.length - 1]);
+          const fresh = await source.refreshOrders(picked);
+          orders = orders.concat(fresh.map(o => ({ ...o, refreshOnly: true })));
         }
       }
       // 취소·반품 요청 목록 (쿠팡: 송장을 올린 뒤의 취소·반품은 발주서 목록에 안 나온다) → 저장된 주문에 요청 상태를 덮어 쓴다

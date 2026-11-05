@@ -173,7 +173,8 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     const cutoff = hideCutoff(db);
     const doneGroup = `(${GROUP_ENDED} = 1 OR MIN(COALESCE(o.stage_id = ${Number(last)}, 0)) = 1)`;
     const oldDone = `(${doneGroup} AND MAX(${ORDER_TIME}) < '${cutoff}')`;
-    const hidingOld = view === 'all' && !alert && !q && !due && !period;
+    // 배송중 칸은 오래된 것도 모두 센다 → 눌렀을 때도 숨기지 않는다 (칸 숫자와 목록 건수를 같게)
+    const hidingOld = view === 'all' && !alert && !q && !due && !period && st !== 'shipping';
     if (hidingOld) having.push(`NOT ${oldDone}`);
     const havingSql = having.length ? 'HAVING ' + having.join(' AND ') : '';
 
