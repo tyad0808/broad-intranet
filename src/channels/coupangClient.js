@@ -1,6 +1,6 @@
 // 쿠팡 OPEN API 연결
 //
-// 안전장치 1: 아래 ALLOWED 에 맞는 주소만 호출할 수 있다 (조회 1개 + 상태 변경 2개).
+// 안전장치 1: 아래 ALLOWED 에 맞는 주소만 호출할 수 있다 (조회 + 상태 변경 2개 + 문의 답변 2개).
 // 안전장치 2: 상태 변경(상품준비중 처리·송장 업로드, write: true)은 allowWrite 를 켠 클라이언트만.
 //            .env 의 COUPANG_WRITE=on 일 때만 켜진다 (기본은 연습 모드).
 //
@@ -13,6 +13,10 @@ const BASE_URL = 'https://api-gateway.coupang.com';
 const ALLOWED = [
   // 발주서 목록 조회 (일 단위 페이징)
   { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/ordersheets$/ },
+  // 주문번호로 발주서 조회 (상태와 관계없이 그 주문의 지금 모습, 조회만)
+  { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/\d+\/ordersheets$/ },
+  // 취소·반품(출고중지) 요청 목록 조회 (문서에 v4·v6 둘 다 나와서 둘 다 허용, 조회만)
+  { method: 'GET', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v[46]\/vendors\/[A-Za-z0-9]+\/returnRequests$/ },
   // 상품준비중 처리 (= 발주확인)
   { method: 'PUT', pattern: /^\/v2\/providers\/openapi\/apis\/api\/v4\/vendors\/[A-Za-z0-9]+\/ordersheets\/acknowledgement$/, write: true },
   // 송장 업로드 (= 발송처리)
