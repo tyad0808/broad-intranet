@@ -248,6 +248,11 @@ test('치수 글자: 소수점·천 단위 쉼표·단위', () => {
   assert.strictEqual(core.domboDimLabel(1234.56, 1, true), '1,234.6 mm');
   assert.strictEqual(core.domboDimLabel(5000, 0, false), '5,000');
   assert.strictEqual(core.domboDimLabel(12.004, 2, false), '12.00');
+  // 치수선 글자는 cm, 소수점 반올림
+  assert.strictEqual(core.domboDimCmLabel(1255, true), '126 cm');
+  assert.strictEqual(core.domboDimCmLabel(1254.9, true), '125 cm');
+  assert.strictEqual(core.domboDimCmLabel(12345, false), '1,235');
+  assert.strictEqual(core.domboDimCmLabel(4, true), '0 cm');
 });
 
 test('치수선: 가로는 위, 세로는 오른쪽에 거리만큼 띄우고 양 끝에 화살표', () => {
@@ -266,7 +271,7 @@ test('치수선: 가로는 위, 세로는 오른쪽에 거리만큼 띄우고 �
   near(lines[5][0][1], 50 * MM); near(lines[5][1][1], 0);
   assert.strictEqual(g.arrows.length, 4);
   const texts = Array.from(g.texts, t => ({ ...t }));
-  assert.deepStrictEqual(texts.map(t => [t.str, t.angle]), [['100 mm', 0], ['50 mm', 90]]);
+  assert.deepStrictEqual(texts.map(t => [t.str, t.angle]), [['10 cm', 0], ['5 cm', 90]]);
   near(texts[0].x, 50 * MM);
   assert.ok(texts[0].y > yW, '가로 글자는 치수선 위');
   assert.ok(texts[1].x > xH, '세로 글자는 치수선 오른쪽');
@@ -283,7 +288,6 @@ test('치수선: 아래·왼쪽, 가로만, 글자 크기 자동', () => {
   const tiny = core.domboDimGeometry([0, 10 * MM, 10 * MM, 0], {});
   near(tiny.textPt, 2.5 * MM); // 하한 2.5mm
   assert.throws(() => core.domboDimGeometry(art, { showW: false, showH: false }), /하나는/);
-  assert.throws(() => core.domboDimGeometry(art, { decimals: 3 }), /소수점/);
 });
 
 test('돔보·개수 세기 전체 기준에서 치수 레이어는 뺀다', () => {

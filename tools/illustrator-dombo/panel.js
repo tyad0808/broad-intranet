@@ -2,7 +2,7 @@
 (function () {
   var FIELDS = ['orientMm', 'diameterMm', 'offsetMm', 'spacingMm', 'marginMm', 'barHeightMm', 'barGapMm', 'boxMarginMm', 'dimOffsetMm', 'dimTextMm', 'gTop', 'gBottom', 'gLeft', 'gRight', 'gMarginMm', 'gDiameterMm', 'gStrokePt', 'splitCount', 'splitOverlapMm', 'splitGapMm', 'sizeTextMm', 'bleedMm', 'numTextMm', 'numGapMm'];
   var CHECKS = ['abSave', 'abKeepWork', 'numGroup', 'numBox', 'numPieces', 'orientMark', 'fitArtboard', 'removeRects', 'useBar', 'boxAsCut', 'dimShowW', 'dimShowH', 'dimTextAuto', 'dimUnit', 'dimStroke'];
-  var SELECTS = ['abDpi', 'numCorner', 'orientCorner', 'dimHSide', 'dimVSide', 'dimDecimals'];
+  var SELECTS = ['abDpi', 'numCorner', 'orientCorner', 'dimHSide', 'dimVSide'];
   var STORE_KEY = 'broad-dombo-settings';
 
   function $(id) { return document.getElementById(id); }
@@ -88,7 +88,7 @@
     call('domboPanelDim', {
       target: o.dimTarget, showW: o.dimShowW, showH: o.dimShowH, hSide: o.dimHSide, vSide: o.dimVSide,
       offsetMm: o.dimOffsetMm, textAuto: o.dimTextAuto, textMm: o.dimTextMm,
-      decimals: Number(o.dimDecimals), unit: o.dimUnit, stroke: o.dimStroke
+      unit: o.dimUnit, stroke: o.dimStroke
     });
   });
   $('dimRemove').addEventListener('click', function () { call('domboPanelDimRemove'); });

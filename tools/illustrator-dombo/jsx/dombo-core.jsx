@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.18.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.18.1'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -912,8 +912,7 @@ function domboDimDefaults() {
     offsetMm: 10,       // 객체와 치수선 사이
     textAuto: true,     // 글자 크기를 객체 크기에 맞춤
     textMm: 5,          // 글자 크기 (자동이 아닐 때)
-    decimals: 0,        // 소수점 자리
-    unit: true,         // 'mm' 붙이기
+    unit: true,         // 'cm' 붙이기 (치수는 cm, 소수점은 반올림)
     stroke: false       // 선 두께 포함해서 재기 (기본은 패스 크기)
   };
 }
@@ -929,14 +928,12 @@ function domboDimMerge(opts) {
   for (var i = 0; i < bools.length; i++) o[bools[i]] = o[bools[i]] === true || o[bools[i]] === 'true';
   o.offsetMm = Number(o.offsetMm);
   o.textMm = Number(o.textMm);
-  o.decimals = Number(o.decimals);
   if (o.target !== 'each' && o.target !== 'all') throw new Error('치수 기준이 잘못됐습니다.');
   if (o.hSide !== 'top' && o.hSide !== 'bottom') throw new Error('가로 치수 위치가 잘못됐습니다.');
   if (o.vSide !== 'right' && o.vSide !== 'left') throw new Error('세로 치수 위치가 잘못됐습니다.');
   if (!o.showW && !o.showH) throw new Error('가로·세로 중 하나는 골라야 합니다.');
   if (!(o.offsetMm >= 0)) throw new Error('치수선 거리는 0 이상이어야 합니다.');
   if (!o.textAuto && !(o.textMm > 0)) throw new Error('글자 크기는 0보다 커야 합니다.');
-  if (o.decimals !== 0 && o.decimals !== 1 && o.decimals !== 2) throw new Error('소수점 자리는 0, 1, 2 중 하나여야 합니다.');
   return o;
 }
 
@@ -948,6 +945,11 @@ function domboDimLabel(mm, decimals, unit) {
   var parts = str.split('.');
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   return parts.join('.') + (unit ? ' mm' : '');
+}
+
+// 치수선 글자: mm → cm 정수(반올림), 천 단위 쉼표. 1,255mm → '126 cm'
+function domboDimCmLabel(mm, unit) {
+  return domboDimLabel(Math.round(mm / 10), 0, false) + (unit ? ' cm' : '');
 }
 
 // 범위를 받아 치수선·화살표·글자 자리를 계산한다 (일러스트레이터 없이도 동작, 단위 pt)
@@ -972,7 +974,7 @@ function domboDimGeometry(bounds, opts) {
     lines.push([[L, y], [R, y]]);
     arrows.push([[L, y], [L + arrow, y + half], [L + arrow, y - half]]);
     arrows.push([[R, y], [R - arrow, y + half], [R - arrow, y - half]]);
-    texts.push({ x: (L + R) / 2, y: y + dir * tp * 0.75, angle: 0, str: domboDimLabel(wMm, o.decimals, o.unit) });
+    texts.push({ x: (L + R) / 2, y: y + dir * tp * 0.75, angle: 0, str: domboDimCmLabel(wMm, o.unit) });
   }
   if (o.showH) {
     var dx = o.vSide === 'right' ? 1 : -1, side = dx > 0 ? R : L, x = side + dx * off;
@@ -981,7 +983,7 @@ function domboDimGeometry(bounds, opts) {
     lines.push([[x, T], [x, B]]);
     arrows.push([[x, T], [x - half, T - arrow], [x + half, T - arrow]]);
     arrows.push([[x, B], [x - half, B + arrow], [x + half, B + arrow]]);
-    texts.push({ x: x + dx * tp * 0.75, y: (T + B) / 2, angle: 90, str: domboDimLabel(hMm, o.decimals, o.unit) });
+    texts.push({ x: x + dx * tp * 0.75, y: (T + B) / 2, angle: 90, str: domboDimCmLabel(hMm, o.unit) });
   }
   return { textPt: tp, strokePt: Math.max(0.3, tp / 25), lines: lines, arrows: arrows, texts: texts };
 }
