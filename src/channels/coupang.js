@@ -88,6 +88,33 @@ function normalize(sheet) {
   });
 }
 
+// ── 취소·반품(출고중지) 요청 ── 송장을 올린 뒤의 취소·반품은 발주서 목록에서 상태가 바뀌지 않고 이 목록으로만 온다
+// 쿠팡 접수 상태(receiptStatus) → 인트라넷 요청 상태 (스마트스토어와 같은 이름으로 화면·알림이 그대로 동작)
+const RECEIPT_STATUS = {
+  RELEASE_STOP_UNCHECKED: 'REQUEST', // 출고중지 요청
+  RETURNS_UNCHECKED: 'REQUEST',      // 반품 접수
+  REQUEST_COUPANG_CHECK: 'REQUEST',  // 쿠팡 확인 요청
+  VENDOR_WAREHOUSE_CONFIRM: 'COLLECT_DONE', // 입고(회수) 완료
+  RETURNS_COMPLETED: 'DONE',         // 반품·취소 완료
+};
+const CLAIM_DAYS = 7;
+const CLAIM_WINDOW_DAYS = 3; // 한 번에 묻는 기간 (쿠팡이 긴 기간을 거절할 수 있어서 나눠 묻는다)
+
+// 접수 한 건 → 상품별 요청 상태 [{ channel_order_id, shipmentBoxId, vendorItemId, claim_type, claim_status, channel_status? }]
+function claimPatches(receipt) {
+  const kind = RECEIPT_STATUS[receipt.receiptStatus];
+  if (!kind || !receipt.orderId) return [];
+  const isCancel = String(receipt.receiptType || '').toUpperCase() === 'CANCEL';
+  const type = isCancel ? 'CANCEL' : 'RETURN';
+  const patch = kind === 'DONE'
+    ? { claim_status: `${type}_DONE`, channel_status: isCancel ? 'CANCELED' : 'RETURNED', channel_status_label: isCancel ? '쿠팡에서 취소됨' : '쿠팡에서 반품됨' }
+    : kind === 'COLLECT_DONE' ? { claim_status: 'COLLECT_DONE' } : { claim_status: `${type}_REQUEST` };
+  const items = receipt.returnItems || receipt.returnItemList || receipt.returnItemDtos || [];
+  const base = { channel_order_id: String(receipt.orderId), claim_type: type, ...patch };
+  if (!items.length) return [{ ...base }];
+  return items.map(it => ({ ...base, vendorItemId: it.vendorItemId ? String(it.vendorItemId) : null, shipmentBoxId: it.shipmentBoxId ? String(it.shipmentBoxId) : null }));
+}
+
 function createCoupangSource(options = {}) {
   const client = options.client || createCoupangClient(options);
   const now = options.now || (() => new Date());
@@ -119,6 +146,26 @@ function createCoupangSource(options = {}) {
       for (const status of DONE_STATUSES) all.push(...await sheets(status, DONE_DAYS));
       // 매번 최근 주문 전체를 다시 읽으므로, 상태가 그대로인 주문은 '바뀐 주문' 으로 세지 않는다 (refreshOnly)
       return all.flatMap(normalize).filter(o => o.channel_order_id && o.channel_item_id).map(o => ({ ...o, refreshOnly: true }));
+    },
+    // 최근 7일의 취소·반품(출고중지) 요청 → 상품별 요청 상태 (collector 가 저장된 주문에 덮어 쓴다)
+    async fetchClaims() {
+      const to = now();
+      const out = [];
+      for (const cancelType of ['RETURN', 'CANCEL']) {
+        for (let start = to.getTime() - CLAIM_DAYS * 24 * 3600e3; start < to.getTime(); start += CLAIM_WINDOW_DAYS * 24 * 3600e3) {
+          const end = Math.min(start + CLAIM_WINDOW_DAYS * 24 * 3600e3, to.getTime());
+          let nextToken = '';
+          for (let page = 0; page < 50; page++) {
+            const body = await client.request('GET', `/v2/providers/openapi/apis/api/v6/vendors/${client.vendorId}/returnRequests`, {
+              query: { searchType: 'timeFrame', createdAtFrom: `${kstDate(new Date(start))}T00:00`, createdAtTo: `${kstDate(new Date(end))}T23:59`, cancelType, ...(nextToken ? { nextToken } : {}) },
+            });
+            out.push(...((body && body.data) || []).flatMap(claimPatches));
+            nextToken = body && body.nextToken;
+            if (!nextToken) break;
+          }
+        }
+      }
+      return out;
     },
     // 인트라넷에선 진행 중인데 이번 목록 어디에도 없는 주문 (collector 가 부른다)
     //   쿠팡 발주서 목록에는 '취소' 상태가 없어서, 취소된 주문은 목록에서 그냥 사라진다.
@@ -210,4 +257,4 @@ function createCoupangWriter(options = {}) {
   };
 }
 
-module.exports = { createCoupangWriter, toCommonResult, splitItemId, createCoupangSource, normalize, STATUS_MAP, kstIso };
+module.exports = { createCoupangWriter, toCommonResult, splitItemId, createCoupangSource, normalize, claimPatches, STATUS_MAP, kstIso };

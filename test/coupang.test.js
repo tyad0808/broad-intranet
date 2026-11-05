@@ -290,3 +290,48 @@ test('쿠팡 상품 링크: 옵션 번호(vendorItemId)를 붙여 고객이 고�
   assert.strictEqual(productUrl({ channel: 'coupang', product_no: '8082903311', channel_item_id: null }), 'https://www.coupang.com/vp/products/8082903311');
   assert.strictEqual(productUrl({ channel: 'coupang', product_no: null, channel_item_id: '1-2' }), null);
 });
+
+test('송장을 올린 뒤 쿠팡에서 반품·취소하면: 반품·취소 요청 목록을 읽어 요청 표시 → 완료되면 반품됨·취소됨으로 (발주서 목록엔 안 나와도)', async () => {
+  const db = openDb(':memory:');
+  const now = () => new Date('2026-11-05T09:00:00Z');
+  const lists = { DELIVERING: [sheet(1, 'DELIVERING'), sheet(2, 'DELIVERING')] };
+  let returns = [];
+  const calls = [];
+  const fetchFn = async url => {
+    const u = new URL(url);
+    calls.push(u.pathname);
+    let data = [];
+    if (u.pathname.endsWith('/returnRequests')) data = returns.filter(r => r.cancelType === u.searchParams.get('cancelType')).map(r => r.body);
+    else data = lists[u.searchParams.get('status')] || [];
+    return new Response(JSON.stringify({ code: 200, data, nextToken: '' }));
+  };
+  const collector = createCollector({ db, now, source: createCoupangSource({ ...KEYS, fetchFn, minGapMs: 0, now }) });
+  await collector.run();
+  const row = id => ({ ...db.prepare('SELECT channel_status, claim_type, claim_status, channel_status_label FROM orders WHERE channel_order_id = ?').get(`91000418632${id}`) });
+  assert.strictEqual(row(1).channel_status, 'DELIVERING');
+  assert.ok(calls.some(p => p === '/v2/providers/openapi/apis/api/v6/vendors/A00012345/returnRequests'), '반품·취소 목록도 읽는다');
+  assert.ok(calls.every(p => isAllowed('GET', p)));
+
+  // 1번: 반품 접수 (아직 발주서 목록에도 배송중으로 나옴) → 반품 요청 표시, 상태는 그대로
+  returns = [{ cancelType: 'RETURN', body: { receiptId: 1, orderId: '910004186321', receiptType: 'RETURN', receiptStatus: 'RETURNS_UNCHECKED', returnItems: [{ vendorItemId: '3000000011', shipmentBoxId: '642538970006401' }] } }];
+  const second = await collector.run();
+  assert.deepStrictEqual(row(1), { channel_status: 'DELIVERING', claim_type: 'RETURN', claim_status: 'RETURN_REQUEST', channel_status_label: null });
+  assert.strictEqual(second.claims.length, 1, '새 반품 요청 알림');
+
+  // 1번 반품 완료(발주서 목록에서 사라짐) · 2번은 송장 뒤 취소 완료(상품 목록 없이 주문 단위) → 반품됨 · 취소됨
+  lists.DELIVERING = [];
+  returns = [
+    { cancelType: 'RETURN', body: { receiptId: 1, orderId: '910004186321', receiptType: 'RETURN', receiptStatus: 'RETURNS_COMPLETED', returnItems: [{ vendorItemId: '3000000011' }] } },
+    { cancelType: 'CANCEL', body: { receiptId: 2, orderId: '910004186322', receiptType: 'CANCEL', receiptStatus: 'RETURNS_COMPLETED' } },
+  ];
+  await collector.run();
+  assert.deepStrictEqual(row(1), { channel_status: 'RETURNED', claim_type: 'RETURN', claim_status: 'RETURN_DONE', channel_status_label: '쿠팡에서 반품됨' });
+  assert.deepStrictEqual(row(2), { channel_status: 'CANCELED', claim_type: 'CANCEL', claim_status: 'CANCEL_DONE', channel_status_label: '쿠팡에서 취소됨' });
+  const again = await collector.run();
+  assert.strictEqual(again.updated, 0, '다시 읽어도 바뀐 게 없으면 그대로');
+
+  // 목록을 못 읽어도 주문 수집은 그대로
+  const broken = async url => (new URL(url).pathname.endsWith('/returnRequests') ? new Response('{"code":500,"message":"오류"}', { status: 500 }) : fetchFn(url));
+  const r = await createCollector({ db, now, source: createCoupangSource({ ...KEYS, fetchFn: broken, minGapMs: 0, now }) }).run();
+  assert.strictEqual(r.ok, true);
+});

@@ -227,6 +227,28 @@ function createCollector({ db, source, now = () => new Date(), initialHours = 72
           orders = orders.concat(checked.map(o => ({ ...o, refreshOnly: true })));
         }
       }
+      // 취소·반품 요청 목록 (쿠팡: 송장을 올린 뒤의 취소·반품은 발주서 목록에 안 나온다) → 저장된 주문에 요청 상태를 덮어 쓴다
+      //   목록을 못 읽어도 주문 수집은 그대로 한다 (다음 수집 때 다시)
+      if (source.fetchClaims) {
+        let claims = [];
+        try {
+          claims = await source.fetchClaims({ from, to });
+        } catch (err) {
+          console.warn(`[${source.label}] 취소·반품 목록 읽기 실패 (다음 수집 때 다시): ${err.message}`);
+        }
+        const groupRows = db.prepare('SELECT * FROM orders WHERE channel = ? AND channel_order_id = ?');
+        for (const c of claims) {
+          const rows = groupRows.all(source.channel, c.channel_order_id).filter(r => !c.vendorItemId
+            || r.channel_item_id === `${c.shipmentBoxId}-${c.vendorItemId}` || String(r.channel_item_id).endsWith(`-${c.vendorItemId}`));
+          for (const r of rows) {
+            const patch = { claim_type: c.claim_type, claim_status: c.claim_status,
+              ...(c.channel_status ? { channel_status: c.channel_status, channel_status_label: c.channel_status_label || null } : {}) };
+            const listed = orders.find(o => o.channel_item_id === r.channel_item_id);
+            if (listed) Object.assign(listed, patch);
+            else orders.push({ ...r, ...patch, refreshOnly: true });
+          }
+        }
+      }
       const result = applyOrders(db, orders);
       setSetting(db, lastKey, to.toISOString());
       db.prepare(
