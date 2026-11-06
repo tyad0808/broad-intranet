@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.18.2'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.18.3'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -851,13 +851,13 @@ function domboSplitRects(bounds, opts) {
   return out;
 }
 
-// 조각들을 원본 아래 50mm 부터 간격을 두고 위에서 아래로 늘어놓을 때의 이동량 [dx, dy]
+// 조각들을 원본 아래 50mm 줄에, 원본 왼쪽부터 간격을 두고 왼쪽에서 오른쪽으로 늘어놓을 때의 이동량 [dx, dy]
 function domboSplitMoves(bounds, rects, gapPt) {
-  var y = bounds[3] - 50 * DOMBO_PT_PER_MM, out = [];
+  var x = bounds[0], top = bounds[3] - 50 * DOMBO_PT_PER_MM, out = [];
   for (var i = 0; i < rects.length; i++) {
     var r = rects[i];
-    out.push([bounds[0] - r[0], y - r[1]]);
-    y -= (r[1] - r[3]) + gapPt;
+    out.push([x - r[0], top - r[1]]);
+    x += (r[2] - r[0]) + gapPt;
   }
   return out;
 }
@@ -895,7 +895,7 @@ function domboSplit(opts) {
   var k = DOMBO_PT_PER_MM, first = rects[0], mid = rects[Math.min(1, rects.length - 1)];
   var size = function (rc) { return Math.round((rc[2] - rc[0]) / k) + '×' + Math.round((rc[1] - rc[3]) / k) + 'mm'; };
   return (o.direction === 'h' ? '가로로 ' : '세로로 ') + rects.length + '등분했습니다 (겹침 ' + o.overlapMm + 'mm).\n' +
-    '조각 크기: 끝 ' + size(first) + (rects.length > 2 ? ', 가운데 ' + size(mid) : '') + '. 원본 아래에 늘어놓았습니다.';
+    '조각 크기: 끝 ' + size(first) + (rects.length > 2 ? ', 가운데 ' + size(mid) : '') + '. 원본 아래에 가로로 늘어놓았습니다.';
 }
 
 // ---- 치수 표시 ----

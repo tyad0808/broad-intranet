@@ -338,14 +338,21 @@ test('분할: 가로 3등분, 안쪽 이음매만 겹침 절반씩', () => {
   v.forEach(x => { near(x[0], 0); near(x[2], 900 * MM); });
 });
 
-test('분할: 원본 아래 50mm 부터 간격을 두고 위에서 아래로 늘어놓는다', () => {
+test('분할: 원본 아래 50mm 줄에 왼쪽부터 간격을 두고 가로로 늘어놓는다', () => {
   const b = [100, 300 * MM, 900 * MM, 0];
   const rects = core.domboSplitRects(b, { count: 3, overlapMm: 0 });
   const m = Array.from(core.domboSplitMoves(b, rects, 20 * MM), x => Array.from(x));
-  // 각 조각의 왼쪽 위가 (원본 왼쪽, 아래 50mm), 그다음은 조각 높이 + 20mm 아래
+  // 각 조각의 위가 원본 아래 50mm, 왼쪽은 원본 왼쪽부터 조각 폭 + 20mm 씩 오른쪽
   rects.forEach((r, i) => {
-    near(r[0] + m[i][0], 100);
-    near(r[1] + m[i][1], -50 * MM - i * (300 + 20) * MM);
+    near(r[1] + m[i][1], -50 * MM);
+    near(r[0] + m[i][0], 100 + i * ((rects[0][2] - rects[0][0]) + 20 * MM));
+  });
+  // 세로 분할도 가로로 한 줄
+  const v = core.domboSplitRects(b, { direction: 'v', count: 2, overlapMm: 0 });
+  const mv = Array.from(core.domboSplitMoves(b, v, 20 * MM), x => Array.from(x));
+  v.forEach((r, i) => {
+    near(r[1] + mv[i][1], -50 * MM);
+    near(r[0] + mv[i][0], 100 + i * ((900 * MM - 100) + 20 * MM));
   });
 });
 
