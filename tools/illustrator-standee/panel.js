@@ -15,7 +15,10 @@
     el.textContent = result.slice(ok ? 3 : 4);
   }
 
-  function readOptions() { return { outlineMm: parseFloat($('outlineMm').value), roundMm: parseFloat($('roundMm').value), baseMm: parseFloat($('baseMm').value), fillLegs: $('fillLegs').checked }; }
+  function readOptions() {
+    return { outlineMm: parseFloat($('outlineMm').value), roundMm: parseFloat($('roundMm').value), baseMm: parseFloat($('baseMm').value), fillLegs: $('fillLegs').checked,
+      cutRoundMm: parseFloat($('cutRoundMm').value), cutFill: $('cutFill').checked, cutTrim: $('cutTrim').checked };
+  }
   function save(o) { try { localStorage.setItem(STORE_KEY, JSON.stringify(o)); } catch (e) {} }
   (function load() {
     var o;
@@ -25,6 +28,9 @@
     if (typeof o.roundMm === 'number' && !isNaN(o.roundMm)) $('roundMm').value = o.roundMm;
     if (typeof o.baseMm === 'number' && !isNaN(o.baseMm)) $('baseMm').value = o.baseMm;
     if (typeof o.fillLegs === 'boolean') $('fillLegs').checked = o.fillLegs;
+    if (typeof o.cutRoundMm === 'number' && !isNaN(o.cutRoundMm)) $('cutRoundMm').value = o.cutRoundMm;
+    if (typeof o.cutFill === 'boolean') $('cutFill').checked = o.cutFill;
+    if (typeof o.cutTrim === 'boolean') $('cutTrim').checked = o.cutTrim;
   })();
   document.addEventListener('change', function () { save(readOptions()); });
 
@@ -106,6 +112,54 @@
       };
       if (info.temp) window.__adobe_cep__.evalScript('standeePanelRemoveTemp(' + JSON.stringify(info.path) + ')', function () {});
       img.src = 'data:image/png;base64,' + file.data;
+    });
+  });
+
+  // 선택한 칼선 예각 없애기: 일러스트에서 패스 점·손잡이 → 캔버스에 칠해 칸 그림 → 다듬기 → 일러스트에서 바꿔 넣기
+  $('cutSmooth').addEventListener('click', function () {
+    if (!window.__adobe_cep__) { show('ERR:일러스트레이터 안에서 열어야 합니다.'); return; }
+    var o = readOptions();
+    save(o);
+    if (!(o.cutRoundMm > 0)) { show('ERR:예각 크기는 0 보다 커야 합니다.'); return; }
+    if (!o.cutFill && !o.cutTrim) { show('ERR:틈 메우기와 끝 다듬기 중 하나는 켜야 합니다.'); return; }
+    evalP('standeePanelCutPrepare()', function (json) {
+      try {
+        var info = JSON.parse(json), k = 72 / 25.4, f = info.factor || 1, out = [], filled = 0, trimmed = 0;
+        for (var n = 0; n < info.paths.length; n++) {
+          var path = info.paths[n], b = path.bounds;
+          var physW = (b[2] - b[0]) / k * f, physH = (b[1] - b[3]) / k * f, longMm = Math.max(physW, physH);
+          // 칸 하나: 큰 변의 1/1500 (0.3mm 보다 잘게는 안 함), 예각 크기의 1/4 보다 크지 않게, 그래도 큰 변 2500칸까지만
+          var cell = Math.max(longMm / 2500, Math.min(Math.max(0.3, longMm / 1500), o.cutRoundMm / 4));
+          var rad = o.cutRoundMm / cell, P = Math.ceil(rad) + 4;
+          var gw = Math.ceil(physW / cell) + 2 * P, gh = Math.ceil(physH / cell) + 2 * P;
+          var s = cell / f * k; // 칸 하나 = 문서 좌표 s pt
+          var cx = function (x) { return (x - b[0]) / s + P; }, cy = function (y) { return (b[1] - y) / s + P; };
+          var cv = document.createElement('canvas');
+          cv.width = gw; cv.height = gh;
+          var ctx = cv.getContext('2d'), pts = path.pts, m = pts.length;
+          ctx.fillStyle = '#000';
+          ctx.beginPath();
+          ctx.moveTo(cx(pts[0][0]), cy(pts[0][1]));
+          for (var i = 0; i < m; i++) {
+            var p0 = pts[i], p1 = pts[(i + 1) % m];
+            ctx.bezierCurveTo(cx(p0[4]), cy(p0[5]), cx(p1[2]), cy(p1[3]), cx(p1[0]), cy(p1[1]));
+          }
+          ctx.closePath();
+          ctx.fill();
+          var px = ctx.getImageData(0, 0, gw, gh).data, mask = new Uint8Array(gw * gh);
+          for (var q = 0; q < gw * gh; q++) mask[q] = px[q * 4 + 3] >= 128 ? 1 : 0;
+          var r = window.standeeShape.smoothCut(mask, gw, gh, { radius: rad, fillGaps: o.cutFill, trimSpikes: o.cutTrim });
+          filled += r.filled; trimmed += r.trimmed;
+          if (!r.points) continue;
+          var X = function (x) { return b[0] + (x - P) * s; }, Y = function (y) { return b[1] - (y - P) * s; };
+          out.push({ i: n, points: r.points.map(function (p) {
+            return [X(p.a[0]), Y(p.a[1]), X(p.l[0]), Y(p.l[1]), X(p.r[0]), Y(p.r[1]), p.corner ? 1 : 0];
+          }) });
+        }
+        window.__adobe_cep__.evalScript('standeePanelCutApply(' + JSON.stringify({ paths: out, radiusMm: o.cutRoundMm, filled: filled, trimmed: trimmed, skipped: info.skipped }) + ')', show);
+      } catch (e) {
+        show('ERR:' + e.message);
+      }
     });
   });
 

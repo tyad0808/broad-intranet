@@ -300,7 +300,133 @@
     return { points, feetY: feet + 1, cutY: cut - P, cells: count };
   }
 
-  const api = { outline, distSq, fillHoles, keepLargest, traceOuter, simplifyClosed };
+  // 상하좌우로 이어진 켜진 칸 덩어리들: [[칸 번호, ...], ...]
+  function components(g, W, H) {
+    const seen = new Uint8Array(W * H), out = [];
+    for (let s = 0; s < W * H; s++) {
+      if (!g[s] || seen[s]) continue;
+      const list = [], stack = [s];
+      seen[s] = 1;
+      while (stack.length) {
+        const i = stack.pop();
+        list.push(i);
+        const x = i % W;
+        const nb = [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i >= W ? i - W : -1, i + W < W * H ? i + W : -1];
+        for (const j of nb) if (j >= 0 && g[j] && !seen[j]) { seen[j] = 1; stack.push(j); }
+      }
+      out.push(list);
+    }
+    return out;
+  }
+
+  // 선택한 칼선의 예각 없애기.
+  // mask: 칼선 안쪽이 1 인 칸 그림 (W x H, 둘레에 반지름 + 3칸 이상 빈 여백), opts: { radius: 칸 단위, fillGaps, trimSpikes }
+  // - 안쪽 좁은 틈·뾰족한 안쪽 모서리: 반지름만큼 넓혔다 줄여서(닫기) 생긴 곳을 메운다
+  // - 바깥 뾰족한 끝: 반지름만큼 줄였다 넓혀서(열기) 깎인 곳을 깎는다
+  // 바뀐 곳마다 깊이(반지름의 0.5 넘게)를 보고, 직각·둔각 모서리처럼 조금 바뀌는 곳은 그대로 둔다.
+  // 결과: { points (칸 단위, 바뀐 게 없으면 null), filled, trimmed }
+  function smoothCut(mask, W, H, opts) {
+    const r = opts.radius, R2 = r * r, N = W * H;
+    if (!(r > 0)) throw new Error('예각 크기는 0 보다 커야 합니다.');
+    const shape = new Uint8Array(N);
+    let count = 0;
+    for (let i = 0; i < N; i++) if (mask[i]) { shape[i] = 1; count++; }
+    if (!count) throw new Error('칼선 안쪽이 비어 있습니다.');
+    // 바뀐 곳의 깊이가 반지름의 절반을 넘으면 예각 (직각 모서리는 0.41, 60도면 1.0, 좁은 틈은 틈 깊이만큼)
+    // dist: 거리 제곱, off: 거기서 뺄 거리
+    const big = (list, dist, off) => {
+      let m = 0;
+      for (const i of list) if (dist[i] > m) m = dist[i];
+      return Math.sqrt(m) - off > r * 0.5;
+    };
+    let filled = 0, trimmed = 0;
+    if (opts.fillGaps !== false) {
+      const d1 = distSq(shape, W, H), outside = new Uint8Array(N);
+      for (let i = 0; i < N; i++) outside[i] = d1[i] <= R2 ? 0 : 1;
+      const d2 = distSq(outside, W, H), added = new Uint8Array(N);
+      for (let i = 0; i < N; i++) if (!shape[i] && d2[i] > R2) added[i] = 1;
+      // 메운 곳이 닫은 모양 바깥에서 얼마나 깊은가 (좁은 틈은 틈 깊이, 직각 모서리는 얕음)
+      const closedOut = new Uint8Array(N);
+      for (let i = 0; i < N; i++) closedOut[i] = shape[i] || added[i] ? 0 : 1;
+      const d3 = distSq(closedOut, W, H);
+      for (const list of components(added, W, H)) {
+        if (!big(list, d3, 0)) continue;
+        for (const i of list) shape[i] = 1;
+        filled++;
+      }
+    }
+    if (opts.trimSpikes !== false) {
+      const out = new Uint8Array(N);
+      for (let i = 0; i < N; i++) out[i] = shape[i] ? 0 : 1;
+      const d1 = distSq(out, W, H), core = new Uint8Array(N);
+      let any = 0;
+      for (let i = 0; i < N; i++) if (d1[i] > R2) { core[i] = 1; any = 1; }
+      if (!any) throw new Error('칼선 모양이 예각 크기보다 좁습니다. 예각 크기를 줄이세요.');
+      const d2 = distSq(core, W, H), removed = new Uint8Array(N);
+      for (let i = 0; i < N; i++) if (shape[i] && d2[i] > R2) removed[i] = 1;
+      for (const list of components(removed, W, H)) {
+        if (!big(list, d2, r)) continue;
+        for (const i of list) shape[i] = 0;
+        trimmed++;
+      }
+    }
+    if (!filled && !trimmed) return { points: null, filled: 0, trimmed: 0 };
+    fillHoles(shape, W, H);
+    keepLargest(shape, W, H);
+
+    // 칸 변 하나하나를 점으로 (긴 직선도 점이 촘촘해야 부드럽게 할 때 모서리가 크게 깎이지 않는다)
+    let pts = traceOuter(shape, W, H);
+    {
+      // 시작점을 곧은 변 가운데로 옮겨 둔다 (모서리가 목록 처음·끝에 걸치지 않게)
+      const n = pts.length, d = i => { const a = pts[(i + n) % n], b = pts[(i + 1 + n) % n]; return (b[0] - a[0]) + ',' + (b[1] - a[1]); };
+      let at = 0;
+      for (let i = 0; i < n; i++) if (d(i - 2) === d(i - 1) && d(i - 1) === d(i) && d(i) === d(i + 1)) { at = i; break; }
+      pts = pts.slice(at).concat(pts.slice(0, at));
+    }
+    // 곧은 변(6칸 이상) 사이에 칸 한두 개짜리 계단이 낀 모서리(칠할 때 모서리 칸이 반쯤 걸쳐 빠진 것)는 반듯한 모서리 점 하나로
+    const runs = list => {
+      const n = list.length, dir = i => { const a = list[i], b = list[(i + 1) % n]; return (b[0] - a[0]) + ',' + (b[1] - a[1]); };
+      const before = new Int32Array(n), after = new Int32Array(n);
+      for (let k = 0; k < 2 * n; k++) { const i = k % n, p = (i + n - 1) % n; before[i] = dir(p) === dir((p + n - 1) % n) ? before[p] + 1 : 1; }
+      for (let k = 2 * n - 1; k >= 0; k--) { const i = k % n, q = (i + 1) % n; after[i] = dir(i) === dir(q) ? after[q] + 1 : 1; }
+      return { dir, before, after };
+    };
+    {
+      // 모서리를 반듯하게: i 에서 앞 변 방향으로 모서리까지, 거기서 뒤 변 방향으로 j 까지 칸 단위로 다시 잇는다
+      const n = pts.length, { dir, before, after } = runs(pts), out = [];
+      let skipTo = -1;
+      for (let i = 0; i < n; i++) {
+        if (skipTo >= 0 && i < skipTo) continue;
+        out.push(pts[i]);
+        if (before[i] < 6 || dir((i + n - 1) % n) === dir(i) || i + 3 >= n) continue;
+        for (let g = 2; g <= 3; g++) {
+          const j = i + g, d0 = dir((i + n - 1) % n).split(',').map(Number), d1 = dir(j).split(',').map(Number);
+          if (after[j] < 6 || dir(j - 1) === dir(j)) continue;
+          if ((d0[1] === 0) === (d1[1] === 0)) continue;
+          const c = d0[1] === 0 ? [pts[j][0], pts[i][1]] : [pts[i][0], pts[j][1]];
+          let x = pts[i][0], y = pts[i][1], guard = 0;
+          while ((x !== c[0] || y !== c[1]) && guard++ < 4) { x += d0[0]; y += d0[1]; out.push([x, y]); }
+          while ((x + d1[0] !== pts[j][0] || y + d1[1] !== pts[j][1]) && (x !== pts[j][0] || y !== pts[j][1]) && guard++ < 8) { x += d1[0]; y += d1[1]; out.push([x, y]); }
+          if (x === pts[j][0] && y === pts[j][1]) out.pop();
+          skipTo = j;
+          break;
+        }
+      }
+      // 모서리가 맞지 않게 이어졌으면 (방향이 거꾸로 등) 원래대로
+      const ok = out.every((p, k) => { const q = out[(k + 1) % out.length]; return Math.abs(q[0] - p[0]) + Math.abs(q[1] - p[1]) === 1; });
+      if (ok) pts = out;
+    }
+    const n = pts.length, { dir, before: runBefore, after: runAfter } = runs(pts);
+    // 곧은 변 두 개(각 6칸 이상)가 만나는 모서리는 각진 채로 고정
+    const fixed = pts.map((p, i) => dir((i + n - 1) % n) !== dir(i) && runBefore[i] >= 6 && runAfter[i] >= 6);
+    const sm = smooth(pts, fixed, 3);
+    const idx = simplifyClosed(sm, 0.35, fixed);
+    const corner = idx.map(i => fixed[i]);
+    const points = handles(idx.map(i => sm[i]), corner).map(p => ({ a: p.a, l: p.l, r: p.r, corner: p.corner }));
+    return { points, filled, trimmed };
+  }
+
+  const api = { outline, smoothCut, distSq, fillHoles, keepLargest, traceOuter, simplifyClosed };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.standeeShape = api;
 })(typeof window !== 'undefined' ? window : this);

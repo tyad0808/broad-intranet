@@ -104,3 +104,48 @@ test('다리 사이 메우기: 바닥부터 다리가 만나는 곳(가랑이)�
   const off = st.outline(a, w, h, { cellMm: 1, outlineMm: 5, roundMm: 5, fillLegs: false });
   assert.ok(!inside(off.points, 150, 450), '끄면 다리 사이가 빈다');
 });
+
+// 칼선 예각 없애기 (smoothCut): 사각형 50~250 에 위에서 파인 V자 틈(예각)과 오른쪽으로 튀어나온 가시(예각)
+function notched(opts = {}) {
+  const W = 300, H = 300, m = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let on = x >= 50 && x < 250 && y >= 50 && y < 250;
+    if (opts.notch !== false && y >= 50 && y < 130 && Math.abs(x - 150) < 10 * (130 - y) / 80) on = false;
+    if (opts.spike !== false && x >= 250 && x < 290 && Math.abs(y - 150) < 8 * (290 - x) / 40) on = true;
+    if (on) m[y * W + x] = 1;
+  }
+  return { m, W, H };
+}
+const inPoly = (pts, x, y) => inside(pts, x, y);
+
+test('칼선 예각 없애기: 안쪽 V자 틈은 메우고 바깥 가시는 깎고, 직각 모서리는 각진 채로', () => {
+  const { m, W, H } = notched();
+  const r = st.smoothCut(m, W, H, { radius: 10 });
+  assert.strictEqual(r.filled, 1);
+  assert.strictEqual(r.trimmed, 1);
+  assert.ok(inPoly(r.points, 150, 70), 'V자 틈이 메워짐');
+  assert.ok(!inPoly(r.points, 275, 150), '가시 끝이 깎임');
+  const b = bbox(r.points);
+  assert.ok(b[2] < 262, `가시가 거의 다 깎임 (오른쪽 ${b[2]})`);
+  const corners = r.points.filter(p => p.corner).map(p => p.a.join(','));
+  assert.deepStrictEqual(corners.sort(), ['250,250', '250,50', '50,250', '50,50'].sort(), '네 모서리는 그대로 각진 점');
+});
+
+test('칼선 예각 없애기: 예각이 없으면 바꾸지 않고, 끈 쪽은 그대로 둔다', () => {
+  const plain = notched({ notch: false, spike: false });
+  assert.strictEqual(st.smoothCut(plain.m, plain.W, plain.H, { radius: 10 }).points, null);
+  const { m, W, H } = notched();
+  const onlyFill = st.smoothCut(m, W, H, { radius: 10, trimSpikes: false });
+  assert.strictEqual(onlyFill.trimmed, 0);
+  assert.ok(inPoly(onlyFill.points, 280, 150), '가시는 남음');
+  assert.ok(inPoly(onlyFill.points, 150, 70), '틈은 메움');
+  const onlyTrim = st.smoothCut(m, W, H, { radius: 10, fillGaps: false });
+  assert.strictEqual(onlyTrim.filled, 0);
+  assert.ok(!inPoly(onlyTrim.points, 150, 60), '틈은 남음');
+});
+
+test('칼선 예각 없애기: 모양이 예각 크기보다 좁으면 알려준다', () => {
+  const W = 100, H = 100, m = new Uint8Array(W * H);
+  for (let y = 40; y < 50; y++) for (let x = 20; x < 80; x++) m[y * W + x] = 1;
+  assert.throws(() => st.smoothCut(m, W, H, { radius: 10 }), /좁습니다/);
+});

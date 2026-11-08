@@ -1,7 +1,7 @@
 ﻿// 등신대 패널: 누끼 사진(과 글자·도형 디자인)을 고르면 여기서 배경 투명 PNG 로 내보내고,
 // 패널이 그 투명도로 외곽선을 계산한 뒤(standee-shape.js), 여기서 흰 면(맨 뒤)과 칼선으로 그린다.
 
-var STANDEE_VERSION = '1.3.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var STANDEE_VERSION = '1.4.0'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var STANDEE_PT_PER_MM = 72 / 25.4;
 var STANDEE_CUT_LAYER = '칼선';
 var STANDEE_CUT_SPOT = 'CutContour';
@@ -178,6 +178,80 @@ function standeeApply(data) {
     (data.orient ? ' (그림 방향: ' + data.orient + ')' : '') + check;
 }
 
+// ---- 선택한 칼선 예각 없애기 ----
+// 선택한 닫힌 패스(그룹 안 포함)의 점·손잡이를 패널로 넘긴다. 패널이 다듬은 모양을 standeeCutApply 로 돌려준다
+
+function standeeCutCollect(item, out, skip) {
+  if (item.typename === 'PathItem') {
+    if (item.closed && item.pathPoints.length >= 3 && !item.guides && !item.clipping) out.push(item); else skip.n++;
+  } else if (item.typename === 'GroupItem') {
+    for (var i = 0; i < item.pageItems.length; i++) standeeCutCollect(item.pageItems[i], out, skip);
+  } else if (item.typename === 'CompoundPathItem') {
+    skip.compound++;
+  } else {
+    skip.n++;
+  }
+}
+
+function standeeNum(v) { return String(Math.round(v * 1000) / 1000); }
+
+function standeeCutPrepare() {
+  var doc = standeeDoc();
+  var sel = doc.selection;
+  if (!sel || sel.typename === 'TextRange') throw new Error('글자 편집 중입니다. 선택 도구로 바꾼 뒤 다시 하세요.');
+  if (!sel.length) throw new Error('다듬을 칼선(닫힌 패스)을 선택하세요.');
+  var paths = [], skip = { n: 0, compound: 0 }, i, j;
+  for (i = 0; i < sel.length; i++) standeeCutCollect(sel[i], paths, skip);
+  if (!paths.length) throw new Error(skip.compound ? '컴파운드 패스는 다듬지 못합니다. 컴파운드 패스를 풀고(Alt+Shift+Ctrl+8) 바깥 칼선만 선택하세요.' : '선택한 것 중에 닫힌 패스(칼선)가 없습니다.');
+  var factor = 1;
+  try { factor = Number(doc.scaleFactor) || 1; } catch (e) { factor = 1; }
+  var json = [];
+  for (i = 0; i < paths.length; i++) {
+    var pp = paths[i].pathPoints, pts = [];
+    for (j = 0; j < pp.length; j++) {
+      var a = pp[j].anchor, l = pp[j].leftDirection, r = pp[j].rightDirection;
+      pts.push('[' + standeeNum(a[0]) + ',' + standeeNum(a[1]) + ',' + standeeNum(l[0]) + ',' + standeeNum(l[1]) + ',' + standeeNum(r[0]) + ',' + standeeNum(r[1]) + ']');
+    }
+    var b = paths[i].geometricBounds;
+    json.push('{"bounds":[' + standeeNum(b[0]) + ',' + standeeNum(b[1]) + ',' + standeeNum(b[2]) + ',' + standeeNum(b[3]) + '],"pts":[' + pts.join(',') + ']}');
+  }
+  $.global.STANDEE_CUT_PENDING = paths;
+  return '{"factor":' + factor + ',"skipped":' + (skip.n + skip.compound) + ',"paths":[' + json.join(',') + ']}';
+}
+
+// data: { paths: [{ i, points }], radiusMm, filled, trimmed, skipped }  points 는 standeeDrawPath 모양
+function standeeCutApply(data) {
+  var items = $.global.STANDEE_CUT_PENDING;
+  if (!items || !items.length) throw new Error('준비된 칼선이 없습니다. 다시 누르세요.');
+  $.global.STANDEE_CUT_PENDING = null;
+  var doc = standeeDoc(), done = [], i;
+  for (i = 0; i < data.paths.length; i++) {
+    var d = data.paths[i], old = items[d.i];
+    if (!old || !d.points || d.points.length < 3) continue;
+    var np = standeeDrawPath(old.parent, d.points);
+    np.move(old, ElementPlacement.PLACEBEFORE);
+    np.filled = old.filled;
+    if (old.filled) np.fillColor = old.fillColor;
+    np.stroked = old.stroked;
+    if (old.stroked) {
+      np.strokeColor = old.strokeColor;
+      np.strokeWidth = old.strokeWidth;
+      np.strokeDashes = old.strokeDashes;
+    }
+    try { np.fillOverprint = old.fillOverprint; np.strokeOverprint = old.strokeOverprint; } catch (e) { /* 없는 버전 */ }
+    np.name = old.name;
+    old.remove();
+    done.push(np);
+  }
+  doc.selection = null;
+  for (i = 0; i < done.length; i++) done[i].selected = true;
+  var total = items.length;
+  if (!done.length) return '예각이 없습니다 (' + data.radiusMm + 'mm 기준). 칼선 ' + total + '개 그대로입니다.';
+  return '칼선 ' + done.length + '개의 예각을 없앴습니다 (' + data.radiusMm + 'mm 기준: 틈 메움 ' + data.filled + '곳, 뾰족한 끝 다듬음 ' + data.trimmed + '곳).' +
+    (total > done.length ? ' 나머지 ' + (total - done.length) + '개는 예각이 없어 그대로.' : '') +
+    (data.skipped ? ' 닫힌 패스가 아닌 것 ' + data.skipped + '개는 건너뜀.' : '') + ' 되돌리려면 Ctrl+Z.';
+}
+
 // 패널에서 부르는 함수: 결과를 'OK:' 또는 'ERR:' 로 시작하는 글자로 돌려준다
 function standeeCall(fn, arg) {
   try {
@@ -189,3 +263,5 @@ function standeeCall(fn, arg) {
 function standeePanelPrepare() { return standeeCall(standeePrepare); }
 function standeePanelApply(data) { return standeeCall(standeeApply, data); }
 function standeePanelRemoveTemp(path) { return standeeCall(standeeRemoveTemp, path); }
+function standeePanelCutPrepare() { return standeeCall(standeeCutPrepare); }
+function standeePanelCutApply(data) { return standeeCall(standeeCutApply, data); }
