@@ -626,3 +626,23 @@ test('메일함 담당 거르기: 내 담당만 · 담당 없음 · 직원별, �
   assert.ok(!custom.includes('견적 문의'), '기간 밖은 빼고');
   assert.ok((await page('/inbox?box=mail&from=2020-01-01&to=2020-01-31&per=')).includes('견적 문의'), 'per= 은 기간 지우기');
 });
+
+test('답장하면 담당이 비어 있을 때만 답한 사람이 담당 (대신 답한 경우 담당은 그대로, 보내기 실패면 안 바뀜)', async t => {
+  const fail = { reply: async () => ({ result: 'fail', message: '보내지 못했습니다' }) };
+  const { kim, db, id1, id2, kimId, leeId, row } = await setupInbox(t);
+  // 담당 없음 → 연습 모드로 답해도 내가 담당
+  await kim.submit(`/inbox/${id1}`, `/inbox/${id1}/reply`, { body: '견적 보내드립니다', version: '0' });
+  assert.strictEqual(row(id1).assignee_id, kimId);
+  // 다른 사람이 담당인 메일을 대신 답함 → 담당은 그대로
+  db.prepare('UPDATE inquiries SET assignee_id = ? WHERE id = ?').run(leeId, id2);
+  await kim.submit(`/inbox/${id2}`, `/inbox/${id2}/reply`, { body: '대신 답변드립니다', version: String(row(id2).version) });
+  assert.strictEqual(row(id2).assignee_id, leeId);
+  // 담당 칸에서 바꾸기는 그대로 된다
+  await kim.submit(`/inbox/${id1}`, `/inbox/${id1}/assign`, { assignee_id: String(leeId), from: 'detail' });
+  assert.strictEqual(row(id1).assignee_id, leeId);
+
+  // 보내기에 실패하면 담당을 정하지 않는다
+  const failed = await setupInbox(t, { senders: { naver_mail: fail } });
+  await failed.kim.submit(`/inbox/${failed.id1}`, `/inbox/${failed.id1}/reply`, { body: '답', version: '0' });
+  assert.strictEqual(failed.row(failed.id1).assignee_id, null);
+});

@@ -473,6 +473,11 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
           db.prepare("UPDATE inquiries SET status = 'answered', handled_by = ?, handled_at = datetime('now') WHERE id = ?")
             .run(req.user.id, inquiry.id);
         }
+        // 담당이 비어 있으면 답한 사람이 담당이 된다 (연습 모드 포함). 이미 담당이 있으면 그대로 —
+        // 다른 사람이 대신 답한 경우라 담당은 바꾸지 않는다. 담당 칸에서 언제든 고칠 수 있다
+        if (out.result === 'ok' || out.result === 'practice') {
+          db.prepare('UPDATE inquiries SET assignee_id = ? WHERE id = ? AND assignee_id IS NULL').run(req.user.id, inquiry.id);
+        }
         // 톡톡: 실제로 나간 말·사진은 대화에 '우리' 말풍선으로 (네이버가 되돌려 주는 echo 와는 하나로 합친다)
         if (isChat && out.sent && out.sent.length) {
           const add = db.prepare(`INSERT INTO chat_messages (inquiry_id, direction, kind, text, image_url, sender, created_at, echoed)
