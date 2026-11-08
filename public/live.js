@@ -206,7 +206,7 @@
     }
   });
 
-  // 위쪽 메뉴의 문의함 미답변 건수를 새로 고친다 (어느 화면에서든)
+  // 왼쪽 메뉴의 숫자(신규주문·문의함·메일함·톡톡 미답변)를 새로 고친다 (어느 화면에서든)
   let navTimer = null;
   function refreshNavBadge(delay = 600) {
     const nav = document.getElementById('main-nav');
@@ -218,7 +218,8 @@
         if (!res.ok || res.redirected) return;
         const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
         // 문의함·메일함·톡톡 칸의 미답변 숫자 + 종 버튼 칸까지 함께 (알림을 끄고 켠 결과도 반영). 지금 보고 있는 칸 표시(on)는 그대로
-        for (const href of ['/inbox', '/inbox?box=mail', '/inbox?box=chat']) {
+        // 주문(신규주문 수)도 함께
+        for (const href of ['/', '/inbox', '/inbox?box=mail', '/inbox?box=chat']) {
           const fresh = doc.querySelector(`#main-nav a[href="${href}"]`);
           const link = nav.querySelector(`a[href="${href}"]`);
           if (!fresh || !link) continue;
@@ -309,6 +310,7 @@
   });
 
   source.addEventListener('orders-changed', e => {
+    refreshNavBadge();
     const { ids, actorId } = JSON.parse(e.data);
     if (feed === 'orders') refreshList();
     if (orderCard && actorId !== me && (ids.length === 0 || ids.includes(Number(orderCard.dataset.orderId)))) {

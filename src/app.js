@@ -247,6 +247,10 @@ function createApp({
       COALESCE(SUM(source = 'talktalk'), 0) AS chats
     FROM inquiries WHERE status = 'open' AND deleted_at IS NULL
   `);
+  // 왼쪽 메뉴 '주문' 옆 숫자: 신규주문(발주확인 전) 주문 수 — 홈 '신규주문' 칸·주문 화면 '신규주문' 과 같은 기준(주문번호 단위)
+  const newOrdersStmt = db.prepare(`
+    SELECT COUNT(*) AS n FROM (SELECT 1 FROM orders WHERE channel_status = 'PAYED' AND channel_confirmed = 0 GROUP BY channel, channel_order_id)
+  `);
   app.use((req, res, next) => {
     res.locals.flash = req.session.flash || null;
     delete req.session.flash;
@@ -268,6 +272,7 @@ function createApp({
     res.locals.openInquiries = open.inquiries;
     res.locals.openMails = open.mails;
     res.locals.openChats = open.chats;
+    res.locals.newOrders = req.user && req.user.status === 'active' ? newOrdersStmt.get().n : 0;
     // 왼쪽 메뉴 '톡톡' 은 톡톡을 연결했을 때만 보인다
     res.locals.chatOn = Boolean(inbox.talktalk);
     // 이 직원이 끈 알림 칸 (끈 칸은 왼쪽 메뉴 숫자를 숨긴다)

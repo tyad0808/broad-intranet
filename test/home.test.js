@@ -61,6 +61,7 @@ test('지금 처리할 주문·내 담당: 주문 목록의 칸과 같은 건수
   const kim = await loginAs(baseUrl, 'kim@broad.test');
   const html = (await kim.request('/home')).text;
   assert.deepStrictEqual(tileOf(html, '신규주문 (발주확인 전)'), { href: '/?st=new', n: 2 });
+  assert.match(html, /<span>주문 <span class="badge">2<\/span>/, '왼쪽 메뉴 주문 옆에도 신규주문 수');
   assert.deepStrictEqual(tileOf(html, '오늘출발'), { href: '/?alert=today', n: 1 });
   assert.deepStrictEqual(tileOf(html, '취소·반품·교환 요청'), { href: '/?alert=claim', n: 1 });
   assert.deepStrictEqual(tileOf(html, '담당 없는 주문'), { href: '/?view=unassigned', n: 1 });

@@ -35,7 +35,7 @@
           <a href="/home" class="<%= section === 'home' ? 'on' : '' %>"><svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><%- icon('home') %></svg><span>홈</span></a>
         </div>
         <% const navItems = {
-             orders: { href: '/', label: '주문', count: 0 },
+             orders: { href: '/', label: '주문', count: locals.newOrders },
              mail: { href: '/inbox?box=mail', label: '메일함', count: locals.openMails },
              chat: locals.chatOn ? { href: '/inbox?box=chat', label: '톡톡', count: locals.openChats } : null,
              inbox: { href: '/inbox', label: '문의함', count: locals.openInquiries },
