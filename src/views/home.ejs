@@ -22,13 +22,14 @@
     ...(locals.chatOn ? [{ ...boxTile('내 톡톡 대기', inbox.chat, '/inbox?box=chat&tab=wait&who=mine', '/inbox?box=chat&tab=wait') }] : []),
   ];
 %>
-<div class="page-head">
+<div class="page-head home-page-head">
   <div class="title-row">
     <h1 class="page-title">안녕하세요, <%= user.name %>님</h1>
     <span class="hm-date"><%= todayText %></span>
   </div>
 </div>
 
+<div class="hm-row hm-row-top">
 <section class="card hm-card" aria-labelledby="hm-todo">
   <div class="hm-head"><h2 id="hm-todo"><%- ico('<path d="M5 12l4 4 10-10"/>') %>지금 처리할 주문</h2><a class="hm-more" href="/">주문 전체 보기 ›</a></div>
   <div class="hm-tiles"><% todo.forEach(t => { %><%- tile(t) %><% }) %></div>
@@ -44,8 +45,10 @@
   <div class="hm-head"><h2 id="hm-mine"><%- ico('<circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/>') %>내 담당</h2><span class="hm-note">나에게 지정된 것만 세요</span></div>
   <div class="hm-tiles<%= mine.length === 3 ? ' three' : '' %>"><% mine.forEach(t => { %><%- tile(t) %><% }) %></div>
 </section>
+</div>
 
-<div class="hm-two">
+<%# 아랫줄: 일정 · 방금 들어온 주문 · (관리자·부관리자) 매출·받기 상태 %>
+<div class="hm-row hm-row-bottom<%= manager ? ' has-mgr' : '' %>">
   <section class="card hm-card" aria-labelledby="hm-cal">
     <div class="hm-head"><h2 id="hm-cal"><%- ico('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>') %>오늘·내일 일정</h2><a class="hm-more" href="/schedule">일정 ›</a></div>
     <% if (events.length) { %>
@@ -81,11 +84,10 @@
       <p class="hm-empty">아직 들어온 주문이 없어요. <a href="/orders/new">수기 주문 등록하기 ›</a></p>
     <% } %>
   </section>
-</div>
 
 <% if (manager) { const s = manager.sales; %>
-  <section class="card hm-card" aria-labelledby="hm-mgr">
-    <div class="hm-head"><h2 id="hm-mgr"><%- ico('<path d="M5 20V10M12 20V4M19 20v-7"/>') %>관리자·부관리자만 보여요</h2><a class="hm-more" href="/stats">통계 ›</a></div>
+  <section class="card hm-card hm-mgr-card" aria-labelledby="hm-mgr">
+    <div class="hm-head"><h2 id="hm-mgr"><%- ico('<path d="M5 20V10M12 20V4M19 20v-7"/>') %>이번 달 · 받기 상태</h2><a class="hm-more" href="/stats">통계 ›</a></div>
     <div class="hm-mgr">
       <a class="hm-stat" href="/stats?from=<%= s.from %>&to=<%= s.to %>">
         <span class="hm-label">이번 달 매출 (<%= s.month %>월 1~<%= s.day %>일)</span>
@@ -116,4 +118,5 @@
     </div>
   </section>
 <% } %>
+</div>
 <%- include('partials/footer') %>

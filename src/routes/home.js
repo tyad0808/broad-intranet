@@ -125,6 +125,7 @@ function homeRoutes(db, { sourceLabels = {} } = {}) {
       title: '홈',
       navSection: 'home',
       ds: true,
+      bodyClass: 'orders-wide', // 주문 화면과 같은 너비
       todayText: `${mm}월 ${dd}일 (${weekday})`,
       orders,
       inbox,
