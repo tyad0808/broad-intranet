@@ -2005,3 +2005,14 @@ a.hm-stat:hover { background: var(--surface-2); text-decoration: none; }
 .ev-todo { color: var(--warn); }
 a.ev-btn { display: flex; justify-content: center; width: 100%; min-height: 44px; font-size: 16px; }
 .ev-help { margin: 10px 0 0; color: var(--muted); font-size: 14px; }
+.ev-check { display: grid; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-2); }
+.ev-check .ev-help { margin: 0; }
+button.ev-btn { width: 100%; min-height: 44px; font-size: 16px; }
+.ev-compact { padding-top: 14px; padding-bottom: 14px; }
+.ev-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 32px; font-size: 14px; }
+.ev-line + .ev-line { margin-top: 6px; }
+.ev-name { font-weight: 700; color: var(--text); font-size: 16px; }
+.ev-when { color: var(--muted); font-variant-numeric: tabular-nums; }
+.ev-link { margin-left: auto; font-weight: 600; white-space: nowrap; }
+/* 노트북 크기: 주문 화면 위 칩 줄이 두 줄로 꺾이지 않게 '연습 모드' 옆 판매처 이름은 숨김 (마우스를 올리면 보임) */
+@media (min-width: 901px) and (max-width: 1440px) { .practice-pill .muted { display: none; } }

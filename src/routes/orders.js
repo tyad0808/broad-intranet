@@ -49,7 +49,7 @@ const GROUP_SHIP_STATE = `CASE
 //   today: 스마트스토어 오늘출발 상품이 들어 있는데 아직 발송 전인 주문 (발송기한 이른 순)
 //   shiplate: 채널의 발송기한이 지났는데 아직 발송 전인 주문
 //   evidence: 자사몰에서 손님이 세금계산서를 신청했는데 아직 발행 전 (견적 도구에서 발행)
-const ALERTS = { today: '오늘출발', claim: '취소·반품·교환 요청', late: '납기 지남', shiplate: '발송기한 지남', evidence: '계산서 발행 대기' };
+const ALERTS = { today: '오늘출발', claim: '취소·반품·교환 요청', late: '납기 지남', shiplate: '발송기한 지남', evidence: '계산서 대기' };
 const TODAY_TYPES = "('TODAY', 'OPTION_TODAY')";
 const TODAY_HAVING = `MAX(o.channel_status = 'PAYED' AND o.delivery_type IN ${TODAY_TYPES}) = 1`;
 // 발송지연 처리하면 네이버가 발송기한을 새 날짜로 바꿔 준다 → 새 기한까지 지나야 '발송기한 지남'

@@ -45,7 +45,9 @@ function evidenceView(row) {
     });
   }
   if (!badges.length) return null;
-  return { badges, tax, cash };
+  // 할 일: 세금계산서 발행 전 · 현금영수증 발급 실패 → 목록 꼬리표와 상세 맨 위 큰 칸은 이것만
+  const todo = Boolean((tax && tax.status === 'requested') || (cash && cash.status === 'failed'));
+  return { badges, listBadges: badges.filter(b => b.cls === 'req'), tax, cash, todo };
 }
 
 // 주문 묶음 여러 개의 증빙을 한 번에: Map('channel:주문번호' → 화면용)

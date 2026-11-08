@@ -1,0 +1,49 @@
+<%# 자사몰 증빙 칸 — ev: evidenceView() 결과, compact: 끝난 것(한 줄씩 작게) %>
+<% const t = ev.tax; const cr = ev.cash; %>
+<% if (compact) { %>
+<section class="card ev-card ev-compact" aria-label="세금계산서·현금영수증">
+  <% if (t) { %>
+    <div class="ev-line">
+      <span class="ev-name">세금계산서</span>
+      <span class="ev-badge <%= t.status === 'issued' ? 'done' : 'off' %>"><%= t.label %></span>
+      <span class="ev-when"><%= t.issuedAt ? kst(t.issuedAt).slice(5) : '' %></span>
+      <% if (t.url) { %><a class="ev-link" href="<%= t.url %>" target="_blank" rel="noopener">보기 ↗</a><% } %>
+    </div>
+  <% } %>
+  <% if (cr) { %>
+    <div class="ev-line">
+      <span class="ev-name">현금영수증</span>
+      <span class="ev-badge <%= cr.status === 'canceled' ? 'off' : 'cash' %>"><%= cr.use ? `${cr.use} ` : '' %><%= cr.label %></span>
+      <span class="ev-when"><%= cr.issuedAt ? kst(cr.issuedAt).slice(5) : cr.requestedAt ? `${kst(cr.requestedAt).slice(5)} 신청` : '' %></span>
+    </div>
+  <% } %>
+</section>
+<% } else { %>
+<section class="card ev-card" aria-labelledby="ev-title">
+  <% if (t && t.status === 'requested') { %>
+    <h2 id="ev-title" class="ev-title">세금계산서 <span class="ev-badge req">발행 전</span></h2>
+    <dl class="ev-info">
+      <% if (t.requestedAt) { %><dt>신청</dt><dd><%= kst(t.requestedAt) %> · 자사몰 주문서</dd><% } %>
+      <dt>상태</dt><dd><strong class="ev-todo">손님이 신청했어요. 아직 발행 전이에요.</strong></dd>
+    </dl>
+    <% if (t.url) { %>
+      <a class="btn-sm primary ev-btn" href="<%= t.url %>" target="_blank" rel="noopener">계산서 발행하기 ↗</a>
+      <p class="ev-help">견적 도구가 새 탭으로 열려요. 이 주문으로 견적이 만들어지면 [기록 저장] → [계산서 발행]을 누르고, 돌아와서 아래 [지금 확인]을 누르세요.</p>
+    <% } else { %>
+      <p class="ev-help">견적 도구 링크가 아직 없어요. 왼쪽 메뉴 '견적/계산서'에서 발행해 주세요.</p>
+    <% } %>
+  <% } else if (cr) { %>
+    <h2 id="ev-title" class="ev-title">현금영수증 <span class="ev-badge req"><%= cr.label %></span></h2>
+    <dl class="ev-info">
+      <% if (cr.use) { %><dt>용도</dt><dd><%= cr.use %></dd><% } %>
+      <% if (cr.requestedAt) { %><dt>신청</dt><dd><%= kst(cr.requestedAt) %> · 자사몰 주문서</dd><% } %>
+    </dl>
+    <p class="ev-help">자사몰 관리자에서 다시 발급해 주세요.</p>
+  <% } %>
+  <form method="post" action="/orders/<%= orderId %>/evidence-check" class="ev-check">
+    <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
+    <button type="submit" class="btn-sm ev-btn" data-once>지금 확인</button>
+    <span class="ev-help">처리했으면 눌러 주세요. 5분을 기다리지 않고 자사몰에서 이 주문만 바로 다시 읽어 와요.</span>
+  </form>
+</section>
+<% } %>
