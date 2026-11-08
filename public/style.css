@@ -1964,3 +1964,25 @@ a.hm-stat:hover { background: var(--surface-2); text-decoration: none; }
   .hm-stat + .hm-stat { border-left: 0; border-top: 1px solid var(--line-2); }
   .hm-conn .hm-sub { white-space: normal; text-align: right; }
 }
+/* 홈: 미답변 메일·문의 줄 */
+.hm-row-inbox { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hm-total { margin-left: 4px; padding: 0 8px; border-radius: 6px; background: var(--error-bg); color: var(--error); font-size: 14px; font-weight: 700; line-height: 24px; font-variant-numeric: tabular-nums; }
+.hm-total.zero { background: var(--line-2); color: var(--text-2); }
+.hm-ask { display: grid; grid-template-columns: auto 7.5em minmax(0, 1fr) auto auto; align-items: center; gap: 10px; min-height: 40px; padding: 6px 16px; color: var(--text); font-size: 14px; }
+.hm-ask:hover { background: var(--surface-2); text-decoration: none; }
+.hm-ask .ch { width: 22px; height: 22px; }
+.hm-ask .talk-tag { width: 6em; text-align: center; }
+.hm-ask-from { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.hm-ask-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.hm-ask-who { padding: 0 8px; border-radius: 6px; background: var(--purple-bg); color: var(--purple); font-weight: 600; line-height: 24px; white-space: nowrap; }
+.hm-ask-who.none { background: var(--line-2); color: var(--muted); font-weight: 500; }
+.hm-ask-time { color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 1100px) {
+  .hm-row-inbox { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  .hm-ask { grid-template-columns: auto minmax(0, 1fr) auto; row-gap: 2px; }
+  .hm-ask .talk-tag { width: auto; }
+  .hm-ask-title { grid-column: 1 / -1; }
+  .hm-ask-who { display: none; }
+}

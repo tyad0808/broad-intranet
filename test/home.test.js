@@ -139,3 +139,21 @@ test('다음 날 처음 / 로 들어오면 홈을 먼저, 홈을 본 뒤엔 / �
   assert.strictEqual((await b.request('/home')).status, 200);
   assert.strictEqual((await b.request('/')).status, 200);
 });
+
+test('미답변 메일·문의 최근 5건: 보낸 사람·제목·담당, 왼쪽 메뉴 숫자는 그대로', async t => {
+  const { db, baseUrl, kimId } = await setup(t);
+  const add = db.prepare('INSERT INTO inquiries (source, external_id, from_name, subject, body, received_at, assignee_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  for (let i = 1; i <= 6; i++) add.run('naver_mail', `m${i}`, `보낸이${i}`, `메일 제목 ${i}`, '내용', `2026-11-0${i}T01:00:00Z`, null, 'open');
+  add.run('gmail', 'done1', '답한 사람', '답한 메일', '내용', '2026-11-07T01:00:00Z', null, 'answered');
+  add.run('coupang_qna', 'q1', '정해리', null, '사이즈 120x60 가능한가요?', '2026-11-07T02:00:00Z', kimId, 'open');
+  const kim = await loginAs(baseUrl, 'kim@broad.test');
+  const html = (await kim.request('/home')).text;
+  assert.match(html, /미답변 메일<span class="hm-total">6건<\/span>/);
+  assert.match(html, /보낸이6/, '최근 것부터');
+  assert.doesNotMatch(html, /보낸이1</, '5건까지만');
+  assert.match(html, /나머지 1건 더 보기/);
+  assert.doesNotMatch(html, /답한 메일/, '답한 메일은 안 보임');
+  assert.match(html, /<span class="ch ch-coupang"[^>]*>C<\/span>\s*<span class="hm-ask-from">정해리<\/span>\s*<span class="hm-ask-title">사이즈 120x60 가능한가요\?<\/span>\s*<span class="hm-ask-who">김직원<\/span>/);
+  // 왼쪽 메뉴 메일함 숫자(미답변 6)가 홈에서도 보인다
+  assert.match(html, /<span>메일함 <span class="badge">6<\/span>/);
+});

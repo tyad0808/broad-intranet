@@ -8,11 +8,11 @@ const { orderSummary, kstDay } = require('./orders');
 const { ORDER_TIME } = require('../retention');
 const { totals, utcRange } = require('../stats');
 
-const MAIL_SQL = "(source GLOB 'naver_mail*' OR source GLOB 'gmail*')";
+const MAIL_SQL = "(q.source GLOB 'naver_mail*' OR q.source GLOB 'gmail*')";
 const BOX_WHERE = {
-  mail: `${MAIL_SQL} AND deleted_at IS NULL`,
-  shop: `NOT ${MAIL_SQL} AND source != 'talktalk'`,
-  chat: "source = 'talktalk'",
+  mail: `(${MAIL_SQL} AND q.deleted_at IS NULL)`,
+  shop: `(NOT ${MAIL_SQL} AND q.source != 'talktalk')`,
+  chat: "(q.source = 'talktalk')",
 };
 const MAIL_KIND = source => (/^naver_mail/.test(source) ? '네이버메일' : /^gmail/.test(source) ? '지메일' : null);
 // 판매처 받기 상태: 이 시간 안에 받은 기록이 있는 판매처만 보여 준다 (예전에 쓰다 뺀 판매처는 안 보이게)
@@ -47,12 +47,17 @@ function monthSales(db) {
   return { from: first, to: today, month: m, day: d, sales: now.sales, orders: now.orders, prevSales: prev.sales, change };
 }
 
-function homeRoutes(db, { sourceLabels = {} } = {}) {
+// DB 시각('2026-11-04 01:00:00' 처럼 끝에 Z 없는 UTC 포함) → ISO
+const isoOf = v => { const t = String(v || ''); return /[zZ]|[+-]\d\d:?\d\d$/.test(t) ? t : `${t.replace(' ', 'T')}Z`; };
+// 쇼핑몰 문의 출처 → 판매처 (한 글자 표시용)
+const SHOP_CHANNEL = { smartstore_qna: 'smartstore', naver_qna: 'smartstore', godo_qna: 'godo', coupang_qna: 'coupang' };
+
+function homeRoutes(db, { sourceLabels = {}, chatOn = false } = {}) {
   const router = express.Router();
 
   const countOpen = (box, userId) => db.prepare(`
-    SELECT COUNT(*) AS total, COALESCE(SUM(assignee_id = ?), 0) AS mine
-    FROM inquiries WHERE status = 'open' AND ${BOX_WHERE[box]}
+    SELECT COUNT(*) AS total, COALESCE(SUM(q.assignee_id = ?), 0) AS mine
+    FROM inquiries q WHERE q.status = 'open' AND ${BOX_WHERE[box]}
   `).get(userId);
 
   router.get('/home', (req, res) => {
@@ -91,7 +96,18 @@ function homeRoutes(db, { sourceLabels = {} } = {}) {
         SELECT id FROM orders x WHERE x.channel = g.ch AND x.channel_order_id = g.oid
         ORDER BY CASE WHEN x.item_type = 'addon' THEN 1 ELSE 0 END, x.id LIMIT 1)
       ORDER BY g.t DESC
-    `).all().map(r => ({ ...r, clock: kstClock(String(r.at || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(String(r.at || '')) ? '' : 'Z')) }));
+    `).all().map(r => ({ ...r, clock: kstClock(isoOf(r.at)) }));
+
+    // 미답변 메일 · 문의(쇼핑몰 문의 + 톡톡) 최근 5건씩: 누가 보냈는지·무슨 내용인지·담당
+    const openRows = (where, limit = 5) => db.prepare(`
+      SELECT q.id, q.source, q.from_name, q.from_addr, q.received_at, q.assignee_id, u.name AS assignee_name,
+        substr(COALESCE(NULLIF(q.subject, ''), q.body, ''), 1, 120) AS title
+      FROM inquiries q LEFT JOIN users u ON u.id = q.assignee_id
+      WHERE q.status = 'open' AND ${where}
+      ORDER BY q.received_at DESC, q.id DESC LIMIT ${Number(limit)}
+    `).all().map(r => ({ ...r, clock: kstClock(isoOf(r.received_at)) }));
+    const mailRows = openRows(BOX_WHERE.mail);
+    const askRows = openRows(chatOn ? `(${BOX_WHERE.shop} OR ${BOX_WHERE.chat})` : BOX_WHERE.shop);
 
     // 관리자·부관리자만: 이번 달 매출 · 판매처·메일 받기 상태
     let manager = null;
@@ -132,6 +148,10 @@ function homeRoutes(db, { sourceLabels = {} } = {}) {
       events: eventRows.slice(0, 6),
       moreEvents: Math.max(0, eventRows.length - 6),
       recent,
+      mailRows,
+      askRows,
+      mailLabel: source => MAIL_KIND(source) || source,
+      askChannel: source => SHOP_CHANNEL[source] || null,
       manager,
     });
   });
