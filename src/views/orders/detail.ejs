@@ -231,6 +231,35 @@
   </div>
 
   <div class="detail-side">
+  <%# 자사몰 증빙: 세금계산서(견적 도구에서 발행) · 현금영수증(상태만) %>
+  <% if (locals.evidence) { const ev = evidence; const t = ev.tax; const cr = ev.cash; %>
+  <section class="card ev-card" aria-labelledby="ev-title">
+    <% if (t) { %>
+      <h2 id="ev-title" class="ev-title">세금계산서 <span class="ev-badge <%= t.status === 'issued' ? 'done' : t.status === 'canceled' ? 'off' : 'req' %>"><%= t.label %></span></h2>
+      <dl class="ev-info">
+        <% if (t.requestedAt) { %><dt>신청</dt><dd><%= kst(t.requestedAt) %> · 자사몰 주문서</dd><% } %>
+        <% if (t.issuedAt) { %><dt><%= t.status === 'canceled' ? '취소 전 발행' : '발행' %></dt><dd><%= kst(t.issuedAt) %> · 견적 도구</dd><% } %>
+        <dt>상태</dt>
+        <dd><% if (t.status === 'issued') { %>발행했어요.<% } else if (t.status === 'canceled') { %>발행한 계산서를 취소했어요.<% } else { %><strong class="ev-todo">손님이 신청했어요. 아직 발행 전이에요.</strong><% } %></dd>
+      </dl>
+      <% if (t.url) { %>
+        <a class="btn-sm <%= t.status === 'requested' ? 'primary' : '' %> ev-btn" href="<%= t.url %>" target="_blank" rel="noopener"><%= t.status === 'requested' ? '계산서 발행하기' : '계산서 보기' %> ↗</a>
+        <% if (t.status === 'requested') { %><p class="ev-help">견적 도구가 새 탭으로 열려요. 이 주문의 상품·금액이 들어간 견적이 만들어지면 [기록 저장] → [계산서 발행]을 누르세요. 발행하면 5분 안에 여기도 '발행됨'으로 바뀌어요.</p><% } %>
+      <% } else if (t.status === 'requested') { %>
+        <p class="ev-help">견적 도구 링크가 아직 없어요. 왼쪽 메뉴 '견적/계산서'에서 발행해 주세요.</p>
+      <% } %>
+    <% } %>
+    <% if (cr) { %>
+      <h2 <%- t ? '' : 'id="ev-title"' %> class="ev-title<%= t ? ' ev-second' : '' %>">현금영수증 <span class="ev-badge <%= cr.status === 'failed' ? 'req' : cr.status === 'canceled' ? 'off' : 'cash' %>"><%= cr.label %></span></h2>
+      <dl class="ev-info">
+        <% if (cr.use) { %><dt>용도</dt><dd><%= cr.use %></dd><% } %>
+        <% if (cr.requestedAt) { %><dt>신청</dt><dd><%= kst(cr.requestedAt) %> · 자사몰 주문서</dd><% } %>
+        <% if (cr.issuedAt) { %><dt>발급</dt><dd><%= kst(cr.issuedAt) %></dd><% } %>
+      </dl>
+      <% if (cr.status === 'failed' || cr.status === 'requested') { %><p class="ev-help">현금영수증은 자사몰 관리자에서 확인해 주세요.</p><% } %>
+    <% } %>
+  </section>
+  <% } %>
   <% if (['smartstore', 'coupang', 'godo'].includes(order.channel)) {
        const isCoupang = order.channel === 'coupang';
        // 쿠팡·자사몰의 발주확인 = 상품준비중 처리

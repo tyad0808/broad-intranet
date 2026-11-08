@@ -154,6 +154,34 @@ const CANCEL_REQUEST_FRESH_DAYS = 14;
 
 const kstDate = date => new Date(date.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 
+// 견적 도구(계산서 발행) 주소: 이 주소로 시작하는 링크만 버튼으로 쓴다 (다른 사이트로 보내지 않게)
+const QUOTE_ORIGIN = (() => {
+  try { return new URL(process.env.QUOTE_URL || 'https://quote.broadstore.co.kr').origin; } catch { return null; }
+})();
+const oneOf = (value, list) => (list.includes(value) ? value : null);
+// 자사몰 API 의 evidence 칸 → 저장할 값. 칸이 아예 없으면(예전 API) undefined → 저장된 값을 건드리지 않는다
+function evidenceOf(order, quoteOrigin = QUOTE_ORIGIN) {
+  if (!order || !Object.hasOwn(order, 'evidence')) return undefined;
+  const e = order.evidence && typeof order.evidence === 'object' ? order.evidence : {};
+  const tax = e.taxInvoice && typeof e.taxInvoice === 'object' ? e.taxInvoice : null;
+  const cash = e.cashReceipt && typeof e.cashReceipt === 'object' ? e.cashReceipt : null;
+  let url = null;
+  try {
+    const u = tax && tax.url ? new URL(String(tax.url)) : null;
+    url = u && u.protocol === 'https:' && quoteOrigin && u.origin === quoteOrigin ? u.href : null;
+  } catch { url = null; }
+  return {
+    type: oneOf(e.type, ['tax_invoice', 'cash_receipt']),
+    requested_at: e.requestedAt ? kstIso(e.requestedAt) : null,
+    tax_status: tax ? oneOf(tax.status, ['requested', 'issued', 'canceled']) : null,
+    tax_issued_at: tax && tax.issuedAt ? kstIso(tax.issuedAt) : null,
+    tax_url: url,
+    cash_use: cash ? oneOf(cash.use, ['income', 'expense']) : null,
+    cash_status: cash ? oneOf(cash.status, ['requested', 'issued', 'canceled', 'failed']) : null,
+    cash_issued_at: cash && cash.issuedAt ? kstIso(cash.issuedAt) : null,
+  };
+}
+
 // 자사몰 주문 1건 → 인트라넷 주문(상품) 여러 건
 function normalize(order, now = new Date()) {
   const changed = Date.parse(kstIso(order.modifiedAt || order.paidAt || order.orderedAt) || '');
@@ -169,6 +197,7 @@ function normalize(order, now = new Date()) {
   // 배송비: 주문 전체에 한 번 (totalDeliveryCharge)
   const shipFee = money(order.totalDeliveryCharge);
   const shipMemo = String(receiver.memo || receiver.message || order.orderMemo || order.shippingMemo || order.memo || '').trim().slice(0, 500) || null;
+  const evidence = evidenceOf(order);
   return (order.items || []).map(item => {
     const map = mapStatus(item.status || order.status, Boolean(item.shippedAt), { stale });
     const size = item.sizeW && item.sizeH ? `${item.sizeW}x${item.sizeH}mm` : null;
@@ -201,6 +230,8 @@ function normalize(order, now = new Date()) {
       ship_pkg: order.orderNo ? String(order.orderNo) : null,
       // 자사몰 상품 번호 (상품 페이지 링크: goods_view.php?goodsNo=번호)
       product_no: item.goodsNo ? String(item.goodsNo) : null,
+      // 세금계산서·현금영수증 (주문 단위, applyOrders 가 order_evidence 에 저장)
+      ...(evidence !== undefined ? { evidence } : {}),
     };
   });
 }
@@ -320,7 +351,7 @@ function createGodoWriter(options = {}) {
   };
 }
 
-module.exports = {
+module.exports = { evidenceOf,
   formatOption, createGodoSource, createGodoClient, createGodoWriter, toCommonResult, splitItemId,
   normalize, mapStatus, isAllowed, parseJson, GodoApiError,
 };

@@ -31,7 +31,7 @@
     <h1 class="page-title">주문</h1>
     <%# 확인 필요: 오늘출발·취소·반품·교환 요청·납기 지남·발송기한 지남 (0건이면 흐리게). 실시간 새로고침 때 건수가 바뀐다 %>
     <nav class="alert-tabs" id="live-head" aria-label="확인 필요">
-      <% Object.entries(ALERTS).forEach(([key, label]) => { const n = alertCounts[key] || 0; %>
+      <% Object.entries(ALERTS).forEach(([key, label]) => { const n = alertCounts[key] || 0; if (key === 'evidence' && !n && alert !== key) return; %>
         <a href="<%= alert === key ? link({ alert: '', stage: '' }) : link({ alert: key, st: '', view: '', stage: '' }) %>"
            class="alert-tab alert-<%= key %> <%= alert === key ? 'on' : '' %> <%= n ? '' : 'zero' %>">
           <%= label %> <span class="count"><%= n %></span>
@@ -233,6 +233,7 @@
             <% if (o.channel === 'manual') { %>
               <span class="src-tag <%= o.source_id ? `src-c${o.source_id % 6}` : 'none' %>"><%= o.source_name || '출처 미지정' %></span>
             <% } %>
+            <% if (g.evidence) { g.evidence.badges.forEach(b => { %><span class="ev-badge <%= b.cls %>"><%= b.text %></span><% }) } %>
             <% if (g.today) { %><span class="today-badge" title="스마트스토어 오늘출발 상품">오늘출발</span><% } %>
             <% if (g.claim && claimLevel(g.claim.claim_status)) { %>
               <span class="claim-badge <%= claimLevel(g.claim.claim_status) %>"><%= claimLabel(g.claim.claim_status) %></span>

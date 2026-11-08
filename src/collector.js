@@ -101,10 +101,30 @@ function applyOrders(db, orders) {
   // claims: 이번 수집에서 새로 생긴 취소·반품·교환 요청 (알림용)
   const result = { created: 0, updated: 0, createdIds: [], archived: 0, claims: [] };
 
+  // 증빙(세금계산서·현금영수증): 주문번호 단위로 덮어쓴다. 바뀌었을 때만 updated_at 을 새로
+  const saveEvidence = db.prepare(`
+    INSERT INTO order_evidence (channel, channel_order_id, type, requested_at, tax_status, tax_issued_at, tax_url, cash_use, cash_status, cash_issued_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(channel, channel_order_id) DO UPDATE SET type = excluded.type, requested_at = excluded.requested_at,
+      tax_status = excluded.tax_status, tax_issued_at = excluded.tax_issued_at, tax_url = excluded.tax_url,
+      cash_use = excluded.cash_use, cash_status = excluded.cash_status, cash_issued_at = excluded.cash_issued_at, updated_at = datetime('now')
+    WHERE order_evidence.type IS NOT excluded.type OR order_evidence.requested_at IS NOT excluded.requested_at
+      OR order_evidence.tax_status IS NOT excluded.tax_status OR order_evidence.tax_issued_at IS NOT excluded.tax_issued_at
+      OR order_evidence.tax_url IS NOT excluded.tax_url OR order_evidence.cash_use IS NOT excluded.cash_use
+      OR order_evidence.cash_status IS NOT excluded.cash_status OR order_evidence.cash_issued_at IS NOT excluded.cash_issued_at
+  `);
+  const evidenceDone = new Set();
+
   const shippedGroups = new Set();
   transaction(db, () => {
     for (const o of orders) {
       const existing = find.get(o.channel, o.channel_item_id);
+      const evKey = `${o.channel}:${o.channel_order_id}`;
+      if (o.evidence && !evidenceDone.has(evKey)) {
+        evidenceDone.add(evKey);
+        const e = o.evidence;
+        saveEvidence.run(o.channel, o.channel_order_id, e.type, e.requested_at, e.tax_status, e.tax_issued_at, e.tax_url, e.cash_use, e.cash_status, e.cash_issued_at);
+      }
 
       if (!existing) {
         if (UNPAID.has(o.channel_status) || CANCELED.has(o.channel_status)) continue;

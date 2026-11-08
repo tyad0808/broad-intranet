@@ -14,6 +14,7 @@ const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, 
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER, orderShipWay, shipWay } = require('../channels/shipping');
 const { sheetView, SHIP_CHOICES, termsOf, phoneOf, shipChoiceFor } = require('../proofs');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
+const { evidenceFor, evidenceView, GROUP_TAX_PENDING } = require('../evidence');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
 
@@ -47,7 +48,8 @@ const GROUP_SHIP_STATE = `CASE
 //   late : 납기가 지났는데 아직 안 나간 주문
 //   today: 스마트스토어 오늘출발 상품이 들어 있는데 아직 발송 전인 주문 (발송기한 이른 순)
 //   shiplate: 채널의 발송기한이 지났는데 아직 발송 전인 주문
-const ALERTS = { today: '오늘출발', claim: '취소·반품·교환 요청', late: '납기 지남', shiplate: '발송기한 지남' };
+//   evidence: 자사몰에서 손님이 세금계산서를 신청했는데 아직 발행 전 (견적 도구에서 발행)
+const ALERTS = { today: '오늘출발', claim: '취소·반품·교환 요청', late: '납기 지남', shiplate: '발송기한 지남', evidence: '계산서 발행 대기' };
 const TODAY_TYPES = "('TODAY', 'OPTION_TODAY')";
 const TODAY_HAVING = `MAX(o.channel_status = 'PAYED' AND o.delivery_type IN ${TODAY_TYPES}) = 1`;
 // 발송지연 처리하면 네이버가 발송기한을 새 날짜로 바꿔 준다 → 새 기한까지 지나야 '발송기한 지남'
@@ -169,6 +171,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     if (alert === 'late') having.push(lateHaving);
     if (alert === 'today') having.push(TODAY_HAVING);
     if (alert === 'shiplate') having.push(shipLateHaving());
+    if (alert === 'evidence') having.push(`MAX(${GROUP_TAX_PENDING}) = 1`);
     // 끝난 주문은 N일(기본 14일)이 지나면 '전체'·'배송완료' 에서 숨긴다 (검색·월별 보기·확인 필요·달력 날짜로는 보임)
     const cutoff = hideCutoff(db);
     const doneGroup = `(${GROUP_ENDED} = 1 OR MIN(COALESCE(o.stage_id = ${Number(last)}, 0)) = 1)`;
@@ -213,8 +216,11 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       if (current && current.rnk === row.rnk) current.items.push(row);
       else groups.push({ rnk: row.rnk, main: row, items: [row] });
     }
+    // 자사몰 증빙(세금계산서·현금영수증) 꼬리표
+    const evidence = evidenceFor(db, groups.map(g => g.main));
     // 카드에 보여줄 처리 가능 여부와 클레임 표시
     for (const g of groups) {
+      g.evidence = evidence.get(`${g.main.channel}:${g.main.channel_order_id}`) || null;
       g.canConfirm = g.items.some(canConfirm);
       g.canDispatch = g.items.some(canDispatch);
       g.claim = g.items.find(hasOpenClaim) || g.items.find(i => i.claim_status) || null;
@@ -313,9 +319,11 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
         COALESCE(SUM(claim), 0) AS claim,
         COALESCE(SUM(late), 0) AS late,
         COALESCE(SUM(today), 0) AS today,
-        COALESCE(SUM(shiplate), 0) AS shiplate
+        COALESCE(SUM(shiplate), 0) AS shiplate,
+        COALESCE(SUM(evidence), 0) AS evidence
       FROM (
-        SELECT MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late, (${TODAY_HAVING}) AS today, COALESCE(${shipLateHaving()}, 0) AS shiplate
+        SELECT MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late, (${TODAY_HAVING}) AS today, COALESCE(${shipLateHaving()}, 0) AS shiplate,
+          MAX(${GROUP_TAX_PENDING}) AS evidence
         FROM orders o ${countWhere}
         GROUP BY o.channel, o.channel_order_id
       )
@@ -838,10 +846,14 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     const sourceName = order.source_id ? (db.prepare('SELECT name FROM order_sources WHERE id = ?').get(order.source_id) || {}).name : null;
     // 작업 파일 이름 한 줄: 관리자 › 주문 수집 에서 정한 모양으로
     const pattern = (db.prepare("SELECT value FROM settings WHERE key = 'file_label_pattern'").get() || {}).value;
+    const evidence = order.channel === 'godo'
+      ? evidenceView(db.prepare('SELECT * FROM order_evidence WHERE channel = ? AND channel_order_id = ?').get(order.channel, order.channel_order_id))
+      : null;
     res.render('orders/detail', {
       title: items[0].product_name,
       order,
       sourceName,
+      evidence,
       fileLabel: fileLabel(pattern, { order, items, sourceName, channelName: res.locals.channelInfo(order.channel).name, kst: res.app.locals.kst }),
       items,
       canConfirm: items.some(canConfirm),
@@ -1098,12 +1110,14 @@ function orderSummary(db, userId) {
       COALESCE(SUM(late), 0) AS late,
       COALESCE(SUM(shiplate), 0) AS shiplate,
       COALESCE(SUM(open AND unassigned), 0) AS unassigned,
-      COALESCE(SUM(open AND mine), 0) AS mine
+      COALESCE(SUM(open AND mine), 0) AS mine,
+      COALESCE(SUM(evidence), 0) AS evidence
     FROM (
       SELECT ${GROUP_SHIP_STATE} AS ship_state, MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late,
         (${TODAY_HAVING}) AS today, COALESCE(${shipLateHaving()}, 0) AS shiplate, ${OPEN} AS open,
         MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
-        MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned
+        MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned,
+        MAX(${GROUP_TAX_PENDING}) AS evidence
       FROM orders o
       GROUP BY o.channel, o.channel_order_id
     )

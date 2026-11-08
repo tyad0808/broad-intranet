@@ -33,8 +33,9 @@
 <section class="card hm-card" aria-labelledby="hm-todo">
   <div class="hm-head"><h2 id="hm-todo"><%- ico('<path d="M5 12l4 4 10-10"/>') %>지금 처리할 주문</h2><a class="hm-more" href="/">주문 전체 보기 ›</a></div>
   <div class="hm-tiles"><% todo.forEach(t => { %><%- tile(t) %><% }) %></div>
-  <% if (orders.late || orders.shiplate) { %>
+  <% if (orders.late || orders.shiplate || orders.evidence) { %>
     <p class="hm-extra">
+      <% if (orders.evidence) { %><a href="/?alert=evidence">세금계산서 발행 대기 <strong><%= orders.evidence %></strong>건</a><% } %>
       <% if (orders.shiplate) { %><a href="/?alert=shiplate">발송기한 지남 <strong><%= orders.shiplate %></strong>건</a><% } %>
       <% if (orders.late) { %><a href="/?alert=late">납기 지남 <strong><%= orders.late %></strong>건</a><% } %>
     </p>

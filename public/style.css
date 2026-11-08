@@ -1942,8 +1942,11 @@ a.hm-stat:hover { background: var(--surface-2); text-decoration: none; }
 .hm-row-bottom { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .hm-row-bottom .hm-mgr-card { grid-column: 1 / -1; }
 /* 넓은 PC: 위 2칸, 아래 3칸 */
-@media (min-width: 1400px) {
+/* 위 2칸은 칸 이름이 잘리지 않을 만큼 넓을 때만 나란히 */
+@media (min-width: 1600px) {
   .hm-row-top { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1400px) {
   .hm-row-bottom.has-mgr { grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr); }
   .hm-row-bottom .hm-mgr-card { grid-column: auto; }
   .hm-row-bottom .hm-mgr { grid-template-columns: 1fr; }
@@ -1986,3 +1989,19 @@ a.hm-stat:hover { background: var(--surface-2); text-decoration: none; }
   .hm-ask-title { grid-column: 1 / -1; }
   .hm-ask-who { display: none; }
 }
+
+/* ───────── 자사몰 증빙 (세금계산서·현금영수증) ───────── */
+.ev-badge { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 24px; padding: 0 8px; border-radius: 6px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.ev-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.ev-badge.req { background: var(--warn-bg); color: var(--warn); }
+.ev-badge.done { background: var(--ok-bg); color: var(--ok); }
+.ev-badge.cash { background: var(--primary-weak); color: var(--primary-dark); }
+.ev-badge.off { background: var(--line-2); color: var(--text-2); }
+.ev-title { display: flex; align-items: center; gap: 8px; margin: 0; }
+.ev-title.ev-second { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line-2); }
+.ev-info { display: grid; grid-template-columns: 6em minmax(0, 1fr); gap: 8px 12px; margin: 12px 0 14px; font-size: 16px; }
+.ev-info dt { padding-top: 2px; color: var(--text-2); font-size: 14px; }
+.ev-info dd { margin: 0; min-width: 0; }
+.ev-todo { color: var(--warn); }
+a.ev-btn { display: flex; justify-content: center; width: 100%; min-height: 44px; font-size: 16px; }
+.ev-help { margin: 10px 0 0; color: var(--muted); font-size: 14px; }

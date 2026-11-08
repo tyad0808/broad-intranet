@@ -425,6 +425,25 @@ function migrate(db) {
       action      TEXT    NOT NULL,
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
+    -- 자사몰 주문의 증빙(세금계산서·현금영수증) 상태 — 자사몰 API(evidence)에서 읽어 온 값. 주문번호 단위
+    --   type: tax_invoice / cash_receipt / NULL(신청 안 함)
+    --   tax_status: requested / issued / canceled, tax_url: 견적 도구에서 이 주문 계산서를 여는 주소
+    --   cash_use: income(소득공제) / expense(지출증빙), cash_status: requested / issued / canceled / failed
+    --   개인·사업자 정보(번호·상호)는 받지도 저장하지도 않는다
+    CREATE TABLE IF NOT EXISTS order_evidence (
+      channel          TEXT NOT NULL,
+      channel_order_id TEXT NOT NULL,
+      type             TEXT,
+      requested_at     TEXT,
+      tax_status       TEXT,
+      tax_issued_at    TEXT,
+      tax_url          TEXT,
+      cash_use         TEXT,
+      cash_status      TEXT,
+      cash_issued_at   TEXT,
+      updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (channel, channel_order_id)
+    );
     -- 메일 계정을 누가 언제 추가·바꾸기·끄기·지우기 했는지
     CREATE TABLE IF NOT EXISTS mail_account_log (
       id          INTEGER PRIMARY KEY,
