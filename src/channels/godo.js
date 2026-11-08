@@ -260,6 +260,17 @@ function createGodoSource(options = {}) {
         .filter(o => o.channel_order_id && o.channel_item_id)
         .map(o => ({ ...o, refreshOnly: true }));
     },
+    // 주문 하나만 지금 다시 읽기 (주문 화면의 [지금 확인]: 계산서 발행 뒤 5분을 기다리지 않게). 없는 주문이면 []
+    async fetchOrder(orderNo) {
+      try {
+        const body = await client.request('GET', `/orders/${encodeURIComponent(orderNo)}`);
+        const order = body && (body.item || body.order || body);
+        return order && order.items ? normalize(order, now()) : [];
+      } catch (e) {
+        if (e.status === 404) return [];
+        throw e;
+      }
+    },
     // 인트라넷에선 아직 진행 중인데 이번 목록에 안 나온 주문을 한 건씩 확인한다.
     // 자사몰 관리자에서 삭제된 주문은 '없는 주문(404)' 이 되므로 → '자사몰에서 삭제됨' 으로 끝난 주문 처리
     async verifyOpen(rows) {

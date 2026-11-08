@@ -42,6 +42,7 @@
   <% } %>
   <form method="post" action="/orders/<%= orderId %>/evidence-check" class="ev-check">
     <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
+    <input type="hidden" name="back" value="<%= locals.back || '/' %>">
     <button type="submit" class="btn-sm ev-btn" data-once>지금 확인</button>
     <span class="ev-help">처리했으면 눌러 주세요. 5분을 기다리지 않고 자사몰에서 이 주문만 바로 다시 읽어 와요.</span>
   </form>

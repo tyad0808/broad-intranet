@@ -23,7 +23,7 @@
   const nowIdx = canceled ? -1 : steps.findIndex(s => !s.done);
 %>
 <% if (!locals.embed) { %>
-  <p class="back-row"><a href="<%= back %>" class="btn-back">← 목록으로</a></p>
+  <p class="back-row"><a href="<%= back %>" class="btn-back">← <%= back === '/home' ? '홈으로' : '목록으로' %></a></p>
 <% } %>
 
 <%# 머리: 채널·주문번호·결제일 + 배송 방법 + 상품 이름 + 발주서 출력 %>

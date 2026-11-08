@@ -98,6 +98,8 @@ test('오늘·내일 일정과 방금 들어온 주문, 비어 있으면 안내 
   assert.match(html, /<span class="hm-ev-time">종일<\/span>/);
   assert.doesNotMatch(html, /다음 주 일정/);
   assert.match(html, /아크릴 간판 외 1건/);
+  assert.match(html, /<a class="hm-recent" href="\/orders\/\d+\?back=%2Fhome" data-modal-link>/, '누르면 팝업으로 (페이지가 넘어가지 않게)');
+  assert.match(html, /<script src="\/modal\.js"><\/script>/);
   assert.match(html, /이영희 · \d\d:\d\d/);
 });
 

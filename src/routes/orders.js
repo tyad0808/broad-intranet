@@ -6,7 +6,7 @@
 const express = require('express');
 const { isManager } = require('../auth');
 const { CHANNELS } = require('../channels/labels');
-const { ENDED_SQL } = require('../collector');
+const { ENDED_SQL, applyOrders } = require('../collector');
 const { buildWeek } = require('./calendar');
 const { historyForOrder } = require('../customer');
 const { fileLabel } = require('../fileLabel');
@@ -801,6 +801,39 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     }
   });
 
+  // 자사몰 증빙 [지금 확인]: 이 주문 하나만 자사몰에서 바로 다시 읽는다 (조회만, 같은 주문은 한 번에 하나)
+  const godoSource = () => {
+    const list = collector ? (collector.collectors || [collector]) : [];
+    const found = list.find(c => c && c.source && c.source.channel === 'godo' && typeof c.source.fetchOrder === 'function');
+    return found ? found.source : null;
+  };
+  const checking = new Set();
+  router.post('/orders/:id/evidence-check', async (req, res, next) => {
+    const order = findOrder(req.params.id);
+    if (!order) return res.status(404).render('error', { title: '없는 주문', message: '주문을 찾을 수 없습니다.' });
+    const url = selfUrl(order.id, safeBack(req.body.back));
+    const flash = (type, message) => { req.session.flash = { type, message }; res.redirect(url); };
+    const source = order.channel === 'godo' ? godoSource() : null;
+    if (!source) return flash('error', '자사몰 연결이 없어 지금 확인할 수 없어요. 5분마다 자동으로 다시 읽어요.');
+    if (checking.has(order.channel_order_id)) return flash('warn', '이미 확인하는 중이에요. 잠시 뒤 새로고침해 보세요.');
+    checking.add(order.channel_order_id);
+    const before = db.prepare('SELECT tax_status, cash_status FROM order_evidence WHERE channel = ? AND channel_order_id = ?').get(order.channel, order.channel_order_id) || {};
+    try {
+      const rows = await source.fetchOrder(order.channel_order_id);
+      if (!rows.length) return flash('error', '자사몰에서 이 주문을 찾지 못했어요.');
+      applyOrders(db, rows);
+      notifier.ordersChanged(groupItems(order).map(i => i.id), req.user.id);
+      const after = db.prepare('SELECT tax_status, cash_status FROM order_evidence WHERE channel = ? AND channel_order_id = ?').get(order.channel, order.channel_order_id) || {};
+      const changed = after.tax_status !== before.tax_status || after.cash_status !== before.cash_status;
+      if (after.tax_status === 'issued' && before.tax_status !== 'issued') return flash('ok', '세금계산서가 발행됨으로 바뀌었어요.');
+      flash(changed ? 'ok' : 'warn', changed ? '자사몰에서 새 상태를 읽어 왔어요.' : '아직 바뀐 게 없어요. 견적 도구에서 [계산서 발행]까지 눌렀는지 확인해 주세요.');
+    } catch (e) {
+      flash('error', `자사몰에 연결하지 못했어요. 잠시 뒤 다시 눌러 주세요. (${e.message})`);
+    } finally {
+      checking.delete(order.channel_order_id);
+    }
+  });
+
   // 주문 하나 발송처리
   router.post('/orders/:id/dispatch', async (req, res, next) => {
     try {
@@ -1083,10 +1116,11 @@ function summarize(label, results) {
   };
 }
 
-// 목록으로 돌아갈 주소: 우리 사이트의 목록 주소만 허용 (다른 사이트로 튕기는 것 방지)
+// 목록으로 돌아갈 주소: 우리 사이트의 목록 주소·홈만 허용 (다른 사이트로 튕기는 것 방지)
 function safeBack(value) {
   const v = String(value || '');
-  return /^\/(\?[^\s]*)?$/.test(v) ? v : '/';
+  // 주문 목록('/', '/?…') 또는 홈('/home') 만
+  return /^\/(\?[^\s]*)?$/.test(v) || v === '/home' ? v : '/';
 }
 
 // 오늘 날짜 (한국 시간) YYYY-MM-DD

@@ -55,7 +55,7 @@ test('수집하면 주문번호마다 저장되고, 견적 도구에서 발행�
   assert.strictEqual(ev(1).tax_status, 'issued', 'evidence 칸이 없는 응답은 저장된 값을 그대로 둔다');
 });
 
-test('화면: 목록 꼬리표·계산서 발행 대기 모아보기·상세 [계산서 발행하기]·홈 줄, 발행되면 [계산서 보기]', async t => {
+test('화면: 목록은 할 일만 꼬리표(줄 끝)·계산서 대기 모아보기·상세 맨 위 [계산서 발행하기]·홈 줄, 끝난 증빙은 자사몰 처리 아래 한 줄', async t => {
   const ctx = await startServer();
   t.after(() => ctx.server.close());
   const { db, baseUrl } = ctx;
@@ -66,8 +66,8 @@ test('화면: 목록 꼬리표·계산서 발행 대기 모아보기·상세 [�
 
   const list = (await kim.request('/?view=all')).text;
   assert.match(list, /<span class="ev-badge req">세금계산서 · 발행 전<\/span>/);
-  assert.match(list, /<span class="ev-badge cash">현금영수증 · 소득공제 발급됨<\/span>/);
-  assert.match(list, /계산서 발행 대기 <span class="count">1<\/span>/);
+  assert.doesNotMatch(list, /현금영수증 · 소득공제 발급됨/, '할 일이 없는 증빙은 목록에 꼬리표를 달지 않는다');
+  assert.match(list, /계산서 대기 <span class="count">1<\/span>/);
   const pending = (await kim.request('/?alert=evidence')).text;
   assert.strictEqual((pending.match(/class="oi-main"/g) || []).length, 1);
   assert.match(pending, /포맥스 안내판 1/);
@@ -76,14 +76,55 @@ test('화면: 목록 꼬리표·계산서 발행 대기 모아보기·상세 [�
   const detail = (await kim.request(`/orders/${id(1)}`)).text;
   assert.match(detail, /세금계산서 <span class="ev-badge req">발행 전<\/span>/);
   assert.match(detail, /href="https:\/\/quote\.broadstore\.co\.kr\/\?mallOrder=261108120001" target="_blank" rel="noopener">계산서 발행하기 ↗/);
-  assert.match((await kim.request(`/orders/${id(2)}`)).text, /현금영수증 <span class="ev-badge cash">발급됨<\/span>[\s\S]*<dd>소득공제<\/dd>/);
+  assert.match(detail, /action="\/orders\/\d+\/evidence-check"[\s\S]*>지금 확인<\/button>/);
+  assert.ok(detail.indexOf('ev-card') < detail.indexOf('자사몰 처리'), '할 일이면 맨 위');
+  const cashDetail = (await kim.request(`/orders/${id(2)}`)).text;
+  assert.match(cashDetail, /class="card ev-card ev-compact"[\s\S]*현금영수증<\/span>\s*<span class="ev-badge cash">소득공제 발급됨<\/span>/);
+  assert.ok(cashDetail.indexOf('ev-compact') > cashDetail.indexOf('자사몰 처리'), '끝난 것은 자사몰 처리 아래');
   assert.doesNotMatch((await kim.request(`/orders/${id(3)}`)).text, /ev-card/, '신청 안 한 주문은 칸이 없다');
   assert.match((await kim.request('/home')).text, /href="\/\?alert=evidence">세금계산서 발행 대기 <strong>1<\/strong>건/);
 
   await collectInto(db, [mallOrder(1, { ...taxRequested, taxInvoice: { ...taxRequested.taxInvoice, status: 'issued', issuedAt: '2026-11-08T15:00:00+09:00' } })]);
   const after = (await kim.request(`/orders/${id(1)}`)).text;
-  assert.match(after, /세금계산서 <span class="ev-badge done">발행됨<\/span>/);
-  assert.match(after, />계산서 보기 ↗/);
-  assert.doesNotMatch((await kim.request('/?view=all')).text, /계산서 발행 대기/, '0건이면 칩을 숨긴다');
+  assert.match(after, /class="card ev-card ev-compact"[\s\S]*<span class="ev-badge done">발행됨<\/span>[\s\S]*>보기 ↗<\/a>/);
+  assert.doesNotMatch(after, /지금 확인/);
+  assert.doesNotMatch((await kim.request('/?view=all')).text, /계산서 대기/, '0건이면 칩을 숨긴다');
   assert.doesNotMatch((await kim.request('/home')).text, /세금계산서 발행 대기/);
+});
+
+test('[지금 확인]: 그 주문 하나만 자사몰에서 바로 읽어 발행됨으로, 연결이 없으면 안내만', async t => {
+  let issued = false;
+  const asked = [];
+  const fetchFn = async url => {
+    const u = new URL(url);
+    const m = u.pathname.match(/\/orders\/(\d+)$/);
+    const order = mallOrder(1, issued ? { ...taxRequested, taxInvoice: { ...taxRequested.taxInvoice, status: 'issued', issuedAt: '2026-11-08T15:00:00+09:00' } } : taxRequested);
+    if (m) { asked.push(m[1]); return new Response(JSON.stringify(order), { status: 200 }); }
+    return new Response(JSON.stringify({ total: 1, page: 1, size: 100, items: [order] }), { status: 200 });
+  };
+  const db = openDb(':memory:');
+  const collector = createCollector({ db, source: createGodoSource({ apiKey: 'k', fetchFn }) });
+  await collector.run();
+  const ctx = await startServer({ db, collector });
+  t.after(() => ctx.server.close());
+  addUser(db, { email: 'kim@broad.test', name: '김직원' });
+  const kim = await loginAs(ctx.baseUrl, 'kim@broad.test');
+  const id = db.prepare("SELECT id FROM orders WHERE channel_order_id = '261108120001'").get().id;
+
+  const same = await kim.submit(`/orders/${id}`, `/orders/${id}/evidence-check`, {});
+  assert.strictEqual(same.location, `/orders/${id}`);
+  assert.match((await kim.request(`/orders/${id}`)).text, /아직 바뀐 게 없어요/);
+  issued = true;
+  await kim.submit(`/orders/${id}`, `/orders/${id}/evidence-check`, {});
+  assert.deepStrictEqual(asked, ['261108120001', '261108120001'], '주문 하나만 묻는다');
+  const page = (await kim.request(`/orders/${id}`)).text;
+  assert.match(page, /세금계산서가 발행됨으로 바뀌었어요/);
+  assert.match(page, /<span class="ev-badge done">발행됨<\/span>/);
+
+  // 자사몰 연결이 없는 서버
+  const other = await startServer({ db });
+  t.after(() => other.server.close());
+  const lee = await loginAs(other.baseUrl, 'kim@broad.test');
+  await lee.submit(`/orders/${id}`, `/orders/${id}/evidence-check`, {});
+  assert.match((await lee.request(`/orders/${id}`)).text, /자사몰 연결이 없어 지금 확인할 수 없어요/);
 });

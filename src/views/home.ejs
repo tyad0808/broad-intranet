@@ -113,7 +113,7 @@
     <% if (recent.length) { %>
       <ul class="hm-recents">
         <% recent.forEach(r => { const c = channelInfo(r.channel); %>
-          <li><a class="hm-recent" href="/orders/<%= r.id %>">
+          <li><a class="hm-recent" href="/orders/<%= r.id %>?back=%2Fhome" data-modal-link>
             <span class="ch ch-<%= c.cls %>" title="<%= c.name %>"><%= c.mark %></span>
             <span class="hm-recent-title"><%= r.product_name %><%= r.n > 1 ? ` 외 ${r.n - 1}건` : '' %></span>
             <span class="hm-recent-meta"><%= r.buyer || '' %><%= r.buyer && r.clock ? ' · ' : '' %><%= r.clock %></span>
@@ -159,4 +159,7 @@
   </section>
 <% } %>
 </div>
+<%# 주문을 누르면 주문 화면처럼 팝업으로 (휴대폰은 화면 전체), 닫으면 홈 숫자를 새로 %>
+<script src="/modal.js"></script>
+<script src="/home.js"></script>
 <%- include('partials/footer') %>
