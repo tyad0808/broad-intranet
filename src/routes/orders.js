@@ -1082,9 +1082,47 @@ function kstToday() {
   return kstDay(0);
 }
 
+// 홈 화면 숫자: 주문 목록의 칸·모아보기와 같은 조건으로 센다 (홈에서 누르면 목록에도 같은 건수가 보이게)
+//   new: 신규주문(발주확인 전) · today: 오늘출발 · claim: 취소·반품·교환 요청 · late: 납기 지남 · shiplate: 발송기한 지남
+//   unassigned: 담당 없는 진행 중 주문 · mine: 내 담당 진행 중 주문 · mineStages: 내 담당을 작업 단계별로
+function orderSummary(db, userId) {
+  const lastRow = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
+  const last = lastRow ? lastRow.id : -1;
+  const lateHaving = `MIN(o.due_date) < '${kstToday()}' AND ${GROUP_ENDED} = 0 AND MAX(o.stage_id IS NULL OR o.stage_id != ${Number(last)}) = 1`;
+  const OPEN = `(MAX(CASE WHEN o.stage_id IS NULL OR o.stage_id != ${Number(last)} THEN 1 ELSE 0 END) AND ${GROUP_ENDED} = 0)`;
+  const r = db.prepare(`
+    SELECT
+      COALESCE(SUM(ship_state = 'new'), 0) AS new,
+      COALESCE(SUM(today), 0) AS today,
+      COALESCE(SUM(claim), 0) AS claim,
+      COALESCE(SUM(late), 0) AS late,
+      COALESCE(SUM(shiplate), 0) AS shiplate,
+      COALESCE(SUM(open AND unassigned), 0) AS unassigned,
+      COALESCE(SUM(open AND mine), 0) AS mine
+    FROM (
+      SELECT ${GROUP_SHIP_STATE} AS ship_state, MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late,
+        (${TODAY_HAVING}) AS today, COALESCE(${shipLateHaving()}, 0) AS shiplate, ${OPEN} AS open,
+        MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
+        MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned
+      FROM orders o
+      GROUP BY o.channel, o.channel_order_id
+    )
+  `).get(userId);
+  // 내 담당 진행 중 주문을 단계별로 (주문 목록 '내 담당' 탭의 단계 버튼과 같은 셈: 묶음의 첫 단계)
+  const mineStages = db.prepare(`
+    SELECT s.name, COUNT(*) AS n FROM (
+      SELECT MIN(o.stage_id) AS k FROM orders o
+      WHERE (o.stage_id IS NULL OR o.stage_id != ?) AND o.assignee_id = ?
+      GROUP BY o.channel, o.channel_order_id HAVING ${GROUP_ENDED} = 0
+    ) x LEFT JOIN work_stages s ON s.id = x.k
+    GROUP BY x.k ORDER BY MIN(COALESCE(s.sort_order, 9999))
+  `).all(last, userId).map(row => ({ name: row.name || '단계 없음', n: row.n }));
+  return { ...r, mineStages };
+}
+
 // 오늘부터 offset 일 뒤의 한국 날짜 'YYYY-MM-DD'
 function kstDay(offset) {
   return new Date(Date.now() + 9 * 3600 * 1000 + offset * 86400000).toISOString().slice(0, 10);
 }
 
-module.exports = { orderRoutes, safeBack, collectFlash };
+module.exports = { orderRoutes, safeBack, collectFlash, orderSummary, kstDay };

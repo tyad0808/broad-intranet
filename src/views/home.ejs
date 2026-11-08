@@ -1,0 +1,119 @@
+<%- include('partials/header') %>
+<%
+  const ico = d => `<svg class="hm-ico" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+  const won = n => { const v = Math.round(Number(n) || 0); return v >= 10000 ? `${Math.round(v / 10000).toLocaleString('ko-KR')}만원` : `${v.toLocaleString('ko-KR')}원`; };
+  const tile = (t) => `<a class="hm-tile${t.cls ? ' ' + t.cls : ''}${t.n ? '' : ' zero'}" href="${t.href}"><span class="hm-label">${t.label}</span><span class="hm-count">${t.n}<small>건</small></span><span class="hm-sub">${t.sub}</span></a>`;
+  const mineSub = orders.mineStages.length ? orders.mineStages.slice(0, 3).map(s => `${s.name} ${s.n}`).join(' · ') + (orders.mineStages.length > 3 ? ' …' : '') : '진행 중인 내 주문이 없어요';
+  // 내 담당 메일·문의·톡톡: 내 것이 있으면 '내 담당'으로, 없으면 전체 미답변 목록으로
+  const boxTile = (label, c, mineHref, allHref) => ({
+    label, n: c.mine, href: c.mine ? mineHref : allHref,
+    sub: c.total ? `전체 미답변 ${c.total}건` : '미답변이 없어요',
+  });
+  const todo = [
+    { label: '신규주문 (발주확인 전)', n: orders.new, href: '/?st=new', cls: 'new', sub: '새로 들어온 주문' },
+    { label: '오늘출발', n: orders.today, href: '/?alert=today', cls: 'warn', sub: '오늘 보내야 하는 주문' },
+    { label: '취소·반품·교환 요청', n: orders.claim, href: '/?alert=claim', cls: 'warn', sub: '판매처에서 온 요청' },
+    { label: '담당 없는 주문', n: orders.unassigned, href: '/?view=unassigned', sub: orders.unassigned ? '담당자를 정해 주세요' : '모두 담당이 있어요' },
+  ];
+  const mine = [
+    { label: '내 주문 (진행 중)', n: orders.mine, href: '/?view=mine', sub: mineSub },
+    { ...boxTile('내 메일 미답변', inbox.mail, '/inbox?box=mail&who=mine', '/inbox?box=mail') },
+    { ...boxTile('내 문의 미답변', inbox.shop, '/inbox?who=mine', '/inbox') },
+    ...(locals.chatOn ? [{ ...boxTile('내 톡톡 대기', inbox.chat, '/inbox?box=chat&tab=wait&who=mine', '/inbox?box=chat&tab=wait') }] : []),
+  ];
+%>
+<div class="page-head">
+  <div class="title-row">
+    <h1 class="page-title">안녕하세요, <%= user.name %>님</h1>
+    <span class="hm-date"><%= todayText %></span>
+  </div>
+</div>
+
+<section class="card hm-card" aria-labelledby="hm-todo">
+  <div class="hm-head"><h2 id="hm-todo"><%- ico('<path d="M5 12l4 4 10-10"/>') %>지금 처리할 주문</h2><a class="hm-more" href="/">주문 전체 보기 ›</a></div>
+  <div class="hm-tiles"><% todo.forEach(t => { %><%- tile(t) %><% }) %></div>
+  <% if (orders.late || orders.shiplate) { %>
+    <p class="hm-extra">
+      <% if (orders.shiplate) { %><a href="/?alert=shiplate">발송기한 지남 <strong><%= orders.shiplate %></strong>건</a><% } %>
+      <% if (orders.late) { %><a href="/?alert=late">납기 지남 <strong><%= orders.late %></strong>건</a><% } %>
+    </p>
+  <% } %>
+</section>
+
+<section class="card hm-card" aria-labelledby="hm-mine">
+  <div class="hm-head"><h2 id="hm-mine"><%- ico('<circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/>') %>내 담당</h2><span class="hm-note">나에게 지정된 것만 세요</span></div>
+  <div class="hm-tiles<%= mine.length === 3 ? ' three' : '' %>"><% mine.forEach(t => { %><%- tile(t) %><% }) %></div>
+</section>
+
+<div class="hm-two">
+  <section class="card hm-card" aria-labelledby="hm-cal">
+    <div class="hm-head"><h2 id="hm-cal"><%- ico('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>') %>오늘·내일 일정</h2><a class="hm-more" href="/schedule">일정 ›</a></div>
+    <% if (events.length) { %>
+      <ul class="hm-evs">
+        <% events.forEach(e => { %>
+          <li class="hm-ev">
+            <span class="hm-ev-day<%= e.dayLabel === '오늘' ? ' today' : '' %>"><%= e.dayLabel %></span>
+            <span class="hm-ev-time"><%= e.time || '종일' %></span>
+            <span class="hm-ev-title"><span class="dot ev-<%= e.color %>" aria-hidden="true"></span><%= e.title %></span>
+            <span class="hm-ev-who"><%= e.who || '' %></span>
+          </li>
+        <% }) %>
+      </ul>
+      <% if (moreEvents) { %><p class="hm-empty"><a href="/schedule">일정 <%= moreEvents %>개 더 보기 ›</a></p><% } %>
+    <% } else { %>
+      <p class="hm-empty">오늘·내일 일정이 없어요. <a href="/schedule">일정 추가하기 ›</a></p>
+    <% } %>
+  </section>
+
+  <section class="card hm-card" aria-labelledby="hm-recent">
+    <div class="hm-head"><h2 id="hm-recent"><%- ico('<path d="M12 7v5l3 2"/><circle cx="12" cy="12" r="8"/>') %>방금 들어온 주문</h2><a class="hm-more" href="/">주문 ›</a></div>
+    <% if (recent.length) { %>
+      <ul class="hm-recents">
+        <% recent.forEach(r => { const c = channelInfo(r.channel); %>
+          <li><a class="hm-recent" href="/orders/<%= r.id %>">
+            <span class="ch ch-<%= c.cls %>" title="<%= c.name %>"><%= c.mark %></span>
+            <span class="hm-recent-title"><%= r.product_name %><%= r.n > 1 ? ` 외 ${r.n - 1}건` : '' %></span>
+            <span class="hm-recent-meta"><%= r.buyer || '' %><%= r.buyer && r.clock ? ' · ' : '' %><%= r.clock %></span>
+          </a></li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="hm-empty">아직 들어온 주문이 없어요. <a href="/orders/new">수기 주문 등록하기 ›</a></p>
+    <% } %>
+  </section>
+</div>
+
+<% if (manager) { const s = manager.sales; %>
+  <section class="card hm-card" aria-labelledby="hm-mgr">
+    <div class="hm-head"><h2 id="hm-mgr"><%- ico('<path d="M5 20V10M12 20V4M19 20v-7"/>') %>관리자·부관리자만 보여요</h2><a class="hm-more" href="/stats">통계 ›</a></div>
+    <div class="hm-mgr">
+      <a class="hm-stat" href="/stats?from=<%= s.from %>&to=<%= s.to %>">
+        <span class="hm-label">이번 달 매출 (<%= s.month %>월 1~<%= s.day %>일)</span>
+        <span class="hm-big"><%= won(s.sales) %></span>
+        <span class="hm-sub">주문 <%= s.orders %>건<% if (s.change !== null) { %> · 지난달 같은 기간보다 <%= Math.abs(s.change) %>% <%= s.change >= 0 ? '많아요' : '적어요' %><% } %></span>
+      </a>
+      <div class="hm-stat">
+        <span class="hm-label">판매처·메일 받기</span>
+        <% if (manager.conns.length) { %>
+          <ul class="hm-conn">
+            <% manager.conns.forEach(c => { %>
+              <li>
+                <span class="dot <%= c.ok ? 'ok' : 'bad' %>" aria-hidden="true"></span>
+                <span class="hm-conn-name"><%= c.name %></span>
+                <% if (c.ok) { %>
+                  <span class="hm-sub"><%= c.at %> 받음</span>
+                <% } else { %>
+                  <% if (manager.admin) { %><a class="hm-sub hm-bad" href="<%= c.fix %>" title="<%= c.error %>">받기 실패 · <%= c.mail ? '메일 계정' : '판매처 연결' %>에서 확인 ›</a>
+                  <% } else { %><span class="hm-sub hm-bad" title="<%= c.error %>">받기 실패 · 관리자에게 알려 주세요</span><% } %>
+                <% } %>
+              </li>
+            <% }) %>
+          </ul>
+        <% } else { %>
+          <p class="hm-sub">최근 3일 동안 받은 기록이 없어요.</p>
+        <% } %>
+      </div>
+    </div>
+  </section>
+<% } %>
+<%- include('partials/footer') %>

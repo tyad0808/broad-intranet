@@ -1885,3 +1885,73 @@ pre.cmd { margin: 8px 0; padding: 10px 12px; overflow-x: auto; border-radius: 8p
   .sw-who { padding-left: 0; }
   .sw-confirm-box { margin-left: 0; }
 }
+
+/* ───────── 홈 (오늘 할 일) ───────── */
+.hm-date { font-size: 16px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.hm-card { padding: 0; margin-bottom: 16px; overflow: hidden; }
+.hm-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px 12px; }
+.hm-head h2 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 18px; }
+.hm-ico { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hm-more { font-size: 14px; font-weight: 600; color: var(--primary); white-space: nowrap; }
+.hm-note { font-size: 14px; color: var(--muted); }
+.hm-tiles { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--line-2); }
+.hm-tiles.three { grid-template-columns: repeat(3, 1fr); }
+.hm-tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 96px; padding: 14px 20px; color: var(--text); text-decoration: none; transition: background 0.12s; }
+.hm-tile + .hm-tile { border-left: 1px solid var(--line-2); }
+.hm-tile:hover { background: var(--surface-2); text-decoration: none; }
+.hm-label { font-size: 14px; font-weight: 600; color: var(--text-2); }
+.hm-count { font-size: 28px; font-weight: 750; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.hm-count small { margin-left: 2px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.hm-sub { font-size: 14px; color: var(--muted); }
+.hm-tile.new .hm-count { color: var(--primary); }
+.hm-tile.warn .hm-count { color: var(--warn); }
+.hm-tile.zero .hm-count { color: var(--text-2); }
+.hm-extra { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0; padding: 10px 20px; border-top: 1px solid var(--line-2); background: var(--warn-bg); font-size: 14px; }
+.hm-extra a { color: var(--warn); font-weight: 600; }
+.hm-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.hm-two > .hm-card { margin-top: 0; }
+.hm-evs, .hm-recents, .hm-conn { list-style: none; margin: 0; padding: 0; }
+.hm-evs, .hm-recents { border-top: 1px solid var(--line-2); }
+.hm-ev { display: grid; grid-template-columns: 44px 48px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 48px; padding: 8px 20px; font-size: 16px; }
+.hm-ev + .hm-ev, .hm-recents li + li { border-top: 1px solid var(--line-2); }
+.hm-ev-day { font-size: 14px; font-weight: 600; color: var(--text-2); }
+.hm-ev-day.today { color: var(--primary); }
+.hm-ev-time { font-size: 14px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hm-ev-title { display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-recent-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-ev-who, .hm-recent-meta { font-size: 14px; color: var(--muted); white-space: nowrap; }
+.hm-recent { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 48px; padding: 8px 20px; color: var(--text); font-size: 16px; }
+.hm-recent:hover { background: var(--surface-2); text-decoration: none; }
+.hm-empty { margin: 0; padding: 14px 20px 18px; border-top: 1px solid var(--line-2); font-size: 14px; color: var(--muted); }
+.hm-mgr { display: grid; grid-template-columns: 1fr 1fr; border-top: 1px solid var(--line-2); }
+.hm-stat { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 16px 20px; color: var(--text); }
+a.hm-stat:hover { background: var(--surface-2); text-decoration: none; }
+.hm-stat + .hm-stat { border-left: 1px solid var(--line-2); }
+.hm-big { font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.hm-conn li { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 16px; }
+.hm-conn-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-conn .hm-sub { margin-left: auto; white-space: nowrap; }
+.hm-conn .dot.ok { background: var(--ok); }
+.hm-conn .dot.bad { background: var(--error); }
+.hm-sub.hm-bad, a.hm-bad { color: var(--error); }
+@media (max-width: 1100px) {
+  .hm-tiles, .hm-tiles.three { grid-template-columns: repeat(2, 1fr); }
+  .hm-tile:nth-child(odd) { border-left: 0; }
+  .hm-tile:nth-child(n+3) { border-top: 1px solid var(--line-2); }
+  .hm-two { grid-template-columns: 1fr; gap: 0; }
+}
+@media (max-width: 720px) {
+  .hm-head { padding: 14px 16px 10px; }
+  .hm-tile { min-height: 84px; padding: 12px 16px; }
+  .hm-count { font-size: 24px; }
+  .hm-extra, .hm-empty { padding-left: 16px; padding-right: 16px; }
+  .hm-ev { grid-template-columns: 40px 44px minmax(0, 1fr); padding: 8px 16px; }
+  .hm-ev-who { display: none; }
+  .hm-recent { grid-template-columns: 24px minmax(0, 1fr); padding: 8px 16px; }
+  .hm-recent-meta { grid-column: 2; }
+  .hm-mgr { grid-template-columns: 1fr; }
+  .hm-stat { padding: 14px 16px; }
+  .hm-stat + .hm-stat { border-left: 0; border-top: 1px solid var(--line-2); }
+  .hm-conn .hm-sub { white-space: normal; text-align: right; }
+  .hm-date { font-size: 14px; }
+}

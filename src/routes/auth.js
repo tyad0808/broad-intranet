@@ -18,7 +18,7 @@ function authRoutes(db, notifier) {
   const REMEMBER_MS = 30 * 24 * 60 * 60 * 1000;
 
   router.get('/login', (req, res) => {
-    if (req.user) return res.redirect('/');
+    if (req.user) return res.redirect('/home');
     res.render('login', { title: '로그인', error: null, notice: LOGIN_MESSAGES[req.query.m] || null, email: '' });
   });
 
@@ -35,7 +35,9 @@ function authRoutes(db, notifier) {
       req.session.loginAt = Date.now();
       // '로그인 상태 유지' 를 고르면 30일 (쓸 때마다 다시 30일로 늘어남), 아니면 기본 12시간
       if (req.body.remember === '1') req.session.cookie.maxAge = REMEMBER_MS;
-      res.redirect(result.user.status === 'pending' ? '/pending' : '/');
+      // 로그인하면 홈(오늘 할 일)부터. 오늘은 홈을 본 것으로 쳐서 '/' 는 주문 목록 그대로
+      req.session.homeDay = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      res.redirect(result.user.status === 'pending' ? '/pending' : '/home');
     });
   });
 
@@ -81,7 +83,7 @@ function authRoutes(db, notifier) {
 
   router.get('/pending', (req, res) => {
     if (!req.user) return res.redirect('/login');
-    if (req.user.status !== 'pending') return res.redirect('/');
+    if (req.user.status !== 'pending') return res.redirect('/home');
     res.render('pending', { title: '승인 대기' });
   });
 

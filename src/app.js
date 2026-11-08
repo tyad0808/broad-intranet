@@ -12,7 +12,8 @@ const { authRoutes } = require('./routes/auth');
 const { adminRoutes } = require('./routes/admin');
 const { mailAccountRoutes } = require('./routes/mailAccounts');
 const { channelRoutes } = require('./routes/channels');
-const { orderRoutes } = require('./routes/orders');
+const { orderRoutes, kstDay } = require('./routes/orders');
+const { homeRoutes } = require('./routes/home');
 const { manualRoutes, PAY_METHODS } = require('./routes/manual');
 const { calendarRoutes } = require('./routes/calendar');
 const { inboxRoutes } = require('./routes/inbox');
@@ -335,6 +336,13 @@ function createApp({
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));
   app.use('/stats', requireManager, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
+  // 홈 (오늘 할 일). 그날 처음 '/' 로 들어오면 홈을 먼저 보여 준다 (로그인 직후·즐겨찾기·주소창)
+  //   한 번 본 날은 '/' 가 그대로 주문 목록 (왼쪽 메뉴 '주문'·목록으로 돌아가기 등)
+  app.use(requireActive, homeRoutes(db, { sourceLabels: inbox.sourceLabels || {} }));
+  app.get('/', requireActive, (req, res, next) => {
+    if (Object.keys(req.query).length === 0 && req.session.homeDay !== kstDay(0)) return res.redirect('/home');
+    next();
+  });
   app.use(requireActive, calendarRoutes(db, notifier));
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier, brandName: () => brand.view().name }));
   app.use(requireActive, templateRoutes(db));
