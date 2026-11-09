@@ -22,23 +22,14 @@
 <div class="page-head sticky-glass">
   <div class="title-row">
     <h1 class="page-title"><%= pageTitle %></h1>
+    <%# 답장 문구(매크로) 관리: 제목 옆 (오른쪽 끝에 있으면 안 보여서) %>
+    <a href="/templates" class="btn-sm head-link">답장 문구 관리</a>
   </div>
+  <% if (practice.length) { %>
   <div class="page-actions">
-    <% if (practice.length) { %>
-      <span class="practice-pill" title="연습 모드: <%= practice.join(' · ') %> 답변을 보내도 실제로 나가지 않고 기록만 남깁니다.">연습 모드 <span class="muted"><%= practice.join(' · ') %></span></span>
-    <% } %>
-    <%# 여러 개 골라서 처리 완료·삭제: 누르면 줄마다 체크 칸이 나온다 (평소엔 숨겨서 목록을 깔끔하게) %>
-    <% if (canPick) { %><label for="pick-mode" class="btn-sm pick-toggle">☑ 여러 개 선택</label><% } %>
-    <a href="/templates" class="btn-sm ghost">답장 문구</a>
-    <% if (canCollect) { %>
-      <form method="post" action="/inbox/collect" class="collect-form" data-once>
-        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-        <input type="hidden" name="back" value="<%= currentUrl %>">
-        <% if (lastRun) { %><span class="muted small">마지막 <%= kst(lastRun.at).slice(11) %><%= lastRun.ok ? '' : ' (일부 실패)' %></span><% } %>
-        <button type="submit" class="btn-sm ghost">↻ 지금 받기</button>
-      </form>
-    <% } %>
+    <span class="practice-pill" title="연습 모드: <%= practice.join(' · ') %> 답변을 보내도 실제로 나가지 않고 기록만 남깁니다.">연습 모드 <span class="muted"><%= practice.join(' · ') %></span></span>
   </div>
+  <% } %>
 </div>
 
 <% if (noSources) { %>
@@ -57,6 +48,21 @@
 <input type="checkbox" id="pick-mode" class="visually-hidden" aria-label="여러 개 선택">
 <div class="inbox-split talk-split mail-split" data-inbox-split>
   <div class="talk-side">
+    <%# 목록 도구: 지금 받기(마지막 받은 시각) · 여러 개 선택 — 목록 바로 위에 (화면 오른쪽 끝에 있으면 안 보여서) %>
+    <% if (canCollect || canPick) { %>
+    <div class="side-tools">
+      <% if (canCollect) { %>
+        <form method="post" action="/inbox/collect" class="collect-form" data-once>
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="hidden" name="back" value="<%= currentUrl %>">
+          <button type="submit" class="btn-sm">↻ 지금 받기</button>
+          <% if (lastRun) { %><span class="side-tools-time">마지막 <%= kst(lastRun.at).slice(11) %><%= lastRun.ok ? '' : ' (일부 실패)' %></span><% } %>
+        </form>
+      <% } %>
+      <%# 여러 개 골라서 처리 완료·삭제: 누르면 줄마다 체크 칸이 나온다 (평소엔 숨겨서 목록을 깔끔하게) %>
+      <% if (canPick) { %><label for="pick-mode" class="btn-sm pick-toggle">☑ 여러 개 선택</label><% } %>
+    </div>
+    <% } %>
     <form method="get" action="/inbox" class="talk-search" role="search">
       <% [['box', box === 'shop' ? '' : box], ['tab', tab === 'open' ? '' : tab], ['src', src], ['who', who], ['from', from], ['to', to]].forEach(([k, v]) => { if (v) { %><input type="hidden" name="<%= k %>" value="<%= v %>"><% } }) %>
       <input type="search" name="q" value="<%= q %>" placeholder="<%= isMailBox ? '제목, 내용, 보낸 사람, 메일 주소 검색' : '상품명, 문의 내용, 작성자, 주문번호 검색' %>" aria-label="검색">
