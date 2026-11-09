@@ -1566,13 +1566,16 @@ body.ds-v2 {
 
 /* 한 화면에 주문이 더 많이 보이게: 줄 간격·글자·배지·고르는 칸을 한 단계씩 작게 (글자는 14px 아래로 내리지 않음) */
 @media (min-width: 901px) {
-  .ds-v2 .order-item { padding-top: 11px; padding-bottom: 11px; }
+  .ds-v2 .order-item { padding-top: 8px; padding-bottom: 8px; }
   .ds-v2 .order-head { padding-top: 8px; padding-bottom: 8px; }
-  .ds-v2 .oi-head { margin-bottom: 2px; font-size: 14px; line-height: 1.6; }
+  .ds-v2 .oi-head { margin-bottom: 1px; font-size: 14px; line-height: 1.5; }
   .ds-v2 .oi-head .muted { font-size: 14px; }
   .ds-v2 .oi-head .ch { width: 20px; height: 20px; border-radius: 5px; font-size: 12px; }
   .ds-v2 .oi-head .memo-chip, .ds-v2 .oi-head .ev-badge, .ds-v2 .oi-head .today-badge, .ds-v2 .oi-head .src-tag, .ds-v2 .oi-head .claim-badge { min-height: 24px; padding-top: 1px; padding-bottom: 1px; }
-  .ds-v2 .oi-items { gap: 3px; }
+  .ds-v2 .oi-items { gap: 2px; }
+  .ds-v2 .oi-name { line-height: 1.4; }
+  .ds-v2 .oi-addons { margin-top: 2px; }
+  .ds-v2 .oi-addons > summary { min-height: 24px; padding-top: 0; padding-bottom: 0; }
   .ds-v2 .oi-name { font-size: 16px; }
   .ds-v2 .oi-items li.addon .oi-name { font-size: 14px; }
   .ds-v2 .oi-items .muted { font-size: 14px; }
