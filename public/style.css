@@ -1271,6 +1271,7 @@ code.var { padding: 1px 6px; border-radius: 5px; background: var(--primary-weak)
 .kpi-delta.bad { color: var(--error); }
 .kpi-delta .muted { font-size: 12px; font-weight: 500; }
 .stats-note { margin: 0 0 16px; }
+.stats-ch-note { margin: 10px 0 0; }
 .chart-card h2, .stats-two h2 { margin-bottom: 16px; }
 .stats-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
 .stats-two .card + .card { margin-top: 0; }

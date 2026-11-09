@@ -121,3 +121,16 @@ test('통계 화면은 처음에 오늘 기간으로 열린다', async t => {
   assert.match(page, /href="https:\/\/quote\.broadstore\.co\.kr\/" target="_blank" rel="noopener" class="nav-help nav-ext"/, '왼쪽 메뉴 견적/계산서');
 });
 
+
+test('G마켓·옥션 매출이 있으면 채널별 매출 아래에 ESM 판매내역과 다를 수 있다는 안내', async t => {
+  const { db, server, baseUrl } = await startServer();
+  t.after(() => server.close());
+  seed(db);
+  addUser(db, { email: 'boss@broad.test', role: 'admin', name: '대표' });
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  const url = '/stats?from=2026-10-01&to=2026-10-21';
+  assert.doesNotMatch((await boss.request(url)).text, /ESM PLUS 판매내역은/, 'G마켓·옥션 주문이 없으면 안내도 없음');
+  db.prepare(`INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, item_type, quantity, paid_at, channel_status, pay_amount)
+    VALUES ('esm', 'E1', 'E1-1', '현수막', 'main', 1, '2026-10-08T01:00:00Z', 'PAYED', 20000)`).run();
+  assert.match((await boss.request(url)).text, /class="muted small stats-ch-note">G마켓·옥션 매출은 고객이 결제한 주문 금액이에요/);
+});
