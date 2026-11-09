@@ -48,6 +48,11 @@
 </section>
 </div>
 
+<%# 한눈에 보기: 주문 목록 위와 같은 상태 4칸 + 7일 출고 (누르면 그 주문 목록) %>
+<div class="hm-overview">
+  <%- include('partials/ship-overview', { ...overview, stLink: key => `/?st=${key}`, dueLink: date => `/?due=${date}`, onSt: '', onDue: '' }) %>
+</div>
+
 <%# 가운데 줄: 미답변 메일 · 미답변 문의(쇼핑몰 문의·톡톡) 최근 5건 %>
 <%
   const askRow = (r, isMail) => {

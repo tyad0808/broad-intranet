@@ -1327,6 +1327,31 @@ function kstDay(offset) {
   return new Date(Date.now() + 9 * 3600 * 1000 + offset * 86400000).toISOString().slice(0, 10);
 }
 
+// 홈 '한눈에 보기': 주문 목록 위 상태 4칸과 같은 숫자 (전체 판매처 기준 — 신규·배송준비는 수기 주문 빼고)
+function shipOverview(db) {
+  const lastRow = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
+  const last = Number(lastRow ? lastRow.id : -1);
+  const cutoff = hideCutoff(db);
+  const oldDone = `((${GROUP_ENDED} = 1 OR MIN(COALESCE(o.stage_id = ${last}, 0)) = 1) AND MAX(${ORDER_TIME}) < '${cutoff}')`;
+  const counts = db.prepare(`
+    SELECT
+      COALESCE(SUM(ship_state = 'new' AND ch != 'manual'), 0) AS st_new,
+      COALESCE(SUM(ship_state = 'ready' AND ch != 'manual'), 0) AS st_ready,
+      COALESCE(SUM(ship_state = 'shipping'), 0) AS st_shipping,
+      COALESCE(SUM(ship_state = 'delivered' AND NOT old), 0) AS st_delivered
+    FROM (SELECT ${GROUP_SHIP_STATE} AS ship_state, ${oldDone} AS old, o.channel AS ch FROM orders o GROUP BY o.channel, o.channel_order_id)
+  `).get();
+  const itemCounts = db.prepare(`
+    SELECT
+      COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 0), 0) AS new,
+      COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 1), 0) AS ready,
+      COALESCE(SUM(o.channel_status = 'DELIVERING'), 0) AS shipping,
+      COALESCE(SUM(o.channel_status = 'DELIVERED' AND o.channel != 'manual' AND ${ORDER_TIME} >= '${cutoff}'), 0) AS delivered
+    FROM orders o WHERE o.channel != 'manual'
+  `).get();
+  return { counts, itemCounts, hideDays: hideDays(db), SHIP_STATES };
+}
+
 // 직원을 삭제할 때: 그 사람이 담당하던 '진행 중' 주문(홈·목록의 진행 중과 같은 조건)을 미지정으로. count 만 하면 세기만
 function releaseOpenOrders(db, userId, { count = false } = {}) {
   const lastRow = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
@@ -1344,4 +1369,4 @@ function releaseOpenOrders(db, userId, { count = false } = {}) {
   return groups.length;
 }
 
-module.exports = { orderRoutes, safeBack, collectFlash, orderSummary, kstDay, releaseOpenOrders };
+module.exports = { orderRoutes, safeBack, collectFlash, orderSummary, kstDay, releaseOpenOrders, shipOverview };

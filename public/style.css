@@ -2222,3 +2222,7 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
 .settle-main .kpi-label { display: inline-flex; align-items: center; gap: 6px; }
 .settle-main .ch { width: 20px; height: 20px; border-radius: 5px; font-size: 12px; }
 .settle-sub { max-width: 520px; margin: 0; }
+
+/* 홈의 한눈에 보기: 다른 줄과 같은 간격 */
+.hm-overview .overview { margin: 0 0 14px; }
+@media (max-width: 900px) { .hm-overview .overview { margin: 0 -16px 14px; } }

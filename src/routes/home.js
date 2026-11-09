@@ -4,7 +4,8 @@
 // 숫자는 모두 이미 있는 목록과 같은 조건으로 센다 → 칸을 누르면 그 목록에 같은 건수가 보인다
 const express = require('express');
 const { isManager } = require('../auth');
-const { orderSummary, kstDay } = require('./orders');
+const { orderSummary, kstDay, shipOverview } = require('./orders');
+const { buildWeek } = require('./calendar');
 const { ORDER_TIME } = require('../retention');
 const { totals, utcRange } = require('../stats');
 const { dueCountsBetween } = require('./calendar');
@@ -149,6 +150,7 @@ function homeRoutes(db, { sourceLabels = {}, chatOn = false } = {}) {
       bodyClass: 'orders-wide', // 주문 화면과 같은 너비
       todayText: `${mm}월 ${dd}일 (${weekday})`,
       orders,
+      overview: { ...shipOverview(db), week: buildWeek(db) }, // 주문 목록 위 '한눈에 보기'와 같은 칸
       inbox,
       events: eventRows.slice(0, 6),
       dues,

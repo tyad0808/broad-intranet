@@ -84,29 +84,10 @@
     </nav>
   <% } %>
 
-  <%# 한눈에 보기: 채널 상태 4칸 (판매자센터처럼) + 이번 주 출고 7일 — 한 판에 %>
-  <section class="overview" aria-label="한눈에 보기">
-    <nav class="ship-board" aria-label="채널 주문 상태" title="큰 숫자는 판매자센터와 같은 상품주문 단위, 작은 숫자는 주문번호 단위입니다">
-      <% Object.entries(SHIP_STATES).forEach(([key, label]) => { %>
-        <a href="<%= st === key ? link({ st: '', stage: '' }) : link({ st: key, view: '', stage: '' }) %>" class="ship-tile st-<%= key %> <%= st === key ? 'on' : '' %>">
-          <span class="ship-label"><%= label %><% if (key === 'delivered' && hideDays) { %><span class="ship-recent"> · 최근 <%= hideDays %>일</span><% } %></span>
-          <strong class="ship-count"><%= itemCounts[key] || 0 %><small>건</small></strong>
-          <span class="ship-sub">주문 <%= counts['st_' + key] || 0 %>건</span>
-        </a>
-      <% }) %>
-    </nav>
-    <%# 오늘부터 7일, 날짜를 누르면 그날 납기 주문만 (전체 달력은 왼쪽 '일정') %>
-    <nav class="week-strip" aria-label="이번 주 출고 (납기 기준)">
-      <% week.forEach(d => { %>
-        <a href="<%= due === d.date ? link({ due: '' }) : link({ due: d.date }) %>" class="week-day <%= d.isToday ? 'today' : '' %> <%= due === d.date ? 'on' : '' %> <%= d.weekday === 0 ? 'sun' : d.weekday === 6 ? 'sat' : '' %>" title="<%= d.date %> 납기 주문 <%= d.due %>건 보기<%= d.events.length ? ` · ${d.events.map(e => e.title).join(', ')}` : '' %>">
-          <span class="wd"><%= d.isToday ? '오늘' : '일월화수목금토'[d.weekday] %> <span class="dd"><%= Number(d.date.slice(5, 7)) %>/<%= Number(d.date.slice(8)) %></span></span>
-          <strong class="<%= d.due ? '' : 'zero' %>"><%= d.due %><span class="wd-unit">건</span></strong>
-          <% if (d.events.length) { %><span class="wk-ev"><span class="dot ev-<%= d.events[0].color %>"></span><%= d.events[0].title %><%= d.events.length > 1 ? ` 외 ${d.events.length - 1}` : '' %></span><% } %>
-        </a>
-      <% }) %>
-      <a href="/schedule" class="week-more" title="달력 전체 보기">출고 달력 ›</a>
-    </nav>
-  </section>
+  <%# 한눈에 보기: 채널 상태 4칸 + 이번 주 출고 7일 (홈에도 같은 칸) %>
+  <%- include('../partials/ship-overview', { SHIP_STATES, itemCounts, counts, week, hideDays,
+        stLink: key => (st === key ? link({ st: '', stage: '' }) : link({ st: key, view: '', stage: '' })),
+        dueLink: date => (due === date ? link({ due: '' }) : link({ due: date })), onSt: st, onDue: due }) %>
 
   <% if (alert) { %>
     <p class="muted small st-note"><strong><%= ALERTS[alert] %></strong> 주문만 모아 보는 중입니다 (탭과 상관없이). <a href="<%= link({ alert: '' }) %>">해제</a></p>

@@ -174,3 +174,16 @@ test('오늘·내일 일정 칸에 출고(납기) 건수도: 주문 목록 출�
   const list = (await kim.request(`/?due=${kstDay(1)}`)).text;
   assert.strictEqual((list.match(/class="oi-main"/g) || []).length, 2, '누른 목록도 2건');
 });
+
+test('홈에도 주문 목록 위와 같은 한눈에 보기(상태 4칸 + 7일 출고), 누르면 그 목록', async t => {
+  const { db, baseUrl } = await setup(t);
+  addOrder(db, { channel_order_id: 'V1', channel_item_id: 'V1-1', due_date: kstDay(2) });
+  const kim = await loginAs(baseUrl, 'kim@broad.test');
+  const home = (await kim.request('/home')).text;
+  const list = (await kim.request('/')).text;
+  const tile = (html, key) => (html.match(new RegExp(`class="ship-tile st-${key}[^"]*">[\\s\\S]*?<strong class="ship-count">(\\d+)<small>`)) || [])[1];
+  assert.strictEqual(tile(home, 'new'), '1');
+  assert.strictEqual(tile(home, 'new'), tile(list, 'new'), '목록과 같은 숫자');
+  assert.match(home, /<a href="\/\?st=new" class="ship-tile st-new /);
+  assert.match(home, new RegExp(`<a href="/\\?due=${kstDay(2)}" class="week-day`));
+});
