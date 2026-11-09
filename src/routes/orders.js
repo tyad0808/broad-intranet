@@ -433,6 +433,43 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     res.redirect(`${back}#o${items[0].id}`);
   });
 
+  // 체크한 주문 여러 건의 담당 디자이너를 한 번에 (아래 일괄 처리 막대의 [담당 지정])
+  //   ※ '/orders/:id/assign' 보다 먼저 등록해야 'bulk' 가 주문 번호로 읽히지 않는다
+  router.post('/orders/bulk/assign', (req, res) => {
+    const back = safeBack(req.body.back);
+    const ids = pickIds(req.body.ids);
+    if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
+    const raw = String(req.body.bulk_assignee || '');
+    const assignee = raw === 'none' ? null : Number(raw);
+    const designer = assignee ? designers().find(d => d.id === assignee) : null;
+    if (raw !== 'none' && !designer) return flashBack(req, res, back, { type: 'error', message: '담당 디자이너를 골라 주세요.' });
+    const done = new Set();
+    const changed = [];
+    let groupsChanged = 0;
+    for (const id of ids) {
+      const order = findOrder(id);
+      if (!order) continue;
+      const key = `${order.channel}:${order.channel_order_id}`;
+      if (done.has(key)) continue; // 같은 주문번호 묶음은 한 번만
+      done.add(key);
+      if ((order.assignee_id || null) === assignee) continue;
+      db.prepare(
+        "UPDATE orders SET assignee_id = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?"
+      ).run(assignee, order.channel, order.channel_order_id);
+      logEvent(order, req.user.id, 'assign', order.assignee_id, assignee);
+      changed.push(...groupItems(order).map(i => i.id));
+      groupsChanged += 1;
+    }
+    if (changed.length) {
+      notifier.ordersChanged(changed, req.user.id);
+      notifier.checkUnassigned();
+    }
+    const who = designer ? `${designer.name} 님으로 지정했어요` : '비웠어요';
+    const same = done.size - groupsChanged;
+    req.session.flash = { type: 'ok', message: `주문 ${done.size}건의 담당을 ${who}.${same ? ` (이미 그 담당이던 ${same}건 포함)` : ''}` };
+    res.redirect(back);
+  });
+
   // 목록에서 바로 담당 디자이너 지정 (주문 묶음 전체의 담당자 칸만 바꾼다)
   router.post('/orders/:id/assign', (req, res) => {
     const back = safeBack(req.body.back);

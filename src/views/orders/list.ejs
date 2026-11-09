@@ -337,6 +337,15 @@
           data-confirm="체크한 주문 {n}건을 로젠에 등록할까요?<%= logenEnv !== 'prod' ? ' (테스트 서버)' : '' %>&#10;주문번호가 같은 상품은 한 송장으로 묶어요. 등록한 뒤 iLOGEN 에서 출력해 주세요." data-bulk-kind="logen">로젠 등록 <span data-n>0</span>건</button><% } %>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/dispatch-form" formtarget="order-modal-frame" data-modal class="secondary" data-bulk-kind="dispatch">송장 입력·발송처리 <span data-n>0</span>건…</button>
   <button type="button" class="secondary" data-bulk-kind="any" data-print-selected>발주서 출력 <span data-n>0</span>건</button>
+  <%# 담당 디자이너 한 번에: 이름을 고르면 확인창 → 체크한 주문 모두 그 담당으로 (orders.js) %>
+  <label class="bulk-assign"><span class="visually-hidden">체크한 주문의 담당 디자이너 한 번에 지정</span>
+    <select name="bulk_assignee" form="bulk-form" data-bulk-assign>
+      <option value="" selected disabled>담당 지정…</option>
+      <% designers.forEach(d => { %><option value="<%= d.id %>"><%= d.name %><%= d.id === user.id ? ' (나)' : '' %></option><% }) %>
+      <option value="none">담당 비우기</option>
+    </select>
+  </label>
+  <button type="submit" form="bulk-form" formaction="/orders/bulk/assign" data-bulk-assign-go hidden>담당 지정</button>
   <span class="bulk-sep" aria-hidden="true"></span>
   <button type="submit" form="bulk-form" formaction="/orders/bulk/manual-delete" class="danger" data-bulk-kind="delete"
           data-confirm="체크한 직접 등록 주문 {n}건을 지울까요?&#10;상품·메모·처리 기록까지 모두 지워지고 되돌릴 수 없습니다.&#10;(스마트스토어·쿠팡·자사몰 주문은 지우지 않고 건너뜁니다)">삭제 <span data-n>0</span>건</button>

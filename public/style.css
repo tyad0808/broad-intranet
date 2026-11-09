@@ -781,6 +781,12 @@ form.inline { display: inline; margin: 0; }
 .bulk-bar button.danger:hover { background: rgba(228, 41, 57, 0.85); border-color: transparent; color: #fff; }
 .bulk-bar button:disabled, .bulk-bar button:disabled:hover { opacity: 0.35; }
 .bulk-sep { width: 1px; height: 26px; background: rgba(255, 255, 255, 0.2); margin: 0 2px; }
+/* [담당 지정…] 고르는 칸: 막대의 다른 버튼과 같은 높이·모양 */
+.bulk-assign { display: inline-flex; margin: 0; }
+.bulk-bar .bulk-assign select { width: auto; min-width: 128px; height: 44px; min-height: 44px; margin: 0; padding: 0 34px 0 14px; border: 1px solid transparent; border-radius: 10px; background-color: rgba(255, 255, 255, 0.12); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23ffffff' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-position: right 13px center; color: #fff; font-size: 14.5px; font-weight: 600; cursor: pointer; }
+.bulk-bar .bulk-assign select:hover { background-color: rgba(255, 255, 255, 0.2); }
+.bulk-bar .bulk-assign select option { color: var(--text); background: #fff; }
+@media (max-width: 900px) { .bulk-assign { flex: none; } }
 @media (max-width: 900px) {
   .bulk-bar { bottom: 76px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 10px 12px; border-radius: 14px; }
   .bulk-bar::-webkit-scrollbar { display: none; }

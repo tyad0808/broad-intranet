@@ -181,6 +181,20 @@ test('목록에서도 디자이너가 아닌 직원은 지정할 수 없다', as
   assert.strictEqual(row('P1').assignee_id, null);
 });
 
+test('체크한 주문 여러 건의 담당 디자이너를 한 번에 지정·비우기 (디자이너가 아니면 거절)', async t => {
+  const { kim, leeId, csId, idOf, row } = await setup(t);
+  const ids = ['P1', 'P2', 'P3'].map(p => String(idOf(p)));
+  assert.match((await kim.request('/')).text, /<select name="bulk_assignee" form="bulk-form" data-bulk-assign>/, '아래 막대에 [담당 지정…]');
+  const res = await kim.submit('/', '/orders/bulk/assign', { ids, bulk_assignee: String(leeId), back: '/?view=all' });
+  assert.strictEqual(res.location, '/?view=all');
+  for (const p of ['P1', 'P2', 'P3']) assert.strictEqual(row(p).assignee_id, leeId);
+  assert.match((await kim.request('/?view=all')).text, /주문 3건의 담당을 이디자 님으로 지정했어요/);
+  await kim.submit('/', '/orders/bulk/assign', { ids, bulk_assignee: String(csId), back: '/' });
+  assert.strictEqual(row('P1').assignee_id, leeId, '디자이너가 아닌 직원은 안 됨');
+  await kim.submit('/', '/orders/bulk/assign', { ids: ids.slice(0, 2), bulk_assignee: 'none', back: '/' });
+  assert.deepStrictEqual(['P1', 'P2', 'P3'].map(p => row(p).assignee_id), [null, null, leeId]);
+});
+
 test('목록의 담당자 선택 상자에는 디자이너만 나온다', async t => {
   const { kim } = await setup(t);
   const text = (await kim.request('/')).text;

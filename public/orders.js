@@ -66,6 +66,17 @@ document.addEventListener('click', event => {
 });
 syncBulkBar();
 
+// [담당 지정…]: 이름을 고르면 확인창 → 체크한 주문 모두 그 담당으로. 취소하면 칸을 처음으로
+document.addEventListener('change', event => {
+  const select = event.target;
+  if (!select.matches('[data-bulk-assign]')) return;
+  const n = document.querySelectorAll('input[name="ids"][form="bulk-form"]:checked').length;
+  const name = select.selectedOptions[0].text.replace(' (나)', '');
+  const ask = select.value === 'none' ? `체크한 주문 ${n}건의 담당을 비울까요?` : `체크한 주문 ${n}건의 담당을 ${name} 님으로 바꿀까요?`;
+  if (!n || !window.confirm(ask)) { select.value = ''; return; }
+  select.form.requestSubmit(document.querySelector('[data-bulk-assign-go]'));
+});
+
 // [📋 복사]: data-copy 의 글자를 클립보드로 (작업 파일 이름 등). 잠깐 '복사됨 ✓' 으로 바뀐다
 document.addEventListener('click', async event => {
   const button = event.target.closest('[data-copy]');
