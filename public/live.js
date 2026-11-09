@@ -166,6 +166,8 @@
         const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
         // 일괄 처리용으로 체크해 둔 주문은 새로 그린 뒤에도 체크된 채로 둔다
         const checked = new Set([...liveList.querySelectorAll('input[name="ids"]:checked')].map(box => box.value));
+        // 펼쳐 둔 추가 옵션도 새로 그린 뒤 펼친 채로
+        const opened = new Set([...liveList.querySelectorAll('details.oi-addons[open]')].map(d => d.dataset.id));
         // 탭 건수와 주문 목록만 바꾼다 (검색창은 건드리지 않아 입력 중인 글자가 지워지지 않음)
         for (const id of ['live-head', 'live-tabs', 'live-views', 'live-list']) {
           const fresh = doc.getElementById(id);
@@ -173,6 +175,7 @@
           if (fresh && current) current.innerHTML = fresh.innerHTML;
         }
         liveList.querySelectorAll('input[name="ids"]').forEach(box => { box.checked = checked.has(box.value); });
+        liveList.querySelectorAll('details.oi-addons').forEach(d => { d.open = opened.has(d.dataset.id); });
         // 주문 목록 옆 달력도 같이: 납기를 바꾸면 '출고 N건' 이 바로 맞춰지게
         if (feed === 'orders' && typeof window.reloadCalendar === 'function') window.reloadCalendar();
         if (typeof window.syncBulkBar === 'function') window.syncBulkBar();

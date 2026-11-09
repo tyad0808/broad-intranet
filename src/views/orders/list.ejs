@@ -227,6 +227,9 @@
                    data-can="<%= [g.canConfirm ? 'confirm' : '', g.canDispatch ? 'dispatch' : '', g.canLogen ? 'logen' : '', o.channel === 'manual' ? 'delete' : ''].filter(Boolean).join(' ') %>"
                    data-channel-name="<%= c.name %>">
         </span>
+        <%# 추가 옵션(addon)은 처음엔 접어 두고 [⌄] 를 누르면 펼친다 → 주문 한 건이 차지하는 높이를 줄인다 %>
+        <% const mains = g.items.filter(i => i.item_type !== 'addon'); const addons = g.items.filter(i => i.item_type === 'addon'); %>
+        <div class="oi-col">
         <a class="oi-main" href="/orders/<%= o.id %>?back=<%= encodeURIComponent(currentUrl) %>">
           <div class="oi-head">
             <span class="ch ch-<%= c.cls %>" title="<%= c.name %>"><%= c.mark %></span>
@@ -242,16 +245,19 @@
             <%# 자사몰 증빙: 할 일이 있을 때만 (계산서 발행 전·현금영수증 발급 실패) %>
             <% if (g.evidence) { g.evidence.listBadges.forEach(b => { %><span class="ev-badge <%= b.cls %>"><%= b.text %></span><% }) } %>
           </div>
-          <ul class="oi-items">
-            <% g.items.forEach(i => { %>
-              <li class="<%= i.item_type === 'addon' ? 'addon' : '' %>">
-                <%# 상품 이름·옵션은 한 줄씩, 넘치면 … (마우스를 올리면 전체) %>
-                <div class="oi-line" title="<%= i.product_name %>"><% if (i.item_type === 'addon') { %><span class="tag">추가</span><% } %><span class="oi-name"><%= i.product_name %></span></div>
-                <div class="muted oi-opt"><% if (i.option_text) { %><span class="oi-line" title="<%= i.option_text %>"><%= i.option_text %></span><span class="oi-qty">&nbsp;· <%= i.quantity %>개</span><% } else { %><span class="oi-qty"><%= i.quantity %>개</span><% } %></div>
-              </li>
-            <% }) %>
-          </ul>
+          <ul class="oi-items"><% (mains.length ? mains : addons).forEach(i => { %><%- include('../partials/order-line', { i }) %><% }) %></ul>
         </a>
+        <% if (mains.length && addons.length) { %>
+          <details class="oi-addons" data-id="<%= o.id %>">
+            <summary title="추가 옵션 펼치기·접기">
+              <span class="tag">추가 <%= addons.length %></span>
+              <span class="oi-addon-names"><%= addons.map(i => i.product_name).join(' · ') %></span>
+              <svg class="oi-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </summary>
+            <ul class="oi-items"><% addons.forEach(i => { %><%- include('../partials/order-line', { i }) %><% }) %></ul>
+          </details>
+        <% } %>
+        </div>
         <div class="oi-meta">
           <%# 상태 배지 (휴대폰에서는 맨 위에) + 채널 상태·송장 한 줄 %>
           <span class="cell c-status">
