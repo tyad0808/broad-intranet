@@ -175,3 +175,15 @@ test('7일 지난 배송중 주문은 주문번호로 다시 물어 배송완료
   assert.deepStrictEqual(rows.map(r => [r.channel_item_id, r.channel_status]), [['G-1003', 'DELIVERED']]);
   assert.deepStrictEqual(client.calls.map(c => c.json), [{ siteType: 2, orderStatus: 0, orderNo: 1003 }, { siteType: 2, orderStatus: 0, orderNo: 999 }]);
 });
+
+test('토큰의 판매자 ID 는 요청한 사이트 것 하나만 (ESM: "one site seller id")', async () => {
+  const seen = [];
+  const fetchFn = async (url, init) => {
+    seen.push(JSON.parse(Buffer.from(init.headers.authorization.split(' ')[1].split('.')[1], 'base64url')).ssi);
+    return new Response(JSON.stringify({ ResultCode: 0, Data: [] }));
+  };
+  const client = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'gm1', auctionId: 'au1', fetchFn, sleep: async () => {} });
+  await client.request('POST', '/shipping/v1/Order/RequestOrders', { siteType: 2, orderStatus: 0, orderNo: 1 });
+  await client.request('POST', '/claim/v1/sa/Cancels', { SiteType: 1, CancelStatus: 0, Type: 2 });
+  assert.deepStrictEqual(seen, ['G:gm1', 'A:au1']);
+});

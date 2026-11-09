@@ -5,7 +5,9 @@
 //
 // 인증(JWT, HS256): 매 요청마다 시크릿키로 서명한 토큰을 Authorization: Bearer 로 보낸다 (etapi.gmarket.com 'API 가이드')
 //   header  { alg: HS256, typ: JWT, kid: ESM+ 마스터 ID }
-//   payload { iss, sub: 'sell', aud: 'sa.esmplus.com', iat, ssi: 'A:옥션ID,G:G마켓ID' }
+//   payload { iss, sub: 'sell', aud: 'sa.esmplus.com', iat, ssi: 'G:G마켓ID' 또는 'A:옥션ID' }
+//   ※ 안내 예시는 'A:…,G:…' 둘 다였지만, 실제 주문조회는 "한 사이트 판매자 ID 만" 받는다 (HTTP 400)
+//     → 요청마다 그 요청의 사이트(siteType) ID 하나만 넣는다
 // ESM 은 미리 등록한 서버(인트라넷 서버 IP)에서 온 요청만 받는다.
 // 키·아이디는 서버 .env 에만: ESM_MASTER_ID, ESM_SECRET_KEY, ESM_GMARKET_ID, ESM_AUCTION_ID
 const crypto = require('crypto');
@@ -42,9 +44,9 @@ class EsmApiError extends Error {
 
 const b64url = obj => Buffer.from(JSON.stringify(obj)).toString('base64url');
 
-// 인증 토큰 (Authorization: Bearer 토큰)
-function buildToken({ masterId, secretKey, gmarketId, auctionId, issuer = 'www.esmplus.com', now = new Date() }) {
-  const ssi = [auctionId ? `A:${auctionId}` : null, gmarketId ? `G:${gmarketId}` : null].filter(Boolean).join(',');
+// 인증 토큰 (Authorization: Bearer 토큰). site: 'G' / 'A' 면 그 사이트 ID 만
+function buildToken({ masterId, secretKey, gmarketId, auctionId, site = null, issuer = 'www.esmplus.com', now = new Date() }) {
+  const ssi = [site !== 'G' && auctionId ? `A:${auctionId}` : null, site !== 'A' && gmarketId ? `G:${gmarketId}` : null].filter(Boolean).join(',');
   const head = b64url({ alg: 'HS256', typ: 'JWT', kid: masterId });
   const body = b64url({ iss: issuer, sub: 'sell', aud: 'sa.esmplus.com', iat: Math.floor(now.getTime() / 1000), ssi });
   const sig = crypto.createHmac('sha256', secretKey).update(`${head}.${body}`).digest('base64url');
@@ -89,13 +91,16 @@ function createEsmClient({
     }
     // 주문 '기간' 조회만 5초 규칙 (주문번호로 조회하면 제한 없음)
     const isRange = /RequestOrders$/.test(path) && Number(json.orderStatus) !== 0;
+    // 이 요청의 사이트 (1 옥션 · 2 G마켓) → 토큰에 그 사이트 판매자 ID 하나만
+    const siteCode = Number(json.siteType ?? json.SiteType);
+    const site = siteCode === 1 ? 'A' : siteCode === 2 ? 'G' : null;
     for (let attempt = 0; ; attempt++) {
       await wait(isRange);
       const res = await fetchFn(BASE_URL + path, {
         method,
         signal: AbortSignal.timeout(30_000),
         headers: {
-          authorization: `Bearer ${buildToken({ masterId, secretKey, gmarketId, auctionId, issuer, now: now() })}`,
+          authorization: `Bearer ${buildToken({ masterId, secretKey, gmarketId, auctionId, site, issuer, now: now() })}`,
           'content-type': 'application/json',
           accept: 'application/json',
         },
