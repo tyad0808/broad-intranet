@@ -273,6 +273,7 @@ function createApp({
     res.locals.openMails = open.mails;
     res.locals.openChats = open.chats;
     res.locals.newOrders = req.user && req.user.status === 'active' ? newOrdersStmt.get().n : 0;
+    res.locals.pagePath = req.originalUrl; // 화면 밝기 버튼(스크립트 없이 눌렀을 때) 돌아올 주소
     // 왼쪽 메뉴 '톡톡' 은 톡톡을 연결했을 때만 보인다
     res.locals.chatOn = Boolean(inbox.talktalk);
     // 이 직원이 끈 알림 칸 (끈 칸은 왼쪽 메뉴 숫자를 숨긴다)
@@ -306,6 +307,15 @@ function createApp({
 
   app.get('/events', requireActive, (req, res) => {
     notifier.hub.add(req, res, req.user.id);
+  });
+
+  // 화면 밝기 버튼: 자동 → 밝게 → 어둡게 (직원마다 계정에 저장 → 다른 PC·휴대폰에서도 같게)
+  app.post('/me/theme', requireActive, (req, res) => {
+    const theme = ['auto', 'light', 'dark'].includes(req.body.theme) ? req.body.theme : 'auto';
+    db.prepare('UPDATE users SET theme = ? WHERE id = ?').run(theme === 'auto' ? null : theme, req.user.id);
+    if (req.accepts(['html', 'json']) === 'json') return res.json({ theme });
+    const back = String(req.body.back || '/');
+    res.redirect(/^\/(?![/\\])[^\\\s]*$/.test(back) ? back : '/');
   });
 
   // 왼쪽 메뉴의 종 버튼: 메일함·톡톡·문의함 알림 켜기/끄기 (직원마다 따로)

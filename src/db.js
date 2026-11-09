@@ -68,6 +68,8 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'nickname', 'TEXT');
   // 삭제한 직원: 지난 기록(처리한 사람 등)에 이름이 남아 있어 줄은 지우지 않고 표시만 (목록·로그인에서 빠짐)
   addColumn(db, 'users', 'deleted_at', 'TEXT');
+  // 화면 밝기: 'auto'(컴퓨터 설정 따라, 기본) · 'light' · 'dark' — 직원마다 계정에 저장
+  addColumn(db, 'users', 'theme', 'TEXT');
   // 채널이 쓰는 상태 이름 그대로 (예: 자사몰 '고객취소요청'). 공통 상태와 함께 보여줘서 헷갈리지 않게
   addColumn(db, 'orders', 'channel_status_label', 'TEXT');
   // 수기 주문 출처 (계좌·전화 주문, G마켓, 옥션 …)와 그 판매처의 주문번호

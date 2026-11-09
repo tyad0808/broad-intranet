@@ -1,12 +1,18 @@
 <!doctype html>
 <% const brand = locals.brand || { name: '통합 어드민(브로애드)', logoUrl: null }; %>
-<html lang="ko">
+<%# 화면 밝기: 직원이 고른 값 (없으면 자동 = 컴퓨터·휴대폰 설정 따라). 어둡게 색은 dark.css %>
+<% const theme = locals.user && ['light', 'dark'].includes(user.theme) ? user.theme : 'auto';
+   const THEME_LABEL = { auto: '자동', light: '밝게', dark: '어둡게' };
+   const THEME_NEXT = { auto: 'light', light: 'dark', dark: 'auto' }; %>
+<html lang="ko" data-theme="<%= theme %>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title === '주문' ? brand.name : `${title} · ${brand.name}` %></title>
   <link rel="stylesheet" href="/fonts/pretendard/pretendard.css">
+  <meta name="color-scheme" content="<%= theme === 'auto' ? 'light dark' : theme %>">
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/dark.css" id="dark-css" media="<%= theme === 'dark' ? 'all' : theme === 'light' ? 'not all' : '(prefers-color-scheme: dark)' %>">
   <% if (brand.logoUrl) { %><link rel="icon" href="<%= brand.logoUrl %>" type="<%= brand.logoType %>"><% } else { %><link rel="icon" href="/favicon.svg" type="image/svg+xml"><% } %>
 </head>
 <body<% if (locals.user && user.status === 'active') { %> data-user-id="<%= user.id %>"<% if (Object.keys(locals.soundMap || {}).length) { %> data-sounds="<%= JSON.stringify(soundMap) %>"<% } %><% } %> class="<%= locals.embed ? 'embed' : locals.user && user.status === 'active' ? 'with-sidebar' : 'no-sidebar' %><%= locals.ds ? ' ds-v2' : '' %><%= locals.bodyClass ? ` ${bodyClass}` : '' %>">
@@ -81,6 +87,20 @@
           <button type="button" id="enable-notify" class="btn-sm primary">알림 켜기</button>
         </div>
         <span class="me-name"><span class="avatar <%= staffColor(user.id) %>" aria-hidden="true"><%= String(user.name || '?').slice(0, 1) %></span><%= user.name %></span>
+        <%# 화면 밝기 버튼: 누를 때마다 자동 → 밝게 → 어둡게 (theme.js 가 바로 바꾸고 저장) %>
+        <% if (user.status === 'active') { %>
+        <form method="post" action="/me/theme" class="theme-form" data-theme-form>
+          <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
+          <input type="hidden" name="theme" value="<%= THEME_NEXT[theme] %>">
+          <input type="hidden" name="back" value="<%= locals.pagePath || '/' %>">
+          <button type="submit" class="theme-btn" title="화면 밝기: <%= THEME_LABEL[theme] %> (누르면 <%= THEME_LABEL[THEME_NEXT[theme]] %>)" aria-label="화면 밝기: <%= THEME_LABEL[theme] %>. 누르면 <%= THEME_LABEL[THEME_NEXT[theme]] %>">
+            <svg class="theme-ico ti-auto" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>
+            <svg class="theme-ico ti-light" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>
+            <svg class="theme-ico ti-dark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></svg>
+            <span class="theme-label" data-theme-label><%= THEME_LABEL[theme] %></span>
+          </button>
+        </form>
+        <% } %>
         <form method="post" action="/logout">
           <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
           <button class="link" type="submit">로그아웃</button>

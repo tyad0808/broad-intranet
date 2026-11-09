@@ -2,8 +2,10 @@
   </div>
   <% if (locals.embed) { %>
     <script src="/embed.js"></script>
+    <script src="/theme.js"></script>
   <% } else if (locals.user && user.status === 'active') { %>
     <script src="/live.js"></script>
+    <script src="/theme.js"></script>
   <% } %>
 </body>
 </html>
