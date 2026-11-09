@@ -84,7 +84,7 @@ test('오늘·내일 일정과 방금 들어온 주문, 비어 있으면 안내 
   const { db, baseUrl, bossId } = await setup(t);
   const kim = await loginAs(baseUrl, 'kim@broad.test');
   let html = (await kim.request('/home')).text;
-  assert.match(html, /오늘·내일 일정이 없어요/);
+  assert.match(html, /오늘·내일 일정·출고가 없어요/);
   assert.match(html, /아직 들어온 주문이 없어요/);
 
   const ev = db.prepare('INSERT INTO events (title, start_date, end_date, time, created_by) VALUES (?, ?, ?, ?, ?)');
@@ -159,4 +159,18 @@ test('미답변 메일·문의 최근 5건: 보낸 사람·제목·담당, 왼�
   assert.match(html, /<span class="ch ch-coupang"[^>]*>C<\/span>\s*<span class="hm-ask-from">정해리<\/span>\s*<span class="hm-ask-title">사이즈 120x60 가능한가요\?<\/span>\s*<span class="hm-ask-who">김직원<\/span>/);
   // 왼쪽 메뉴 메일함 숫자(미답변 6)가 홈에서도 보인다
   assert.match(html, /<span>메일함 <span class="badge">6<\/span>/);
+});
+
+test('오늘·내일 일정 칸에 출고(납기) 건수도: 주문 목록 출고 달력과 같은 셈, 누르면 그날 납기 주문', async t => {
+  const { db, baseUrl } = await setup(t);
+  addOrder(db, { channel_order_id: 'T1', channel_item_id: 'T1-1', due_date: kstDay(1) });
+  addOrder(db, { channel_order_id: 'T2', channel_item_id: 'T2-1', due_date: kstDay(1) });
+  addOrder(db, { channel_order_id: 'T2', channel_item_id: 'T2-2', due_date: kstDay(1), item_type: 'addon' });
+  const kim = await loginAs(baseUrl, 'kim@broad.test');
+  const html = (await kim.request('/home')).text;
+  assert.match(html, new RegExp(`<a class="hm-ev hm-due" href="/\\?due=${kstDay(1)}">\\s*<span class="hm-ev-day">내일</span>\\s*<span class="hm-ev-time">출고</span>\\s*<span class="hm-ev-title"><strong>2건</strong>`));
+  assert.doesNotMatch(html, /hm-ev-day today">오늘<\/span>\s*<span class="hm-ev-time">출고/, '오늘 출고가 없으면 줄도 없다');
+  assert.match(html, /오늘·내일 다른 일정은 없어요/);
+  const list = (await kim.request(`/?due=${kstDay(1)}`)).text;
+  assert.strictEqual((list.match(/class="oi-main"/g) || []).length, 2, '누른 목록도 2건');
 });

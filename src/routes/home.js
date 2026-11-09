@@ -7,6 +7,7 @@ const { isManager } = require('../auth');
 const { orderSummary, kstDay } = require('./orders');
 const { ORDER_TIME } = require('../retention');
 const { totals, utcRange } = require('../stats');
+const { dueCountsBetween } = require('./calendar');
 
 const MAIL_SQL = "(q.source GLOB 'naver_mail*' OR q.source GLOB 'gmail*')";
 const BOX_WHERE = {
@@ -84,6 +85,10 @@ function homeRoutes(db, { sourceLabels = {}, chatOn = false } = {}) {
       }
     }
 
+    // 오늘·내일 출고(납기) 건수: 주문 목록 위 출고 달력과 같은 셈 → 누르면 그날 납기 주문 목록
+    const dueCounts = dueCountsBetween(db, today, tomorrow);
+    const dues = [[today, '오늘'], [tomorrow, '내일']].map(([date, label]) => ({ date, label, n: dueCounts[date] || 0 })).filter(d => d.n);
+
     // 방금 들어온 주문 4건 (주문번호 묶음 단위, 결제 시각 최근 순)
     const recent = db.prepare(`
       WITH g AS (
@@ -146,6 +151,7 @@ function homeRoutes(db, { sourceLabels = {}, chatOn = false } = {}) {
       orders,
       inbox,
       events: eventRows.slice(0, 6),
+      dues,
       moreEvents: Math.max(0, eventRows.length - 6),
       recent,
       mailRows,

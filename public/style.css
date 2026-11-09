@@ -2209,3 +2209,9 @@ button.ev-btn { width: 100%; min-height: 44px; font-size: 16px; }
   .view-seg::-webkit-scrollbar { display: none; }
   .view-seg a { padding: 0 9px; gap: 4px; }
 }
+
+/* 홈 '오늘·내일 일정' 의 출고 줄 (누르면 그날 납기 주문 목록) */
+.hm-dues { border-bottom: 1px solid var(--line-2); }
+a.hm-due { color: var(--text); text-decoration: none; }
+a.hm-due:hover { background: var(--hover); text-decoration: none; }
+a.hm-due .hm-ev-who { color: var(--primary-text); }

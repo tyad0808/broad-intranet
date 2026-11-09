@@ -91,6 +91,19 @@
 <div class="hm-row hm-row-bottom<%= manager ? ' has-mgr' : '' %>">
   <section class="card hm-card" aria-labelledby="hm-cal">
     <div class="hm-head"><h2 id="hm-cal"><%- ico('<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>') %>오늘·내일 일정</h2><a class="hm-more" href="/schedule">일정 ›</a></div>
+    <%# 출고(납기) 건수: 주문 목록 위 출고 달력과 같은 셈, 누르면 그날 납기 주문 %>
+    <% if (dues.length) { %>
+      <ul class="hm-evs hm-dues">
+        <% dues.forEach(d => { %>
+          <li><a class="hm-ev hm-due" href="/?due=<%= d.date %>">
+            <span class="hm-ev-day<%= d.label === '오늘' ? ' today' : '' %>"><%= d.label %></span>
+            <span class="hm-ev-time">출고</span>
+            <span class="hm-ev-title"><strong><%= d.n %>건</strong> 납기 주문</span>
+            <span class="hm-ev-who">목록 ›</span>
+          </a></li>
+        <% }) %>
+      </ul>
+    <% } %>
     <% if (events.length) { %>
       <ul class="hm-evs">
         <% events.forEach(e => { %>
@@ -104,7 +117,7 @@
       </ul>
       <% if (moreEvents) { %><p class="hm-empty"><a href="/schedule">일정 <%= moreEvents %>개 더 보기 ›</a></p><% } %>
     <% } else { %>
-      <p class="hm-empty">오늘·내일 일정이 없어요. <a href="/schedule">일정 추가하기 ›</a></p>
+      <p class="hm-empty"><%= dues.length ? '오늘·내일 다른 일정은 없어요.' : '오늘·내일 일정·출고가 없어요.' %> <a href="/schedule">일정 추가하기 ›</a></p>
     <% } %>
   </section>
 

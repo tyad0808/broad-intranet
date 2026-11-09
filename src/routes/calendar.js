@@ -199,4 +199,4 @@ function fail(req, res, back, message) {
   res.redirect(back);
 }
 
-module.exports = { calendarRoutes, buildMonth, buildWeek, COLORS };
+module.exports = { calendarRoutes, buildMonth, buildWeek, dueCountsBetween, COLORS };
