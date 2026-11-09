@@ -30,6 +30,7 @@
 </div>
 
 <div class="hm-row hm-row-top">
+<div class="hm-col">
 <section class="card hm-card" aria-labelledby="hm-todo">
   <div class="hm-head"><h2 id="hm-todo"><%- ico('<path d="M5 12l4 4 10-10"/>') %>지금 처리할 주문</h2><a class="hm-more" href="/">주문 전체 보기 ›</a></div>
   <div class="hm-tiles"><% todo.forEach(t => { %><%- tile(t) %><% }) %></div>
@@ -41,16 +42,16 @@
     </p>
   <% } %>
 </section>
+<%# 한눈에 보기 (작게): 주문 목록 위와 같은 상태 4칸 + 7일 출고, 누르면 그 주문 목록 %>
+<div class="hm-overview">
+  <%- include('partials/ship-overview', { ...overview, stLink: key => `/?st=${key}`, dueLink: date => `/?due=${date}`, onSt: '', onDue: '' }) %>
+</div>
+</div>
 
 <section class="card hm-card" aria-labelledby="hm-mine">
   <div class="hm-head"><h2 id="hm-mine"><%- ico('<circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/>') %>내 담당</h2><span class="hm-note">나에게 지정된 것만 세요</span></div>
   <div class="hm-tiles<%= mine.length === 3 ? ' three' : '' %>"><% mine.forEach(t => { %><%- tile(t) %><% }) %></div>
 </section>
-</div>
-
-<%# 한눈에 보기: 주문 목록 위와 같은 상태 4칸 + 7일 출고 (누르면 그 주문 목록) %>
-<div class="hm-overview">
-  <%- include('partials/ship-overview', { ...overview, stLink: key => `/?st=${key}`, dueLink: date => `/?due=${date}`, onSt: '', onDue: '' }) %>
 </div>
 
 <%# 가운데 줄: 미답변 메일 · 미답변 문의(쇼핑몰 문의·톡톡) 최근 5건 %>

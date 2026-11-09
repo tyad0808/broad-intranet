@@ -2217,6 +2217,18 @@ a.hm-due:hover { background: var(--hover); text-decoration: none; }
 a.hm-due .hm-ev-who { color: var(--primary-text); }
 
 
-/* 홈의 한눈에 보기: 다른 줄과 같은 간격 */
-.hm-overview .overview { margin: 0 0 14px; }
-@media (max-width: 900px) { .hm-overview .overview { margin: 0 -16px 14px; } }
+/* 홈: 왼쪽 칸 = 지금 처리할 주문 + 한눈에 보기(작게) */
+.hm-col { display: grid; gap: 14px; min-width: 0; align-content: start; }
+@media (max-width: 1599px) { .hm-row-top { grid-template-columns: minmax(0, 1fr); } } /* 좁은 화면: 한 줄, 안의 칸이 넓어도 화면 밖으로 밀리지 않게 */
+.hm-col > * { min-width: 0; }
+.hm-overview .overview { margin: 0; }
+.hm-overview .ship-board { flex-basis: 100%; }
+.hm-overview .ship-tile { min-height: 0; padding: 8px 14px; gap: 0; }
+.hm-overview .ship-count { font-size: 20px; }
+.hm-overview .ship-label, .hm-overview .ship-sub { font-size: 14px; }
+.hm-overview .ship-recent { display: none; } /* '· 최근 14일' 은 목록 화면에서만 (칸이 좁아서) */
+.hm-overview .week-day { padding: 6px 2px; gap: 0; }
+.hm-overview .week-day strong { font-size: 15px; }
+.hm-overview .week-day .wk-ev { display: none; } /* 일정 이름은 아래 '오늘·내일 일정' 칸에 */
+.hm-overview .week-more { padding: 0 10px; }
+@media (max-width: 900px) { .hm-overview .overview { margin: 0 -16px; } }
