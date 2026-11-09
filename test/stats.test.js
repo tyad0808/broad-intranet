@@ -120,3 +120,21 @@ test('통계 화면은 처음에 오늘 기간으로 열린다', async t => {
   assert.match(page, new RegExp(`${today} ~ ${today}`));
   assert.match(page, /href="https:\/\/quote\.broadstore\.co\.kr\/" target="_blank" rel="noopener" class="nav-help nav-ext"/, '왼쪽 메뉴 견적/계산서');
 });
+
+test('통계: G마켓·옥션 정산 금액(송금 완료)은 정산을 받아 온 서버에서만, 고른 기간의 송금일 기준 합계', async t => {
+  const { startServer: start, addUser: add, loginAs: login } = require('./helpers');
+  const ctx = await start();
+  t.after(() => ctx.server.close());
+  add(ctx.db, { email: 'boss2@broad.test', role: 'admin', name: '사장' });
+  const boss = await login(ctx.baseUrl, 'boss2@broad.test');
+  assert.doesNotMatch((await boss.request('/stats?from=2026-11-01&to=2026-11-09')).text, /G마켓·옥션 정산 금액/, '받아 온 적 없으면 칸 없음');
+  ctx.db.prepare("INSERT INTO settings (key, value) VALUES ('esm_settle_status', ?)").run(JSON.stringify({ ok: true, at: '2026-11-09T03:00:00Z' }));
+  const ins = ctx.db.prepare('INSERT INTO esm_settlements (site, contr_no, kind, remit_date, settlement_price) VALUES (?, ?, ?, ?, ?)');
+  ins.run('G', '1', '1', '2026-11-05', 15770);
+  ins.run('G', '1', '2', '2026-11-08', -5000);
+  ins.run('A', '2', '1', '2026-11-06', 9000);
+  ins.run('A', '3', '1', '2026-10-30', 7000);
+  const html = (await boss.request('/stats?from=2026-11-01&to=2026-11-09')).text;
+  assert.match(html, /G마켓·옥션 정산 금액 <span class="muted">\(송금 완료\)<\/span><\/span>\s*<strong class="kpi-value">19,770원<\/strong>/);
+  assert.match(html, /G마켓 10,770원 · 옥션 9,000원 · 2건/);
+});

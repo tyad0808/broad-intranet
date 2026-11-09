@@ -442,6 +442,15 @@ function migrate(db) {
     --   tax_status: requested / issued / canceled, tax_url: 견적 도구에서 이 주문 계산서를 여는 주소
     --   cash_use: income(소득공제) / expense(지출증빙), cash_status: requested / issued / canceled / failed
     --   개인·사업자 정보(번호·상호)는 받지도 저장하지도 않는다
+    CREATE TABLE IF NOT EXISTS esm_settlements (
+      site             TEXT    NOT NULL,          -- 'G' G마켓 · 'A' 옥션
+      contr_no         TEXT    NOT NULL,          -- 정산의 주문번호 (ContrNo)
+      kind             TEXT    NOT NULL,          -- '1' 원주문 · '2' 환불 (금액이 반대 부호)
+      remit_date       TEXT,                      -- 송금일 (한국 날짜 YYYY-MM-DD) = 실제로 돈이 들어온 날
+      settlement_price INTEGER,                   -- 정산 금액 (송금액)
+      updated_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (site, contr_no, kind)
+    );
     CREATE TABLE IF NOT EXISTS order_hold_log (
       id               INTEGER PRIMARY KEY,
       channel          TEXT    NOT NULL,

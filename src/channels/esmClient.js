@@ -26,6 +26,8 @@ const ALLOWED = [
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Cancels$/ },
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Returns$/ },
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Exchanges$/ },
+  // 판매대금 정산조회 (조회만) — 통계의 'G마켓·옥션 정산 금액(송금 완료)'
+  { method: 'POST', pattern: /^\/account\/v1\/settle\/getsettleorder$/ },
 ];
 
 function findAllowed(method, path) {
@@ -96,8 +98,9 @@ function createEsmClient({
     // 주문 '기간' 조회만 5초 규칙 (주문번호로 조회하면 제한 없음)
     const isRange = /RequestOrders$/.test(path) && Number(json.orderStatus) !== 0;
     // 이 요청의 사이트 (1 옥션 · 2 G마켓) → 토큰에 그 사이트 판매자 ID 하나만
-    const siteCode = Number(json.siteType ?? json.SiteType);
-    const site = siteCode === 1 ? 'A' : siteCode === 2 ? 'G' : null;
+    //   (정산조회는 사이트를 숫자 대신 'A'·'G' 글자로 보낸다)
+    const rawSite = json.siteType ?? json.SiteType;
+    const site = rawSite === 'A' || Number(rawSite) === 1 ? 'A' : rawSite === 'G' || Number(rawSite) === 2 ? 'G' : null;
     for (let attempt = 0; ; attempt++) {
       await wait(isRange);
       let res;
