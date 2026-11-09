@@ -2017,11 +2017,14 @@ button.ev-btn { width: 100%; min-height: 44px; font-size: 16px; }
 /* 노트북 크기: 주문 화면 위 칩 줄이 두 줄로 꺾이지 않게 '연습 모드' 옆 판매처 이름은 숨김 (마우스를 올리면 보임) */
 @media (min-width: 901px) and (max-width: 1440px) { .practice-pill .muted { display: none; } }
 
-/* ───────── 메일함·문의함: 목록 도구(지금 받기·여러 개 선택)는 목록 바로 위에 ───────── */
-.side-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line-2); background: var(--surface-2); }
-.side-tools .collect-form { display: inline-flex; align-items: center; gap: 8px; }
-.side-tools .btn-sm { min-height: 38px; font-size: 14px; font-weight: 600; }
-.side-tools .pick-toggle { border-color: var(--primary); color: var(--primary-dark); }
-.side-tools-time { color: var(--muted); font-size: 14px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+/* ───────── 메일함·문의함: 목록 도구(지금 받기·여러 개 선택)는 목록 바로 위에 ─────────
+   거르기 칸(담당·메일함·기간)과 같은 높이·여백, 두 버튼은 같은 너비 */
+.side-tools { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface-2); }
+.side-tools .collect-form { display: block; margin: 0; }
+.side-tools .btn-sm { width: 100%; min-height: 38px; height: 38px; padding: 0 10px; font-size: 14px; font-weight: 600; }
+.side-tools .pick-toggle { margin: 0; border-color: var(--primary); color: var(--primary-dark); }
+.side-tools > * { margin: 0; }
+.side-tools-time { color: var(--muted); font-weight: 500; font-variant-numeric: tabular-nums; }
 .side-tools + .talk-search { margin-top: 12px; }
 .title-row .head-link { margin-left: 4px; }
+@media (max-width: 900px) { .side-tools .btn-sm { height: 44px; min-height: 44px; } }

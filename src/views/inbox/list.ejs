@@ -55,8 +55,7 @@
         <form method="post" action="/inbox/collect" class="collect-form" data-once>
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
           <input type="hidden" name="back" value="<%= currentUrl %>">
-          <button type="submit" class="btn-sm">↻ 지금 받기</button>
-          <% if (lastRun) { %><span class="side-tools-time">마지막 <%= kst(lastRun.at).slice(11) %><%= lastRun.ok ? '' : ' (일부 실패)' %></span><% } %>
+          <button type="submit" class="btn-sm" title="<%= lastRun ? `마지막으로 받은 시각 ${kst(lastRun.at).slice(11)}${lastRun.ok ? '' : ' (일부 실패)'}` : '' %>">↻ 지금 받기<% if (lastRun) { %> <span class="side-tools-time"><%= kst(lastRun.at).slice(11) %><%= lastRun.ok ? '' : ' 일부 실패' %></span><% } %></button>
         </form>
       <% } %>
       <%# 여러 개 골라서 처리 완료·삭제: 누르면 줄마다 체크 칸이 나온다 (평소엔 숨겨서 목록을 깔끔하게) %>
