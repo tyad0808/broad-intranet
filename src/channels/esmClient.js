@@ -53,8 +53,12 @@ function buildToken({ masterId, secretKey, gmarketId, auctionId, site = null, is
   return `${head}.${body}.${sig}`;
 }
 
-// 주문 기간 조회는 5초에 1번 (ESM 규칙) → 넉넉히 5.2초 간격. 주문번호 조회·클레임 조회는 짧게
-const RANGE_GAP_MS = 5200;
+// 주문 기간 조회는 5초에 1번 (ESM 규칙). ESM 은 앞 조회가 '끝난 뒤' 부터 세는 것 같아서
+//   앞 조회 응답을 받은 때부터 6초 뒤에 보낸다. 주문번호 조회·클레임 조회는 짧게
+const RANGE_GAP_MS = 6000;
+// 그래도 '5초당 1회' 로 거절되면 (확인 명령과 자동 수집이 겹칠 때 등) 쉬었다가 다시 (조회라 안전)
+const BUSY_WAITS_MS = [6000, 8000, 10000];
+const isBusy = (code, msg) => Number(code) === 3000 && /5초|초당|잠시 후/.test(String(msg || ''));
 const MIN_GAP_MS = 400;
 const RETRY_WAITS_MS = [2000, 5000];
 const realSleep = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -78,9 +82,9 @@ function createEsmClient({
     const t = Date.now();
     const at = Math.max(t, nextAny, isRange ? nextRange : 0);
     nextAny = at + MIN_GAP_MS;
-    if (isRange) nextRange = at + RANGE_GAP_MS;
     if (at > t) await sleep(at - t);
   }
+  const rangeDone = () => { nextRange = Date.now() + RANGE_GAP_MS; };
 
   async function request(method, path, json = {}) {
     if (!findAllowed(method, path)) {
@@ -96,18 +100,23 @@ function createEsmClient({
     const site = siteCode === 1 ? 'A' : siteCode === 2 ? 'G' : null;
     for (let attempt = 0; ; attempt++) {
       await wait(isRange);
-      const res = await fetchFn(BASE_URL + path, {
-        method,
-        signal: AbortSignal.timeout(30_000),
-        headers: {
-          authorization: `Bearer ${buildToken({ masterId, secretKey, gmarketId, auctionId, site, issuer, now: now() })}`,
-          'content-type': 'application/json',
-          accept: 'application/json',
-          // 언어를 꼭 적는다: Node 기본값 '*' 를 ESM 서버가 언어 이름으로 못 읽어 코드 3000 ('* 은 잘못된 문화권 식별자')
-          'accept-language': 'ko-KR',
-        },
-        body: JSON.stringify(json),
-      });
+      let res;
+      try {
+        res = await fetchFn(BASE_URL + path, {
+          method,
+          signal: AbortSignal.timeout(30_000),
+          headers: {
+            authorization: `Bearer ${buildToken({ masterId, secretKey, gmarketId, auctionId, site, issuer, now: now() })}`,
+            'content-type': 'application/json',
+            accept: 'application/json',
+            // 언어를 꼭 적는다: Node 기본값 '*' 를 ESM 서버가 언어 이름으로 못 읽어 코드 3000 ('* 은 잘못된 문화권 식별자')
+            'accept-language': 'ko-KR',
+          },
+          body: JSON.stringify(json),
+        });
+      } finally {
+        if (isRange) rangeDone();
+      }
       const text = await res.text();
       let body = null;
       try { body = text ? JSON.parse(text) : null; } catch { body = null; }
@@ -117,6 +126,11 @@ function createEsmClient({
         continue;
       }
       const code = body && (body.ResultCode ?? body.resultCode);
+      const busyMsg = body && (body.Message || body.message);
+      if (isBusy(code, busyMsg) && attempt < BUSY_WAITS_MS.length) {
+        await sleep(BUSY_WAITS_MS[attempt]);
+        continue;
+      }
       if (!res.ok || (code !== undefined && code !== null && Number(code) !== 0)) {
         const msg = (body && (body.Message || body.message || (body.status && body.status.message))) || (text ? text.slice(0, 200) : '');
         throw new EsmApiError(`G마켓·옥션 API 오류 (HTTP ${res.status}${code ? `, 코드 ${code}` : ''})${msg ? `: ${msg}` : ''}`, res.status, body);

@@ -218,3 +218,25 @@ test('관리자 › 판매처 연결: G마켓·옥션 칸 (상태·시작일·�
   assert.match(page, /2026-11-09<\/strong> 결제분부터/);
   assert.match(page, /실패 이유:<\/strong> G마켓 신규주문 주문조회: 코드 3000/);
 });
+
+test("'5초당 1회' 로 거절되면 쉬었다가 다시 묻는다 · 다음 기간 조회는 앞 응답 뒤 6초", async () => {
+  let n = 0;
+  const waits = [];
+  const fetchFn = async () => {
+    n++;
+    return new Response(JSON.stringify(n === 1
+      ? { ResultCode: 3000, Message: '주문 조회는 5초당 1회 호출 가능합니다. 잠시 후 다시 시도해 주세요.' }
+      : { ResultCode: 0, Data: { RequestOrders: [] } }));
+  };
+  const client = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'g', fetchFn, sleep: async ms => waits.push(ms) });
+  const body = await client.request('POST', '/shipping/v1/Order/RequestOrders', { siteType: 2, orderStatus: 1 });
+  assert.strictEqual(body.ResultCode, 0);
+  assert.strictEqual(n, 2);
+  assert.ok(waits.includes(6000), '6초 쉬고 다시');
+  // 다른 3000 오류(기간 초과 등)는 다시 묻지 않고 바로 알려 준다
+  let m = 0;
+  const other = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'g', sleep: async () => {},
+    fetchFn: async () => { m++; return new Response(JSON.stringify({ ResultCode: 3000, Message: '31일 이하의 범위만 조회 할 수 있습니다.' })); } });
+  await assert.rejects(other.request('POST', '/shipping/v1/Order/RequestOrders', { siteType: 2, orderStatus: 1 }), /31일/);
+  assert.strictEqual(m, 1);
+});
