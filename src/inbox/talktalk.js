@@ -193,6 +193,10 @@ function createTalkImages({ ttlMs = 60_000, now = () => Date.now() } = {}) {
   };
 }
 
+// 주도권 넘기기에서 '스레드를 갖고 있지 않은 챗봇이 요청' (코드 11) = 대화가 이미 파트너센터에 있다는 뜻 → 바라던 상태라 오류로 남기지 않는다
+//   (같은 코드 11 이라도 '핸드오버 이벤트를 구독하고 있지 않습니다' 는 설정 문제라 그대로 남긴다)
+const alreadyPassed = e => Boolean(e && e.body && String(e.body.resultCode) === '11' && /갖고 있지 않/.test(String(e.body.resultMessage || '')));
+
 // 인트라넷에서 톡톡 답장 보내기 (TALKTALK_ANSWER=on 일 때만 만든다. 아니면 연습 모드)
 //   ① 대화를 파트너센터에서 잠깐 가져오고 ② 사진들 → 글 순서로 보내고 ③ 다시 파트너센터로 넘긴다 (파트너센터에서도 계속 답할 수 있게)
 //   돌려주는 sent: 실제로 나간 것들 (대화 말풍선으로 남긴다)
@@ -227,7 +231,7 @@ function createTalktalkSender({ client = createTalktalkClient(), images, publicU
       } catch (e) {
         return { result: 'error', sent, message: `톡톡으로 보내지 못했습니다${sent.length ? ` (앞의 ${sent.length}개는 보냄)` : ''}: ${e.message}` };
       } finally {
-        await client.passThread(user, partnerId).catch(e => log.warn(`[톡톡] 파트너센터로 다시 넘기기 실패: ${e.message}`));
+        await client.passThread(user, partnerId).catch(e => { if (!alreadyPassed(e)) log.warn(`[톡톡] 파트너센터로 다시 넘기기 실패: ${e.message}`); });
       }
       return { result: 'ok', sent, message: `톡톡으로 보냈습니다${files.length ? ` (사진 ${files.length}장${body ? ' + 글' : ''})` : ''}.` };
     },
@@ -295,7 +299,7 @@ function createTalktalkHandler({ db, notifier = null, client = null, partnerId =
       }
       // 주도권이 아직 챗봇(인트라넷)에 있으면 파트너센터로 넘긴다 (standby 면 이미 파트너센터에 있음)
       if (client && !(ev.options && ev.options.standby)) {
-        client.passThread(user, ev.partner || partnerId).catch(e => log.warn(`[톡톡] 주도권 넘기기 실패: ${e.message}`));
+        client.passThread(user, ev.partner || partnerId).catch(e => { if (!alreadyPassed(e)) log.warn(`[톡톡] 주도권 넘기기 실패: ${e.message}`); });
       }
       return { id: r.id };
     }

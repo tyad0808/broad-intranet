@@ -407,3 +407,19 @@ test('전화번호로 주문 연결: 손님이 번호를 쓰면 자동(진행 �
   handle(send('u2', '아 주문번호 OLD1 말고 NEW1-1 이에요'));
   assert.strictEqual(row('u2').order_no, 'OTHER', '숫자 주문번호가 아니면 그대로');
 });
+
+test('주도권 넘기기: 이미 파트너센터에 있으면(코드 11 · 스레드를 갖고 있지 않은 챗봇) 기록에 남기지 않고, 핸드오버 구독 안 함은 남긴다', async () => {
+  const db = openDb(':memory:');
+  const warns = [];
+  let reply = { resultCode: '11', resultMessage: '스레드를 갖고 있지 않은 챗봇이 요청' };
+  const client = { passThread: async () => { throw Object.assign(new Error('톡톡 API 오류 (HTTP 200, 코드 11)'), { status: 200, body: reply }); } };
+  const handle = createTalktalkHandler({ db, client, partnerId: 'wc1', log: { warn: m => warns.push(m) } });
+  handle(send('userA', '안녕하세요'));
+  await new Promise(r => setTimeout(r, 10));
+  assert.deepStrictEqual(warns, []);
+  reply = { resultCode: '11', resultMessage: '핸드오버 이벤트를 구독하고 있지 않습니다.' };
+  handle(send('userA', '또 왔어요'));
+  await new Promise(r => setTimeout(r, 10));
+  assert.strictEqual(warns.length, 1);
+  assert.match(warns[0], /주도권 넘기기 실패/);
+});
