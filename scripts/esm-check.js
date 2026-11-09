@@ -18,7 +18,7 @@ const kst = d => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 
   const to = kst(new Date(now.getTime() + 24 * 3600 * 1000));
   console.log(`조회 기간(결제일) ${from} ~ ${kst(now)} · 기간 조회는 5초에 1번이라 조금 걸립니다`);
   let ok = 0;
-  let fail = 0;
+  let fail = 0; // eslint-disable-line prefer-const
   for (const site of client.sites) {
     console.log(`\n▶ ${site.name}`);
     for (const [status, label] of Object.entries(STATUSES)) {
@@ -49,5 +49,37 @@ const kst = d => new Date(d.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 
       fail++;
     }
   }
-  console.log(fail ? `\n일부 실패 ${fail}건 — 401 이면 키·마스터 ID·판매자 ID 또는 서버 IP 등록을 확인하세요.` : `\n연결 정상 (${ok}번 조회 성공)`);
+  console.log(fail ? `\n일부 실패 ${fail}건 — 401 이면 키·마스터 ID·판매자 ID 또는 서버 IP 등록을 확인하세요.` : `\n기본 조회 정상 (${ok}번 조회 성공)`);
+
+  // ── 실제 수집과 똑같이 한 번 (DB 에는 아무것도 쓰지 않음) ──
+  const { createEsmSource } = require('../src/channels/esm');
+  const { DB_PATH } = require('../src/db');
+  let startDate = /^\d{4}-\d{2}-\d{2}$/.test(process.env.ESM_START_DATE || '') ? process.env.ESM_START_DATE : null;
+  let lastRun = null;
+  try {
+    const db = new (require('node:sqlite').DatabaseSync)(DB_PATH, { readOnly: true });
+    startDate = startDate || (db.prepare("SELECT value FROM settings WHERE key = 'esm_start_date'").get() || {}).value || null;
+    lastRun = db.prepare("SELECT started_at, ok, error FROM collect_runs WHERE channel = 'esm' AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 1").get();
+    db.close();
+  } catch (e) {
+    console.log(`(인트라넷 DB 를 읽지 못함: ${e.message})`);
+  }
+  if (lastRun) console.log(`\n인트라넷의 마지막 자동 수집: ${lastRun.started_at} · ${lastRun.ok ? '성공' : `실패 — ${lastRun.error}`}`);
+  console.log(`\n▶ 실제 수집과 같은 과정으로 한 번 (가져오는 주문: ${startDate || '날짜 제한 없음'} 결제분부터, 1분쯤)`);
+  const source = createEsmSource({ client, startDate });
+  try {
+    const rows = await source.fetchChanges();
+    console.log(`  주문 읽기 성공: 가져올 주문 ${rows.length}건 ${rows.slice(0, 5).map(r => `${r.channel_item_id}(${r.channel_status_label})`).join(', ')}${rows.length > 5 ? ' …' : ''}`);
+  } catch (e) {
+    console.log(`  주문 읽기 실패: ${e.message}`);
+    fail++;
+  }
+  try {
+    const claims = await source.fetchClaims();
+    console.log(`  취소·반품·교환 읽기 성공: ${claims.length}건`);
+  } catch (e) {
+    console.log(`  취소·반품·교환 읽기 실패: ${e.message}`);
+    fail++;
+  }
+  console.log(fail ? '\n실패한 줄의 문장을 캡처해서 보내 주세요.' : '\n연결 정상 — 실제 수집도 같은 결과로 됩니다.');
 })();

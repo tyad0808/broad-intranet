@@ -3,7 +3,7 @@
 // 키는 암호화해서 저장하고(channelRegistry.js), 화면에는 끝 4자리만. 켤 때는 관리자 비밀번호를 다시 확인한다.
 const express = require('express');
 
-function channelRoutes(registry, { godo = null } = {}) {
+function channelRoutes(registry, { godo = null, esm = null } = {}) {
   const router = express.Router();
   router.use((req, res, next) => { res.locals.navSection = 'admin'; next(); });
   const flash = (req, type, message) => { req.session.flash = { type, message }; };
@@ -27,6 +27,7 @@ function channelRoutes(registry, { godo = null } = {}) {
       ready: registry.ready,
       keyProblem: registry.keyProblem,
       godo,
+      esm: esm ? esm() : null,
     });
   });
 

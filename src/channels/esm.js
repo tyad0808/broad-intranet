@@ -15,7 +15,8 @@ const CHANNEL = 'esm';
 const OPEN_DAYS = 28; // G마켓은 한 번에 31일까지만
 const DONE_DAYS = 7;
 const CLAIM_DAYS = 7; // 클레임 조회는 7일 단위
-const CLAIM_EVERY_MS = 15 * 60 * 1000; // 클레임은 15분에 한 번만 (사이트마다 12번씩 묻는다)
+const CLAIM_EVERY_MS = 15 * 60 * 1000;
+const PAGE_SIZE = 100; // 연결 확인(esm-check)에서 성공한 값 — 페이지를 넘겨 가며 끝까지 읽는다 // 클레임은 15분에 한 번만 (사이트마다 12번씩 묻는다)
 
 // ESM 주문상태 → 인트라넷 공통 상태
 //   1 신규주문 → 신규주문(발주확인 전) · 2 발송대기중(주문확인 완료) → 배송준비 · 3 배송중 · 4 배송완료 · 5 구매결정완료
@@ -152,12 +153,12 @@ function createEsmSource(options = {}) {
         siteType: SITES[site].code, orderStatus, requestDateType: 2,
         // 오늘까지 보려면 끝 날짜를 내일로 (ESM 안내)
         requestDateFrom: kstDate(new Date(to.getTime() - days * DAY)), requestDateTo: kstDate(new Date(to.getTime() + DAY)),
-        pageIndex: page, pageSize: 500,
+        pageIndex: page, pageSize: PAGE_SIZE,
       });
       const rows = list(body);
       out.push(...rows);
       const total = Number(((body && (body.Data || body.data)) || {}).TotalCount) || 0;
-      if (!rows.length || out.length >= total || rows.length < 500) break;
+      if (!rows.length || out.length >= total || rows.length < PAGE_SIZE) break;
     }
     return out.map(o => normalize(o, site));
   }
@@ -169,9 +170,15 @@ function createEsmSource(options = {}) {
     label: 'G마켓·옥션',
     async fetchChanges() {
       const all = [];
-      for (const { key } of client.sites) {
-        for (const status of [1, 2]) all.push(...await orders(key, status, OPEN_DAYS));
-        for (const status of [3, 4]) all.push(...await orders(key, status, DONE_DAYS));
+      for (const { key, name } of client.sites) {
+        // 어느 사이트·상태에서 실패했는지 알 수 있게 (관리자 › 판매처 연결 · 대시보드에 그대로 보인다)
+        for (const [status, days] of [[1, OPEN_DAYS], [2, OPEN_DAYS], [3, DONE_DAYS], [4, DONE_DAYS]]) {
+          try {
+            all.push(...await orders(key, status, days));
+          } catch (e) {
+            throw Object.assign(new Error(`${name} ${STATUS_MAP[status].label} 주문조회: ${e.message}`), { status: e.status });
+          }
+        }
       }
       // 매번 최근 주문 전체를 다시 읽으므로, 상태가 그대로인 주문은 '바뀐 주문' 으로 세지 않는다 (refreshOnly)
       return evenShipFee(all.filter(afterStart)).map(o => ({ ...o, refreshOnly: true }));

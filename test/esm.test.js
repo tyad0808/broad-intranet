@@ -188,3 +188,33 @@ test('토큰의 판매자 ID 는 요청한 사이트 것 하나만 (ESM: "one si
   await client.request('POST', '/claim/v1/sa/Cancels', { SiteType: 1, CancelStatus: 0, Type: 2 });
   assert.deepStrictEqual(seen, ['G:gm1', 'A:au1']);
 });
+
+test('관리자 › 판매처 연결: G마켓·옥션 칸 (상태·시작일·마지막 수집 실패 이유)', async t => {
+  const { startServer, addUser, loginAs } = require('./helpers');
+  const { createChannelRegistry } = require('../src/channelRegistry');
+  const { createSecretBox } = require('../src/secretBox');
+  const { createOrderActions } = require('../src/actions');
+  const keep = { ...process.env };
+  t.after(() => { for (const k of ['ESM_MASTER_ID', 'ESM_SECRET_KEY', 'ESM_GMARKET_ID', 'ESM_AUCTION_ID', 'ESM']) { if (keep[k] === undefined) delete process.env[k]; else process.env[k] = keep[k]; } });
+  const db = openDb(':memory:');
+  const channelRegistry = createChannelRegistry({
+    db, box: createSecretBox('e'.repeat(64)), env: {}, collectors: [], actions: createOrderActions({ db }), inbox: { sourceLabels: {}, senders: {}, collectorSources: [] },
+    makeCollector: source => ({ source }), factories: {},
+  });
+  const ctx = await startServer({ db, channelRegistry });
+  t.after(() => ctx.server.close());
+  addUser(ctx.db, { email: 'boss@broad.test', role: 'admin' });
+  const boss = await loginAs(ctx.baseUrl, 'boss@broad.test');
+
+  delete process.env.ESM_MASTER_ID;
+  assert.match((await boss.request('/admin/channels')).text, /G마켓·옥션[\s\S]*연결 안 됨[\s\S]*DEPLOY\.md\) 20장/);
+
+  Object.assign(process.env, { ESM_MASTER_ID: 'm', ESM_SECRET_KEY: 's', ESM_GMARKET_ID: 'g', ESM_AUCTION_ID: 'a' });
+  ctx.db.prepare("INSERT INTO settings (key, value) VALUES ('esm_start_date', '2026-11-09')").run();
+  ctx.db.prepare("INSERT INTO collect_runs (channel, started_at, finished_at, ok, error) VALUES ('esm', '2026-11-09T05:00:00Z', '2026-11-09T05:01:00Z', 0, 'G마켓 신규주문 주문조회: 코드 3000')").run();
+  const page = (await boss.request('/admin/channels')).text;
+  assert.match(page, /G마켓·옥션<\/strong><span class="muted small">ESM Trading API · 서버 설정\(\.env\) · G마켓·옥션/);
+  assert.match(page, /받기 실패/);
+  assert.match(page, /2026-11-09<\/strong> 결제분부터/);
+  assert.match(page, /실패 이유:<\/strong> G마켓 신규주문 주문조회: 코드 3000/);
+});

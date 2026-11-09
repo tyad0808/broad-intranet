@@ -1,7 +1,7 @@
 <%- include('../partials/header') %>
 <%- include('../partials/admin-tabs') %>
 <%
-  const MARK = { smartstore: ['mk-naver', 'N'], coupang: ['mk-coupang', 'C'], godo: ['mk-own', 'B'] };
+  const MARK = { smartstore: ['mk-naver', 'N'], coupang: ['mk-coupang', 'C'], godo: ['mk-own', 'B'], esm: ['mk-esm', 'G'] };
   const mark = (ch, small) => `<span class="mk ${MARK[ch][0]}${small ? ' mk-sm' : ''}" aria-hidden="true">${MARK[ch][1]}</span>`;
   const stateOf = c => {
     if (c.fromEnv) return { cls: 'ok', text: '연결됨' };
@@ -98,6 +98,28 @@
     <p class="ch-warn">자사몰 연결은 <b>우리 견적 프로그램에 직접 만든 API</b>라 서버 설정으로만 넣어요. 다른 회사는 쓰는 쇼핑몰(고도몰 등)에 맞춰 연결을 새로 만들어야 해요.</p>
   </div>
 </section>
+
+<% if (esm) { const lr = esm.lastRun; const failed = esm.ready && lr && !lr.ok; %>
+<section class="card ch-card" id="esm">
+  <div class="ch-head"><%- mark('esm') %>
+    <div class="acct-text"><strong>G마켓·옥션</strong><span class="muted small">ESM Trading API · 서버 설정(.env)<%= esm.sites.length ? ` · ${esm.sites.join('·')}` : '' %></span></div>
+    <span class="acct-state <%= !esm.ready ? 'off' : failed ? 'bad' : 'ok' %>">● <%= !esm.ready ? (esm.off ? '꺼짐 (ESM=off)' : '연결 안 됨') : failed ? '받기 실패' : '연결됨' %></span>
+  </div>
+  <div class="ch-body">
+    <% if (esm.ready) { %>
+      <ul class="plain-list">
+        <li>가져오는 주문: <strong><%= esm.startDate || '-' %></strong> 결제분부터 (그 전 주문은 수기 주문으로)</li>
+        <li>마지막 수집: <% if (lr) { %><%= kst(lr.started_at) %> · <%= lr.ok ? `성공 (읽은 주문 ${lr.fetched}건, 새 주문 ${lr.created}건)` : '실패' %><% } else { %>아직 없음 (서버를 켠 뒤 5분 안에)<% } %></li>
+        <li>인트라넷에 들어온 G마켓·옥션 주문: <%= esm.orders %>건</li>
+      </ul>
+      <% if (failed) { %><p class="ch-warn"><strong>실패 이유:</strong> <%= lr.error %></p><% } %>
+      <p class="muted small">지금은 조회만 해요. 주문확인·발송처리는 ESM+ 에서 해 주세요 (다음 단계에서 인트라넷 버튼으로). 연결 확인: 서버에서 <code>npm run esm-check</code></p>
+    <% } else { %>
+      <p class="ch-warn">서버 설정(.env)에 ESM_MASTER_ID · ESM_SECRET_KEY · ESM_GMARKET_ID(또는 ESM_AUCTION_ID)를 넣고 재시작하면 켜져요. 순서는 설치 안내(DEPLOY.md) 20장.</p>
+    <% } %>
+  </div>
+</section>
+<% } %>
 
 <section class="card">
   <h2>실제로 보내기</h2>

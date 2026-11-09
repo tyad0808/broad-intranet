@@ -337,6 +337,20 @@ function createApp({
       write: process.env.GODO_WRITE === 'on' && Boolean(process.env.GODO_WRITE_KEY),
       answer: process.env.GODO_ANSWER === 'on' && Boolean(process.env.GODO_WRITE_KEY) && process.env.GODO_QNA !== 'off',
     },
+    // G마켓·옥션(ESM): 서버 설정(.env)만. 화면에는 상태·시작일·마지막 수집 결과(실패면 그 이유)
+    esm: () => {
+      const env = process.env;
+      const ready = Boolean(env.ESM_MASTER_ID && env.ESM_SECRET_KEY && (env.ESM_GMARKET_ID || env.ESM_AUCTION_ID)) && env.ESM !== 'off';
+      const start = db.prepare("SELECT value FROM settings WHERE key = 'esm_start_date'").get();
+      return {
+        ready,
+        off: env.ESM === 'off',
+        sites: [env.ESM_GMARKET_ID ? 'G마켓' : null, env.ESM_AUCTION_ID ? '옥션' : null].filter(Boolean),
+        startDate: /^\d{4}-\d{2}-\d{2}$/.test(env.ESM_START_DATE || '') ? env.ESM_START_DATE : (start && start.value) || null,
+        lastRun: db.prepare("SELECT started_at, ok, error, fetched, created FROM collect_runs WHERE channel = 'esm' AND finished_at IS NOT NULL ORDER BY id DESC LIMIT 1").get() || null,
+        orders: db.prepare("SELECT COUNT(DISTINCT channel_order_id) AS n FROM orders WHERE channel = 'esm'").get().n,
+      };
+    },
   }));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));
   app.use('/stats', requireManager, statsRoutes(db, { staffReport: require('./stats').staffReport }));
