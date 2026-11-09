@@ -2232,3 +2232,11 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
 .hm-overview .week-day .wk-ev { display: none; } /* 일정 이름은 아래 '오늘·내일 일정' 칸에 */
 .hm-overview .week-more { padding: 0 10px; }
 @media (max-width: 900px) { .hm-overview .overview { margin: 0 -16px; } }
+
+/* 홈 '내 담당 주문': 주문 · 고객·디자인 단계 · 납기 */
+.hm-mine-row { grid-template-columns: 22px minmax(0, 1fr) auto auto; }
+.hm-due-pill { flex: none; padding: 1px 8px; border-radius: 6px; background: var(--line-2); color: var(--text-2); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.hm-due-pill.due-soon { background: var(--warn-bg); color: var(--warn); }
+.hm-due-pill.due-over { background: var(--error-bg); color: var(--error); }
+@media (max-width: 600px) { .hm-mine-row { grid-template-columns: 22px minmax(0, 1fr) auto; } .hm-mine-row .hm-recent-meta { display: none; } }
+.hm-total.calm { background: var(--primary-weak); color: var(--primary-dark); } /* 할 일 수(빨강 아님) */

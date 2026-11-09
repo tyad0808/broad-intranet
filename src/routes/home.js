@@ -7,6 +7,7 @@ const { isManager } = require('../auth');
 const { orderSummary, kstDay, shipOverview } = require('./orders');
 const { buildWeek } = require('./calendar');
 const { ORDER_TIME } = require('../retention');
+const { ENDED_SQL } = require('../collector');
 const { totals, utcRange } = require('../stats');
 const { dueCountsBetween } = require('./calendar');
 
@@ -90,6 +91,29 @@ function homeRoutes(db, { sourceLabels = {}, chatOn = false } = {}) {
     const dueCounts = dueCountsBetween(db, today, tomorrow);
     const dues = [[today, '오늘'], [tomorrow, '내일']].map(([date, label]) => ({ date, label, n: dueCounts[date] || 0 })).filter(d => d.n);
 
+    // 내 담당 진행 중 주문 (납기가 이른 것부터, 납기 없으면 최근 결제 순) — '내 담당' 칸 아래 목록
+    //   진행 중 = 마지막 단계(발송) 전 + 판매처에서 끝나지 않음 + 보류 아님 (주문 목록 '내 담당' 탭과 같은 조건)
+    const lastStage = (db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get() || {}).id || -1;
+    const MINE_LIMIT = 6;
+    const mineOrders = db.prepare(`
+      WITH g AS (
+        SELECT o.channel AS ch, o.channel_order_id AS oid, MIN(o.due_date) AS due, MAX(${ORDER_TIME}) AS t, COUNT(*) AS n
+        FROM orders o
+        WHERE o.assignee_id = ? AND o.hold_at IS NULL AND (o.stage_id IS NULL OR o.stage_id != ?)
+        GROUP BY o.channel, o.channel_order_id
+        HAVING MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END) = 0
+      )
+      SELECT g.n, g.due, o.id, o.channel, o.product_name, COALESCE(NULLIF(o.buyer_name, ''), o.receiver_name) AS buyer,
+        ds.name AS design_name, (SELECT COUNT(*) FROM g) AS total
+      FROM g JOIN orders o ON o.id = (
+        SELECT id FROM orders x WHERE x.channel = g.ch AND x.channel_order_id = g.oid
+        ORDER BY CASE WHEN x.item_type = 'addon' THEN 1 ELSE 0 END, x.id LIMIT 1)
+      LEFT JOIN design_stages ds ON ds.id = o.design_stage_id
+      ORDER BY g.due IS NULL, g.due, g.t DESC
+      LIMIT ${MINE_LIMIT}
+    `).all(user.id, lastStage);
+    const mineTotal = mineOrders.length ? mineOrders[0].total : 0;
+
     // 방금 들어온 주문 4건 (주문번호 묶음 단위, 결제 시각 최근 순)
     const recent = db.prepare(`
       WITH g AS (
@@ -156,6 +180,9 @@ function homeRoutes(db, { sourceLabels = {}, chatOn = false } = {}) {
       dues,
       moreEvents: Math.max(0, eventRows.length - 6),
       recent,
+      mineOrders,
+      mineTotal,
+      today,
       mailRows,
       askRows,
       mailLabel: source => MAIL_KIND(source) || source,
