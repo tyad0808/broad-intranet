@@ -29,7 +29,8 @@
     "option-sample": "node --disable-warning=ExperimentalWarning scripts/option-sample.js",
     "mail-backfill": "node --disable-warning=ExperimentalWarning scripts/mail-backfill.js",
     "godo-shipway-backfill": "node --disable-warning=ExperimentalWarning scripts/godo-shipway-backfill.js",
-    "esm-check": "node --disable-warning=ExperimentalWarning scripts/esm-check.js"
+    "esm-check": "node --disable-warning=ExperimentalWarning scripts/esm-check.js",
+    "esm-sales-check": "node --disable-warning=ExperimentalWarning scripts/esm-sales-check.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
