@@ -12,8 +12,10 @@
 const { createEsmClient, SITES } = require('./esmClient');
 
 const CHANNEL = 'esm';
-const OPEN_DAYS = 28; // G마켓은 한 번에 31일까지만
+const OPEN_DAYS = 28;
 const DONE_DAYS = 7;
+const WINDOW_DAYS = 30; // G마켓은 한 번에 31일까지만 → 긴 기간은 30일씩 나눠 묻는다 (평소 최근 28일~내일은 한 번에)
+const MAX_BACK_DAYS = 90; // 처음 한 번 시작일부터 읽을 때도 최대 90일 전까지
 const CLAIM_DAYS = 7; // 클레임 조회는 7일 단위
 const CLAIM_EVERY_MS = 15 * 60 * 1000;
 const PAGE_SIZE = 100; // 연결 확인(esm-check)에서 성공한 값 — 페이지를 넘겨 가며 끝까지 읽는다 // 클레임은 15분에 한 번만 (사이트마다 12번씩 묻는다)
@@ -137,6 +139,8 @@ function createEsmSource(options = {}) {
   const now = options.now || (() => new Date());
   const startDate = options.startDate || null; // 이 날(포함)부터 결제한 주문만
   let lastClaimsAt = 0;
+  // 서버가 켜진 뒤 첫 수집은 시작일부터 오늘까지 모든 상태를 읽는다 (시작일을 앞당겼을 때 그 사이 주문도 들어오게)
+  let backfilled = false;
 
   const list = body => {
     const data = body && (body.Data || body.data);
@@ -144,23 +148,41 @@ function createEsmSource(options = {}) {
     return (data && (data.RequestOrders || data.requestOrders)) || [];
   };
 
-  // 한 사이트·한 상태의 주문을 결제일 기준 기간으로 (페이지 끝까지)
-  async function orders(site, orderStatus, days) {
-    const to = now();
+  // 읽을 기간의 시작 날짜: 최근 days 일, 단 시작일보다 앞으로는 가지 않는다
+  const fromDate = days => {
+    const recent = kstDate(new Date(now().getTime() - days * DAY));
+    return startDate && startDate > recent ? startDate : recent;
+  };
+  // 첫 수집: 시작일부터 (최대 90일 전까지)
+  const backfillFrom = () => {
+    const limit = kstDate(new Date(now().getTime() - MAX_BACK_DAYS * DAY));
+    const from = startDate || kstDate(new Date(now().getTime() - OPEN_DAYS * DAY));
+    return from < limit ? limit : from;
+  };
+
+  // 한 사이트·한 상태의 주문을 결제일 기준으로 from(포함)~오늘 (30일씩 나눠서, 페이지 끝까지)
+  async function orders(site, orderStatus, from) {
+    // 오늘까지 보려면 끝 날짜를 내일로 (ESM 안내)
+    const end = kstDate(new Date(now().getTime() + DAY));
     const out = [];
-    for (let page = 1; page <= 20; page++) {
-      const body = await client.request('POST', '/shipping/v1/Order/RequestOrders', {
-        siteType: SITES[site].code, orderStatus, requestDateType: 2,
-        // 오늘까지 보려면 끝 날짜를 내일로 (ESM 안내)
-        requestDateFrom: kstDate(new Date(to.getTime() - days * DAY)), requestDateTo: kstDate(new Date(to.getTime() + DAY)),
-        pageIndex: page, pageSize: PAGE_SIZE,
-      });
-      const rows = list(body);
-      out.push(...rows);
-      const total = Number(((body && (body.Data || body.data)) || {}).TotalCount) || 0;
-      if (!rows.length || out.length >= total || rows.length < PAGE_SIZE) break;
+    for (let a = from; a < end;) {
+      const b = kstDate(new Date(Math.min(Date.parse(`${a}T00:00:00Z`) + WINDOW_DAYS * DAY, Date.parse(`${end}T00:00:00Z`))));
+      for (let page = 1; page <= 20; page++) {
+        const body = await client.request('POST', '/shipping/v1/Order/RequestOrders', {
+          siteType: SITES[site].code, orderStatus, requestDateType: 2,
+          requestDateFrom: a, requestDateTo: b,
+          pageIndex: page, pageSize: PAGE_SIZE,
+        });
+        const rows = list(body);
+        out.push(...rows);
+        const total = Number(((body && (body.Data || body.data)) || {}).TotalCount) || 0;
+        if (!rows.length || rows.length < PAGE_SIZE || out.length >= total) break;
+      }
+      a = b;
     }
-    return out.map(o => normalize(o, site));
+    // 나눈 기간의 경계 날짜에 걸친 주문이 두 번 나올 수 있다 → 주문번호로 하나만
+    const seen = new Set();
+    return out.filter(o => !seen.has(String(o.OrderNo)) && seen.add(String(o.OrderNo))).map(o => normalize(o, site));
   }
 
   const afterStart = o => !startDate || !o.paid_at || kstDate(new Date(Date.parse(o.paid_at))) >= startDate;
@@ -174,12 +196,13 @@ function createEsmSource(options = {}) {
         // 어느 사이트·상태에서 실패했는지 알 수 있게 (관리자 › 판매처 연결 · 대시보드에 그대로 보인다)
         for (const [status, days] of [[1, OPEN_DAYS], [2, OPEN_DAYS], [3, DONE_DAYS], [4, DONE_DAYS]]) {
           try {
-            all.push(...await orders(key, status, days));
+            all.push(...await orders(key, status, backfilled ? fromDate(days) : backfillFrom()));
           } catch (e) {
             throw Object.assign(new Error(`${name} ${STATUS_MAP[status].label} 주문조회: ${e.message}`), { status: e.status });
           }
         }
       }
+      backfilled = true; // 다음부터는 최근 기간만
       // 매번 최근 주문 전체를 다시 읽으므로, 상태가 그대로인 주문은 '바뀐 주문' 으로 세지 않는다 (refreshOnly)
       return evenShipFee(all.filter(afterStart)).map(o => ({ ...o, refreshOnly: true }));
     },

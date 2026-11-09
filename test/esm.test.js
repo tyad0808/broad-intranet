@@ -145,7 +145,8 @@ test('수집: 사이트마다 상태 4번 조회(결제일 기준, 오늘까지)
   assert.deepStrictEqual(range.map(c => `${c.json.siteType}:${c.json.orderStatus}`), ['2:1', '2:2', '2:3', '2:4', '1:1', '1:2', '1:3', '1:4']);
   assert.strictEqual(range[0].json.requestDateType, 2);
   assert.strictEqual(range[0].json.requestDateTo, '2026-11-10', '오늘까지 보려면 끝 날짜는 내일');
-  assert.strictEqual(range[0].json.requestDateFrom, '2026-10-12');
+  assert.strictEqual(range[0].json.requestDateFrom, '2026-11-01', '첫 수집은 시작일부터 (모든 상태)');
+  assert.strictEqual(range[2].json.requestDateFrom, '2026-11-01', '배송중도 시작일부터');
   const ids = db.prepare("SELECT channel_item_id FROM orders WHERE channel = 'esm' ORDER BY channel_item_id").all().map(r => r.channel_item_id);
   assert.deepStrictEqual(ids, ['A-2001', 'G-1001'], '켠 날(11/1) 전에 결제한 G-1002 는 가져오지 않음');
   const row = db.prepare("SELECT * FROM orders WHERE channel_item_id = 'G-1001'").get();
@@ -239,4 +240,21 @@ test("'5초당 1회' 로 거절되면 쉬었다가 다시 묻는다 · 다음 �
     fetchFn: async () => { m++; return new Response(JSON.stringify({ ResultCode: 3000, Message: '31일 이하의 범위만 조회 할 수 있습니다.' })); } });
   await assert.rejects(other.request('POST', '/shipping/v1/Order/RequestOrders', { siteType: 2, orderStatus: 1 }), /31일/);
   assert.strictEqual(m, 1);
+});
+
+test('시작일을 앞당기면 첫 수집에서 그날부터 30일씩 나눠 읽고, 다음부터는 최근 기간만', async () => {
+  const client = fakeClient(['G']);
+  const t = new Date('2026-11-09T03:00:00Z');
+  const source = createEsmSource({ client, now: () => t, startDate: '2026-10-10' });
+  await source.fetchChanges();
+  const first = client.calls.filter(c => c.json.orderStatus === 1).map(c => `${c.json.requestDateFrom}~${c.json.requestDateTo}`);
+  assert.deepStrictEqual(first, ['2026-10-10~2026-11-09', '2026-11-09~2026-11-10'], 'G마켓 31일 제한 안에서 나눠 묻는다');
+  const before = client.calls.length;
+  await source.fetchChanges();
+  const again = client.calls.slice(before);
+  assert.deepStrictEqual(again.filter(c => c.json.orderStatus === 1).map(c => c.json.requestDateFrom), ['2026-10-12'], '두 번째부터 최근 28일');
+  assert.deepStrictEqual(again.filter(c => c.json.orderStatus === 3).map(c => c.json.requestDateFrom), ['2026-11-02'], '배송중·배송완료는 최근 7일');
+  // 같은 주문이 경계에서 두 번 나와도 한 번만
+  const rows = await createEsmSource({ client: fakeClient(['G']), now: () => t, startDate: '2026-10-10' }).fetchChanges();
+  assert.strictEqual(rows.filter(r => r.channel_item_id === 'G-1001').length, 1);
 });
