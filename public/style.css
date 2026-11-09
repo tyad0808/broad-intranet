@@ -1872,6 +1872,7 @@ a.mail-file:hover { border-color: var(--primary); text-decoration: none; }
 .acct-state.off { background: var(--line-2); color: var(--text-2); }
 .acct-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin: 10px 0 0 52px; }
 .acct-actions form { margin: 0; }
+.acct-actions > .muted.small { align-self: center; } /* 서버 설정 계정 안내 글자를 [끄기] 버튼과 같은 높이에 */
 .acct-error { margin: 8px 0 0 52px; padding: 8px 12px; border-radius: 8px; background: var(--error-bg); color: var(--error); font-size: 14px; }
 .acct-empty { margin: 14px 0 0; }
 .acct-pw > summary { list-style: none; cursor: pointer; }

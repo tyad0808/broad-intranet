@@ -45,7 +45,15 @@
           <span class="acct-state <%= st.cls %>">● <%= st.text %></span>
         </div>
         <% if (a.fromEnv) { %>
-          <div class="acct-actions"><span class="muted small">서버 설정 계정이라 여기서는 바꿀 수 없어요</span></div>
+          <div class="acct-actions">
+            <span class="muted small">서버 설정 계정이라 비밀번호는 여기서 못 바꿔요. 끄고 켜기만 돼요</span>
+            <form method="post" action="/admin/mail/env/<%= a.source %>/enable" class="inline" data-once
+                  <% if (a.enabled) { %>data-confirm="<%= a.address %> 연결을 끌까요?&#10;새 메일을 받지 않고, 이 주소로 답장도 보내지 않아요. 이미 받은 메일은 메일함에 그대로 있어요. 언제든 다시 켤 수 있어요."<% } %>>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="on" value="<%= a.enabled ? '0' : '1' %>">
+              <button type="submit" class="btn-sm"><%= a.enabled ? '끄기' : '다시 켜기' %></button>
+            </form>
+          </div>
         <% } else { %>
           <div class="acct-actions">
             <details class="acct-pw" <%= a.locked || (st.cls === 'bad') ? 'open' : '' %>>

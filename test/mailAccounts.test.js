@@ -113,6 +113,25 @@ test('.env 계정은 목록에 같이 보이고(바꿀 수 없음), 열쇠가 �
   assert.match((await nokey.registry.add({ kind: 'gmail', address: 'a@gmail.com', pass: 'goodpass' }, 1)).error, /SETTINGS_KEY/);
 });
 
+test('.env 계정 끄기·켜기: 끄면 받기·답장에서 빠지고(받은 메일 이름은 그대로), 서버를 다시 켜도 꺼진 채, 켜면 다시 받기', () => {
+  const db = openDb(':memory:');
+  const env = [{ source: 'gmail', kind: 'gmail', kindLabel: '지메일', label: 'me@gmail.com', user: 'me@gmail.com', pass: 'x' }];
+  const a = setup({ db, env, live: true });
+  assert.ok(a.sources.some(s => s.source === 'gmail'));
+  assert.ok(a.inbox.senders.gmail);
+  assert.deepStrictEqual(a.registry.setEnvEnabled('gmail', false, 1), { ok: true, address: 'me@gmail.com' });
+  assert.ok(!a.sources.some(s => s.source === 'gmail'), '받기에서 빠짐');
+  assert.ok(!a.inbox.senders.gmail, '답장도 안 보냄');
+  assert.strictEqual(a.inbox.sourceLabels.gmail, 'me@gmail.com', '받은 메일에 계정 이름은 그대로');
+  assert.strictEqual(a.registry.list()[0].enabled, 0);
+  const again = setup({ db, env, live: true }); // 서버를 다시 켠 것처럼
+  assert.ok(!again.sources.some(s => s.source === 'gmail'), '다시 켜도 꺼진 채');
+  again.registry.setEnvEnabled('gmail', true, 1);
+  assert.ok(again.sources.some(s => s.source === 'gmail'));
+  assert.deepStrictEqual(again.registry.history().slice(0, 2).map(h => h.action), ['켬', '끔']);
+  assert.match(again.registry.setEnvEnabled('nope', false, 1).error, /찾을 수 없어요/);
+});
+
 test('관리자 › 메일 계정 화면: 관리자만, 추가·실패 안내, 비밀번호는 화면에 나오지 않음, 열쇠가 없으면 넣는 법 안내', async t => {
   const { db, inbox } = setup();
   const ctx = await startServer({ db, inbox });

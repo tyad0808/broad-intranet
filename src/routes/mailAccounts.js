@@ -55,6 +55,14 @@ function mailAccountRoutes(registry) {
     res.redirect('/admin/mail');
   });
 
+  // 서버 설정(.env) 계정 끄기·켜기 (계정 정보는 .env 그대로, 받기·답장만 멈춤)
+  router.post('/mail/env/:source/enable', (req, res) => {
+    const on = req.body.on === '1';
+    const out = registry.setEnvEnabled(String(req.params.source), on, req.user.id);
+    flash(req, out.error ? 'error' : 'ok', out.error || (on ? `${out.address} 를 다시 켰어요. 다음 받기부터 메일이 들어와요.` : `${out.address} 를 껐어요. 새 메일을 받지 않고, 이 주소로 답장도 보내지 않아요. 이미 받은 메일은 메일함에 그대로 있어요.`));
+    res.redirect('/admin/mail');
+  });
+
   router.post('/mail/:id/delete', (req, res) => {
     const out = registry.remove(req.params.id, req.user.id);
     flash(req, out.error ? 'error' : 'ok', out.error || '지웠어요. 이미 받은 메일은 메일함에 그대로 남아요.');

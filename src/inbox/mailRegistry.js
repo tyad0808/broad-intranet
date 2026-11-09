@@ -44,6 +44,9 @@ function createMailRegistry({
   const setStatus = (source, status) => db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
     .run(`inbox_status_${source}`, JSON.stringify(status));
 
+  // .env 계정 끄기·켜기: 계정 정보(.env)는 그대로 두고 받기·답장만 멈춘다 (settings 의 mail_env_off_<출처> = '1')
+  const envOff = source => (db.prepare('SELECT value FROM settings WHERE key = ?').get(`mail_env_off_${source}`) || {}).value === '1';
+
   // 지금 계정들을 메일함·답장·첨부·이름에 반영 (메일이 아닌 출처는 그대로 둔다)
   function apply() {
     if (!inbox) return;
@@ -59,7 +62,7 @@ function createMailRegistry({
       if (live && inbox.senders) inbox.senders[acc.source] = makeSender(acc);
       collectorSources.push(makeSource(acc));
     };
-    for (const acc of envAccounts) use(acc, { collect: true });
+    for (const acc of envAccounts) use(acc, { collect: !envOff(acc.source) });
     for (const row of rowsAll()) {
       if (!row.source) continue;
       const pass = row.deleted_at ? null : box.open(row.pass_sealed);
@@ -93,7 +96,7 @@ function createMailRegistry({
     live,
     // 화면용 목록: .env 계정(바꿀 수 없음) + 관리자 화면 계정. 비밀번호는 내보내지 않는다
     list() {
-      const env = envAccounts.map(a => ({ id: null, fromEnv: true, kind: a.kind, kindLabel: a.kindLabel, address: a.user, source: a.source, enabled: 1, status: statusOf(a.source) }));
+      const env = envAccounts.map(a => ({ id: null, fromEnv: true, kind: a.kind, kindLabel: a.kindLabel, address: a.user, source: a.source, enabled: envOff(a.source) ? 0 : 1, status: statusOf(a.source) }));
       const saved = rowsAll().filter(r => !r.deleted_at).map(r => ({
         id: r.id, fromEnv: false, kind: r.kind, kindLabel: PROVIDERS[r.kind].label, address: r.address, source: r.source,
         enabled: r.enabled, created_at: r.created_at, updated_at: r.updated_at,
@@ -157,6 +160,15 @@ function createMailRegistry({
       log(row.id, userId, on ? '켬' : '끔', row.address);
       apply();
       return { ok: true };
+    },
+    // .env 계정 끄기·켜기 (끄면 새 메일을 받지 않고 그 주소로 답장도 안 보냄. 받은 메일은 메일함에 그대로)
+    setEnvEnabled(source, on, userId) {
+      const acc = envAccounts.find(a => a.source === source);
+      if (!acc) return { error: '계정을 찾을 수 없어요.' };
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(`mail_env_off_${source}`, on ? '0' : '1');
+      log(null, userId, on ? '켬' : '끔', acc.user);
+      apply();
+      return { ok: true, address: acc.user };
     },
     // 지우기: 비밀번호는 지우고 이름만 남긴다 (받은 메일은 메일함에 그대로)
     remove(id, userId) {
