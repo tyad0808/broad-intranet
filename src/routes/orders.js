@@ -654,7 +654,21 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     back: safeBack(req.query.back),
     makerData: { ...prefill, phone: prefill.phone || phoneOf(db), terms: termsOf(db), logoUrl: res.locals.brand.logoUrl, brandName: res.locals.brand.name },
   });
-  router.get('/proof-maker', (req, res) => makerPage(req, res, { revision: 0 }));
+  // 시안확정서 담당 디자이너 칸 (고객에게 가는 종이라 실명 대신 별명만)
+  //   주문 담당 디자이너의 별명 → 담당이 없으면 지금 만드는 사람(로그인한 본인)의 별명 → 그래도 없으면 비우고 알려 준다
+  const myNickname = userId => (db.prepare('SELECT nickname FROM users WHERE id = ?').get(userId) || {}).nickname || '';
+  const designerFor = (order, user) => {
+    if (order && order.assignee_id) {
+      return order.assignee_nickname
+        ? { designer: order.assignee_nickname, designerNote: '' }
+        : { designer: '', designerNote: `담당 디자이너(${order.assignee_name || ''})의 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.` };
+    }
+    const mine = myNickname(user.id);
+    return mine
+      ? { designer: mine, designerNote: order ? `담당 디자이너가 정해지지 않아 내 별명(${mine})을 넣었어요.` : '' }
+      : { designer: '', designerNote: `${order ? '담당 디자이너가 정해지지 않았고, ' : ''}내 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.` };
+  };
+  router.get('/proof-maker', (req, res) => makerPage(req, res, { revision: 0, ...designerFor(null, req.user) }));
   router.get('/orders/:id/proof-maker', (req, res) => {
     const order = findOrder(req.params.id);
     if (!order) return res.status(404).render('error', { title: '없는 주문', message: '주문을 찾을 수 없습니다.' });
@@ -669,9 +683,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       receiver: v.receiver,
       orderNo: v.orderNo,
       revision: v.revision,
-      // 고객에게 가는 종이라 실명 대신 별명만 (별명이 없으면 비워 두고 화면에 알려 준다)
-      designer: order.assignee_nickname || '',
-      designerNote: order.assignee_id && !order.assignee_nickname ? `담당 디자이너(${order.assignee_name || ''})의 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.` : '',
+      ...designerFor(order, req.user), // 고객에게 가는 종이라 실명 대신 별명만
       phone: v.phone,
       // 고객이 주문한 그대로: 상품마다 '이름 × 수량' 줄 + 옵션 줄, 상품 사이는 빈 줄
       products: v.products.map(p => `${p.name} × ${p.qty}${p.option ? `\n${p.option.split(' / ').join(' · ')}` : ''}`).join('\n\n'),

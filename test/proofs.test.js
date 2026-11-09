@@ -232,6 +232,16 @@ test('고객용 시안확정서 만들기: 빈 양식과 주문으로 미리 채
   const nick = await ctx.kim.request(`/orders/${ctx.id}/proof-maker`);
   assert.match(nick.text, /name="designer" value="하늘"/);
   assert.doesNotMatch(nick.text, /별명이 없어 비워 뒀어요/);
+  // 담당 디자이너가 없으면 만드는 사람(로그인한 본인)의 별명
+  ctx.db.prepare("UPDATE orders SET assignee_id = NULL WHERE channel_order_id = 'O1'").run();
+  const noAssignee = (await ctx.kim.request(`/orders/${ctx.id}/proof-maker`)).text;
+  assert.match(noAssignee, /name="designer" value="하늘"/);
+  assert.match(noAssignee, /담당 디자이너가 정해지지 않아 내 별명\(하늘\)을 넣었어요/);
+  assert.match((await ctx.kim.request('/proof-maker')).text, /name="designer" value="하늘"/, '빈 양식도 내 별명');
+  ctx.db.prepare("UPDATE users SET nickname = NULL WHERE id = ?").run(ctx.kimId);
+  assert.match((await ctx.kim.request(`/orders/${ctx.id}/proof-maker`)).text, /내 별명이 없어 비워 뒀어요/);
+  ctx.db.prepare("UPDATE users SET nickname = '하늘' WHERE id = ?").run(ctx.kimId);
+  ctx.db.prepare("UPDATE orders SET assignee_id = ? WHERE channel_order_id = 'O1'").run(ctx.kimId);
   for (const text of ['value="홍길동"', 'value="김길동"', 'value="O1"', 'value="2"', '실물 등신대 입간판 포맥스3T 1인 120x60cm 거치대O × 1\n등신대 키 선택: ~180cm · 거치대 선택: 거치대O', '볼터치작업 × 1 (볼터치 무료옵션)', '거치대는 뒤쪽 가운데로', '/proof/image']) {
     assert.ok(filled.text.includes(text), text);
   }
