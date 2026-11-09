@@ -21,7 +21,7 @@
       <% pending.forEach(u => { %>
         <li class="row">
           <div class="row-main">
-            <strong><%= u.name %></strong>
+            <strong><%= u.name %></strong><% if (u.nickname) { %> <span class="nick-tag" title="시안확정서에 들어가는 별명">별명 <%= u.nickname %></span><% } %>
             <span class="muted"><%= u.email %> · <%= u.job_name || '직무 없음' %> · <%= kst(u.created_at) %> 신청</span>
           </div>
           <div class="row-actions">
@@ -36,6 +36,7 @@
 
 <section class="card">
   <h2>직원 목록 <span class="muted"><%= others.length %>명</span></h2>
+  <p class="muted small"><strong>별명</strong>은 고객에게 보내는 시안확정서에 실명 대신 들어가요 (비워 두면 시안확정서 담당 칸이 비어요). 직원을 지우려면 먼저 <strong>정지</strong>한 뒤 <strong>삭제</strong>를 누르세요.</p>
   <p class="muted small">역할: <strong>직원</strong> 기본 기능 · <strong>부관리자</strong> 통계·주문 단계 바꾸기·남의 일정 고치기·답장 문구 엑셀까지 다 쓰고, 관리자 설정(이 관리자 메뉴)만 못 들어와요 · <strong>관리자</strong> 전부</p>
   <ul class="rows">
     <% others.forEach(u => { const isMe = u.id === user.id; const locked = u.locked_until && new Date(u.locked_until) > now; %>
@@ -48,6 +49,7 @@
         </div>
         <form method="post" action="/admin/users/<%= u.id %>/update" class="row-edit">
           <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <input type="text" name="nickname" value="<%= u.nickname || '' %>" maxlength="20" placeholder="별명" aria-label="<%= u.name %> 별명 (시안확정서용)" class="nick-input">
           <select name="job_id" aria-label="직무">
             <option value="">직무 없음</option>
             <% jobs.forEach(j => { %>
@@ -72,6 +74,8 @@
             <%- action(`/admin/users/${u.id}/delete`, '삭제', 'danger', `${u.name} 계정을 지울까요?`) %>
           <% } else if (!isMe && u.status === 'suspended') { %>
             <%- action(`/admin/users/${u.id}/reactivate`, '정지 해제', 'primary') %>
+            <% const r = u.release || { orders: 0, asks: 0 }; const moved = [r.orders ? `진행 중 주문 ${r.orders}건` : '', r.asks ? `미답변 문의 ${r.asks}건` : ''].filter(Boolean).join('·'); %>
+            <%- action(`/admin/users/${u.id}/delete`, '삭제', 'danger', `${u.name} 님을 삭제할까요?${moved ? `\n담당 중인 ${moved}은 미지정이 됩니다.` : ''}\n지난 처리 기록에는 이름이 그대로 남고, 되돌릴 수 없습니다.`) %>
           <% } %>
         </div>
       </li>

@@ -61,6 +61,62 @@ test('거절하면 계정이 지워져 로그인할 수 없고, 예전에 거절
   assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM users WHERE id = ?').get(old).n, 0);
 });
 
+test('정지한 직원 [삭제]: 진행 중 주문·미답변 문의는 미지정, 기록이 있으면 줄은 남기고 목록·로그인에서 빠지며 같은 메일로 다시 가입', async t => {
+  const { db, baseUrl, admin, adminId } = await setup(t);
+  const kim = addUser(db, { email: 'kim@broad.test', name: '김퇴사' });
+  const lee = addUser(db, { email: 'lee@broad.test', name: '이테스트' });
+  const stage = db.prepare("SELECT id FROM work_stages WHERE name = '발주'").get().id;
+  const add = (oid, status) => db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, channel_status, stage_id, assignee_id) VALUES ('smartstore', ?, ?, '현수막', ?, ?, ?)").run(oid, `${oid}-1`, status, stage, kim);
+  add('OPEN1', 'PAYED');
+  add('DONE1', 'DELIVERED');
+  db.prepare("INSERT INTO inquiries (source, external_id, subject, body, received_at, assignee_id, status) VALUES ('gmail', 'm1', '문의', '내용', '2026-11-09T00:00:00Z', ?, 'open')").run(kim);
+
+  // 일하는 중인 직원은 바로 못 지운다 (먼저 정지)
+  await press(admin, `/admin/users/${kim}/delete`);
+  assert.strictEqual(db.prepare('SELECT deleted_at FROM users WHERE id = ?').get(kim).deleted_at, null);
+  await press(admin, `/admin/users/${kim}/suspend`);
+  await press(admin, `/admin/users/${lee}/suspend`);
+  const page = (await admin.request('/admin/users')).text;
+  assert.match(page, /김퇴사 님을 삭제할까요\?\n담당 중인 진행 중 주문 1건·미답변 문의 1건은 미지정이 됩니다/);
+
+  await press(admin, `/admin/users/${kim}/delete`);
+  const row = db.prepare('SELECT name, email, deleted_at FROM users WHERE id = ?').get(kim);
+  assert.ok(row.deleted_at, '기록이 있어서 줄은 남기고 삭제 표시');
+  assert.strictEqual(row.name, '김퇴사', '지난 기록에 이름은 남는다');
+  const assignee = oid => db.prepare('SELECT assignee_id FROM orders WHERE channel_order_id = ?').get(oid).assignee_id;
+  assert.strictEqual(assignee('OPEN1'), null, '진행 중 주문은 미지정');
+  assert.strictEqual(assignee('DONE1'), kim, '끝난 주문 기록은 그대로');
+  assert.strictEqual(db.prepare("SELECT assignee_id FROM inquiries WHERE external_id = 'm1'").get().assignee_id, null);
+  const after = (await admin.request('/admin/users')).text;
+  assert.match(after, /김퇴사 님을 삭제했어요\. 진행 중 주문 1건·미답변 문의 1건은 미지정이 됐어요\. 지난 처리 기록에는 이름이 그대로 남아요/);
+  assert.doesNotMatch(after.replace(/김퇴사 님을 삭제했어요[^<]*/, ''), /김퇴사/, '직원 목록에서 빠짐');
+  assert.strictEqual((await loginAs(baseUrl, 'kim@broad.test').then(b => b.request('/'))).location, '/login', '로그인 안 됨');
+  // 같은 메일로 다시 가입할 수 있다
+  assert.ok(!db.prepare('SELECT 1 FROM users WHERE email = ?').get('kim@broad.test'));
+
+  // 기록이 하나도 없는 계정은 완전히 지운다
+  await press(admin, `/admin/users/${lee}/delete`);
+  assert.strictEqual(db.prepare('SELECT COUNT(*) AS n FROM users WHERE id = ?').get(lee).n, 0);
+  assert.ok(db.prepare('SELECT 1 FROM users WHERE id = ?').get(adminId));
+});
+
+test('별명: 가입할 때 넣고, 관리자 화면에서 고치고 비울 수 있다', async t => {
+  const { db, baseUrl, admin } = await setup(t);
+  const { browser } = require('./helpers');
+  const b = browser(baseUrl);
+  await b.submit('/signup', '/signup', { email: 'new@broad.test', name: '박실명', nickname: '  디자이너 하늘 ', password: 'password123', password_confirm: 'password123' });
+  const id = db.prepare('SELECT id FROM users WHERE email = ?').get('new@broad.test').id;
+  assert.strictEqual(db.prepare('SELECT nickname FROM users WHERE id = ?').get(id).nickname, '디자이너 하늘');
+  assert.match((await admin.request('/admin/users')).text, /별명 디자이너 하늘/, '가입 신청 줄에 별명');
+  await press(admin, `/admin/users/${id}/approve`);
+  assert.match((await admin.request('/admin/users')).text, /name="nickname" value="디자이너 하늘"/);
+  await press(admin, `/admin/users/${id}/update`, { nickname: '바다', role: 'staff', job_id: '' });
+  assert.strictEqual(db.prepare('SELECT nickname FROM users WHERE id = ?').get(id).nickname, '바다');
+  assert.match((await admin.request('/admin/users')).text, /name="nickname" value="바다"/);
+  await press(admin, `/admin/users/${id}/update`, { nickname: '  ', role: 'staff', job_id: '' });
+  assert.strictEqual(db.prepare('SELECT nickname FROM users WHERE id = ?').get(id).nickname, null);
+});
+
 test('정지하면 로그인해 있던 직원의 세션이 즉시 지워진다', async t => {
   const { db, baseUrl, admin, statusOf } = await setup(t);
   const id = addUser(db, { email: 'leaver@broad.test' });

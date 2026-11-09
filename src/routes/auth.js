@@ -54,6 +54,7 @@ function authRoutes(db, notifier) {
     const form = {
       email: String(req.body.email || '').trim(),
       name: String(req.body.name || '').trim(),
+      nickname: String(req.body.nickname || '').trim().slice(0, 20),
       job_id: Number(req.body.job_id) || null,
     };
     const password = req.body.password;
@@ -72,8 +73,8 @@ function authRoutes(db, notifier) {
 
     // 가입 직후 상태는 항상 '승인 대기'
     db.prepare(
-      "INSERT INTO users (email, password_hash, name, job_id, role, status) VALUES (?, ?, ?, ?, 'staff', 'pending')"
-    ).run(form.email, hashPassword(password), form.name, form.job_id);
+      "INSERT INTO users (email, password_hash, name, nickname, job_id, role, status) VALUES (?, ?, ?, ?, ?, 'staff', 'pending')"
+    ).run(form.email, hashPassword(password), form.name, form.nickname || null, form.job_id);
 
     // 관리자에게 가입 신청 알림
     notifier.signup({ name: form.name, email: form.email });

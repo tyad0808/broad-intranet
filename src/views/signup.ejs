@@ -11,6 +11,9 @@
     <label>이름
       <input type="text" name="name" value="<%= form.name || '' %>" required maxlength="30">
     </label>
+    <label>별명 <span class="muted small">(선택 · 고객에게 보내는 시안확정서에 실명 대신 들어가요)</span>
+      <input type="text" name="nickname" value="<%= form.nickname || '' %>" maxlength="20" placeholder="예: 디자이너 하늘">
+    </label>
     <label>직무
       <select name="job_id">
         <option value="">선택 안 함</option>

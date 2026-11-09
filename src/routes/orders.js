@@ -572,7 +572,9 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       receiver: v.receiver,
       orderNo: v.orderNo,
       revision: v.revision,
-      designer: v.designer,
+      // 고객에게 가는 종이라 실명 대신 별명만 (별명이 없으면 비워 두고 화면에 알려 준다)
+      designer: order.assignee_nickname || '',
+      designerNote: order.assignee_id && !order.assignee_nickname ? `담당 디자이너(${order.assignee_name || ''})의 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.` : '',
       phone: v.phone,
       // 고객이 주문한 그대로: 상품마다 '이름 × 수량' 줄 + 옵션 줄, 상품 사이는 빈 줄
       products: v.products.map(p => `${p.name} × ${p.qty}${p.option ? `\n${p.option.split(' / ').join(' · ')}` : ''}`).join('\n\n'),
@@ -1043,7 +1045,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
 
   function findOrder(id) {
     return db.prepare(`
-      SELECT o.*, s.name AS stage_name, u.name AS assignee_name
+      SELECT o.*, s.name AS stage_name, u.name AS assignee_name, u.nickname AS assignee_nickname
       FROM orders o
       LEFT JOIN work_stages s ON s.id = o.stage_id
       LEFT JOIN users u ON u.id = o.assignee_id
@@ -1210,4 +1212,21 @@ function kstDay(offset) {
   return new Date(Date.now() + 9 * 3600 * 1000 + offset * 86400000).toISOString().slice(0, 10);
 }
 
-module.exports = { orderRoutes, safeBack, collectFlash, orderSummary, kstDay };
+// 직원을 삭제할 때: 그 사람이 담당하던 '진행 중' 주문(홈·목록의 진행 중과 같은 조건)을 미지정으로. count 만 하면 세기만
+function releaseOpenOrders(db, userId, { count = false } = {}) {
+  const lastRow = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
+  const last = Number(lastRow ? lastRow.id : -1);
+  const groups = db.prepare(`
+    SELECT o.channel, o.channel_order_id FROM orders o
+    GROUP BY o.channel, o.channel_order_id
+    HAVING MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) = 1
+      AND MAX(CASE WHEN o.stage_id IS NULL OR o.stage_id != ${last} THEN 1 ELSE 0 END) = 1 AND ${GROUP_ENDED} = 0
+  `).all(userId);
+  if (!count) {
+    const stmt = db.prepare("UPDATE orders SET assignee_id = NULL, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ? AND assignee_id = ?");
+    for (const g of groups) stmt.run(g.channel, g.channel_order_id, userId);
+  }
+  return groups.length;
+}
+
+module.exports = { orderRoutes, safeBack, collectFlash, orderSummary, kstDay, releaseOpenOrders };

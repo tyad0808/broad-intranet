@@ -31,9 +31,10 @@
       <label><span class="cap">수령자 <span class="muted small">(구매자와 다를 때)</span></span><input type="text" name="receiver" value="<%= d.receiver || '' %>" maxlength="30"></label>
     </div>
     <div class="two-fields">
-      <label><span class="cap">담당 디자이너</span><input type="text" name="designer" value="<%= d.designer || '' %>" maxlength="30"></label>
+      <label><span class="cap">담당 디자이너 <span class="muted small">(별명)</span></span><input type="text" name="designer" value="<%= d.designer || '' %>" maxlength="30"></label>
       <label><span class="cap">수정 횟수</span><input type="number" name="revision" value="<%= d.revision || 0 %>" min="0" max="999" inputmode="numeric"></label>
     </div>
+    <% if (d.designerNote) { %><p class="maker-note"><%= d.designerNote %></p><% } %>
     <label><span class="cap">연락처</span><input type="text" name="phone" value="<%= d.phone || '' %>" maxlength="30"></label>
     <label><span class="cap">상품 <span class="muted small">(상품마다 첫 줄 = 이름 × 수량, 다음 줄 = 옵션 · 상품 사이는 빈 줄)</span></span><textarea name="products" rows="6" maxlength="1500" placeholder="예: 실물 등신대 포맥스3T 1인 × 1&#10;등신대 키 선택: ~180cm · 거치대 선택: 거치대O"><%= d.products || '' %></textarea>
     </label>

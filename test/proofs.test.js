@@ -224,7 +224,15 @@ test('고객용 시안확정서 만들기: 빈 양식과 주문으로 미리 채
   assert.match(blank.text, /수정 횟수는 템플릿에 기재된 횟수입니다/); // 약관
   await ctx.upload({ revision: '2', material: '포맥스 3T', size_long: '160', size_short: '63', ship_method: '택배' }, { data: PNG });
   const filled = await ctx.kim.request(`/orders/${ctx.id}/proof-maker`);
-  for (const text of ['value="홍길동"', 'value="김길동"', 'value="O1"', 'value="김디자"', 'value="2"', '실물 등신대 입간판 포맥스3T 1인 120x60cm 거치대O × 1\n등신대 키 선택: ~180cm · 거치대 선택: 거치대O', '볼터치작업 × 1 (볼터치 무료옵션)', '거치대는 뒤쪽 가운데로', '/proof/image']) {
+  // 시안확정서는 고객에게 가는 종이라 담당 디자이너는 별명만 (별명이 없으면 비우고 알려 줌)
+  assert.match(filled.text, /name="designer" value=""/);
+  assert.ok(!filled.text.includes('value="김디자"'), '실명은 들어가지 않는다');
+  assert.match(filled.text, /별명이 없어 비워 뒀어요/);
+  ctx.db.prepare("UPDATE users SET nickname = '하늘' WHERE id = ?").run(ctx.kimId);
+  const nick = await ctx.kim.request(`/orders/${ctx.id}/proof-maker`);
+  assert.match(nick.text, /name="designer" value="하늘"/);
+  assert.doesNotMatch(nick.text, /별명이 없어 비워 뒀어요/);
+  for (const text of ['value="홍길동"', 'value="김길동"', 'value="O1"', 'value="2"', '실물 등신대 입간판 포맥스3T 1인 120x60cm 거치대O × 1\n등신대 키 선택: ~180cm · 거치대 선택: 거치대O', '볼터치작업 × 1 (볼터치 무료옵션)', '거치대는 뒤쪽 가운데로', '/proof/image']) {
     assert.ok(filled.text.includes(text), text);
   }
   // 데이터 칸에 < 가 그대로 들어가 스크립트가 끊기지 않게

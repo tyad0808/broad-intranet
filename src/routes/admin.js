@@ -1,7 +1,7 @@
 // 관리자 메뉴: 직원 관리, 작업 단계 편집, 직무 편집
 // 이 파일의 모든 주소는 app.js 에서 requireAdmin 을 거친 뒤에만 들어온다.
 const express = require('express');
-const { collectFlash } = require('./orders');
+const { collectFlash, releaseOpenOrders } = require('./orders');
 const { transaction } = require('../db');
 const { CHANNELS } = require('../channels/labels');
 const { storageInfo, humanSize } = require('../storage');
@@ -57,12 +57,17 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
   // ───────── 직원 관리 ─────────
   router.get('/users', (req, res) => {
     const users = db.prepare(`
-      SELECT u.id, u.email, u.name, u.role, u.sub_admin, u.status, u.job_id, u.created_at, u.locked_until, j.name AS job_name
+      SELECT u.id, u.email, u.name, u.nickname, u.role, u.sub_admin, u.status, u.job_id, u.created_at, u.locked_until, j.name AS job_name
       FROM users u LEFT JOIN jobs j ON j.id = u.job_id
+      WHERE u.deleted_at IS NULL
       ORDER BY CASE u.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 WHEN 'suspended' THEN 2 ELSE 3 END,
                u.created_at DESC
     `).all();
     const jobs = db.prepare('SELECT id, name, active FROM jobs ORDER BY sort_order').all();
+    // 정지한 직원을 지우면 미지정이 될 건수 (삭제 확인창에 보여 준다)
+    for (const u of users) {
+      if (u.status === 'suspended') u.release = { orders: releaseOpenOrders(db, u.id, { count: true }), asks: openAsks(u.id) };
+    }
     res.render('admin/users', {
       title: '직원 관리',
       tab: 'users',
@@ -94,16 +99,42 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
     res.redirect('/admin/users');
   });
 
-  // 예전에 거절해 둔 계정 지우기
+  // 미답변 문의·메일 중 이 직원이 담당인 것
+  const openAsks = userId => db.prepare("SELECT COUNT(*) AS n FROM inquiries WHERE assignee_id = ? AND status = 'open'").get(userId).n;
+
+  // 계정 지우기: 거절한 계정, 또는 정지한 직원 (일하는 직원을 실수로 지우지 않게 '정지 → 삭제' 두 단계)
+  //   정지한 직원: 진행 중 주문·미답변 문의 담당은 미지정으로. 지난 기록이 있으면 줄은 남기고 '삭제됨' 표시만
+  //   (목록·담당 고르는 칸·알림·로그인에서 빠지고, 같은 메일로 다시 가입할 수 있게 메일 주소는 비운다)
   router.post('/users/:id/delete', (req, res) => {
     const user = targetUser(req, res);
     if (!user) return;
-    if (user.status !== 'rejected') {
-      flash(req, 'error', '거절한 계정만 지울 수 있습니다.');
+    if (!['rejected', 'suspended'].includes(user.status) || user.deleted_at) {
+      flash(req, 'error', '정지한 직원(또는 거절한 계정)만 삭제할 수 있습니다. 먼저 [정지]를 눌러 주세요.');
       return res.redirect('/admin/users');
     }
-    const ok = removeUser(user);
-    flash(req, ok ? 'ok' : 'error', ok ? `${user.name} 계정을 지웠습니다.` : '이 계정은 남은 기록이 있어 지우지 못했습니다.');
+    if (user.status === 'rejected') {
+      const ok = removeUser(user);
+      flash(req, ok ? 'ok' : 'error', ok ? `${user.name} 계정을 지웠습니다.` : '이 계정은 남은 기록이 있어 지우지 못했습니다.');
+      return res.redirect('/admin/users');
+    }
+    let released = { orders: 0, asks: 0 };
+    transaction(db, () => {
+      released = { orders: releaseOpenOrders(db, user.id), asks: openAsks(user.id) };
+      db.prepare("UPDATE inquiries SET assignee_id = NULL WHERE assignee_id = ? AND status = 'open'").run(user.id);
+    });
+    sessionStore.destroyUserSessions(user.id);
+    notifier.hub.disconnectUser(user.id);
+    let gone = false;
+    try {
+      db.prepare('DELETE FROM users WHERE id = ?').run(user.id); // 남은 기록이 하나도 없으면 완전히 지운다
+      gone = true;
+    } catch {
+      db.prepare("UPDATE users SET deleted_at = datetime('now'), status = 'suspended', email = ?, password_hash = '' WHERE id = ?")
+        .run(`deleted-${user.id}@deleted.invalid`, user.id);
+    }
+    if (released.orders || released.asks) notifier.checkUnassigned();
+    const moved = [released.orders ? `진행 중 주문 ${released.orders}건` : '', released.asks ? `미답변 문의 ${released.asks}건` : ''].filter(Boolean).join('·');
+    flash(req, 'ok', `${user.name} 님을 삭제했어요.${moved ? ` ${moved}은 미지정이 됐어요.` : ''}${gone ? '' : ' 지난 처리 기록에는 이름이 그대로 남아요.'}`);
     res.redirect('/admin/users');
   });
 
@@ -184,7 +215,9 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       }
     }
 
-    db.prepare('UPDATE users SET job_id = ?, role = ?, sub_admin = ? WHERE id = ?').run(jobId, role, subAdmin, user.id);
+    // 별명: 고객용 시안확정서에 실명 대신 들어가는 이름 (비우면 시안확정서 담당 칸도 비어요)
+    const nickname = String(req.body.nickname || '').trim().slice(0, 20) || null;
+    db.prepare('UPDATE users SET job_id = ?, role = ?, sub_admin = ?, nickname = ? WHERE id = ?').run(jobId, role, subAdmin, nickname, user.id);
     flash(req, 'ok', `${user.name} 님의 정보를 저장했습니다.`);
     res.redirect('/admin/users');
   });

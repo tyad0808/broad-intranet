@@ -64,6 +64,10 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'notify_off', 'TEXT');
   // 부관리자: role 은 'staff' 그대로 두고 이 칸만 1 (예전 코드로 되돌려도 그냥 직원으로 보여서 안전). 관리자 설정 화면만 빼고 다 쓴다
   addColumn(db, 'users', 'sub_admin', 'INTEGER NOT NULL DEFAULT 0');
+  // 별명: 고객에게 보내는 시안확정서에는 실명 대신 이 이름 (가입할 때·관리자 › 직원 관리에서)
+  addColumn(db, 'users', 'nickname', 'TEXT');
+  // 삭제한 직원: 지난 기록(처리한 사람 등)에 이름이 남아 있어 줄은 지우지 않고 표시만 (목록·로그인에서 빠짐)
+  addColumn(db, 'users', 'deleted_at', 'TEXT');
   // 채널이 쓰는 상태 이름 그대로 (예: 자사몰 '고객취소요청'). 공통 상태와 함께 보여줘서 헷갈리지 않게
   addColumn(db, 'orders', 'channel_status_label', 'TEXT');
   // 수기 주문 출처 (계좌·전화 주문, G마켓, 옥션 …)와 그 판매처의 주문번호
