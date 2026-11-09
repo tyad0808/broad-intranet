@@ -142,7 +142,7 @@ test('수집: 사이트마다 상태 4번 조회(결제일 기준, 오늘까지)
   const r1 = await collector.run();
   assert.ok(r1.ok, r1.error);
   const range = client.calls.filter(c => c.path.endsWith('RequestOrders'));
-  assert.deepStrictEqual(range.map(c => `${c.json.siteType}:${c.json.orderStatus}`), ['2:1', '2:2', '2:3', '2:4', '1:1', '1:2', '1:3', '1:4']);
+  assert.deepStrictEqual(range.map(c => `${c.json.siteType}:${c.json.orderStatus}`), ['2:1', '2:2', '2:3', '2:4', '2:5', '1:1', '1:2', '1:3', '1:4', '1:5'], '첫 수집은 구매결정완료(5)까지');
   assert.strictEqual(range[0].json.requestDateType, 2);
   assert.strictEqual(range[0].json.requestDateTo, '2026-11-10', '오늘까지 보려면 끝 날짜는 내일');
   assert.strictEqual(range[0].json.requestDateFrom, '2026-11-01', '첫 수집은 시작일부터 (모든 상태)');
@@ -254,52 +254,9 @@ test('시작일을 앞당기면 첫 수집에서 그날부터 30일씩 나눠 �
   const again = client.calls.slice(before);
   assert.deepStrictEqual(again.filter(c => c.json.orderStatus === 1).map(c => c.json.requestDateFrom), ['2026-10-12'], '두 번째부터 최근 28일');
   assert.deepStrictEqual(again.filter(c => c.json.orderStatus === 3).map(c => c.json.requestDateFrom), ['2026-11-02'], '배송중·배송완료는 최근 7일');
+  assert.ok(!again.some(c => c.json.orderStatus === 5), '구매결정완료는 첫 수집에서만');
   // 같은 주문이 경계에서 두 번 나와도 한 번만
   const rows = await createEsmSource({ client: fakeClient(['G']), now: () => t, startDate: '2026-10-10' }).fetchChanges();
   assert.strictEqual(rows.filter(r => r.channel_item_id === 'G-1001').length, 1);
 });
 
-test('정산 금액(송금 완료): 판매대금 정산조회를 송금일(D6)로 사이트마다·페이지마다 읽어 저장, 환불은 - 로 빼고, 통계에 기간 합계', async () => {
-  const { openDb } = require('../src/db');
-  const { createEsmSettleSync, esmSettlement } = require('../src/channels/esmSettle');
-  assert.ok(isAllowed('POST', '/account/v1/settle/getsettleorder'), '정산조회는 허용 목록에');
-  const db = openDb(':memory:');
-  assert.strictEqual(esmSettlement(db, '2026-11-01', '2026-11-09'), null, '한 번도 받아 오지 않았으면 통계 칸 없음');
-  const calls = [];
-  const rows = { G: [
-    { ContrNo: 1001, Kind: '1', RemitDate: '2026-11-05T00:00:00', SettlementPrice: 15770.0 },
-    { ContrNo: 1002, Kind: '1', RemitDate: '2026-11-08T00:00:00', SettlementPrice: 20000.0 },
-    { ContrNo: 1001, Kind: '2', RemitDate: '2026-11-08T00:00:00', SettlementPrice: -5000.0 },
-  ], A: [{ ContrNo: 2001, Kind: '1', RemitDate: '2026-10-20T00:00:00', SettlementPrice: 9000 }] };
-  const fetchFn = async (url, init) => {
-    const body = JSON.parse(init.body);
-    calls.push({ url, body, auth: init.headers.authorization });
-    // 가짜 ESM 은 한 쪽에 2건씩만 준다 (요청한 PageRowCnt 보다 적게 줘도 끝까지 받는지)
-    const all = body.SrchStartDate <= '2026-11-08' && body.SrchEndDate >= '2026-10-20' ? rows[body.SiteType].filter(r => r.RemitDate.slice(0, 10) >= body.SrchStartDate && r.RemitDate.slice(0, 10) <= body.SrchEndDate) : [];
-    const page = all.slice((body.PageNo - 1) * 2, body.PageNo * 2);
-    return new Response(JSON.stringify({ ResultCode: 0, TotalCount: all.length, Data: page }));
-  };
-  const client = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'g', auctionId: 'a', fetchFn, sleep: async () => {} });
-  const sync = createEsmSettleSync({ db, client, now: () => new Date('2026-11-09T03:00:00Z') });
-  const r = await sync.run();
-  assert.strictEqual(r.ok, true, r.error);
-  assert.ok(calls.some(c => c.body.SiteType === 'G' && c.body.PageNo === 2), 'G마켓 11월은 2쪽째까지');
-  assert.ok(calls.every(c => c.url.endsWith('/account/v1/settle/getsettleorder') && c.body.SrchType === 'D6' && ['G', 'A'].includes(c.body.SiteType)));
-  assert.ok(calls.some(c => c.body.SrchStartDate === '2026-07-12'), '처음엔 넉 달 전부터 (31일씩)');
-  const payload = c => JSON.parse(Buffer.from(c.auth.split(' ')[1].split('.')[1], 'base64url'));
-  assert.deepStrictEqual([...new Set(calls.map(c => `${c.body.SiteType}:${payload(c).ssi}`))].sort(), ['A:A:a', 'G:G:g'], '토큰에는 그 사이트 판매자 ID 하나만');
-  const nov = esmSettlement(db, '2026-11-01', '2026-11-09');
-  assert.deepStrictEqual({ total: nov.total, gmarket: nov.gmarket, auction: nov.auction, count: nov.count }, { total: 30770, gmarket: 30770, auction: 0, count: 2 });
-  assert.strictEqual(esmSettlement(db, '2026-10-01', '2026-10-31').auction, 9000);
-  // 다음부터는 최근 2주만
-  calls.length = 0;
-  await sync.run();
-  assert.strictEqual(Math.min(...calls.map(c => c.body.SrchStartDate.replace(/-/g, ''))), 20261026);
-  // 권한이 없으면 실패를 남기고 통계 칸에 알린다
-  const bad = createEsmSettleSync({ db, client: createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'g', fetchFn: async () => new Response(JSON.stringify({ ResultCode: 1000, Message: '권한이 없습니다' })), sleep: async () => {} }), now: () => new Date('2026-11-09T04:00:00Z') });
-  assert.strictEqual((await bad.run()).ok, false);
-  const st = esmSettlement(db, '2026-11-01', '2026-11-09').status;
-  assert.strictEqual(st.ok, false);
-  assert.match(st.error, /권한이 없습니다/);
-  assert.ok(st.lastOk, '마지막 성공 시각은 남김');
-});

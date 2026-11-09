@@ -6,7 +6,6 @@ const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
 const { createCollector, createChannelCollector, getSetting, setSetting } = require('./collector');
 const { createEsmSource } = require('./channels/esm');
-const { createEsmSettleSync } = require('./channels/esmSettle');
 const { createChannelRegistry, CHANNELS } = require('./channelRegistry');
 const { createCoupangSource, createCoupangWriter } = require('./channels/coupang');
 const { createGodoSource, createGodoWriter } = require('./channels/godo');
@@ -58,11 +57,6 @@ if (esmReady) {
     setSetting(db, 'esm_start_date', esmStart);
   }
   collectors.push(createCollector({ db, source: createEsmSource({ startDate: esmStart }), onResult: notifier.afterCollect }));
-  // 정산 금액(송금 완료): 켜고 2분 뒤 한 번, 그 뒤 6시간마다 (정산은 하루 한두 번 바뀌므로). 통계 화면에 쓴다 — 조회만
-  const esmSettle = createEsmSettleSync({ db });
-  const settleRun = () => esmSettle.run().then(r => { if (!r.ok) console.error(`[G마켓·옥션 정산] 가져오기 실패: ${r.error}`); });
-  setTimeout(settleRun, 2 * 60 * 1000).unref();
-  setInterval(settleRun, 6 * 60 * 60 * 1000).unref();
 }
 const collector = createChannelCollector(collectors); // 판매처가 하나도 없으면 '연결된 판매처 없음'
 // 발주확인·발송처리를 실제로 네이버에 보내는지: NAVER_WRITE=on 이고 실제 스마트스토어(ORDER_SOURCE=naver)일 때만.

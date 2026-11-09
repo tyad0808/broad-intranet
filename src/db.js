@@ -442,6 +442,7 @@ function migrate(db) {
     --   tax_status: requested / issued / canceled, tax_url: 견적 도구에서 이 주문 계산서를 여는 주소
     --   cash_use: income(소득공제) / expense(지출증빙), cash_status: requested / issued / canceled / failed
     --   개인·사업자 정보(번호·상호)는 받지도 저장하지도 않는다
+    -- (예전에 통계 'G마켓·옥션 정산 금액' 에 쓰던 표. 그 칸은 사용자 요청으로 뺐다 — DB 는 지우지 않는 규칙이라 표만 남김)
     CREATE TABLE IF NOT EXISTS esm_settlements (
       site             TEXT    NOT NULL,          -- 'G' G마켓 · 'A' 옥션
       contr_no         TEXT    NOT NULL,          -- 정산의 주문번호 (ContrNo)

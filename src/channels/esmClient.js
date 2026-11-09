@@ -26,8 +26,6 @@ const ALLOWED = [
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Cancels$/ },
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Returns$/ },
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Exchanges$/ },
-  // 판매대금 정산조회 (조회만) — 통계의 'G마켓·옥션 정산 금액(송금 완료)'
-  { method: 'POST', pattern: /^\/account\/v1\/settle\/getsettleorder$/ },
 ];
 
 function findAllowed(method, path) {

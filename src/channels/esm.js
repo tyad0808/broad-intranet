@@ -194,7 +194,10 @@ function createEsmSource(options = {}) {
       const all = [];
       for (const { key, name } of client.sites) {
         // 어느 사이트·상태에서 실패했는지 알 수 있게 (관리자 › 판매처 연결 · 대시보드에 그대로 보인다)
-        for (const [status, days] of [[1, OPEN_DAYS], [2, OPEN_DAYS], [3, DONE_DAYS], [4, DONE_DAYS]]) {
+        // 구매결정완료(5)는 서버를 켠 뒤 첫 수집에서만 (지난 주문은 대부분 이미 구매결정이라 이걸 안 읽으면 지난달 매출이 빠진다)
+        //   평소에는 결제완료~배송완료(1~4)만 5분마다 — 그 사이에 이미 다 한 번씩 보므로
+        const statuses = [[1, OPEN_DAYS], [2, OPEN_DAYS], [3, DONE_DAYS], [4, DONE_DAYS], ...(backfilled ? [] : [[5, DONE_DAYS]])];
+        for (const [status, days] of statuses) {
           try {
             all.push(...await orders(key, status, backfilled ? fromDate(days) : backfillFrom()));
           } catch (e) {

@@ -58,21 +58,6 @@
     <% if (t.missing) { %> · <strong>금액을 모르는 주문 <%= t.missing %>건</strong>은 매출에서 빠졌어요 (금액 받기 전에 들어온 주문)<% } %>
   </p>
 
-  <%# G마켓·옥션 정산 금액: 실제로 송금된(통장에 들어온) 돈만, 송금일 기준 %>
-  <% if (locals.esmSettle) { const es = esmSettle; %>
-    <section class="card settle-card" aria-label="G마켓·옥션 정산 금액">
-      <div class="settle-main">
-        <span class="kpi-label"><span class="ch ch-esm" aria-hidden="true">G</span> G마켓·옥션 정산 금액 <span class="muted">(송금 완료)</span></span>
-        <strong class="kpi-value"><%= won(es.total) %></strong>
-        <span class="muted small">G마켓 <%= won(es.gmarket) %> · 옥션 <%= won(es.auction) %> · <%= es.count.toLocaleString('ko-KR') %>건 · 송금일 <%= fromDay %> ~ <%= toDay %></span>
-      </div>
-      <p class="muted small settle-sub">
-        수수료를 뺀 뒤 실제로 들어온 돈이에요 (환불은 빼고). 위 '매출'은 주문 금액 기준이라 달라요.
-        <% if (es.status.ok) { %>마지막 확인 <%= kst(es.status.at).slice(5, 16) %><% } else { %><span class="text-bad">정산 정보를 가져오지 못했어요 (<%= es.status.at ? kst(es.status.at).slice(5, 16) : '' %>): <%= es.status.error %></span><% } %>
-      </p>
-    </section>
-  <% } %>
-
   <%# ② 일별(또는 월별) 매출 막대 %>
   <% const pts = report.series.points; const max = Math.max(1, ...pts.map(x => x.sales)); %>
   <section class="card chart-card">

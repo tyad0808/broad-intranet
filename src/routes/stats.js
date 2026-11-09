@@ -2,7 +2,6 @@
 const express = require('express');
 const { salesReport } = require('../stats');
 const { periodRange } = require('../retention');
-const { esmSettlement } = require('../channels/esmSettle');
 
 const kstDay = (d = new Date()) => new Date(d.getTime() + 9 * 3600000).toISOString().slice(0, 10);
 const addDays = (day, n) => new Date(Date.parse(`${day}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -38,8 +37,6 @@ function statsRoutes(db, { staffReport = null } = {}) {
       title: '통계', navSection: 'stats', tab,
       fromDay, toDay, quick,
       report: tab === 'sales' ? salesReport(db, fromDay, toDay) : null,
-      // G마켓·옥션 정산 금액 (송금 완료, 송금일 기준). 정산을 받아 오지 않는 서버면 null → 칸 안 보임
-      esmSettle: tab === 'sales' ? esmSettlement(db, fromDay, toDay) : null,
       staff: tab === 'staff' ? staffReport(db, fromDay, toDay) : null,
     });
   });
