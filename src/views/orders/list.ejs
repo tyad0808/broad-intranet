@@ -274,11 +274,14 @@
           <span class="cell c-stage"><span class="cell-cap">디자인</span>
           <%# 디자인 단계: 디자이너·관리자가 고른다 (비어 있으면 첫 단계) %>
           <% const curDesign = o.design_stage_id || firstDesign; const curDesignName = (designStages.find(s => s.id === curDesign) || {}).name || '-'; %>
+          <%# 디자인 단계 표시: 순서로 정한다 (첫 단계 = 작업 전 ○, 마지막 = 끝 ●, 그 사이 = 작업 중 ◐) — 단계 이름은 관리자가 바꿀 수 있어서 %>
+          <% const liveDesign = designStages.filter(s => s.active); const dPos = liveDesign.findIndex(s => s.id === curDesign);
+             const dCls = dPos <= 0 ? 'ds-todo' : dPos === liveDesign.length - 1 ? 'ds-done' : 'ds-doing'; %>
           <% if (canPickStage && o.channel_status !== 'CANCELED') { %>
             <form method="post" action="/orders/<%= o.id %>/design" class="inline" data-autosubmit>
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
               <input type="hidden" name="back" value="<%= currentUrl %>">
-              <select name="design_stage_id" class="stage-select design" aria-label="디자인 단계">
+              <select name="design_stage_id" class="stage-select design <%= dCls %>" aria-label="디자인 단계">
                 <% designStages.forEach(s => { if (!s.active && s.id !== curDesign) return; %>
                   <option value="<%= s.id %>" <%= s.id === curDesign ? 'selected' : '' %>><%= s.name %></option>
                 <% }) %>
@@ -286,7 +289,7 @@
               <noscript><button type="submit" class="btn-sm">변경</button></noscript>
             </form>
           <% } else { %>
-            <span class="pill design"><%= curDesignName %></span>
+            <span class="pill design <%= dCls %>"><%= curDesignName %></span>
           <% } %>
           </span>
           <span class="cell c-assign"><span class="cell-cap">담당</span>

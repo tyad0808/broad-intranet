@@ -636,6 +636,16 @@ form.inline { display: inline; margin: 0; }
 .stage-select { border-color: transparent; background-color: var(--line-2); color: var(--text-2); }
 .stage-select.design { background-color: #fff; border-color: var(--line); color: var(--text); }
 .stage-select.design:hover { border-color: #c5ccd3; }
+/* 디자인 단계 표시: 흰 칸 안 글자 앞 동그라미 (작업 전 ○ 회색 · 작업 중 ◐ 파랑 · 끝 ● 초록). 칸 바탕은 늘 흰색이라 디자이너 색과 안 겹친다 */
+.ds-todo { --ds-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.6' fill='none' stroke='%238b95a1' stroke-width='1.6'/%3E%3C/svg%3E"); }
+.ds-doing { --ds-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='4.6' fill='none' stroke='%232563eb' stroke-width='1.6'/%3E%3Cpath d='M6 1.4a4.6 4.6 0 0 1 0 9.2z' fill='%232563eb'/%3E%3C/svg%3E"); }
+.ds-done { --ds-dot: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Ccircle cx='6' cy='6' r='5.4' fill='%23067a52'/%3E%3Cpath d='M3.6 6.1l1.7 1.7 3.1-3.3' fill='none' stroke='%23fff' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.stage-select.design { padding-left: 29px; padding-right: 26px; background-image: var(--ds-dot, none), url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238b95a1' fill='none' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: left 10px center, right 9px center; background-size: 13px 13px, auto; }
+.pill.design[class*="ds-"] { padding-left: 28px; background-image: var(--ds-dot); background-repeat: no-repeat; background-position: left 9px center; background-size: 13px 13px; }
+.stage-select.design.ds-todo, .pill.design.ds-todo { color: var(--text-2); }
+.stage-select.design.ds-doing { border-color: var(--primary); color: var(--primary-dark); }
+.pill.design.ds-doing { color: var(--primary-dark); box-shadow: inset 0 0 0 1px var(--primary); }
+.stage-select.design.ds-done, .pill.design.ds-done { color: var(--ok); }
 .c-stage .pill.stage { height: 36px; padding: 0 10px; border-radius: 8px; background: var(--line-2); color: var(--text-2); font-size: 14px; }
 
 /* 배송 방법 (고객이 고른 것): 택배 = 노랑 · 퀵 = 파랑 · 방문수령 = 파란 테두리 (글자 + 아이콘, 색만으로 구분하지 않음) */
@@ -656,7 +666,7 @@ form.inline { display: inline; margin: 0; }
 @media (min-width: 1100px) {
   .order-head {
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) 140px 104px 144px 150px 112px;
+    grid-template-columns: 24px minmax(0, 1fr) 140px 104px 132px 168px 112px;
     gap: 12px;
     align-items: center;
     margin: 0;
@@ -672,7 +682,7 @@ form.inline { display: inline; margin: 0; }
   .order-head + .order-list { border-radius: 0 0 var(--radius) var(--radius); }
   .order-head .check-all-text { display: none; }
   .order-head .oi-check { min-height: 0; margin: 0; top: 0; }
-  .order-head + .order-list > .order-item { display: grid; grid-template-columns: 24px minmax(0, 1fr) 140px 104px 144px 150px 112px; gap: 12px; }
+  .order-head + .order-list > .order-item { display: grid; grid-template-columns: 24px minmax(0, 1fr) 140px 104px 132px 168px 112px; gap: 12px; }
   .order-head .head-pick { color: var(--primary-dark); } /* 직원이 고르는 칸 */
   .order-head + .order-list .c-stage form.inline { display: flex; flex: 1 1 auto; min-width: 0; }
   .order-head + .order-list .c-stage .stage-select { width: 100%; min-width: 0; }
@@ -699,7 +709,7 @@ form.inline { display: inline; margin: 0; }
 @media (min-width: 1100px) and (max-width: 1299px) {
   .filters-period .chips-label { display: none; }
   .filters .period input[type=date] { width: 134px; }
-  .order-head, .order-head + .order-list > .order-item { grid-template-columns: 24px minmax(0, 1fr) 136px 100px 136px 140px 104px; gap: 10px; }
+  .order-head, .order-head + .order-list > .order-item { grid-template-columns: 24px minmax(0, 1fr) 132px 100px 124px 164px 104px; gap: 10px; }
   .order-head + .order-list .c-stage .pill.stage { padding: 0 8px; }
 }
 @media (max-width: 1099px) {
