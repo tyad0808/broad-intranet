@@ -24,7 +24,9 @@
 %>
 <div class="page-head home-page-head">
   <div class="title-row">
-    <h1 class="page-title">안녕하세요, <%= user.name %>님</h1>
+    <%# 별명이 있으면 별명 + 작은 글씨로 (이름), 없으면 이름만 %>
+    <% const nick = (user.nickname || '').trim(); %>
+    <h1 class="page-title">안녕하세요, <% if (nick && nick !== user.name) { %><%= nick %><small class="hm-realname">(<%= user.name %>)</small><% } else { %><%= user.name %><% } %>님</h1>
     <span class="hm-date"><%= todayText %></span>
   </div>
 </div>

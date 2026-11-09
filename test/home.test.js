@@ -32,13 +32,15 @@ const tileOf = (html, label) => {
 };
 
 test('로그인하면 홈부터 열리고, 그날은 / 가 주문 목록 그대로 (왼쪽 메뉴 맨 위에 홈)', async t => {
-  const { baseUrl } = await setup(t);
+  const { db, baseUrl } = await setup(t);
   const b = browser(baseUrl);
   const res = await b.submit('/login', '/login', { email: 'kim@broad.test', password: 'password123' });
   assert.strictEqual(res.location, '/home');
   const home = await b.request('/home');
   assert.strictEqual(home.status, 200);
   assert.match(home.text, /안녕하세요, 김직원님/);
+  db.prepare("UPDATE users SET nickname = '김디자' WHERE email = 'kim@broad.test'").run();
+  assert.match((await b.request('/home')).text, /안녕하세요, 김디자<small class="hm-realname">\(김직원\)<\/small>님/, '별명이 있으면 별명 + 작게 (이름)');
   assert.match(home.text, /<a href="\/home" class="on">/);
   assert.match(home.text, /<a class="brand" href="\/home">/);
   assert.strictEqual((await b.request('/')).status, 200, '오늘 홈을 봤으면 / 는 주문 목록');

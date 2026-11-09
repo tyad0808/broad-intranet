@@ -2002,6 +2002,7 @@ pre.cmd { margin: 8px 0; padding: 10px 12px; overflow-x: auto; border-radius: 8p
 
 /* ───────── 홈 (오늘 할 일) ─────────
    주문 화면과 같은 너비. 넓은 PC(1400px~)는 위 2칸·아래 2~3칸으로 나란히 → 한 화면에 다 보이게 */
+.hm-realname { margin-left: 2px; font-size: 15px; font-weight: 500; color: var(--text-2); }
 .hm-date { font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
 .home-page-head { margin-bottom: 14px; }
 .hm-row { display: grid; gap: 14px; align-items: start; margin-bottom: 14px; }
