@@ -260,7 +260,7 @@ sed -i '/^COUPANG_WRITE=/d' /opt/broad-intranet/app/.env && echo 'COUPANG_WRITE=
 1. 비밀 주소용 글자 만들기: `openssl rand -hex 24` → `.env` 에 `TALKTALK_WEBHOOK_TOKEN=만든글자`
 2. `systemctl restart broad-intranet` → `cd /opt/broad-intranet/app && sudo -u intranet npm run talktalk-check`
    (나오는 Webhook 주소는 캡처·공유하지 말 것)
-3. 톡톡 파트너센터 → 개발자도구 → 챗봇 API 설정: Webhook 에 위 주소, 이벤트에서 **echo** 켜기, **보내기 API** 인증키 발급
+3. 톡톡 파트너센터 → 개발자도구 → 챗봇 API 설정: Webhook 에 위 주소, 이벤트에서 **echo** 와 **handover** 켜기 (handover 가 꺼져 있으면 기록에 '주도권 넘기기 실패 … 코드 11: 핸드오버 이벤트를 구독하고 있지 않습니다' 가 계속 남는다), **보내기 API** 인증키 발급
 4. `.env` 에 `TALKTALK_SEND_KEY=발급받은키` → 재시작 (고객 말이 오면 주도권을 파트너센터로 넘김)
 5. 내 휴대폰 톡톡으로 메시지를 보내 → 문의함 💬 채팅 탭에 오는지, 파트너센터에서 답장이 되는지 확인
 
