@@ -196,10 +196,13 @@ test('내 담당 아래에 내 담당 주문만 센 한눈에 보기 (상태 4�
   const kim = await loginAs(baseUrl, 'kim@broad.test');
   const html = (await kim.request('/home')).text;
   const mine = html.slice(html.indexOf('hm-overview-mine'));
-  const tile = (h, key) => (h.match(new RegExp(`class="ship-tile st-${key}[^"]*">[\\s\\S]*?<strong class="ship-count">(\\d+)<small>`)) || [])[1];
-  assert.strictEqual(tile(mine, 'new'), '1', '내 담당 신규주문만');
+  const tile = (h, key) => (h.match(new RegExp(`class="ship-tile st-${key}[^"]*"[^>]*>[\\s\\S]*?<strong class="ship-count">(\\d+)<small>`)) || [])[1];
+  assert.strictEqual(tile(mine, 'due-tomorrow'), '1', '첫 칸은 신규주문 대신 납기 내일 (내 담당만)');
+  assert.doesNotMatch(mine, /class="ship-tile st-new /, '내 담당 쪽엔 신규주문 칸 없음');
+  assert.match(mine, />납기 내일</);
+  assert.match(mine, new RegExp(`<a href="/\\?who=mine&amp;due=${kstDay(1)}" class="ship-tile st-due-tomorrow `));
   assert.strictEqual(tile(mine, 'ready'), '1');
-  assert.match(mine, /<a href="\/\?who=mine&amp;st=new" class="ship-tile st-new /);
+  assert.match(mine, /<a href="\/\?who=mine&amp;st=ready" class="ship-tile st-ready /);
   assert.match(mine, new RegExp(`<a href="/\\?who=mine&amp;due=${kstDay(1)}" class="week-day[^"]*"[^>]*>[\\s\\S]*?<strong class="">1<span`));
   const list = (await kim.request(`/?who=mine&due=${kstDay(1)}`)).text;
   assert.strictEqual((list.match(/class="oi-main"/g) || []).length, 1, '눌렀을 때도 내 담당 1건');

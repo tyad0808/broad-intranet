@@ -53,9 +53,9 @@
   <div class="hm-head"><h2 id="hm-mine"><%- ico('<circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/>') %>내 담당</h2><span class="hm-note">나에게 지정된 것만 세요</span></div>
   <div class="hm-tiles<%= mine.length === 3 ? ' three' : '' %>"><% mine.forEach(t => { %><%- tile(t) %><% }) %></div>
 </section>
-<%# 내 담당 주문만 센 한눈에 보기 (왼쪽과 같은 모양): 누르면 그 상태·날짜의 내 담당 주문 목록 %>
+<%# 내 담당 주문만 센 한눈에 보기 (왼쪽과 같은 모양, 첫 칸은 '납기 내일'): 누르면 그 상태·날짜의 내 담당 주문 목록 %>
 <div class="hm-overview hm-overview-mine">
-  <%- include('partials/ship-overview', { ...mineOverview, stLink: key => `/?who=mine&st=${key}`, dueLink: date => `/?who=mine&due=${date}`, onSt: '', onDue: '' }) %>
+  <%- include('partials/ship-overview', { ...mineOverview, stLink: key => `/?who=mine&st=${key}`, dueLink: date => `/?who=mine&due=${date}`, onSt: '', onDue: '', dueFirst: true }) %>
 </div>
 </div>
 </div>

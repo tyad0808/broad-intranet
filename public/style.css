@@ -2232,4 +2232,8 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
 .hm-overview .week-day .wk-ev { display: none; } /* 일정 이름은 아래 '오늘·내일 일정' 칸에 */
 .hm-overview .week-more { padding: 0 10px; }
 @media (max-width: 900px) { .hm-overview .overview { margin: 0 -16px; } }
+/* 홈 '내 담당' 아래 첫 칸: 납기 내일 (빨간 글씨표, 숫자는 0이면 흐리게) */
+.due-tag { display: inline-block; padding: 0 6px; border-radius: 4px; background: var(--warn-bg); color: var(--error-ink); font-weight: 700; line-height: 1.5; }
+.st-due-tomorrow .ship-count { color: var(--error-ink); }
+.st-due-tomorrow .ship-count.zero { color: var(--muted); }
 

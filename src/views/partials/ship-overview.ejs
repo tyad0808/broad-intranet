@@ -1,8 +1,17 @@
 <%# 한눈에 보기: 채널 상태 4칸 (판매자센터처럼) + 오늘부터 7일 출고 — 주문 목록 위와 홈에서 같이 쓴다
-    stLink(key)·dueLink(date): 누르면 갈 주소, onSt·onDue: 지금 고른 것(목록에서만) %>
+    stLink(key)·dueLink(date): 누르면 갈 주소, onSt·onDue: 지금 고른 것(목록에서만)
+    dueFirst: 첫 칸 '신규주문' 대신 '납기 내일' (홈 '내 담당' 아래, 디자이너가 내일 낼 주문을 바로 보게) %>
 <section class="overview" aria-label="한눈에 보기">
   <nav class="ship-board" aria-label="채널 주문 상태" title="큰 숫자는 판매자센터와 같은 상품주문 단위, 작은 숫자는 주문번호 단위입니다">
-    <% Object.entries(SHIP_STATES).forEach(([key, label]) => { %>
+    <% const tmr = typeof dueFirst !== 'undefined' && dueFirst ? week[1] : null; %>
+    <% if (tmr) { %>
+      <a href="<%= dueLink(tmr.date) %>" class="ship-tile st-due-tomorrow <%= onDue === tmr.date ? 'on' : '' %>" title="<%= tmr.date %> 납기 주문 <%= tmr.due %>건 보기">
+        <span class="ship-label"><span class="due-tag">납기 내일</span></span>
+        <strong class="ship-count<%= tmr.due ? '' : ' zero' %>"><%= tmr.due %><small>건</small></strong>
+        <span class="ship-sub"><%= Number(tmr.date.slice(5, 7)) %>/<%= Number(tmr.date.slice(8)) %> (<%= '일월화수목금토'[tmr.weekday] %>) 출고</span>
+      </a>
+    <% } %>
+    <% Object.entries(SHIP_STATES).filter(([key]) => !(tmr && key === 'new')).forEach(([key, label]) => { %>
       <a href="<%= stLink(key) %>" class="ship-tile st-<%= key %> <%= onSt === key ? 'on' : '' %>">
         <span class="ship-label"><%= label %><% if (key === 'delivered' && hideDays) { %><span class="ship-recent"> · 최근 <%= hideDays %>일</span><% } %></span>
         <strong class="ship-count"><%= itemCounts[key] || 0 %><small>건</small></strong>
