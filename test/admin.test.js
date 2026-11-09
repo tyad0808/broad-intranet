@@ -113,6 +113,11 @@ test('별명: 가입할 때 넣고, 관리자 화면에서 고치고 비울 수 
   await press(admin, `/admin/users/${id}/update`, { nickname: '바다', role: 'staff', job_id: '' });
   assert.strictEqual(db.prepare('SELECT nickname FROM users WHERE id = ?').get(id).nickname, '바다');
   assert.match((await admin.request('/admin/users')).text, /name="nickname" value="바다"/);
+  await press(admin, `/admin/users/${id}/update`, { nickname: '바다', phone: ' 010-1234-5678 ', role: 'staff', job_id: '' });
+  assert.strictEqual(db.prepare('SELECT phone FROM users WHERE id = ?').get(id).phone, '010-1234-5678');
+  assert.match((await admin.request('/admin/users')).text, /name="phone" value="010-1234-5678"/);
+  await press(admin, `/admin/users/${id}/update`, { nickname: '바다', phone: '<b>전화</b>', role: 'staff', job_id: '' });
+  assert.strictEqual(db.prepare('SELECT phone FROM users WHERE id = ?').get(id).phone, '010-1234-5678', '이상한 값은 저장 안 함');
   await press(admin, `/admin/users/${id}/update`, { nickname: '  ', role: 'staff', job_id: '' });
   assert.strictEqual(db.prepare('SELECT nickname FROM users WHERE id = ?').get(id).nickname, null);
 });

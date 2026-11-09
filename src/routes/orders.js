@@ -656,17 +656,20 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
   });
   // 시안확정서 담당 디자이너 칸 (고객에게 가는 종이라 실명 대신 별명만)
   //   주문 담당 디자이너의 별명 → 담당이 없으면 지금 만드는 사람(로그인한 본인)의 별명 → 그래도 없으면 비우고 알려 준다
-  const myNickname = userId => (db.prepare('SELECT nickname FROM users WHERE id = ?').get(userId) || {}).nickname || '';
+  //   연락처: 그 디자이너 전화번호(관리자 › 직원 관리) → 없으면 회사 번호(관리자 › 회사·로고)
+  const me = userId => db.prepare('SELECT nickname, phone FROM users WHERE id = ?').get(userId) || {};
   const designerFor = (order, user) => {
     if (order && order.assignee_id) {
+      const phone = order.assignee_phone ? { phone: order.assignee_phone } : {};
       return order.assignee_nickname
-        ? { designer: order.assignee_nickname, designerNote: '' }
-        : { designer: '', designerNote: `담당 디자이너(${order.assignee_name || ''})의 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.` };
+        ? { designer: order.assignee_nickname, designerNote: '', ...phone }
+        : { designer: '', designerNote: `담당 디자이너(${order.assignee_name || ''})의 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.`, ...phone };
     }
-    const mine = myNickname(user.id);
-    return mine
-      ? { designer: mine, designerNote: order ? `담당 디자이너가 정해지지 않아 내 별명(${mine})을 넣었어요.` : '' }
-      : { designer: '', designerNote: `${order ? '담당 디자이너가 정해지지 않았고, ' : ''}내 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.` };
+    const mine = me(user.id);
+    const phone = mine.phone ? { phone: mine.phone } : {};
+    return mine.nickname
+      ? { designer: mine.nickname, designerNote: order ? `담당 디자이너가 정해지지 않아 내 별명(${mine.nickname})을 넣었어요.` : '', ...phone }
+      : { designer: '', designerNote: `${order ? '담당 디자이너가 정해지지 않았고, ' : ''}내 별명이 없어 비워 뒀어요. 관리자 › 직원 관리에서 별명을 정해 주세요.`, ...phone };
   };
   router.get('/proof-maker', (req, res) => makerPage(req, res, { revision: 0, ...designerFor(null, req.user) }));
   router.get('/orders/:id/proof-maker', (req, res) => {
@@ -683,8 +686,8 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       receiver: v.receiver,
       orderNo: v.orderNo,
       revision: v.revision,
+      phone: v.phone, // 회사 번호 (담당 디자이너 전화번호가 있으면 아래에서 그것으로)
       ...designerFor(order, req.user), // 고객에게 가는 종이라 실명 대신 별명만
-      phone: v.phone,
       // 고객이 주문한 그대로: 상품마다 '이름 × 수량' 줄 + 옵션 줄, 상품 사이는 빈 줄
       products: v.products.map(p => `${p.name} × ${p.qty}${p.option ? `\n${p.option.split(' / ').join(' · ')}` : ''}`).join('\n\n'),
       addons: v.addons.map(a => `${a.value} × ${a.qty}${a.label ? ` (${a.label})` : ''}`).join('\n'),
@@ -1155,7 +1158,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
 
   function findOrder(id) {
     return db.prepare(`
-      SELECT o.*, s.name AS stage_name, u.name AS assignee_name, u.nickname AS assignee_nickname
+      SELECT o.*, s.name AS stage_name, u.name AS assignee_name, u.nickname AS assignee_nickname, u.phone AS assignee_phone
       FROM orders o
       LEFT JOIN work_stages s ON s.id = o.stage_id
       LEFT JOIN users u ON u.id = o.assignee_id

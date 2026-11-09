@@ -58,7 +58,7 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
   // ───────── 직원 관리 ─────────
   router.get('/users', (req, res) => {
     const users = db.prepare(`
-      SELECT u.id, u.email, u.name, u.nickname, u.role, u.sub_admin, u.status, u.job_id, u.created_at, u.locked_until, j.name AS job_name
+      SELECT u.id, u.email, u.name, u.nickname, u.phone, u.role, u.sub_admin, u.status, u.job_id, u.created_at, u.locked_until, j.name AS job_name
       FROM users u LEFT JOIN jobs j ON j.id = u.job_id
       WHERE u.deleted_at IS NULL
       ORDER BY CASE u.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 WHEN 'suspended' THEN 2 ELSE 3 END,
@@ -218,7 +218,13 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
 
     // 별명: 고객용 시안확정서에 실명 대신 들어가는 이름 (비우면 시안확정서 담당 칸도 비어요)
     const nickname = String(req.body.nickname || '').trim().slice(0, 20) || null;
-    db.prepare('UPDATE users SET job_id = ?, role = ?, sub_admin = ?, nickname = ? WHERE id = ?').run(jobId, role, subAdmin, nickname, user.id);
+    // 전화번호: 고객용 시안확정서의 담당 디자이너 연락처 (숫자·-·괄호·띄어쓰기만, 비우면 회사 번호)
+    const phone = String(req.body.phone || '').trim().slice(0, 20);
+    if (phone && !/^[0-9+()\-\s]{7,20}$/.test(phone)) {
+      flash(req, 'error', '전화번호는 숫자와 - 로 적어 주세요. 예: 010-1234-5678');
+      return res.redirect('/admin/users');
+    }
+    db.prepare('UPDATE users SET job_id = ?, role = ?, sub_admin = ?, nickname = ?, phone = ? WHERE id = ?').run(jobId, role, subAdmin, nickname, phone || null, user.id);
     flash(req, 'ok', `${user.name} 님의 정보를 저장했습니다.`);
     res.redirect('/admin/users');
   });

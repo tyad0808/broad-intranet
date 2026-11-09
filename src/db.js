@@ -70,6 +70,8 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'deleted_at', 'TEXT');
   // 화면 밝기: 'auto'(컴퓨터 설정 따라, 기본) · 'light' · 'dark' — 직원마다 계정에 저장
   addColumn(db, 'users', 'theme', 'TEXT');
+  // 디자이너 전화번호: 고객용 시안확정서의 담당 디자이너 옆 연락처 (관리자 › 직원 관리에서). 비어 있으면 회사 번호
+  addColumn(db, 'users', 'phone', 'TEXT');
   // 보류: 고객이 '파일·내용 정리될 때까지 잠깐 멈춰 달라' 한 주문 (주문 묶음 전체에 같이). 회사 안에서만 표시
   addColumn(db, 'orders', 'hold_at', 'TEXT');
   addColumn(db, 'orders', 'hold_note', 'TEXT');

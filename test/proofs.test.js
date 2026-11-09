@@ -232,6 +232,12 @@ test('고객용 시안확정서 만들기: 빈 양식과 주문으로 미리 채
   const nick = await ctx.kim.request(`/orders/${ctx.id}/proof-maker`);
   assert.match(nick.text, /name="designer" value="하늘"/);
   assert.doesNotMatch(nick.text, /별명이 없어 비워 뒀어요/);
+  // 담당 디자이너 전화번호가 있으면 연락처도 그 번호 (없으면 회사 번호)
+  assert.match(nick.text, /name="phone" value="031-822-7815"/, '전화번호가 없으면 회사 번호');
+  ctx.db.prepare("UPDATE users SET phone = '010-1111-2222' WHERE id = ?").run(ctx.kimId);
+  assert.match((await ctx.kim.request(`/orders/${ctx.id}/proof-maker`)).text, /name="phone" value="010-1111-2222"/);
+  assert.match((await ctx.kim.request('/proof-maker')).text, /name="phone" value="010-1111-2222"/, '빈 양식도 내 번호');
+  ctx.db.prepare('UPDATE users SET phone = NULL WHERE id = ?').run(ctx.kimId);
   // 담당 디자이너가 없으면 만드는 사람(로그인한 본인)의 별명
   ctx.db.prepare("UPDATE orders SET assignee_id = NULL WHERE channel_order_id = 'O1'").run();
   const noAssignee = (await ctx.kim.request(`/orders/${ctx.id}/proof-maker`)).text;
