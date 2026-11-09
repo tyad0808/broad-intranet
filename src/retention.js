@@ -128,8 +128,10 @@ function runCleanup(db, { orderMonths = keepMonths(db, 'orders'), inquiryMonths 
     const delActions = db.prepare('DELETE FROM order_actions WHERE channel = ? AND channel_order_id = ?');
     const delOrders = db.prepare('DELETE FROM orders WHERE channel = ? AND channel_order_id = ?');
     const delEvidence = db.prepare('DELETE FROM order_evidence WHERE channel = ? AND channel_order_id = ?');
+    const delHoldLog = db.prepare('DELETE FROM order_hold_log WHERE channel = ? AND channel_order_id = ?'); // 보류 사유에 고객 얘기가 있을 수 있어서 같이
     for (const g of groups) {
       delEvidence.run(g.channel, g.channel_order_id);
+      delHoldLog.run(g.channel, g.channel_order_id);
       for (const r of ids.all(g.channel, g.channel_order_id)) delNotes.run(r.id);
       delActions.run(g.channel, g.channel_order_id);
       delOrders.run(g.channel, g.channel_order_id);

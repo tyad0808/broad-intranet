@@ -70,6 +70,10 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'deleted_at', 'TEXT');
   // 화면 밝기: 'auto'(컴퓨터 설정 따라, 기본) · 'light' · 'dark' — 직원마다 계정에 저장
   addColumn(db, 'users', 'theme', 'TEXT');
+  // 보류: 고객이 '파일·내용 정리될 때까지 잠깐 멈춰 달라' 한 주문 (주문 묶음 전체에 같이). 회사 안에서만 표시
+  addColumn(db, 'orders', 'hold_at', 'TEXT');
+  addColumn(db, 'orders', 'hold_note', 'TEXT');
+  addColumn(db, 'orders', 'hold_by', 'INTEGER REFERENCES users(id)');
   // 채널이 쓰는 상태 이름 그대로 (예: 자사몰 '고객취소요청'). 공통 상태와 함께 보여줘서 헷갈리지 않게
   addColumn(db, 'orders', 'channel_status_label', 'TEXT');
   // 수기 주문 출처 (계좌·전화 주문, G마켓, 옥션 …)와 그 판매처의 주문번호
@@ -436,6 +440,15 @@ function migrate(db) {
     --   tax_status: requested / issued / canceled, tax_url: 견적 도구에서 이 주문 계산서를 여는 주소
     --   cash_use: income(소득공제) / expense(지출증빙), cash_status: requested / issued / canceled / failed
     --   개인·사업자 정보(번호·상호)는 받지도 저장하지도 않는다
+    CREATE TABLE IF NOT EXISTS order_hold_log (
+      id               INTEGER PRIMARY KEY,
+      channel          TEXT    NOT NULL,
+      channel_order_id TEXT    NOT NULL,
+      user_id          INTEGER REFERENCES users(id),
+      action           TEXT    NOT NULL,          -- 'hold' 보류 · 'unhold' 보류 풀기
+      note             TEXT,                      -- 보류 사유
+      created_at       TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS order_evidence (
       channel          TEXT NOT NULL,
       channel_order_id TEXT NOT NULL,

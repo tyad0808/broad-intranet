@@ -298,3 +298,25 @@ test('자동 수집 간격: 관리자가 주문·메일 따로 정하고, 범위
   stop();
   assert.strictEqual(runs, 2, '두 번째 뒤에는 10분으로 바뀌어 더 돌지 않음');
 });
+
+test('주문 목록 칸: 관리자가 순서를 바꾸고 숨기면 목록 표 머리·칸 자리가 바뀌고, 주문 칸은 못 숨기며, 처음 순서로 되돌린다', async t => {
+  const { db, baseUrl, admin } = await setup(t);
+  // 목록에 주문이 있어야 표 머리가 보인다
+  db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, channel_status, paid_at) VALUES ('smartstore', 'O1', 'P1', '현수막', 'PAYED', ?)").run(new Date().toISOString());
+  const page = (await admin.request('/admin/columns')).text;
+  assert.match(page, /주문 목록 칸/);
+  await press(admin, '/admin/columns/memo/move', { dir: 'down' }, '/admin/columns'); // 메모를 상태 뒤로
+  await press(admin, '/admin/columns/assign/move', { dir: 'up' }, '/admin/columns'); // 담당을 디자인 앞으로
+  await press(admin, '/admin/columns/ship/show', { show: '0' }, '/admin/columns');
+  await press(admin, '/admin/columns/main/show', { show: '0' }, '/admin/columns');
+  const list = (await admin.request('/')).text;
+  assert.match(list, /<span class="">주문<\/span><span class="">상태<\/span><span class="head-memo">메모<\/span><span class="">납기 · 발송<\/span><span class="head-pick">담당<\/span><span class="head-pick">디자인<\/span>/);
+  assert.match(list, /--oc-main: 2; --oc-status: 3; --oc-memo: 4; --oc-due: 5; --oc-assign: 6; --oc-design: 7;/);
+  assert.match(list, /\.order-list:not\(\.inbox-list\) \.c-ship \{ display: none !important; \}/, '숨긴 칸');
+  await press(admin, '/admin/columns/reset', {}, '/admin/columns');
+  assert.match((await admin.request('/')).text, /<span class="">주문<\/span><span class="head-memo">메모<\/span><span class="">상태<\/span><span class="">배송 · 금액<\/span>/);
+  // 직원은 못 바꾼다
+  addUser(db, { email: 'staff2@broad.test' });
+  const staff = await loginAs(baseUrl, 'staff2@broad.test');
+  assert.strictEqual((await staff.request('/admin/columns')).status, 403);
+});

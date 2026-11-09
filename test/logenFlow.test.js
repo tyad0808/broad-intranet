@@ -212,7 +212,7 @@ test('화면: 관리자 로젠 설정, 목록의 [로젠 등록]·[송장번호 
   const ids = seedOrders(db, 2);
   const list = (await kim.request('/')).text;
   assert.match(list, /formaction="\/orders\/bulk\/logen"/);
-  assert.match(list, /data-can="dispatch logen"/);
+  assert.match(list, /data-can="dispatch logen hold"/);
   await kim.submit('/', '/orders/bulk/logen', { ids: ids.map(String), back: '/' });
   const after = (await kim.request('/')).text;
   assert.match(after, /로젠에 2건 등록했습니다/);

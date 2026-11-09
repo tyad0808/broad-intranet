@@ -354,7 +354,7 @@ test('새 주문의 디자인 단계는 디자인 작업 전이고, 목록에서
   const select = list.slice(list.indexOf(`action="/orders/${idOf('P1')}/design"`));
   assert.match(select.slice(0, 900), new RegExp(`value="${designId('디자인 작업 전')}" selected>디자인 작업 전`));
   assert.doesNotMatch(list, /class="pill stage"/, '주문 단계(발주·발주확인·발송)는 상태 칸에 나와서 목록에 따로 표시하지 않는다');
-  assert.match(list, /<span>상태<\/span><span>배송 · 금액<\/span><span>납기 · 발송<\/span><span class="head-pick">디자인<\/span><span class="head-pick">담당<\/span>/, '보는 칸 → 고르는 칸 순서');
+  assert.match(list, /<span class="">주문<\/span><span class="head-memo">메모<\/span><span class="">상태<\/span><span class="">배송 · 금액<\/span><span class="">납기 · 발송<\/span><span class="head-pick">디자인<\/span><span class="head-pick">담당<\/span>/, '보는 칸 → 고르는 칸 순서 (처음 순서)');
   await kim.submit('/', `/orders/${idOf('P1')}/design`, { design_stage_id: String(designId('디자인 작업 중')), back: '/' });
   assert.deepStrictEqual([row('P1').design_stage_id, row('P9').design_stage_id], [designId('디자인 작업 중'), designId('디자인 작업 중')]);
   // 잘못 골랐으면 다시 '디자인 작업 전' 으로
@@ -591,4 +591,63 @@ test('배송중 칸: 숫자와 눌렀을 때 목록 건수가 같다 (오래된 
   ins.run('C-NEW', 'C-NEW-1', '최근배송중', daysAgo(2));
   const page = (await kim.request('/?st=shipping')).text;
   assert.ok(page.includes('오래된배송중') && page.includes('최근배송중'));
+});
+
+test('보류: 걸면 진행 중·내 담당·미지정에서 빠지고 보류 탭에, 풀면 돌아옴 (여러 건 한 번에도), 미지정 알림 숫자에서도 빠짐', async t => {
+  const { db, kim, kimId, idOf, row } = await setup(t);
+  const { orderSummary } = require('../src/routes/orders');
+  db.prepare('UPDATE orders SET assignee_id = ? WHERE id = ?').run(kimId, idOf('P1'));
+  const tabs = async () => {
+    const html = (await kim.request('/')).text;
+    const n = label => Number((html.match(new RegExp(`${label} <span class="count">(\\d+)</span>`)) || [])[1]);
+    return { active: n('진행 중'), mine: n('내 담당'), unassigned: n('미지정'), hold: n('보류') };
+  };
+  const before = await tabs();
+  assert.strictEqual(before.hold, 0);
+  const sumBefore = orderSummary(db, kimId);
+
+  await kim.submit(`/orders/${idOf('P1')}`, `/orders/${idOf('P1')}/hold`, { hold_note: '  고객이 파일 정리 후 연락 ', from: 'detail', back: '/' });
+  assert.ok(row('P1').hold_at);
+  assert.strictEqual(row('P1').hold_note, '고객이 파일 정리 후 연락');
+  const held = await tabs();
+  assert.deepStrictEqual(held, { active: before.active - 1, mine: before.mine - 1, unassigned: before.unassigned, hold: 1 });
+  assert.strictEqual(orderSummary(db, kimId).mine, sumBefore.mine - 1, '홈 숫자에서도 빠짐');
+  const holdList = (await kim.request('/?view=hold')).text;
+  assert.strictEqual((holdList.match(/class="oi-main"/g) || []).length, 1);
+  assert.match(holdList, /<span class="hold-badge"[^>]*>보류<\/span>/);
+  assert.match(holdList, /보류 · 고객이 파일 정리 후 연락/);
+  const detail = (await kim.request(`/orders/${idOf('P1')}`)).text;
+  assert.match(detail, /보류 중/);
+  assert.match(detail, /action="\/orders\/\d+\/unhold"/);
+
+  await kim.submit('/', `/orders/${idOf('P1')}/unhold`, { back: '/' });
+  assert.strictEqual(row('P1').hold_at, null);
+  assert.deepStrictEqual(await tabs(), before);
+
+  // 여러 건 한 번에 (미지정 주문 → 미지정 알림 숫자에서 빠짐)
+  const ids = [String(idOf('P2')), String(idOf('P1'))];
+  await kim.submit('/', '/orders/bulk/hold', { ids, back: '/' });
+  assert.ok(row('P2').hold_at && row('P1').hold_at);
+  assert.strictEqual((await tabs()).hold, 2);
+  await kim.submit('/', '/orders/bulk/unhold', { ids, back: '/' });
+  assert.strictEqual((await tabs()).hold, 0);
+  const kinds = db.prepare('SELECT action FROM order_hold_log ORDER BY id').all().map(r => r.action);
+  assert.deepStrictEqual(kinds, ['hold', 'unhold', 'hold', 'hold', 'unhold', 'unhold']);
+});
+
+test('목록에서 바로 작업 메모: 저장하면 묶음 전체에, 주문 화면 메모와 같고, 비우면 지움', async t => {
+  const { db, kim, idOf, row } = await setup(t);
+  applyOrders(db, [order(9, { channel_order_id: 'O1', item_type: 'addon', product_name: '추가품' })]);
+  const list = (await kim.request('/')).text;
+  assert.match(list, /action="\/orders\/\d+\/memo" class="memo-form" data-memo-form hidden/);
+  const res = await kim.submit('/', `/orders/${idOf('P1')}/memo`, { memo: '시안 2개 먼저 보내기\r\n금요일까지', back: '/' });
+  assert.match(res.location, /^\/#o\d+$/);
+  assert.strictEqual(row('P1').memo, '시안 2개 먼저 보내기\n금요일까지');
+  assert.strictEqual(row('P9').memo, '시안 2개 먼저 보내기\n금요일까지', '추가상품에도 같이');
+  const again = (await kim.request('/')).text;
+  assert.match(again, /class="cell c-memo has-memo"/);
+  assert.match(again, /<span class="memo-text" data-memo-text>시안 2개 먼저 보내기\n금요일까지<\/span>/);
+  assert.match((await kim.request(`/orders/${idOf('P1')}`)).text, /시안 2개 먼저 보내기/, '주문 화면 메모 칸과 같은 메모');
+  await kim.submit('/', `/orders/${idOf('P1')}/memo`, { memo: '   ', back: '/' });
+  assert.strictEqual(row('P1').memo, null);
 });

@@ -1,0 +1,54 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-tabs') %>
+
+<section class="card">
+  <h2>주문 목록 칸</h2>
+  <p class="muted">주문 목록 표의 칸 순서를 바꾸거나 숨겨요. <strong>모든 직원 화면에 같이</strong> 바뀌어요. 위에 있을수록 왼쪽 칸이에요.</p>
+  <p class="muted small">넓은 화면(PC)의 표 순서예요. 휴대폰은 화면이 좁아 정해진 모양으로 보이고, 숨긴 칸은 휴대폰에서도 숨겨요. '주문' 칸은 숨길 수 없어요.</p>
+
+  <%# 지금 순서 미리보기: 표 머리처럼 한 줄로 %>
+  <div class="col-preview" aria-label="지금 순서">
+    <span class="col-preview-check" aria-hidden="true"></span>
+    <% columns.filter(col => col.show).forEach(col => { %><span class="col-preview-cell<%= col.key === 'main' ? ' main' : '' %><%= col.pick ? ' pick' : '' %>"><%= col.label %></span><% }) %>
+  </div>
+
+  <ol class="rows col-rows">
+    <% columns.forEach((col, i) => { %>
+      <li class="row <%= col.show ? '' : 'inactive' %>">
+        <div class="row-main">
+          <span class="order"><%= i + 1 %></span>
+          <strong><%= col.label %></strong>
+          <% if (!col.show) { %><span class="status status-suspended">숨김</span><% } %>
+          <% if (col.key === 'memo') { %><span class="muted small">작업 메모 · 누르면 그 자리에서 고쳐요</span><% } %>
+        </div>
+        <div class="row-actions">
+          <form method="post" action="/admin/columns/<%= col.key %>/move" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="dir" value="up">
+            <button type="submit" class="btn-sm" <%= i === 0 ? 'disabled' : '' %> aria-label="<%= col.label %> 왼쪽으로">▲ 왼쪽</button>
+          </form>
+          <form method="post" action="/admin/columns/<%= col.key %>/move" class="inline">
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="hidden" name="dir" value="down">
+            <button type="submit" class="btn-sm" <%= i === columns.length - 1 ? 'disabled' : '' %> aria-label="<%= col.label %> 오른쪽으로">▼ 오른쪽</button>
+          </form>
+          <% if (!col.fixed) { %>
+            <form method="post" action="/admin/columns/<%= col.key %>/show" class="inline">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="hidden" name="show" value="<%= col.show ? '0' : '1' %>">
+              <button type="submit" class="btn-sm"><%= col.show ? '숨기기' : '다시 보이기' %></button>
+            </form>
+          <% } %>
+        </div>
+      </li>
+    <% }) %>
+  </ol>
+
+  <form method="post" action="/admin/columns/reset" class="inline" data-confirm="처음 순서(주문 · 메모 · 상태 · 배송·금액 · 납기·발송 · 디자인 · 담당)로 되돌릴까요?">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button type="submit" class="btn-sm">처음 순서로</button>
+  </form>
+</section>
+
+<script src="/confirm.js"></script>
+<%- include('../partials/footer') %>

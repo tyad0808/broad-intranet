@@ -284,7 +284,7 @@ test('목록: 처리할 수 있는 주문에 체크박스가 있고, 체크한 �
   const list = await kim.request('/');
   assert.match(list.text, new RegExp(`name="ids" value="${idOf('P1')}" form="bulk-form"`));
   assert.match(list.text, /data-bulk-kind="confirm"/);
-  assert.match(list.text, /data-can="confirm"/);
+  assert.match(list.text, /data-can="confirm hold"/);
   const res = await kim.submit('/', '/orders/bulk/confirm', { ids: [String(idOf('P1')), String(idOf('P2'))], back: '/' });
   assert.strictEqual(res.location, '/');
   assert.deepStrictEqual([row('P1').channel_confirmed, row('P9').channel_confirmed, row('P2').channel_confirmed], [1, 1, 1]);

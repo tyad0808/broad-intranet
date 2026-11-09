@@ -72,7 +72,7 @@ function createNotifier({ db, hub = new EventHub(), now = () => Date.now() }) {
     return db.prepare(`
       SELECT COUNT(*) AS n FROM (
         SELECT 1 FROM orders
-        WHERE assignee_id IS NULL AND (stage_id IS NULL OR stage_id != ?)
+        WHERE assignee_id IS NULL AND hold_at IS NULL AND (stage_id IS NULL OR stage_id != ?)
         GROUP BY channel, channel_order_id
         HAVING MIN(CASE WHEN channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END) = 0
       )

@@ -156,6 +156,12 @@
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(async () => {
       // 직원이 담당자 상자를 고르는 중이면 끝날 때까지 기다린다
+      // 메모를 쓰는 중이어도 기다린다 (새로 그리면 쓰던 글자가 사라지므로)
+      const typing = liveList.querySelector('.c-memo.editing');
+      if (typing) {
+        typing.addEventListener('focusout', () => setTimeout(() => { if (!liveList.querySelector('.c-memo.editing')) refreshList(); }, 300), { once: true });
+        return;
+      }
       if (liveList.contains(document.activeElement) && document.activeElement.tagName === 'SELECT') {
         document.activeElement.addEventListener('blur', refreshList, { once: true });
         return;

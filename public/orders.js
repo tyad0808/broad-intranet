@@ -43,6 +43,8 @@ function syncBulkBar() {
     const n = kind === 'any' ? checked.length : checked.filter(box => (box.dataset.can || '').split(' ').includes(kind)).length;
     button.querySelector('[data-n]').textContent = n;
     button.disabled = n === 0;
+    // 보류·보류 풀기는 해당하는 주문을 체크했을 때만 보인다 (늘 0건으로 자리만 차지하지 않게)
+    if (kind === 'hold' || kind === 'unhold') button.hidden = n === 0;
   }
 }
 document.addEventListener('change', event => {
@@ -75,6 +77,67 @@ document.addEventListener('change', event => {
   const ask = select.value === 'none' ? `체크한 주문 ${n}건의 담당을 비울까요?` : `체크한 주문 ${n}건의 담당을 ${name} 님으로 바꿀까요?`;
   if (!n || !window.confirm(ask)) { select.value = ''; return; }
   select.form.requestSubmit(document.querySelector('[data-bulk-assign-go]'));
+});
+
+// 주문 목록의 작업 메모: 누르면 그 자리에서 고치고 [저장] (Ctrl+Enter 도 저장, Esc 는 취소)
+//   저장은 화면을 다시 읽지 않고 보낸다. 실패하면 보통 폼 보내기로 (화면이 다시 열림)
+function closeMemo(cell, text) {
+  const form = cell.querySelector('[data-memo-form]');
+  if (typeof text === 'string') {
+    cell.querySelector('[data-memo-text]').textContent = text;
+    cell.classList.toggle('has-memo', Boolean(text));
+    const view = cell.querySelector('[data-memo-edit]');
+    view.title = text || '눌러서 메모 쓰기';
+    view.setAttribute('aria-label', text ? `작업 메모: ${text}` : '작업 메모 쓰기');
+    form.elements.memo.defaultValue = text;
+  }
+  form.elements.memo.value = form.elements.memo.defaultValue;
+  form.hidden = true;
+  cell.classList.remove('editing');
+}
+document.addEventListener('click', event => {
+  const open = event.target.closest('[data-memo-edit]');
+  if (open) {
+    const cell = open.closest('.c-memo');
+    const form = cell.querySelector('[data-memo-form]');
+    form.hidden = false;
+    cell.classList.add('editing');
+    const box = form.elements.memo;
+    box.focus();
+    box.setSelectionRange(box.value.length, box.value.length);
+    return;
+  }
+  const cancel = event.target.closest('[data-memo-cancel]');
+  if (cancel) closeMemo(cancel.closest('.c-memo'));
+});
+document.addEventListener('keydown', event => {
+  if (!event.target.matches('[data-memo-form] textarea')) return;
+  const cell = event.target.closest('.c-memo');
+  if (event.key === 'Escape') { event.preventDefault(); closeMemo(cell); cell.querySelector('[data-memo-edit]').focus(); }
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) { event.preventDefault(); event.target.form.requestSubmit(); }
+});
+document.addEventListener('submit', async event => {
+  const form = event.target.closest('[data-memo-form]');
+  if (!form) return;
+  event.preventDefault();
+  const cell = form.closest('.c-memo');
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    const res = await fetch(form.action, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(new FormData(form)),
+      credentials: 'same-origin',
+    });
+    if (!res.ok) throw new Error(String(res.status));
+    const out = await res.json();
+    closeMemo(cell, out.memo);
+  } catch {
+    form.submit(); // 화면을 다시 열어서라도 저장
+  } finally {
+    button.disabled = false;
+  }
 });
 
 // [📋 복사]: data-copy 의 글자를 클립보드로 (작업 파일 이름 등). 잠깐 '복사됨 ✓' 으로 바뀐다

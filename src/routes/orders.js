@@ -14,6 +14,7 @@ const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, 
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER, orderShipWay, shipWay } = require('../channels/shipping');
 const { sheetView, SHIP_CHOICES, termsOf, phoneOf, shipChoiceFor } = require('../proofs');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
+const { loadColumns, columnsCss } = require('../orderColumns');
 const { evidenceFor, evidenceView, GROUP_TAX_PENDING } = require('../evidence');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
@@ -27,6 +28,7 @@ const VIEWS = {
   active: '진행 중',
   mine: '내 담당',
   unassigned: '미지정',
+  hold: '보류',
   all: '전체',
 };
 
@@ -136,6 +138,9 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       params.push(req.user.id);
     }
     if (view === 'unassigned') where.push('o.assignee_id IS NULL');
+    // 보류한 주문은 보류 탭에만 (진행 중·내 담당·미지정에서는 뺀다). 확인 필요·상태 칸·전체에서는 그대로 보인다
+    if (['active', 'mine', 'unassigned'].includes(view)) where.push('o.hold_at IS NULL');
+    if (view === 'hold') where.push('o.hold_at IS NOT NULL');
     if (due) {
       where.push('o.due_date = ?');
       params.push(due);
@@ -201,12 +206,13 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       ), r AS (
         SELECT g.*, ROW_NUMBER() OVER (ORDER BY ${groupOrder}) AS rnk FROM g
       )
-      SELECT o.*, s.name AS stage_name, u.name AS assignee_name, src.name AS source_name, r.rnk
+      SELECT o.*, s.name AS stage_name, u.name AS assignee_name, src.name AS source_name, hu.name AS hold_by_name, r.rnk
       FROM r
       JOIN orders o ON o.channel = r.ch AND o.channel_order_id = r.oid
       LEFT JOIN work_stages s ON s.id = o.stage_id
       LEFT JOIN order_sources src ON src.id = o.source_id
       LEFT JOIN users u ON u.id = o.assignee_id
+      LEFT JOIN users hu ON hu.id = o.hold_by
       ORDER BY r.rnk, ${ITEM_ORDER}
     `).all(...listParams);
 
@@ -233,6 +239,10 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       // 로젠: 등록 상태(송장번호)와 지금 등록할 수 있는지
       g.logen = logen ? logen.shipmentOf(g.main.channel, g.main.channel_order_id) : null;
       g.canLogen = Boolean(logen && logen.hasKey && logen.canRegister(g.items));
+      // 보류 (주문 묶음 전체에 같이 걸린다) · 작업 메모 (묶음에 같이 저장되므로 첫 상품 것)
+      const held = g.items.find(i => i.hold_at);
+      g.hold = held ? { at: held.hold_at, note: held.hold_note || '', by: held.hold_by_name || '' } : null;
+      g.memo = (g.items.find(i => i.memo) || {}).memo || '';
     }
 
     // 단계 버튼에 보여줄 건수: 지금 탭·검색 조건 그대로, 그 단계 필터만 빼고 센다
@@ -284,6 +294,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
           MAX(CASE WHEN o.stage_id IS NULL OR o.stage_id != ? THEN 1 ELSE 0 END) AND ${GROUP_ENDED} = 0 AS open,
           MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
           MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned,
+          MAX(o.hold_at IS NOT NULL) AS held,
           ${GROUP_SHIP_STATE} AS ship_state,
           ${oldDone} AS old,
           o.channel AS ch
@@ -291,9 +302,10 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
         GROUP BY o.channel, o.channel_order_id
       )
       SELECT
-        COALESCE(SUM(open), 0) AS active,
-        COALESCE(SUM(open AND mine), 0) AS mine,
-        COALESCE(SUM(open AND unassigned), 0) AS unassigned,
+        COALESCE(SUM(open AND NOT held), 0) AS active,
+        COALESCE(SUM(open AND mine AND NOT held), 0) AS mine,
+        COALESCE(SUM(open AND unassigned AND NOT held), 0) AS unassigned,
+        COALESCE(SUM(open AND held), 0) AS hold,
         COALESCE(SUM(NOT old), 0) AS "all",
         COALESCE(SUM(ship_state = 'new' AND (? OR ch != 'manual')), 0) AS st_new,
         COALESCE(SUM(ship_state = 'ready' AND (? OR ch != 'manual')), 0) AS st_ready,
@@ -331,7 +343,11 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
 
     const lastRun = db.prepare('SELECT started_at, ok FROM collect_runs ORDER BY id DESC LIMIT 1').get() || null;
 
+    // 칸 순서·보이기 (관리자 › 주문 목록 칸)
+    const columns = loadColumns(db);
     res.render('orders/list', {
+      columns,
+      columnsStyle: columnsCss(columns),
       bodyClass: 'orders-wide', // 가로 여백을 줄이고 주문 줄을 넓게
       ds: true, // 새 디자인 규칙(.ds-v2) — 지금은 이 화면에만
       title: '주문',
@@ -430,6 +446,87 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     logEvent(order, req.user.id, 'design', order.design_stage_id || firstDesignId(), stage.id);
     notifier.ordersChanged(items.map(i => i.id), req.user.id);
     req.session.flash = { type: 'ok', message: `'${items[0].product_name}' → ${stage.name}` };
+    res.redirect(`${back}#o${items[0].id}`);
+  });
+
+  // ───────── 보류 ─────────
+  // 고객이 '파일·내용이 정리될 때까지 멈춰 달라' 한 주문. 회사 안에서만 표시 (판매처 발송기한은 그대로 흐른다)
+  // 보류 기록 (누가·언제·사유). order_events 는 담당·디자인 기록 전용이라 따로 둔다
+  const holdLog = (order, userId, action, note) => db.prepare('INSERT INTO order_hold_log (channel, channel_order_id, user_id, action, note) VALUES (?, ?, ?, ?, ?)')
+    .run(order.channel, order.channel_order_id, userId, action, note || null);
+  const setHold = (order, userId, note) => {
+    db.prepare("UPDATE orders SET hold_at = ?, hold_note = ?, hold_by = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?")
+      .run(new Date().toISOString(), note || null, userId, order.channel, order.channel_order_id);
+    holdLog(order, userId, 'hold', note);
+  };
+  const clearHold = (order, userId) => {
+    db.prepare("UPDATE orders SET hold_at = NULL, hold_note = NULL, hold_by = NULL, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?")
+      .run(order.channel, order.channel_order_id);
+    holdLog(order, userId, 'unhold', order.hold_note);
+  };
+  const holdNote = raw => String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+
+  // 여러 건 한 번에 보류·풀기 (아래 일괄 처리 막대)
+  const bulkHold = on => (req, res) => {
+    const back = safeBack(req.body.back);
+    const ids = pickIds(req.body.ids);
+    if (ids.error) return flashBack(req, res, back, { type: 'error', message: ids.error });
+    const done = new Set();
+    const changed = [];
+    for (const id of ids) {
+      const order = findOrder(id);
+      if (!order || done.has(`${order.channel}:${order.channel_order_id}`)) continue;
+      done.add(`${order.channel}:${order.channel_order_id}`);
+      if (Boolean(order.hold_at) === on) continue;
+      if (on) setHold(order, req.user.id, holdNote(req.body.hold_note));
+      else clearHold(order, req.user.id);
+      changed.push(...groupItems(order).map(i => i.id));
+    }
+    if (changed.length) { notifier.ordersChanged(changed, req.user.id); notifier.checkUnassigned(); }
+    req.session.flash = { type: 'ok', message: on ? `주문 ${done.size}건을 보류했어요. '보류' 탭에서 볼 수 있어요.` : `주문 ${done.size}건의 보류를 풀었어요. 다시 진행 중이에요.` };
+    res.redirect(back);
+  };
+  router.post('/orders/bulk/hold', bulkHold(true));
+  router.post('/orders/bulk/unhold', bulkHold(false));
+
+  router.post('/orders/:id/hold', (req, res) => {
+    const back = safeBack(req.body.back);
+    const order = findOrder(req.params.id);
+    if (!order) return flashBack(req, res, back, { type: 'error', message: '주문을 찾을 수 없습니다.' });
+    const note = holdNote(req.body.hold_note);
+    setHold(order, req.user.id, note);
+    const items = groupItems(order);
+    notifier.ordersChanged(items.map(i => i.id), req.user.id);
+    notifier.checkUnassigned();
+    req.session.flash = { type: 'ok', message: `'${items[0].product_name}' 주문을 보류했어요.${note ? ` (${note})` : ''} 보류를 풀 때까지 '보류' 탭에 있어요.` };
+    res.redirect(req.body.from === 'detail' ? selfUrl(order.id, back) : `${back}#o${items[0].id}`);
+  });
+
+  router.post('/orders/:id/unhold', (req, res) => {
+    const back = safeBack(req.body.back);
+    const order = findOrder(req.params.id);
+    if (!order) return flashBack(req, res, back, { type: 'error', message: '주문을 찾을 수 없습니다.' });
+    if (order.hold_at) clearHold(order, req.user.id);
+    const items = groupItems(order);
+    notifier.ordersChanged(items.map(i => i.id), req.user.id);
+    notifier.checkUnassigned();
+    req.session.flash = { type: 'ok', message: `'${items[0].product_name}' 보류를 풀었어요. 다시 진행 중이에요.` };
+    res.redirect(req.body.from === 'detail' ? selfUrl(order.id, back) : `${back}#o${items[0].id}`);
+  });
+
+  // 목록에서 바로 작업 메모 쓰기 (주문 화면의 메모 칸과 같은 메모, 묶음 전체에 같이 저장)
+  router.post('/orders/:id/memo', (req, res) => {
+    const back = safeBack(req.body.back);
+    const order = findOrder(req.params.id);
+    const json = req.accepts(['html', 'json']) === 'json';
+    if (!order) return json ? res.status(404).json({ error: '주문을 찾을 수 없습니다.' }) : flashBack(req, res, back, { type: 'error', message: '주문을 찾을 수 없습니다.' });
+    const memo = String(req.body.memo || '').replace(/\r\n?/g, '\n').trim().slice(0, 2000) || null;
+    db.prepare("UPDATE orders SET memo = ?, version = version + 1, updated_at = datetime('now') WHERE channel = ? AND channel_order_id = ?")
+      .run(memo, order.channel, order.channel_order_id);
+    const items = groupItems(order);
+    notifier.ordersChanged(items.map(i => i.id), req.user.id);
+    if (json) return res.json({ ok: true, memo: memo || '' });
+    req.session.flash = { type: 'ok', message: memo ? '메모를 저장했어요.' : '메모를 지웠어요.' };
     res.redirect(`${back}#o${items[0].id}`);
   });
 
@@ -923,6 +1020,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       : null;
     res.render('orders/detail', {
       title: items[0].product_name,
+      holdBy: order.hold_by ? (db.prepare('SELECT name FROM users WHERE id = ?').get(order.hold_by) || {}).name || '' : '',
       order,
       sourceName,
       evidence,
@@ -1182,14 +1280,16 @@ function orderSummary(db, userId) {
       COALESCE(SUM(claim), 0) AS claim,
       COALESCE(SUM(late), 0) AS late,
       COALESCE(SUM(shiplate), 0) AS shiplate,
-      COALESCE(SUM(open AND unassigned), 0) AS unassigned,
-      COALESCE(SUM(open AND mine), 0) AS mine,
+      COALESCE(SUM(open AND unassigned AND NOT held), 0) AS unassigned,
+      COALESCE(SUM(open AND mine AND NOT held), 0) AS mine,
+      COALESCE(SUM(open AND held), 0) AS hold,
       COALESCE(SUM(evidence), 0) AS evidence
     FROM (
       SELECT ${GROUP_SHIP_STATE} AS ship_state, MAX(${OPEN_CLAIM_SQL}) AS claim, (${lateHaving}) AS late,
         (${TODAY_HAVING}) AS today, COALESCE(${shipLateHaving()}, 0) AS shiplate, ${OPEN} AS open,
         MAX(CASE WHEN o.assignee_id = ? THEN 1 ELSE 0 END) AS mine,
         MIN(CASE WHEN o.assignee_id IS NULL THEN 1 ELSE 0 END) AS unassigned,
+        MAX(o.hold_at IS NOT NULL) AS held,
         MAX(${GROUP_TAX_PENDING}) AS evidence
       FROM orders o
       GROUP BY o.channel, o.channel_order_id
@@ -1199,7 +1299,7 @@ function orderSummary(db, userId) {
   const mineStages = db.prepare(`
     SELECT s.name, COUNT(*) AS n FROM (
       SELECT MIN(o.stage_id) AS k FROM orders o
-      WHERE (o.stage_id IS NULL OR o.stage_id != ?) AND o.assignee_id = ?
+      WHERE (o.stage_id IS NULL OR o.stage_id != ?) AND o.assignee_id = ? AND o.hold_at IS NULL
       GROUP BY o.channel, o.channel_order_id HAVING ${GROUP_ENDED} = 0
     ) x LEFT JOIN work_stages s ON s.id = x.k
     GROUP BY x.k ORDER BY MIN(COALESCE(s.sort_order, 9999))

@@ -43,6 +43,8 @@
   --mark: #fff0a8;         /* 검색어 표시 */
   --glass: rgba(245, 246, 248, 0.78);
   --glass-line: rgba(229, 232, 235, 0.9);
+  --memo-bg: #fffbea;      /* 작업 메모 칸 (옅은 노랑 메모지) */
+  --memo-line: #f1e3a6;
   --radius: 12px;
   --radius-sm: 8px;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -691,7 +693,7 @@ form.inline { display: inline; margin: 0; }
 @media (min-width: 1100px) {
   .order-head {
     display: grid;
-    grid-template-columns: 24px minmax(0, 1fr) 140px 104px 132px 168px 112px;
+    grid-template-columns: var(--ocn-wide, 24px minmax(0, 1.6fr) 140px 104px 132px 168px 112px);
     gap: 12px;
     align-items: center;
     margin: 0;
@@ -707,7 +709,7 @@ form.inline { display: inline; margin: 0; }
   .order-head + .order-list { border-radius: 0 0 var(--radius) var(--radius); }
   .order-head .check-all-text { display: none; }
   .order-head .oi-check { min-height: 0; margin: 0; top: 0; }
-  .order-head + .order-list > .order-item { display: grid; grid-template-columns: 24px minmax(0, 1fr) 140px 104px 132px 168px 112px; gap: 12px; }
+  .order-head + .order-list > .order-item { display: grid; grid-template-columns: var(--ocn-wide, 24px minmax(0, 1.6fr) 140px 104px 132px 168px 112px); gap: 4px 12px; }
   .order-head .head-pick { color: var(--primary-dark); } /* 직원이 고르는 칸 */
   .order-head + .order-list .c-stage form.inline { display: flex; flex: 1 1 auto; min-width: 0; }
   .order-head + .order-list .c-stage .stage-select { width: 100%; min-width: 0; }
@@ -715,13 +717,17 @@ form.inline { display: inline; margin: 0; }
   .order-head + .order-list .c-assign .assign-select { width: 100%; }
   .order-head + .order-list > .order-item > .oi-meta { display: contents; }
   .order-head + .order-list .oi-check { grid-area: 1 / 1; }
-  .order-head + .order-list .oi-col { grid-area: 1 / 2; }
+  /* 칸 자리: 관리자 › 주문 목록 칸 에서 정한 순서 (--ocn-<칸> = 몇 번째 칸). 이 너비에서는 메모가 주문 칸 아래 한 줄 */
+  .order-head + .order-list .oi-col { grid-area: 1 / var(--ocn-main, 2); }
+  .order-head + .order-list .c-memo { grid-area: 2 / var(--ocn-main, 2); }
+  .order-head + .order-list .cell:not(.c-memo) { grid-row: 1 / span 2; }
+  .order-head .head-memo { display: none; }
   /* 칸 순서: 주문 · 상태 · 배송·금액 · 납기·발송 | 디자인 · 담당 */
-  .order-head + .order-list .c-status { grid-area: 1 / 3; }
-  .order-head + .order-list .c-ship { grid-area: 1 / 4; flex-direction: column; align-items: flex-start; gap: 6px; }
-  .order-head + .order-list .c-due { grid-area: 1 / 5; }
-  .order-head + .order-list .c-stage { grid-area: 1 / 6; }
-  .order-head + .order-list .c-assign { grid-area: 1 / 7; }
+  .order-head + .order-list .c-status { grid-column: var(--ocn-status, 3); }
+  .order-head + .order-list .c-ship { grid-column: var(--ocn-ship, 4); flex-direction: column; align-items: flex-start; gap: 6px; }
+  .order-head + .order-list .c-due { grid-column: var(--ocn-due, 5); }
+  .order-head + .order-list .c-stage { grid-column: var(--ocn-design, 6); }
+  .order-head + .order-list .c-assign { grid-column: var(--ocn-assign, 7); }
   /* 고르는 칸 두 개는 같은 높이·칸을 꽉 채우게 */
   .order-head + .order-list .c-stage form.inline, .order-head + .order-list .c-assign form.inline { width: 100%; }
   .order-head + .order-list .stage-select, .order-head + .order-list .assign-select { height: 40px; }
@@ -731,10 +737,23 @@ form.inline { display: inline; margin: 0; }
   .order-head + .order-list .c-status .st-badge { max-width: 100%; }
   .order-head + .order-list .c-stage { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 6px; }
 }
+/* 아주 넓은 화면: 메모도 따로 한 칸 (관리자가 정한 자리 --oc-<칸>) */
+@media (min-width: 1500px) {
+  .order-head, .order-head + .order-list > .order-item { grid-template-columns: var(--oc-wide, 24px minmax(0, 1.6fr) minmax(170px, 0.7fr) 140px 104px 132px 168px 112px); }
+  .order-head .head-memo { display: block; }
+  .order-head + .order-list .oi-col { grid-area: 1 / var(--oc-main, 2); }
+  .order-head + .order-list .c-memo { grid-area: 1 / var(--oc-memo, 3); align-self: center; }
+  .order-head + .order-list .cell:not(.c-memo) { grid-row: 1; }
+  .order-head + .order-list .c-status { grid-column: var(--oc-status, 4); }
+  .order-head + .order-list .c-ship { grid-column: var(--oc-ship, 5); }
+  .order-head + .order-list .c-due { grid-column: var(--oc-due, 6); }
+  .order-head + .order-list .c-stage { grid-column: var(--oc-design, 7); }
+  .order-head + .order-list .c-assign { grid-column: var(--oc-assign, 8); }
+}
 @media (min-width: 1100px) and (max-width: 1299px) {
   .filters-period .chips-label { display: none; }
   .filters .period input[type=date] { width: 134px; }
-  .order-head, .order-head + .order-list > .order-item { grid-template-columns: 24px minmax(0, 1fr) 132px 100px 124px 164px 104px; gap: 10px; }
+  .order-head, .order-head + .order-list > .order-item { grid-template-columns: var(--ocn-mid, 24px minmax(0, 1.4fr) 132px 100px 124px 164px 104px); column-gap: 10px; }
   .order-head + .order-list .c-stage .pill.stage { padding: 0 8px; }
 }
 @media (max-width: 1099px) {
@@ -748,7 +767,7 @@ form.inline { display: inline; margin: 0; }
   /* 카드 아래를 늘 같은 3줄로: ① 상태 ② 배송·금액 | 발송기한 ③ 디자인 | 담당 */
   .order-list:not(.inbox-list) .order-item > .oi-meta {
     display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    grid-template-areas: "status status" "ship due" "design assign";
+    grid-template-areas: "status status" "memo memo" "ship due" "design assign";
     gap: 12px 10px; align-items: center;
     margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line-2);
   }
@@ -759,6 +778,8 @@ form.inline { display: inline; margin: 0; }
   .order-list:not(.inbox-list) .oi-meta .c-due { grid-area: due; justify-content: flex-end; }
   .order-list:not(.inbox-list) .oi-meta .c-stage { grid-area: design; }
   .order-list:not(.inbox-list) .oi-meta .c-assign { grid-area: assign; }
+  .order-list:not(.inbox-list) .oi-meta .c-memo { grid-area: memo; }
+  .order-list:not(.inbox-list) .oi-meta .c-memo:not(.has-memo):not(.has-hold) { display: none; } /* 휴대폰: 메모가 없으면 줄을 차지하지 않게 (메모는 주문 화면에서) */
   .order-list:not(.inbox-list) .oi-meta .c-stage, .order-list:not(.inbox-list) .oi-meta .c-assign { display: grid; gap: 4px; align-content: start; }
   .order-list:not(.inbox-list) .oi-meta .cell-cap { display: block; font-size: 14px; font-weight: 600; color: var(--muted); }
   .order-list:not(.inbox-list) .oi-meta .c-stage form.inline, .order-list:not(.inbox-list) .oi-meta .c-assign form.inline { width: 100%; }
@@ -2125,3 +2146,65 @@ button.ev-btn { width: 100%; min-height: 44px; font-size: 16px; }
 .row-edit .nick-input { width: 120px; margin: 0; }
 .nick-tag { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 6px; background: var(--line-2); color: var(--text-2); font-size: 14px; font-weight: 500; vertical-align: middle; }
 .maker-note { display: block; margin: -6px 0 12px; color: var(--error); font-size: 14px; font-weight: 500; line-height: 1.4; }
+
+/* ───────── 주문 목록: 작업 메모 칸 (누르면 그 자리에서 고치기) ───────── */
+.c-memo { flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; }
+.memo-view { display: block; width: 100%; min-height: 36px; margin: 0; padding: 6px 9px; border: 1px dashed transparent; border-radius: 8px; background: none; color: var(--text-2); font-size: 14px; font-weight: 500; line-height: 1.45; text-align: left; cursor: text; }
+.memo-view:hover, .memo-view:focus-visible { border-color: var(--line-strong); background: var(--field); outline: none; }
+.memo-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; word-break: break-word; }
+.memo-add { display: none; color: var(--muted); }
+.c-memo:not(.has-memo) .memo-text { display: none; }
+.c-memo:not(.has-memo) .memo-view { min-height: 32px; }
+.order-item:hover .c-memo:not(.has-memo) .memo-add, .c-memo:not(.has-memo) .memo-view:focus-visible .memo-add { display: inline; }
+.c-memo.has-memo .memo-view { border-style: solid; border-color: var(--memo-line); background: var(--memo-bg); color: var(--text); }
+.memo-form { display: grid; gap: 6px; margin: 0; }
+.memo-form[hidden] { display: none; }
+.memo-form textarea { margin: 0; min-height: 76px; padding: 8px 10px; font-size: 14px; line-height: 1.45; resize: vertical; }
+.memo-actions { display: flex; gap: 6px; }
+.memo-actions .btn-sm { min-height: 36px; padding: 0 12px; }
+.c-memo.editing .memo-view, .c-memo.editing .hold-line { display: none; }
+
+/* ───────── 보류 ───────── */
+.hold-badge { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 6px; background: var(--calm-bg); color: var(--text-2); font-size: 14px; font-weight: 700; box-shadow: inset 0 0 0 1px var(--line-strong); }
+.hold-line { display: block; padding: 0 2px; color: var(--text-2); font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hold-card { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 14px 18px; }
+.hold-card .hold-open { margin: 0; }
+.hold-card .hold-open > summary { list-style: none; cursor: pointer; }
+.hold-card .hold-open > summary::-webkit-details-marker { display: none; }
+.hold-card .hold-open[open] { flex-basis: 100%; }
+.hold-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin: 10px 0 0; }
+.hold-form label { flex: 1 1 320px; margin: 0; }
+.hold-card.is-held { background: var(--calm-bg); }
+.hold-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; flex: 1 1 auto; min-width: 0; }
+.hold-note { font-weight: 600; color: var(--text); }
+.hold-help { flex-basis: 100%; margin: 0; }
+.hold-warn { flex-basis: 100%; margin: 0; color: var(--warn); font-size: 14px; }
+.order-item:has(.hold-badge) .oi-name { color: var(--text-2); }
+
+/* 관리자 › 주문 목록 칸: 지금 순서 미리보기 (표 머리처럼) */
+.col-preview { display: flex; gap: 6px; margin: 4px 0 16px; padding: 10px 12px; overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.col-preview-check { flex: none; width: 18px; height: 18px; margin-top: 4px; border: 1.5px solid var(--line-strong); border-radius: 4px; }
+.col-preview-cell { flex: 0 0 auto; min-width: 72px; padding: 4px 10px; border-radius: 6px; background: var(--field); color: var(--muted); font-size: 14px; font-weight: 600; text-align: center; white-space: nowrap; box-shadow: inset 0 0 0 1px var(--line); }
+.col-preview-cell.main { flex: 1 0 140px; text-align: left; color: var(--text); }
+.col-preview-cell.pick { color: var(--primary-text); }
+.col-rows .row-main { display: flex; align-items: center; gap: 8px; }
+
+/* 1100~1499px: 메모는 주문 칸 아래 한 줄 (메모가 없으면 줄을 차지하지 않고, 마우스를 올리면 '＋ 메모') */
+@media (min-width: 1100px) and (max-width: 1499px) {
+  .order-head + .order-list .c-memo { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .order-head + .order-list .c-memo .memo-view { width: auto; max-width: 100%; min-height: 28px; padding: 2px 8px; }
+  .order-head + .order-list .c-memo .memo-text { -webkit-line-clamp: 1; }
+  .order-head + .order-list .c-memo:not(.has-memo) .memo-view { min-height: 0; height: 0; padding: 0; overflow: hidden; border: 0; }
+  .order-head + .order-list .order-item:hover .c-memo:not(.has-memo) .memo-view, .order-head + .order-list .c-memo:not(.has-memo) .memo-view:focus-visible { height: auto; min-height: 26px; padding: 2px 8px; border: 1px dashed var(--line-strong); }
+  .order-head + .order-list .c-memo.editing { flex-basis: 100%; }
+  .order-head + .order-list .c-memo .memo-form { width: 100%; }
+}
+.c-memo { overflow: hidden; }
+.hold-line { max-width: 100%; }
+
+/* 휴대폰: 보기 탭(진행 중·내 담당·미지정·보류·전체)이 한 줄에 다 들어가게 조금 좁게 */
+@media (max-width: 480px) {
+  .view-seg { max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+  .view-seg::-webkit-scrollbar { display: none; }
+  .view-seg a { padding: 0 9px; gap: 4px; }
+}

@@ -2,6 +2,7 @@
 // 이 파일의 모든 주소는 app.js 에서 requireAdmin 을 거친 뒤에만 들어온다.
 const express = require('express');
 const { collectFlash, releaseOpenOrders } = require('./orders');
+const orderColumns = require('../orderColumns');
 const { transaction } = require('../db');
 const { CHANNELS } = require('../channels/labels');
 const { storageInfo, humanSize } = require('../storage');
@@ -605,6 +606,28 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
     const out = retention.runCleanup(db, { userId: req.user.id, userName: req.user.name });
     flash(req, 'ok', `정리했습니다: 주문 ${out.orders.toLocaleString()}건, 문의 ${out.inquiries.toLocaleString()}건.`);
     res.redirect('/admin/storage');
+  });
+
+  // ───────── 주문 목록 칸: 순서 바꾸기·숨기기 (모든 직원에게 같게, 넓은 화면의 표 모양) ─────────
+  router.get('/columns', (req, res) => {
+    res.render('admin/columns', { title: '주문 목록 칸', tab: 'columns', columns: orderColumns.loadColumns(db) });
+  });
+  router.post('/columns/:key/move', (req, res) => {
+    orderColumns.moveColumn(db, String(req.params.key), req.body.dir === 'up' ? 'up' : 'down');
+    notifier.ordersChanged([], req.user.id); // 열려 있는 주문 목록도 새 순서로
+    res.redirect('/admin/columns');
+  });
+  router.post('/columns/:key/show', (req, res) => {
+    const ok = orderColumns.showColumn(db, String(req.params.key), req.body.show === '1');
+    if (!ok) flash(req, 'error', '이 칸은 숨길 수 없어요.');
+    notifier.ordersChanged([], req.user.id);
+    res.redirect('/admin/columns');
+  });
+  router.post('/columns/reset', (req, res) => {
+    orderColumns.saveColumns(db, orderColumns.DEFAULT_ORDER.map(key => ({ key, show: true })));
+    flash(req, 'ok', '처음 순서로 되돌렸어요.');
+    notifier.ordersChanged([], req.user.id);
+    res.redirect('/admin/columns');
   });
 
   router.get('/collect', (req, res) => {
