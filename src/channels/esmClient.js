@@ -103,6 +103,8 @@ function createEsmClient({
           authorization: `Bearer ${buildToken({ masterId, secretKey, gmarketId, auctionId, site, issuer, now: now() })}`,
           'content-type': 'application/json',
           accept: 'application/json',
+          // 언어를 꼭 적는다: Node 기본값 '*' 를 ESM 서버가 언어 이름으로 못 읽어 코드 3000 ('* 은 잘못된 문화권 식별자')
+          'accept-language': 'ko-KR',
         },
         body: JSON.stringify(json),
       });

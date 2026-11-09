@@ -55,7 +55,7 @@ test('요청: 기간 조회는 5초 간격, Bearer 토큰, 실패 코드는 오�
   const calls = [];
   const waits = [];
   const fetchFn = async (url, init) => {
-    calls.push({ url, auth: init.headers.authorization, body: JSON.parse(init.body) });
+    calls.push({ url, auth: init.headers.authorization, lang: init.headers['accept-language'], body: JSON.parse(init.body) });
     return new Response(JSON.stringify(calls.length === 3 ? { ResultCode: 3000, Message: '31일 이하의 범위만 조회 할 수 있습니다.' } : { ResultCode: 0, Data: { RequestOrders: [] } }));
   };
   const client = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'g', fetchFn, sleep: async ms => waits.push(ms) });
@@ -64,6 +64,7 @@ test('요청: 기간 조회는 5초 간격, Bearer 토큰, 실패 코드는 오�
   assert.ok(waits.some(ms => ms > 4000), '두 번째 기간 조회는 5초 가까이 기다린다');
   assert.strictEqual(calls[0].url, 'https://sa2.esmplus.com/shipping/v1/Order/RequestOrders');
   assert.match(calls[0].auth, /^Bearer [\w-]+\.[\w-]+\.[\w-]+$/);
+  assert.strictEqual(calls[0].lang, 'ko-KR', "언어 표시는 '*' 가 아니라 ko-KR");
   await assert.rejects(client.request('POST', '/shipping/v1/Order/RequestOrders', { orderStatus: 1 }), /코드 3000.*31일/);
 });
 
