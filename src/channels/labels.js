@@ -90,6 +90,7 @@ function claimLevel(code) {
 
 // 손님이 보는 상품 페이지 주소 (주문의 product_no 로). 모르면 null
 //   스마트스토어는 가게 주소가 필요하다 (관리자 › 주문 수집 에서 저장). 없으면 /main/ 으로 (네이버가 해당 가게로 넘겨 줌)
+const { esmProductUrl } = require('./esm');
 const GODO_SHOP_URL = 'https://broadstore.co.kr';
 const SMARTSTORE_DEFAULT = 'https://smartstore.naver.com/main';
 function productUrl(order, { smartstoreUrl } = {}) {
@@ -103,6 +104,8 @@ function productUrl(order, { smartstoreUrl } = {}) {
     return `https://www.coupang.com/vp/products/${no}${/^\d+$/.test(vendorItemId || '') ? `?vendorItemId=${vendorItemId}` : ''}`;
   }
   if (order.channel === 'godo') return `${GODO_SHOP_URL}/goods/goods_view.php?goodsNo=${no}`;
+  // G마켓·옥션: 번호 앞 글자(G-·A-)로 사이트를 고른다
+  if (order.channel === 'esm') return esmProductUrl(order.channel_item_id, order.product_no);
   return null;
 }
 

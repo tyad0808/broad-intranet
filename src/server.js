@@ -4,7 +4,8 @@ require('dotenv').config({ quiet: true });
 const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
-const { createCollector, createChannelCollector } = require('./collector');
+const { createCollector, createChannelCollector, getSetting, setSetting } = require('./collector');
+const { createEsmSource } = require('./channels/esm');
 const { createChannelRegistry, CHANNELS } = require('./channelRegistry');
 const { createCoupangSource, createCoupangWriter } = require('./channels/coupang');
 const { createGodoSource, createGodoWriter } = require('./channels/godo');
@@ -43,6 +44,19 @@ if (coupangReady && process.env.COUPANG !== 'off') {
 const godoReady = Boolean(process.env.GODO_API_KEY) && process.env.GODO !== 'off';
 if (godoReady) {
   collectors.push(createCollector({ db, source: createGodoSource(), onResult: notifier.afterCollect }));
+}
+// G마켓·옥션(ESM): .env 에 마스터 ID·시크릿키·판매자 ID(G마켓·옥션 중 하나 이상)가 있으면. 잠시 끄려면 ESM=off
+//   켠 날부터 가져오기: 그 전 G마켓·옥션 주문은 수기 주문으로 넣어 왔으므로 (ESM_START_DATE=YYYY-MM-DD 로 바꿀 수 있음)
+const esmReady = Boolean(process.env.ESM_MASTER_ID && process.env.ESM_SECRET_KEY && (process.env.ESM_GMARKET_ID || process.env.ESM_AUCTION_ID))
+  && process.env.ESM !== 'off';
+let esmStart = null;
+if (esmReady) {
+  esmStart = /^\d{4}-\d{2}-\d{2}$/.test(process.env.ESM_START_DATE || '') ? process.env.ESM_START_DATE : getSetting(db, 'esm_start_date');
+  if (!esmStart) {
+    esmStart = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    setSetting(db, 'esm_start_date', esmStart);
+  }
+  collectors.push(createCollector({ db, source: createEsmSource({ startDate: esmStart }), onResult: notifier.afterCollect }));
 }
 const collector = createChannelCollector(collectors); // 판매처가 하나도 없으면 '연결된 판매처 없음'
 // 발주확인·발송처리를 실제로 네이버에 보내는지: NAVER_WRITE=on 이고 실제 스마트스토어(ORDER_SOURCE=naver)일 때만.
@@ -206,6 +220,7 @@ app.listen(PORT, HOST, () => {
   console.log(`브로애드 인트라넷 실행 중: http://${HOST || 'localhost'}:${PORT}`);
   console.log(`발주확인·발송처리: ${actions.mode === 'live' ? '실제로 네이버에 보냄 (NAVER_WRITE=on)' : '연습 모드 (네이버로 보내지 않음)'}`);
   if (coupangReady) console.log(`쿠팡 상품준비중·송장: ${coupangLive ? '실제로 쿠팡에 보냄 (COUPANG_WRITE=on)' : '연습 모드 (쿠팡으로 보내지 않음)'}`);
+  if (esmReady) console.log(`G마켓·옥션: 주문 가져오기 켜짐 (${esmStart} 결제분부터, 조회만 — 주문확인·발송처리는 다음 단계)`);
   if (godoReady) console.log(`자사몰 발주확인·송장: ${godoLive ? '실제로 자사몰에 보냄 (GODO_WRITE=on)' : '연습 모드 (자사몰로 보내지 않음)'}`);
   if (inboxCollector) {
     console.log(`문의함: ${inboxSources.map(s => s.label).join(' + ')}, ${intervalMinutes(db, 'inbox_interval_minutes')}분마다`);
