@@ -138,6 +138,12 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       params.push(req.user.id);
     }
     if (view === 'unassigned') where.push('o.assignee_id IS NULL');
+    // 홈 '내 담당' 칸의 숫자를 누르면: 상태·납기 거르기와 함께 내 담당 주문만 (who=mine)
+    const whoMine = req.query.who === 'mine';
+    if (whoMine) {
+      where.push('o.assignee_id = ?');
+      params.push(req.user.id);
+    }
     // 보류한 주문은 보류 탭에만 (진행 중·내 담당·미지정에서는 뺀다). 확인 필요·상태 칸·전체에서는 그대로 보인다
     if (['active', 'mine', 'unassigned'].includes(view)) where.push('o.hold_at IS NULL');
     if (view === 'hold') where.push('o.hold_at IS NOT NULL');
@@ -394,6 +400,7 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       designers: designers(),
       today: kstToday(),
       currentUrl: req.originalUrl,
+      whoMine,
       canCollect: Boolean(collector && !(collector.isEmpty && collector.isEmpty())),
       // 넓은 PC 화면에서만 오른쪽에 보이는 회사 일정 달력
       week: buildWeek(db),
@@ -1328,7 +1335,8 @@ function kstDay(offset) {
 }
 
 // 홈 '한눈에 보기': 주문 목록 위 상태 4칸과 같은 숫자 (전체 판매처 기준 — 신규·배송준비는 수기 주문 빼고)
-function shipOverview(db) {
+function shipOverview(db, { assigneeId = null } = {}) {
+  const mine = assigneeId ? `o.assignee_id = ${Number(assigneeId)}` : '1';
   const lastRow = db.prepare('SELECT id FROM work_stages WHERE active = 1 ORDER BY sort_order DESC LIMIT 1').get();
   const last = Number(lastRow ? lastRow.id : -1);
   const cutoff = hideCutoff(db);
@@ -1339,7 +1347,7 @@ function shipOverview(db) {
       COALESCE(SUM(ship_state = 'ready' AND ch != 'manual'), 0) AS st_ready,
       COALESCE(SUM(ship_state = 'shipping'), 0) AS st_shipping,
       COALESCE(SUM(ship_state = 'delivered' AND NOT old), 0) AS st_delivered
-    FROM (SELECT ${GROUP_SHIP_STATE} AS ship_state, ${oldDone} AS old, o.channel AS ch FROM orders o GROUP BY o.channel, o.channel_order_id)
+    FROM (SELECT ${GROUP_SHIP_STATE} AS ship_state, ${oldDone} AS old, o.channel AS ch FROM orders o WHERE ${mine} GROUP BY o.channel, o.channel_order_id)
   `).get();
   const itemCounts = db.prepare(`
     SELECT
@@ -1347,7 +1355,7 @@ function shipOverview(db) {
       COALESCE(SUM(o.channel_status = 'PAYED' AND o.channel_confirmed = 1), 0) AS ready,
       COALESCE(SUM(o.channel_status = 'DELIVERING'), 0) AS shipping,
       COALESCE(SUM(o.channel_status = 'DELIVERED' AND o.channel != 'manual' AND ${ORDER_TIME} >= '${cutoff}'), 0) AS delivered
-    FROM orders o WHERE o.channel != 'manual'
+    FROM orders o WHERE o.channel != 'manual' AND ${mine}
   `).get();
   return { counts, itemCounts, hideDays: hideDays(db), SHIP_STATES };
 }

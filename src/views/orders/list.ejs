@@ -3,7 +3,7 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view: st || alert || from || to || view === 'active' ? '' : view, st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, src, from, to, ...changes };
+    const merged = { view: st || alert || from || to || view === 'active' ? '' : view, who: whoMine ? 'mine' : '', st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, src, from, to, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
@@ -97,6 +97,9 @@
   <% } %>
   <% if (due) { %>
     <p class="muted small st-note"><strong>납기 <%= due %></strong> 주문만 보는 중입니다. <a href="<%= link({ due: '' }) %>">해제</a></p>
+  <% } %>
+  <% if (whoMine) { %>
+    <p class="muted small st-note"><strong>내 담당</strong> 주문만 보는 중입니다. <a href="<%= link({ who: '' }) %>">해제</a></p>
   <% } %>
   <% if (st) { %>
     <p class="muted small st-note"><strong><%= SHIP_STATES[st] %></strong> 주문을 작업 단계와 상관없이 모두 보여줍니다. <a href="<%= link({ st: '', stage: '' }) %>">해제</a></p>

@@ -188,23 +188,20 @@ test('홈에도 주문 목록 위와 같은 한눈에 보기(상태 4칸 + 7일 
   assert.match(home, new RegExp(`<a href="/\\?due=${kstDay(2)}" class="week-day`));
 });
 
-test('내 담당 아래에 내 담당 진행 중 주문 목록: 납기가 이른 것부터, 보류·끝난 주문은 빼고, 누르면 팝업', async t => {
+test('내 담당 아래에 내 담당 주문만 센 한눈에 보기 (상태 4칸 + 7일 출고), 누르면 내 담당만 걸린 목록', async t => {
   const { db, baseUrl, kimId } = await setup(t);
-  addOrder(db, { channel_order_id: 'M1', channel_item_id: 'M1-1', product_name: '납기 늦은 현수막', due_date: kstDay(5), assignee_id: kimId, buyer_name: '홍길동' });
-  addOrder(db, { channel_order_id: 'M2', channel_item_id: 'M2-1', product_name: '오늘 납기 명함', due_date: kstDay(0), assignee_id: kimId });
-  addOrder(db, { channel_order_id: 'M3', channel_item_id: 'M3-1', product_name: '보류한 주문', assignee_id: kimId, hold_at: new Date().toISOString() });
-  addOrder(db, { channel_order_id: 'M4', channel_item_id: 'M4-1', product_name: '끝난 주문', assignee_id: kimId, channel_status: 'DELIVERED', channel_confirmed: 1 });
-  addOrder(db, { channel_order_id: 'M5', channel_item_id: 'M5-1', product_name: '남의 주문' });
+  addOrder(db, { channel_order_id: 'M1', channel_item_id: 'M1-1', due_date: kstDay(1), assignee_id: kimId });
+  addOrder(db, { channel_order_id: 'M2', channel_item_id: 'M2-1', due_date: kstDay(1) });
+  addOrder(db, { channel_order_id: 'M3', channel_item_id: 'M3-1', assignee_id: kimId, channel_confirmed: 1 });
   const kim = await loginAs(baseUrl, 'kim@broad.test');
   const html = (await kim.request('/home')).text;
-  assert.match(html, /내 담당 주문<span class="hm-total calm">2건<\/span>/);
-  const a = html.indexOf('오늘 납기 명함');
-  const b = html.indexOf('납기 늦은 현수막');
-  assert.ok(a > 0 && b > a, '납기가 이른 것부터');
-  assert.match(html, /<span class="hm-due-pill due-soon">납기 오늘<\/span>/);
-  assert.match(html, /<a class="hm-recent hm-mine-row" href="\/orders\/\d+\?back=%2Fhome" data-modal-link>/);
-  const card = html.slice(html.indexOf('id="hm-mine-orders"'), html.indexOf('</section>', html.indexOf('id="hm-mine-orders"')));
-  for (const name of ['보류한 주문', '끝난 주문', '남의 주문']) assert.ok(!card.includes(name), name);
-  const lee = await loginAs(baseUrl, 'boss@broad.test');
-  assert.match((await lee.request('/home')).text, /진행 중인 내 담당 주문이 없어요/);
+  const mine = html.slice(html.indexOf('hm-overview-mine'));
+  const tile = (h, key) => (h.match(new RegExp(`class="ship-tile st-${key}[^"]*">[\\s\\S]*?<strong class="ship-count">(\\d+)<small>`)) || [])[1];
+  assert.strictEqual(tile(mine, 'new'), '1', '내 담당 신규주문만');
+  assert.strictEqual(tile(mine, 'ready'), '1');
+  assert.match(mine, /<a href="\/\?who=mine&amp;st=new" class="ship-tile st-new /);
+  assert.match(mine, new RegExp(`<a href="/\\?who=mine&amp;due=${kstDay(1)}" class="week-day[^"]*"[^>]*>[\\s\\S]*?<strong class="">1<span`));
+  const list = (await kim.request(`/?who=mine&due=${kstDay(1)}`)).text;
+  assert.strictEqual((list.match(/class="oi-main"/g) || []).length, 1, '눌렀을 때도 내 담당 1건');
+  assert.match(list, /<strong>내 담당<\/strong> 주문만 보는 중입니다/);
 });

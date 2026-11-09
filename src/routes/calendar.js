@@ -70,12 +70,13 @@ function buildMonth(db, monthParam, user) {
 }
 
 // 납기(출고 예정): 날짜별로 아직 끝나지 않은 주문 수 (주문번호 단위)
-function dueCountsBetween(db, from, to) {
+function dueCountsBetween(db, from, to, { assigneeId = null } = {}) {
   const out = {};
+  const mine = assigneeId ? `AND o.assignee_id = ${Number(assigneeId)}` : ''; // 홈 '내 담당' 칸: 내 담당 주문만
   for (const r of db.prepare(`
     SELECT due, COUNT(*) AS n FROM (
       SELECT MIN(o.due_date) AS due FROM orders o
-      WHERE o.due_date BETWEEN ? AND ? AND (o.stage_id IS NULL OR o.stage_id != ?)
+      WHERE o.due_date BETWEEN ? AND ? AND (o.stage_id IS NULL OR o.stage_id != ?) ${mine}
       GROUP BY o.channel, o.channel_order_id
       HAVING MIN(CASE WHEN o.channel_status IN (${ENDED_SQL}) THEN 1 ELSE 0 END) = 0
     ) GROUP BY due
@@ -84,10 +85,10 @@ function dueCountsBetween(db, from, to) {
 }
 
 // 주문 목록 위 '이번 주 출고': 오늘부터 7일의 출고 건수와 일정
-function buildWeek(db) {
+function buildWeek(db, { assigneeId = null } = {}) {
   const today = kstToday();
   const end = addDays(today, 6);
-  const due = dueCountsBetween(db, today, end);
+  const due = dueCountsBetween(db, today, end, { assigneeId });
   const events = db.prepare(`
     SELECT id, title, color, start_date, end_date FROM events
     WHERE start_date <= ? AND COALESCE(end_date, start_date) >= ? ORDER BY start_date, time IS NOT NULL, time, id

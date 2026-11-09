@@ -53,25 +53,10 @@
   <div class="hm-head"><h2 id="hm-mine"><%- ico('<circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/>') %>내 담당</h2><span class="hm-note">나에게 지정된 것만 세요</span></div>
   <div class="hm-tiles<%= mine.length === 3 ? ' three' : '' %>"><% mine.forEach(t => { %><%- tile(t) %><% }) %></div>
 </section>
-<%# 내 담당 진행 중 주문: 납기가 이른 것부터, 누르면 팝업 %>
-<section class="card hm-card" aria-labelledby="hm-mine-orders">
-  <div class="hm-head"><h2 id="hm-mine-orders"><%- ico('<path d="M6 4h12v16H6z"/><path d="M9 9h6M9 13h6M9 17h3"/>') %>내 담당 주문<span class="hm-total calm<%= mineTotal ? '' : ' zero' %>"><%= mineTotal %>건</span></h2><a class="hm-more" href="/?view=mine">내 담당 전체 ›</a></div>
-  <% if (mineOrders.length) { %>
-    <ul class="hm-recents">
-      <% mineOrders.forEach(r => { const c = channelInfo(r.channel); const d = dueInfo(r.due, today); %>
-        <li><a class="hm-recent hm-mine-row" href="/orders/<%= r.id %>?back=%2Fhome" data-modal-link>
-          <span class="ch ch-<%= c.cls %>" title="<%= c.name %>"><%= c.mark %></span>
-          <span class="hm-recent-title"><%= r.product_name %><%= r.n > 1 ? ` 외 ${r.n - 1}건` : '' %></span>
-          <span class="hm-recent-meta"><%= r.buyer || '' %><%= r.design_name ? ` · ${r.design_name}` : '' %></span>
-          <span class="hm-due-pill <%= d.cls %>"><%= d.text ? `납기 ${d.text}` : '납기 없음' %></span>
-        </a></li>
-      <% }) %>
-    </ul>
-    <% if (mineTotal > mineOrders.length) { %><p class="hm-empty"><a href="/?view=mine">나머지 <%= mineTotal - mineOrders.length %>건 더 보기 ›</a></p><% } %>
-  <% } else { %>
-    <p class="hm-empty">진행 중인 내 담당 주문이 없어요. <a href="/?view=unassigned">담당 없는 주문 보기 ›</a></p>
-  <% } %>
-</section>
+<%# 내 담당 주문만 센 한눈에 보기 (왼쪽과 같은 모양): 누르면 그 상태·날짜의 내 담당 주문 목록 %>
+<div class="hm-overview hm-overview-mine">
+  <%- include('partials/ship-overview', { ...mineOverview, stLink: key => `/?who=mine&st=${key}`, dueLink: date => `/?who=mine&due=${date}`, onSt: '', onDue: '' }) %>
+</div>
 </div>
 </div>
 
