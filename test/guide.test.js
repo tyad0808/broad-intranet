@@ -36,3 +36,17 @@ test('안내서 글자는 이스케이프하고 http(s) 링크만 만든다', ()
   assert.match(g.html, /<ol><li>첫째<\/li><li>둘째<\/li><\/ol>/);
   assert.match(g.html, /<th>칸<\/th><th>뜻<\/th>.*<td>a<\/td><td>b<\/td>/s);
 });
+
+test('안내서 화면 그림: /guide-img/ 안의 그림만, 설명은 이스케이프 (안내서에 쓴 그림 파일은 모두 있어야)', () => {
+  const g = renderGuide('# 제목\n\n설명 문단\n![주문 목록 <b>](/guide-img/order-list.png)\n\n![나쁜](https://evil.test/x.png)\n\n![나쁜2](/guide-img/../x.png)');
+  assert.match(g.html, /<p>설명 문단<\/p>\n<figure class="guide-shot"><a href="\/guide-img\/order-list\.png" target="_blank" rel="noopener"><img src="\/guide-img\/order-list\.png" alt="주문 목록 &lt;b&gt;" loading="lazy"><\/a><figcaption>주문 목록 &lt;b&gt;<\/figcaption><\/figure>/);
+  assert.doesNotMatch(g.html, /evil\.test"|<img src="https/);
+  assert.doesNotMatch(g.html, /<img src="\/guide-img\/\.\./);
+  // 진짜 안내서: 적어 둔 그림 파일이 public/guide-img 에 다 있는지
+  const fs = require('fs');
+  const path = require('path');
+  const md = fs.readFileSync(path.join(__dirname, '..', 'docs', 'guide.md'), 'utf8');
+  for (const [, file] of md.matchAll(/!\[[^\]]*\]\(\/guide-img\/([^)]+)\)/g)) {
+    assert.ok(fs.existsSync(path.join(__dirname, '..', 'public', 'guide-img', file)), `그림 파일 없음: ${file}`);
+  }
+});

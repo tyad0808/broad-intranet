@@ -1507,6 +1507,11 @@ body.no-sidebar .card.narrow .muted { margin: 16px 0 0; text-align: center; }
 .guide-toc { position: sticky; top: 88px; padding: 18px 18px 14px; font-size: 14px; }
 .guide-toc strong { display: block; margin-bottom: 8px; color: var(--text); }
 .guide-toc ol { margin: 0; padding-left: 20px; }
+/* 안내서 화면 그림: 테두리 있는 카드처럼, 누르면 새 창에서 크게 */
+.guide-shot { margin: 12px 0 18px; }
+.guide-shot a { display: block; width: fit-content; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface-2); }
+.guide-shot img { display: block; max-width: 100%; height: auto; }
+.guide-shot figcaption { margin-top: 6px; color: var(--muted); font-size: 14px; }
 .guide-toc li { margin: 2px 0; color: var(--muted); }
 .guide-toc a { display: block; padding: 6px 0; color: var(--text-2); text-decoration: none; }
 .guide-toc a:hover { color: var(--primary-dark); }

@@ -1,5 +1,6 @@
 // 직원 사용 안내서: docs/guide.md 를 읽어 화면용 HTML 로 바꾼다
-// 안내서에 쓰는 모양만 다룬다: 제목(# ## ###), 문단, 글머리표(-), 번호 목록(1.), 표(| |), 굵게(**), 링크
+// 안내서에 쓰는 모양만 다룬다: 제목(# ## ###), 문단, 글머리표(-), 번호 목록(1.), 표(| |), 굵게(**), 링크,
+//   화면 그림 ![설명](/guide-img/이름.png) — 한 줄에 하나, 우리 사이트 public/guide-img 안의 그림만
 // 글자는 모두 먼저 이스케이프한다 → 안내서에 <script> 같은 게 들어가도 그대로 글자로 보인다
 const fs = require('fs');
 const path = require('path');
@@ -15,6 +16,9 @@ function inline(text) {
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
     .replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g, '<a href="$1" target="_blank" rel="noopener">$1</a>');
 }
+
+// 화면 그림 한 줄: ![설명](/guide-img/이름.png)
+const IMG = /^!\[([^\]]*)\]\((\/guide-img\/[a-z0-9-]+\.(?:png|jpg|webp))\)$/;
 
 const cells = line => line.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
 
@@ -49,6 +53,14 @@ function renderGuide(md) {
         + rest.map(r => '<tr>' + cells(r).map(c => `<td>${inline(c)}</td>`).join('') + '</tr>').join('') + '</tbody></table></div>');
       continue;
     }
+    // 화면 그림: 누르면 새 창에서 크게 (주소는 /guide-img/ 안의 그림 파일만 받는다)
+    const img = IMG.exec(line.trim());
+    if (img) {
+      const alt = escapeHtml(img[1]);
+      out.push(`<figure class="guide-shot"><a href="${img[2]}" target="_blank" rel="noopener"><img src="${img[2]}" alt="${alt}" loading="lazy"></a>${alt ? `<figcaption>${alt}</figcaption>` : ''}</figure>`);
+      i += 1;
+      continue;
+    }
     const list = /^(\s*)(-|\d+\.)\s+/.exec(line);
     if (list) {
       const ordered = list[2] !== '-';
@@ -60,7 +72,9 @@ function renderGuide(md) {
     }
     // 문단: 빈 줄이나 다른 모양이 나올 때까지
     const para = [];
-    while (i < lines.length && lines[i].trim() && !/^(#{1,3}\s|\||\s*(-|\d+\.)\s)/.test(lines[i])) para.push(lines[i++].trim());
+    // 첫 줄은 늘 문단에 넣는다 (어떤 모양에도 안 맞는 줄에서 멈춰 버리지 않게)
+    para.push(lines[i++].trim());
+    while (i < lines.length && lines[i].trim() && !/^(#{1,3}\s|\||\s*(-|\d+\.)\s)/.test(lines[i]) && !IMG.test(lines[i].trim())) para.push(lines[i++].trim());
     out.push(`<p>${inline(para.join(' '))}</p>`);
   }
   return { title, html: out.join('\n'), toc };
