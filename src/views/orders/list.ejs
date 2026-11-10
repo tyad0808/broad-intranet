@@ -200,7 +200,7 @@
     <p class="empty-title"><%= filtered ? '조건에 맞는 주문이 없어요' : '아직 들어온 주문이 없어요' %></p>
     <p class="empty-text"><%= filtered ? '거르기를 바꾸거나 기간을 넓혀 보세요.' : '새 주문이 들어오면 여기에 바로 나타나요.' %><% if (hideDays) { %> 끝난 주문은 <%= hideDays %>일이 지나면 숨겨져요.<% } %></p>
     <div class="empty-actions">
-      <% if (filtered) { %><a href="/" class="btn-sm">전체 주문 보기</a><% } %>
+      <% if (filtered) { %><a href="<%= pickTexts.length ? '/?f=1' : '/' %>" class="btn-sm">전체 주문 보기</a><% } %><%# 체크가 걸려 있으면 기억한 체크도 풀고 전체로 %>
       <% if (canCollect) { %><button type="submit" form="collect-now" class="btn-sm <%= filtered ? 'ghost' : 'primary' %>">↻ 지금 수집</button><% } %>
     </div>
   </section>

@@ -142,11 +142,13 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     // 노션처럼 체크해서 거르기 (여러 개): 주문 단계(stage)·디자인 단계(ds)·담당(as)
     //   stage: 단계 번호, 마지막 단계(발송)는 발송중(ship)·배송완료(done) 둘로 나눠서 고른다
     //   as: 직원 번호, 'none' = 담당 없음
-    //   주소에 없으면 직원마다 마지막으로 고른 것(users.order_filter)을 쓴다. 단, 홈·알림 숫자를 눌러 온 주소(st·alert·due·who·검색·기간)는 그대로
+    //   주소에 없으면 직원마다 마지막으로 고른 것(users.order_filter)을 쓴다.
+    //   단, 홈·알림·위쪽 숫자를 눌러 온 주소(view·st·alert·due·who·검색·기간)는 그 숫자와 목록 건수가 같게 그대로 둔다
+    //   (목록 안에서 탭을 옮길 때는 지금 걸린 체크가 주소에 같이 붙어 있어서 그대로 이어진다)
     const picks = readPicks(req.query, last);
     const named = ['stage', 'ds', 'as'].some(k => Object.hasOwn(req.query, k));
     if (req.query.f === '1') saveFilter(req.user.id, picks);
-    else if (!named && !(st || alert || req.query.due || req.query.who || req.query.q || period)) Object.assign(picks, savedFilter(req.user, last));
+    else if (!named && !(req.query.view || st || alert || req.query.due || req.query.who || req.query.q || period)) Object.assign(picks, savedFilter(req.user, last));
     const stagePick = picks.stage;
     const designPick = picks.ds;
     const assigneePick = picks.as;

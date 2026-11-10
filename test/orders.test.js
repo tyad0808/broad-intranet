@@ -466,6 +466,13 @@ test('고른 필터는 내 계정에 기억된다 (다음에 열어도 그대로
   assert.match(again, /<strong>디자인: 디자인 작업 중<\/strong> 만 보는 중이에요 \(지난번에 고른 그대로예요\)/);
   assert.match(again, /class="on">\s*진행 중 /, '배송완료는 기억하지 않아서 진행 중 탭 그대로');
   assert.deepStrictEqual(seen((await kim.request('/?st=new')).text), ['상품1', '상품2', '상품3'], '홈·상태 칸 숫자를 눌러 온 주소에는 안 걸린다');
+  assert.deepStrictEqual(seen((await kim.request('/?view=unassigned')).text), ['상품1', '상품2'], '홈 \'담당 없는 주문\'·알림 띠 주소에도 안 걸린다');
+  const tabs = (await kim.request('/')).text;
+  assert.match(tabs, new RegExp(`href="/\\?view=mine&amp;ds=${designId('디자인 작업 중')}"`), '목록 안에서 탭을 옮기면 체크가 이어진다');
+  // 체크 때문에 비었으면 '전체 주문 보기' 는 기억한 체크까지 푼다
+  db.prepare("UPDATE orders SET design_stage_id = ? WHERE channel_item_id = 'P1'").run(designId('디자인 작업 전'));
+  assert.match((await kim.request('/')).text, /<a href="\/\?f=1" class="btn-sm">전체 주문 보기<\/a>/);
+  db.prepare("UPDATE orders SET design_stage_id = ? WHERE channel_item_id = 'P1'").run(designId('디자인 작업 중'));
   const lee = await loginAs(baseUrl, 'lee@broad.test');
   assert.deepStrictEqual(seen((await lee.request('/')).text), ['상품1', '상품2'], '다른 직원은 그대로');
   // 해제
