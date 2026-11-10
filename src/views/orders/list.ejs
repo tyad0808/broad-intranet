@@ -3,11 +3,34 @@
   // 지금 걸린 필터를 유지한 채 하나만 바꾼 주소를 만든다
   const link = changes => {
     const p = new URLSearchParams();
-    const merged = { view: st || alert || from || to || view === 'active' ? '' : view, who: whoMine ? 'mine' : '', st, alert, ch: channel, stage: stageFilter || '', ds: designFilter || '', due, sort: sort === 'recent' ? '' : sort, q, src, from, to, ...changes };
+    const merged = { view: st || alert || from || to || view === 'active' ? '' : view, who: whoMine ? 'mine' : '', st, alert, ch: channel, stage: stagePick.join(','), ds: designPick.join(','), as: assigneePick.join(','), due, sort: sort === 'recent' ? '' : sort, q, src, from, to, ...changes };
     for (const [k, v] of Object.entries(merged)) if (v) p.set(k, v);
     const s = p.toString();
     return s ? `/?${s}` : '/';
   };
+  // 체크해서 거르기 목록 (주문 단계는 마지막 단계(발송)를 발송중·배송완료 둘로 나눈다)
+  const stageOptions = [];
+  stages.forEach(s => {
+    if (s.id === lastStage) {
+      stageOptions.push({ value: 'ship', text: '발송중', n: shipCounts.ship }, { value: 'done', text: '배송완료', n: shipCounts.done });
+      return;
+    }
+    const n = stageCounts[s.id] || 0;
+    if (!s.active && !n && !stagePick.includes(s.id)) return;
+    stageOptions.push({ value: s.id, text: s.name + (s.active ? '' : ' (숨김)'), n });
+  });
+  const designOptions = designStages
+    .filter(s => s.active || designCounts[s.id] || designPick.includes(s.id))
+    .map(s => ({ value: s.id, text: s.name + (s.active ? '' : ' (숨김)'), n: designCounts[s.id] || 0 }));
+  const assigneeOptions = [...assigneeUsers.map(u => ({ value: u.id, text: u.name, n: assigneeCounts[u.id] || 0 })), { value: 'none', text: '담당 없음', n: assigneeCounts[0] || 0 }];
+  const textsOf = (opts, picked) => opts.filter(o => picked.map(String).includes(String(o.value))).map(o => o.text).join(', ');
+  const pickTexts = [
+    stagePick.length && `주문 단계: ${textsOf(stageOptions, stagePick)}`,
+    designPick.length && `디자인: ${textsOf(designOptions, designPick)}`,
+    assigneePick.length && `담당: ${textsOf(assigneeOptions, assigneePick)}`,
+  ].filter(Boolean);
+  // 진행 중·내 담당 탭으로 옮길 때는 발송중·배송완료만 빼고 나머지 체크는 그대로
+  const stageKeep = stagePick.filter(k => k !== 'ship' && k !== 'done').join(',');
   const practiceChannels = Object.keys(actionModes).filter(ch => actionModes[ch] !== 'live' && (ch === 'smartstore' || channels.includes(ch)));
   // 주문 묶음의 상태를 색 배지 하나로: 신규(파랑) → 작업 중(주황) → 발송 준비(보라) → 완료(초록) / 입금대기(회색) / 취소(빨강)
   const statusOf = (g, o, confirmed) => {
@@ -101,6 +124,9 @@
   <% if (whoMine) { %>
     <p class="muted small st-note"><strong>내 담당</strong> 주문만 보는 중입니다. <a href="<%= link({ who: '' }) %>">해제</a></p>
   <% } %>
+  <% if (pickTexts.length) { %>
+    <p class="muted small st-note pick-note"><strong><%= pickTexts.join(' · ') %></strong> 만 보는 중이에요<% if (savedPicks) { %> (지난번에 고른 그대로예요)<% } %>. <a href="<%= link({ stage: '', ds: '', as: '', f: '1' }) %>">해제</a></p>
+  <% } %>
   <% if (st) { %>
     <p class="muted small st-note"><strong><%= SHIP_STATES[st] %></strong> 주문을 작업 단계와 상관없이 모두 보여줍니다. <a href="<%= link({ st: '', stage: '' }) %>">해제</a></p>
   <% } %>
@@ -108,6 +134,7 @@
 
 <%# 거르기: 보기(진행 중·내 담당·미지정·전체)·검색·단계·정렬·기간을 한 줄에 (고르면 바로 조회). 휴대폰에서는 [필터] 를 눌러 펼친다 %>
 <form method="get" action="/" class="filters" data-autosubmit>
+  <input type="hidden" name="f" value="1"><%# 체크한 필터를 내 계정에 기억 %>
   <% if (alert) { %><input type="hidden" name="alert" value="<%= alert %>"><% } %>
   <% if (st) { %><input type="hidden" name="st" value="<%= st %>"><% } else if (view !== 'active' && !periodText) { %><input type="hidden" name="view" value="<%= view %>"><% } %>
   <% if (channel) { %><input type="hidden" name="ch" value="<%= channel %>"><% } %>
@@ -115,36 +142,25 @@
   <% if (due) { %><input type="hidden" name="due" value="<%= due %>"><% } %>
   <nav class="view-seg" id="live-views" aria-label="보기">
     <% Object.entries(VIEWS).forEach(([key, label]) => { %>
-      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', alert: '', stage: '', from: '', to: '' }) %>" class="<%= !st && !alert && !periodText && view === key ? 'on' : '' %>">
+      <a href="<%= link({ view: key === 'active' ? '' : key, st: '', alert: '', stage: stageKeep, from: '', to: '' }) %>" class="<%= !st && !alert && !periodText && view === key ? 'on' : '' %>">
         <%= label %> <span class="count"><%= counts[key] || 0 %></span>
       </a>
     <% }) %>
   </nav>
   <input type="search" name="q" value="<%= q %>" placeholder="상품, 고객, 주문번호, 메모 검색" aria-label="검색">
   <button type="submit" class="btn-sm search-btn">검색</button>
-  <input type="checkbox" id="more-filters" class="visually-hidden" <%= stageFilter || designFilter || periodText || sort === 'due' ? 'checked' : '' %>>
-  <label for="more-filters" class="btn-sm filters-more-toggle">필터<%= [stageFilter, designFilter, periodText].filter(Boolean).length ? ` · ${[stageFilter, designFilter, periodText].filter(Boolean).length}` : '' %> ▾</label>
+  <% const nFilters = [stagePick.length, designPick.length, assigneePick.length, periodText].filter(Boolean).length; %>
+  <input type="checkbox" id="more-filters" class="visually-hidden" <%= nFilters || sort === 'due' ? 'checked' : '' %>>
+  <label for="more-filters" class="btn-sm filters-more-toggle">필터<%= nFilters ? ` · ${nFilters}` : '' %> ▾</label>
   <div class="filters-more">
-    <select name="stage" aria-label="주문 단계" class="<%= stageFilter ? 'picked' : '' %>">
-      <option value="">주문 단계 · 전체 <%= stageTotal %></option>
-      <% stages.forEach(s => {
-           const shipped = s.id === lastStage && shippedCount !== null; // 진행 중 탭에서 본 발송(끝난 주문) → 전체 탭에서
-           const n = shipped ? shippedCount : stageCounts[s.id] || 0;
-           if (!s.active && !n && stageFilter !== s.id) return; %>
-        <option value="<%= s.id %>" <%= stageFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %> <%= n %></option>
-      <% }) %>
-    </select>
-    <select name="ds" aria-label="디자인 단계" class="<%= designFilter ? 'picked' : '' %>">
-      <option value="">디자인 · 전체 <%= designTotal %></option>
-      <% designStages.forEach(s => { const n = designCounts[s.id] || 0; if (!s.active && !n && designFilter !== s.id) return; %>
-        <option value="<%= s.id %>" <%= designFilter === s.id ? 'selected' : '' %>><%= s.name %><%= s.active ? '' : ' (숨김)' %> <%= n %></option>
-      <% }) %>
-    </select>
+    <%- include('../partials/multi-pick', { name: 'stage', label: '주문 단계', options: stageOptions, picked: stagePick, total: stageTotal }) %>
+    <%- include('../partials/multi-pick', { name: 'ds', label: '디자인', options: designOptions, picked: designPick, total: designTotal }) %>
+    <%- include('../partials/multi-pick', { name: 'as', label: '담당', options: assigneeOptions, picked: assigneePick, total: assigneeTotal }) %>
     <select name="sort" aria-label="정렬">
       <option value="">최근 주문순</option>
       <option value="due" <%= sort === 'due' ? 'selected' : '' %>>납기 임박순</option>
     </select>
-    <% if (q || periodText || stageFilter || designFilter) { %><a href="<%= link({ q: '', from: '', to: '', stage: '', ds: '' }) %>" class="btn-sm ghost" title="거르기 모두 지우기">✕ 지우기</a><% } %>
+    <% if (q || periodText || nFilters) { %><a href="<%= link({ q: '', from: '', to: '', stage: '', ds: '', as: '', f: '1' }) %>" class="btn-sm ghost" title="거르기 모두 지우기">✕ 지우기</a><% } %>
     <div class="filters-period">
       <span class="chips-label">기간</span>
       <%- include('../partials/period-inputs', { from, to }) %>
@@ -178,7 +194,7 @@
 <% const anyAction = groups.some(g => g.canConfirm || g.canDispatch || g.canLogen); %>
 <% if (groups.length === 0) { %>
   <%# 빈 화면: 왜 비었는지와 다음에 할 일을 알려 준다 %>
-  <% const filtered = q || periodText || stageFilter || designFilter || alert || st || due || channel || src; %>
+  <% const filtered = q || periodText || stagePick.length || designPick.length || assigneePick.length || alert || st || due || channel || src; %>
   <section class="card empty">
     <div class="empty-art" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16l-1.5 12h-13z"/><path d="M9 7V5a3 3 0 0 1 6 0v2"/><path d="M9.5 12h5"/></svg></div>
     <p class="empty-title"><%= filtered ? '조건에 맞는 주문이 없어요' : '아직 들어온 주문이 없어요' %></p>

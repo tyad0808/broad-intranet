@@ -72,6 +72,8 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'theme', 'TEXT');
   // 디자이너 전화번호: 고객용 시안확정서의 담당 디자이너 옆 연락처 (관리자 › 직원 관리에서). 비어 있으면 회사 번호
   addColumn(db, 'users', 'phone', 'TEXT');
+  // 주문 목록에서 마지막으로 체크한 필터 (디자인 단계·주문 단계·담당, JSON). 노션처럼 다음에 열어도 그대로
+  addColumn(db, 'users', 'order_filter', 'TEXT');
   // 보류: 고객이 '파일·내용 정리될 때까지 잠깐 멈춰 달라' 한 주문 (주문 묶음 전체에 같이). 회사 안에서만 표시
   addColumn(db, 'orders', 'hold_at', 'TEXT');
   addColumn(db, 'orders', 'hold_note', 'TEXT');

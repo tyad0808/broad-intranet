@@ -585,6 +585,42 @@ form.inline { display: inline; margin: 0; }
   #more-filters:checked ~ .filters-more-toggle { background: var(--primary-weak); border-color: var(--primary); color: var(--primary-dark); }
 }
 
+/* 노션처럼 체크해서 거르기 (주문 단계·디자인·담당): 누르면 체크 목록이 펼쳐진다 */
+.mpick { position: relative; }
+.mpick > summary {
+  display: flex; align-items: center; gap: 4px; height: 40px; padding: 0 34px 0 12px; list-style: none; cursor: pointer;
+  border: 1px solid var(--line-strong); border-radius: 8px; background: var(--field); color: var(--text-2);
+  font-size: 14px; font-weight: 600; white-space: nowrap; user-select: none; position: relative;
+}
+.mpick > summary::-webkit-details-marker { display: none; }
+.mpick > summary::after { content: ''; position: absolute; right: 13px; top: 50%; width: 7px; height: 7px; margin-top: -6px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); opacity: 0.7; }
+.mpick[open] > summary::after { margin-top: -2px; transform: rotate(-135deg); }
+.mpick > summary:hover { background: var(--hover); }
+.mpick.picked > summary { border-color: var(--primary); color: var(--primary-dark); background: var(--primary-weak); }
+.mpick-sum { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+.mpick-menu {
+  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; min-width: 240px; max-height: min(420px, 70vh); overflow-y: auto;
+  padding: 6px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-pop);
+}
+.mpick-head { margin: 4px 8px 6px; font-size: 14px; color: var(--muted); }
+.mpick-opt { display: flex; align-items: center; gap: 10px; min-height: 38px; margin: 0; padding: 0 8px; border-radius: 6px; font-size: 14px; color: var(--text); cursor: pointer; }
+.mpick-opt:hover { background: var(--hover); }
+.mpick-opt input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--primary); }
+.mpick-text { flex: 1; white-space: nowrap; }
+.mpick-n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.mpick-opt:has(input:checked) { font-weight: 650; }
+.mpick .mpick-clear { display: block; width: 100%; margin: 6px 0 0; padding: 10px 8px 6px; border: 0; border-top: 1px solid var(--line-2); border-radius: 0; background: none; color: var(--text-2); font-size: 14px; text-align: left; cursor: pointer; }
+.mpick .mpick-clear:hover:not(:disabled) { color: var(--primary-text); background: none; }
+.mpick .mpick-clear:disabled { color: var(--faint); background: none; opacity: 1; cursor: default; }
+@media (max-width: 900px) {
+  .mpick { flex: 1 1 140px; }
+  .mpick > summary { height: 44px; }
+  .mpick-sum { max-width: none; }
+  .mpick-menu { position: static; margin-top: 6px; box-shadow: none; max-height: none; }
+  .mpick-opt { min-height: 44px; }
+  .mpick[open] { flex-basis: 100%; }
+}
+
 /* ───────── 주문 목록: 표처럼 한 줄씩 ───────── */
 .order-list { list-style: none; margin: 0; padding: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .order-head { display: none; }

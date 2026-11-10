@@ -167,3 +167,53 @@ document.addEventListener('click', async event => {
   button.classList.toggle('copied', ok);
   setTimeout(() => { button.textContent = before; button.classList.remove('copied'); }, 1500);
 });
+
+// 노션처럼 체크해서 거르기 (주문 단계·디자인·담당)
+//   체크를 바꾸면 잠깐(0.7초) 기다렸다가 조회 → 여러 개를 연달아 체크할 수 있게. 다시 열린 화면에서 같은 목록을 펼쳐 둔다
+(() => {
+  const OPEN_KEY = 'mpick-open';
+  let timer = null;
+  const submitSoon = details => {
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      try { sessionStorage.setItem(OPEN_KEY, details.dataset.mpick); } catch { /* 저장 못 해도 조회는 된다 */ }
+      details.closest('form').submit();
+    }, 700);
+  };
+  document.addEventListener('change', event => {
+    const box = event.target;
+    if (box.matches('.mpick input[type=checkbox]')) submitSoon(box.closest('.mpick'));
+  });
+  document.addEventListener('click', event => {
+    const clear = event.target.closest('[data-mpick-clear]');
+    if (clear) {
+      const details = clear.closest('.mpick');
+      details.querySelectorAll('input[type=checkbox]').forEach(b => { b.checked = false; });
+      clearTimeout(timer);
+      details.closest('form').submit();
+      return;
+    }
+    // 바깥을 누르면 펼친 목록을 닫는다 (바뀐 체크가 있으면 바로 조회)
+    document.querySelectorAll('.mpick[open]').forEach(d => {
+      if (d.contains(event.target)) return;
+      d.open = false;
+      if (timer) { clearTimeout(timer); d.closest('form').submit(); }
+    });
+  });
+  // 하나를 펼치면 다른 것은 닫기
+  document.addEventListener('toggle', event => {
+    const d = event.target;
+    if (!(d instanceof HTMLDetailsElement) || !d.matches('.mpick') || !d.open) return;
+    document.querySelectorAll('.mpick[open]').forEach(o => { if (o !== d) o.open = false; });
+  }, true);
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    document.querySelectorAll('.mpick[open]').forEach(d => { d.open = false; d.querySelector('summary').focus(); });
+  });
+  let reopen = null;
+  try { reopen = sessionStorage.getItem(OPEN_KEY); sessionStorage.removeItem(OPEN_KEY); } catch { reopen = null; }
+  if (reopen) {
+    const d = document.querySelector(`.mpick[data-mpick="${CSS.escape(reopen)}"]`);
+    if (d) d.open = true;
+  }
+})();

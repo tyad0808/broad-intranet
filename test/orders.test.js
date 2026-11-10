@@ -16,6 +16,12 @@ function order(id, extra = {}) {
   };
 }
 
+// 체크 목록의 한 줄: { checked, n } (없으면 null)
+function pickOpt(html, name, text) {
+  const m = html.match(new RegExp(`<input type="checkbox" name="${name}" value="[^"]*" (checked)?>\\s*<span class="mpick-text">${text}</span>\\s*<span class="mpick-n">(\\d+)</span>`));
+  return m ? { checked: Boolean(m[1]), n: Number(m[2]) } : null;
+}
+
 async function setup(t) {
   const ctx = await startServer();
   t.after(() => ctx.server.close());
@@ -336,13 +342,14 @@ test('주문 단계·디자인 단계 버튼이 따로 있고 건수가 보이�
   const { kim, idOf, designId, stageId } = await setup(t);
   await save(kim, idOf('P1'), { design_stage_id: String(designId('디자인 작업 중')) });
   const text = (await kim.request('/')).text;
-  assert.match(text, /aria-label="주문 단계"[\s\S]*?>발주 3<\/option>/);
-  assert.match(text, /aria-label="디자인 단계"[\s\S]*?>디자인 작업 전 2<\/option>/);
-  assert.match(text, />디자인 작업 중 1<\/option>/);
+  assert.deepStrictEqual(pickOpt(text, 'stage', '발주'), { checked: false, n: 3 });
+  assert.deepStrictEqual(pickOpt(text, 'ds', '디자인 작업 전'), { checked: false, n: 2 });
+  assert.deepStrictEqual(pickOpt(text, 'ds', '디자인 작업 중'), { checked: false, n: 1 });
   const working = (await kim.request(`/?ds=${designId('디자인 작업 중')}`)).text;
   assert.match(working, />상품1</);
   assert.doesNotMatch(working, />상품2</);
-  assert.match(working, />디자인 작업 전 2<\/option>/, '디자인 단계를 골라도 다른 디자인 단계 건수는 그대로');
+  assert.deepStrictEqual(pickOpt(working, 'ds', '디자인 작업 전'), { checked: false, n: 2 }, '디자인 단계를 골라도 다른 디자인 단계 건수는 그대로');
+  assert.deepStrictEqual(pickOpt(working, 'ds', '디자인 작업 중'), { checked: true, n: 1 });
   const byStage = (await kim.request(`/?stage=${stageId('발주')}`)).text;
   assert.match(byStage, />상품2</);
 });
@@ -409,15 +416,63 @@ test('관리자 메뉴도 다른 메뉴처럼 같은 화면에서 열린다 (새
   assert.doesNotMatch(home, /target="_blank"[^>]*>[^<]*<svg[^>]*>[\s\S]{0,1200}관리자/);
 });
 
-test('진행 중 탭에서도 발송 단계에는 발송된 주문 수가 나오고, 고르면 전체 탭에서 보여준다', async t => {
+test('진행 중 탭에서도 발송은 발송중·배송완료로 나눠 건수가 나오고, 고르면 전체 탭에서 보여준다', async t => {
   const { db, kim, stageId } = await setup(t);
-  db.prepare("UPDATE orders SET stage_id = ? WHERE channel_item_id IN ('P1', 'P2')").run(stageId('발송'));
+  db.prepare("UPDATE orders SET stage_id = ?, channel_status = 'DELIVERING' WHERE channel_item_id = 'P1'").run(stageId('발송'));
+  db.prepare("UPDATE orders SET stage_id = ?, channel_status = 'DELIVERED' WHERE channel_item_id = 'P2'").run(stageId('발송'));
   const text = (await kim.request('/')).text;
-  assert.match(text, new RegExp(`<option value="${stageId('발송')}" >발송 2</option>`));
-  const shipped = (await kim.request(`/?stage=${stageId('발송')}`)).text;
-  assert.match(shipped, /class="on">\s*전체 /, '발송을 고르면 전체 탭');
-  assert.match(shipped, />상품1</);
-  assert.doesNotMatch(shipped, />상품3</);
+  assert.deepStrictEqual(pickOpt(text, 'stage', '발송중'), { checked: false, n: 1 });
+  assert.deepStrictEqual(pickOpt(text, 'stage', '배송완료'), { checked: false, n: 1 });
+  assert.strictEqual(pickOpt(text, 'stage', '발송'), null, '발송 하나로는 안 나온다');
+  const shipping = (await kim.request('/?stage=ship')).text;
+  assert.match(shipping, /class="on">\s*전체 /, '발송중을 고르면 전체 탭');
+  assert.deepStrictEqual(['상품1', '상품2', '상품3'].filter(n => shipping.includes(`>${n}<`)), ['상품1']);
+  const done = (await kim.request('/?stage=done')).text;
+  assert.deepStrictEqual(['상품1', '상품2', '상품3'].filter(n => done.includes(`>${n}<`)), ['상품2']);
+  const both = (await kim.request('/?stage=ship&stage=done')).text;
+  assert.deepStrictEqual(['상품1', '상품2', '상품3'].filter(n => both.includes(`>${n}<`)), ['상품1', '상품2'], '둘 다 체크');
+  const old = (await kim.request(`/?stage=${stageId('발송')}`)).text;
+  assert.deepStrictEqual(['상품1', '상품2', '상품3'].filter(n => old.includes(`>${n}<`)), ['상품1', '상품2'], '예전 주소(발송)는 둘 다');
+});
+
+test('노션처럼 여러 개 체크: 디자인 단계 두 개·담당 여러 명을 함께 고른다', async t => {
+  const { db, kim, kimId, designId, idOf } = await setup(t);
+  await save(kim, idOf('P1'), { design_stage_id: String(designId('디자인 작업 중')) });
+  db.prepare("UPDATE orders SET assignee_id = ? WHERE channel_item_id = 'P1'").run(kimId);
+  const seen = text => ['상품1', '상품2', '상품3'].filter(n => text.includes(`>${n}<`));
+  const two = (await kim.request(`/?view=all&ds=${designId('디자인 작업 중')}&ds=${designId('디자인 작업 전')}`)).text;
+  assert.deepStrictEqual(seen(two), ['상품1', '상품2', '상품3']);
+  assert.match(two, /<summary aria-label="디자인 고르기"><span class="mpick-label">디자인<\/span> · <span class="mpick-sum">디자인 작업 전 외 1<\/span>/);
+  assert.deepStrictEqual(seen((await kim.request(`/?view=all&as=${kimId}`)).text), ['상품1']);
+  assert.deepStrictEqual(seen((await kim.request('/?view=all&as=none')).text), ['상품2', '상품3']);
+  const page = (await kim.request(`/?view=all&as=${kimId},none`)).text;
+  assert.deepStrictEqual(seen(page), ['상품1', '상품2', '상품3'], '쉼표로도 여러 명');
+  assert.deepStrictEqual(pickOpt(page, 'as', '김디자'), { checked: true, n: 1 });
+  assert.deepStrictEqual(pickOpt(page, 'as', '담당 없음'), { checked: true, n: 2 });
+  assert.match(page, /<strong>담당: 김디자, 담당 없음<\/strong> 만 보는 중이에요/);
+  assert.deepStrictEqual(seen((await kim.request('/?view=all&ds=99999&as=hacker')).text), ['상품1', '상품2', '상품3'], '모르는 값은 버린다');
+});
+
+test('고른 필터는 내 계정에 기억된다 (다음에 열어도 그대로, 해제하면 풀림, 다른 직원·홈 숫자 주소는 그대로)', async t => {
+  const { db, kim, baseUrl, designId, idOf, stageId } = await setup(t);
+  await save(kim, idOf('P1'), { design_stage_id: String(designId('디자인 작업 중')) });
+  db.prepare("UPDATE orders SET stage_id = ? WHERE channel_item_id = 'P3'").run(stageId('발송'));
+  const seen = text => ['상품1', '상품2', '상품3'].filter(n => text.includes(`>${n}<`));
+  // 목록 위 거르기 칸에서 체크 → f=1 로 저장
+  const picked = (await kim.request(`/?f=1&ds=${designId('디자인 작업 중')}&stage=done`)).text;
+  assert.deepStrictEqual(seen(picked), []);
+  const again = (await kim.request('/')).text;
+  assert.deepStrictEqual(seen(again), ['상품1'], '다음에 열어도 디자인 작업 중만');
+  assert.match(again, /<strong>디자인: 디자인 작업 중<\/strong> 만 보는 중이에요 \(지난번에 고른 그대로예요\)/);
+  assert.match(again, /class="on">\s*진행 중 /, '배송완료는 기억하지 않아서 진행 중 탭 그대로');
+  assert.deepStrictEqual(seen((await kim.request('/?st=new')).text), ['상품1', '상품2', '상품3'], '홈·상태 칸 숫자를 눌러 온 주소에는 안 걸린다');
+  const lee = await loginAs(baseUrl, 'lee@broad.test');
+  assert.deepStrictEqual(seen((await lee.request('/')).text), ['상품1', '상품2'], '다른 직원은 그대로');
+  // 해제
+  const off = (await kim.request('/?f=1')).text;
+  assert.deepStrictEqual(seen(off), ['상품1', '상품2']);
+  assert.deepStrictEqual(seen((await kim.request('/')).text), ['상품1', '상품2']);
+  assert.doesNotMatch((await kim.request('/')).text, /만 보는 중이에요/);
 });
 
 test('채널 버튼 순서를 끌어다 바꾸면 내 계정에만 저장되고, 다음에 열어도 그 순서다', async t => {

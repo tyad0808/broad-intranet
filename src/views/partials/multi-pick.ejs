@@ -1,0 +1,19 @@
+<%# 노션처럼 체크해서 거르기: 누르면 목록이 펼쳐지고, 체크한 것만 보인다 (아무것도 안 고르면 전체)
+    name: 주소 이름(stage·ds·as), label: 칸 이름, options: [{ value, text, n }], picked: 고른 값, total: 전체 건수 %>
+<% const pickedSet = new Set(picked.map(String));
+   const chosen = options.filter(o => pickedSet.has(String(o.value)));
+   const sumText = !chosen.length ? `전체 ${total}` : chosen.length === 1 ? chosen[0].text : `${chosen[0].text} 외 ${chosen.length - 1}`; %>
+<details class="mpick <%= chosen.length ? 'picked' : '' %>" data-mpick="<%= name %>">
+  <summary aria-label="<%= label %> 고르기"><span class="mpick-label"><%= label %></span> · <span class="mpick-sum"><%= sumText %></span></summary>
+  <div class="mpick-menu" role="group" aria-label="<%= label %>">
+    <p class="mpick-head">보고 싶은 <%= label %>만 체크하세요</p>
+    <% options.forEach(o => { %>
+      <label class="mpick-opt<%= o.sub ? ' sub' : '' %>">
+        <input type="checkbox" name="<%= name %>" value="<%= o.value %>" <%= pickedSet.has(String(o.value)) ? 'checked' : '' %>>
+        <span class="mpick-text"><%= o.text %></span>
+        <span class="mpick-n"><%= o.n %></span>
+      </label>
+    <% }) %>
+    <button type="button" class="mpick-clear" data-mpick-clear <%= chosen.length ? '' : 'disabled' %>>선택 취소</button>
+  </div>
+</details>

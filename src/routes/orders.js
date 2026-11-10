@@ -89,6 +89,36 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
   `).all();
   // 실제 주문이 있는 채널만 골라 보기 목록에 보여준다
   // 디자인 단계를 고를 수 있는 사람: 디자이너 + 관리자
+  // ── 체크해서 거르기 (주문 목록) ──
+  // 마지막 단계(발송) 안에서: 채널에서 끝났으면(배송완료·구매확정·취소·반품 등) 'done', 아니면 'ship'(발송중), 다른 단계는 단계 번호
+  const DONE_IN_LAST = `COALESCE(o.channel_status, '') IN (${ENDED_SQL}) AND o.channel_status != 'DELIVERING'`;
+  const stageKeySql = last => `CASE WHEN o.stage_id = ${Number(last) || -1} THEN (CASE WHEN ${DONE_IN_LAST} THEN 'done' ELSE 'ship' END) ELSE o.stage_id END`;
+  // ?ds=1&ds=3 이나 ?ds=1,3 둘 다 받는다
+  const listOf = v => (Array.isArray(v) ? v : [v]).flatMap(x => String(x ?? '').split(',')).map(x => x.trim()).filter(Boolean);
+  // 주소의 값 중 있는 단계·직원만 남긴다 (모르는 값은 버림)
+  const readPicks = (query, last) => {
+    const stageIds = new Set(stages().map(x => x.id));
+    const stage = [];
+    for (const k of listOf(query.stage)) {
+      if (k === 'ship' || k === 'done') stage.push(k);
+      else if (Number(k) === last) stage.push('ship', 'done'); // 예전 주소 (발송 하나) = 둘 다
+      else if (stageIds.has(Number(k))) stage.push(Number(k));
+    }
+    const dsIds = new Set(designStages().map(x => x.id));
+    const ds = listOf(query.ds).map(Number).filter(n => dsIds.has(n));
+    const userIds = new Set(db.prepare('SELECT id FROM users WHERE deleted_at IS NULL').all().map(r => r.id));
+    const as = listOf(query.as).map(k => (k === 'none' ? 'none' : Number(k))).filter(k => k === 'none' || userIds.has(k));
+    return { stage: [...new Set(stage)], ds: [...new Set(ds)], as: [...new Set(as)] };
+  };
+  // 발송중·배송완료는 기억하지 않는다 (고르면 '전체' 탭으로 바뀌어서, 다음에 열 때 진행 중 탭이 안 보이게 되므로)
+  const keepable = picks => ({ stage: picks.stage.filter(k => typeof k === 'number'), ds: picks.ds, as: picks.as });
+  const saveFilter = (userId, picks) => db.prepare('UPDATE users SET order_filter = ? WHERE id = ?').run(JSON.stringify(keepable(picks)), userId);
+  const savedFilter = (user, last) => {
+    let v = {};
+    try { v = JSON.parse(user.order_filter || '{}') || {}; } catch { v = {}; }
+    const toList = x => (Array.isArray(x) ? x.map(String) : []);
+    return keepable(readPicks({ stage: toList(v.stage), ds: toList(v.ds), as: toList(v.as) }, last));
+  };
   const canPickStage = user => isManager(user) || designers().some(d => d.id === user.id);
   // 실제 주문이 있는 채널만, 직원이 끌어다 놓은 순서대로 (저장 안 했으면 기본 순서)
   const channelsInUse = user => {
@@ -106,14 +136,25 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     const alert = Object.hasOwn(ALERTS, String(req.query.alert)) ? req.query.alert : '';
     // 기간 보기 (from·to=YYYY-MM-DD, 결제일 기준): 그 기간 주문을 끝난 것까지 모두
     const period = periodRange(req.query.from, req.query.to);
-    const stageFilter = Number(req.query.stage) || null;
     const last = lastStageId();
-    // 마지막 단계(발송)를 고르면 끝난 주문이라 '전체' 탭에서 보여준다
-    const view = st || alert || period || (stageFilter && stageFilter === last) ? 'all' : Object.hasOwn(VIEWS, String(req.query.view)) ? req.query.view : 'active';
-    // 디자인 단계 거르기 (ds). 비어 있는 주문은 첫 번째 디자인 단계로 본다
-    const designFilter = Number(req.query.ds) || null;
     const firstDesign = firstDesignId() || -1;
     const DESIGN_OF = `COALESCE(o.design_stage_id, ${Number(firstDesign)})`;
+    // 노션처럼 체크해서 거르기 (여러 개): 주문 단계(stage)·디자인 단계(ds)·담당(as)
+    //   stage: 단계 번호, 마지막 단계(발송)는 발송중(ship)·배송완료(done) 둘로 나눠서 고른다
+    //   as: 직원 번호, 'none' = 담당 없음
+    //   주소에 없으면 직원마다 마지막으로 고른 것(users.order_filter)을 쓴다. 단, 홈·알림 숫자를 눌러 온 주소(st·alert·due·who·검색·기간)는 그대로
+    const picks = readPicks(req.query, last);
+    const named = ['stage', 'ds', 'as'].some(k => Object.hasOwn(req.query, k));
+    if (req.query.f === '1') saveFilter(req.user.id, picks);
+    else if (!named && !(st || alert || req.query.due || req.query.who || req.query.q || period)) Object.assign(picks, savedFilter(req.user, last));
+    const stagePick = picks.stage;
+    const designPick = picks.ds;
+    const assigneePick = picks.as;
+    const shipPicked = stagePick.some(k => k === 'ship' || k === 'done');
+    // 발송(발송중·배송완료)을 고르면 끝난 주문이라 '전체' 탭에서 보여준다
+    const view = st || alert || period || shipPicked ? 'all' : Object.hasOwn(VIEWS, String(req.query.view)) ? req.query.view : 'active';
+    // 마지막 단계 안에서 배송완료(배송 끝·구매확정·취소·반품 등)인지, 아니면 발송중인지
+    const STAGE_KEY = stageKeySql(last);
     const channel = CHANNELS[req.query.ch] ? req.query.ch : '';
     const sort = req.query.sort === 'due' ? 'due' : 'recent';
     const q = String(req.query.q || '').trim().slice(0, 50);
@@ -169,9 +210,22 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     }
     const sqlWhere = list => (list.length ? 'WHERE ' + list.join(' AND ') : '');
     // 단계 건수를 셀 때는 그 단계 필터만 빼고 센다
-    const withStage = (list, p) => (stageFilter ? [[...list, 'o.stage_id = ?'], [...p, stageFilter]] : [list, p]);
-    const withDesign = (list, p) => (designFilter ? [[...list, `${DESIGN_OF} = ?`], [...p, designFilter]] : [list, p]);
-    const [listWhere, listParams] = withDesign(...withStage(where, params));
+    const withStage = (list, p) => {
+      if (!stagePick.length) return [list, p];
+      const ids = stagePick.filter(k => typeof k === 'number');
+      const parts = stagePick.map(k => (k === 'ship' || k === 'done' ? `(${STAGE_KEY}) = '${k}'` : 'o.stage_id = ?'));
+      return [[...list, `(${parts.join(' OR ')})`], [...p, ...ids]];
+    };
+    const withDesign = (list, p) => (designPick.length ? [[...list, `${DESIGN_OF} IN (${designPick.map(() => '?').join(', ')})`], [...p, ...designPick]] : [list, p]);
+    const withAssignee = (list, p) => {
+      if (!assigneePick.length) return [list, p];
+      const ids = assigneePick.filter(k => k !== 'none');
+      const parts = [];
+      if (ids.length) parts.push(`o.assignee_id IN (${ids.map(() => '?').join(', ')})`);
+      if (assigneePick.includes('none')) parts.push('o.assignee_id IS NULL');
+      return [[...list, `(${parts.join(' OR ')})`], [...p, ...ids]];
+    };
+    const [listWhere, listParams] = withAssignee(...withDesign(...withStage(where, params)));
     const whereSql = sqlWhere(listWhere);
     // 묶음 단위 조건: 진행 중 탭들은 채널에서 끝난 주문을 빼고, 상태 칸을 눌렀으면 그 상태만
     const having = [];
@@ -188,8 +242,10 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     const doneGroup = `(${GROUP_ENDED} = 1 OR MIN(COALESCE(o.stage_id = ${Number(last)}, 0)) = 1)`;
     const oldDone = `(${doneGroup} AND MAX(${ORDER_TIME}) < '${cutoff}')`;
     // 배송중 칸은 오래된 것도 모두 센다 → 눌렀을 때도 숨기지 않는다 (칸 숫자와 목록 건수를 같게)
+    // 주문 단계에서 '발송중'을 골랐을 때도 마찬가지 (오래된 발송중도 보인다)
     const hidingOld = view === 'all' && !alert && !q && !due && !period && st !== 'shipping';
-    if (hidingOld) having.push(`NOT ${oldDone}`);
+    const keepShipping = stagePick.includes('ship') ? ` AND MAX((${STAGE_KEY}) = 'ship') = 0` : '';
+    if (hidingOld) having.push(`NOT (${oldDone}${keepShipping})`);
     const havingSql = having.length ? 'HAVING ' + having.join(' AND ') : '';
 
     // 오늘출발·발송기한 모아보기는 발송기한이 이른 것부터
@@ -266,14 +322,30 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       }
       return { counts: out, total };
     };
-    const stageCount = countBy('o.stage_id', withDesign(where, params));
-    const designCount = countBy(DESIGN_OF, withStage(where, params));
+    const stageCount = countBy(STAGE_KEY, withAssignee(...withDesign(where, params)));
+    const designCount = countBy(DESIGN_OF, withAssignee(...withStage(where, params)));
+    const assigneeCount = countBy('COALESCE(o.assignee_id, 0)', withDesign(...withStage(where, params)));
     // 수기 주문 출처 칩 (0 = 출처 미지정)
     const sourceCount = channel === 'manual'
-      ? countBy('COALESCE(o.source_id, 0)', withDesign(...withStage(whereNoSrc, paramsNoSrc)))
+      ? countBy('COALESCE(o.source_id, 0)', withAssignee(...withDesign(...withStage(whereNoSrc, paramsNoSrc))))
       : { counts: {}, total: 0 };
     // '진행 중'·'내 담당'·'미지정' 탭은 끝난 주문(발송)을 빼고 보여주므로, 발송 버튼에는 탭과 상관없이
     // 발송 단계에 있는 주문 수를 보여주고 누르면 '전체' 탭에서 본다
+    // 발송중·배송완료 건수는 눌렀을 때 보이는 것과 같게 센다: 배송완료는 오래된 것(기본 14일)을 빼고, 발송중은 모두
+    const shipCounts = { ship: stageCount.counts.ship || 0, done: stageCount.counts.done || 0 };
+    const shipSplit = (list, p, hide) => {
+      const [l, pp] = withAssignee(...withDesign([...list, 'o.stage_id = ?'], [...p, last]));
+      const out = { ship: 0, done: 0 };
+      for (const r of db.prepare(`
+        SELECT k, COUNT(*) AS n FROM (
+          SELECT MIN(${STAGE_KEY}) AS k FROM orders o ${sqlWhere(l)}
+          GROUP BY o.channel, o.channel_order_id
+          ${hide ? `HAVING NOT (${oldDone} AND MAX((${STAGE_KEY}) = 'ship') = 0)` : ''}
+        ) GROUP BY k
+      `).all(...pp)) if (r.k === 'ship' || r.k === 'done') out[r.k] = r.n;
+      return out;
+    };
+    if (view === 'all' && hidingOld && !stagePick.includes('ship')) shipCounts.ship = shipSplit(where, params, false).ship;
     let shippedCount = null;
     if (view !== 'all') {
       const base = [];
@@ -286,10 +358,11 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
         base.push(SEARCH_SQL);
         baseParams.push(...Array(SEARCH_PARAMS).fill(`%${q}%`));
       }
-      const [list, p] = withDesign([...base, 'o.stage_id = ?'], [...baseParams, last]);
+      const [list, p] = withAssignee(...withDesign([...base, 'o.stage_id = ?'], [...baseParams, last]));
       shippedCount = db.prepare(`
         SELECT COUNT(*) AS n FROM (SELECT 1 FROM orders o ${sqlWhere(list)} GROUP BY o.channel, o.channel_order_id)
       `).get(...p).n;
+      Object.assign(shipCounts, shipSplit(base, baseParams, !q && !due));
     }
 
     // 탭 건수와 채널 상태 칸 건수 (주문 묶음 단위, 채널을 골랐으면 그 채널만)
@@ -374,15 +447,25 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       stageTotal: stageCount.total,
       lastStage: last,
       shippedCount,
+      shipCounts,
       designCounts: designCount.counts,
       designTotal: designCount.total,
-      designFilter,
+      designPick,
+      stagePick,
+      assigneePick,
+      assigneeCounts: assigneeCount.counts,
+      // 담당 고르기 목록: 디자이너 + 지금 담당이 있는 직원 (+ 고른 직원)
+      assigneeUsers: (() => {
+        const ids = new Set([...designers().map(d => d.id), ...Object.keys(assigneeCount.counts).map(Number).filter(Boolean), ...assigneePick.filter(k => k !== 'none')]);
+        return ids.size ? db.prepare(`SELECT id, name FROM users WHERE id IN (${[...ids].map(() => '?').join(', ')}) ORDER BY name`).all(...ids) : [];
+      })(),
+      assigneeTotal: assigneeCount.total,
+      savedPicks: !named && req.query.f !== '1' && [stagePick, designPick, assigneePick].some(x => x.length),
       firstDesign,
       src,
       sources: channel === 'manual' ? db.prepare('SELECT id, name, active FROM order_sources ORDER BY sort_order').all() : [],
       sourceCounts: sourceCount.counts,
       sourceTotal: sourceCount.total,
-      stageFilter,
       due,
       channel,
       channels: channelsInUse(req.user),
