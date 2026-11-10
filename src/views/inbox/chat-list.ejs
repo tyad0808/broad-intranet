@@ -95,6 +95,8 @@
                   <% if (r.product) { %><span class="talk-tag">상품정보 문의</span><% } %>
                   <% if (r.order_no) { %><span class="talk-tag linked" title="주문 <%= r.order_no %> 와 연결됨">주문 연결</span><% } %>
                   <% if (tab === 'all' && r.status === 'closed') { %><span class="talk-tag">보류</span><% } %>
+                  <%# 담당 (사람마다 색, 메일함·문의함 목록과 같은 표시) %>
+                  <% if (r.assignee_name) { %><span class="talk-who-mini <%= staffColor(r.assignee_id) %>" title="담당 <%= r.assignee_name %>"><%= r.assignee_name %></span><% } %>
                   <span class="talk-time" title="<%= kst(r.last_at) %>"><%= talkTime(r.last_at) %></span>
                 </span>
                 <span class="talk-last">

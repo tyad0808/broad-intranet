@@ -1050,6 +1050,8 @@ form.inline { display: inline; margin: 0; }
 .talk-memo { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; }
 .talk-tag { flex: 0 1 auto; min-width: 0; display: inline-block; overflow: hidden; text-overflow: ellipsis; height: 24px; line-height: 24px; padding: 0 8px; border-radius: 6px; background: #6b7684; color: #fff; font-size: 14px; font-weight: 600; white-space: nowrap; }
 .talk-tag.linked { background: var(--primary-weak); color: var(--primary-dark); }
+/* 톡톡 목록의 담당: '주문 연결' 표시보다 작게 (글자는 14px 유지, 높이·여백만 줄임), 사람마다 색 */
+.talk-who-mini { flex: 0 1 auto; min-width: 0; max-width: 6em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; height: 18px; line-height: 18px; padding: 0 5px; border-radius: 4px; background: var(--sc-bg, var(--line-2)); color: var(--sc-fg, var(--text-2)); font-size: 14px; font-weight: 500; letter-spacing: -0.02em; }
 .talk-time { flex: none; margin-left: auto; padding-left: 6px; color: var(--muted); font-size: 14px; white-space: nowrap; }
 .talk-last { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .talk-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: 14px; }

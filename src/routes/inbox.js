@@ -241,7 +241,8 @@ function inboxRoutes(db, { collector = null, senders = {}, files = {}, sourceLab
       SELECT q.id, q.from_name, q.cust_memo, q.status, q.assignee_id, q.order_no, q.meta, q.received_at,
         lm.direction AS last_dir, lm.kind AS last_kind, COALESCE(lm.text, q.body) AS last_text, ${LAST_AT_SQL} AS last_at, ${UNREAD_SQL} AS unread,
         (SELECT o.product_name FROM orders o WHERE o.channel_order_id = q.order_no ORDER BY o.item_type = 'addon', o.id LIMIT 1) AS order_product,
-        (SELECT o.buyer_name FROM orders o WHERE o.channel_order_id = q.order_no AND o.buyer_name IS NOT NULL ORDER BY o.id LIMIT 1) AS order_buyer
+        (SELECT o.buyer_name FROM orders o WHERE o.channel_order_id = q.order_no AND o.buyer_name IS NOT NULL ORDER BY o.id LIMIT 1) AS order_buyer,
+        (SELECT u.name FROM users u WHERE u.id = q.assignee_id) AS assignee_name
       ${from} ${sql([...where, CHAT_TAB_SQL[tab]])}
       ORDER BY ${LAST_AT_SQL} ${sort === 'old' ? 'ASC' : 'DESC'}, q.id DESC LIMIT 300
     `).all(...params).map(r => ({ ...r, product: metaOf(r).product || null }));

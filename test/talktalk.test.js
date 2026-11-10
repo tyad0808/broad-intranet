@@ -121,6 +121,10 @@ test('톡톡 목록: 아이콘 탭(전체·대기·진행중·보류), 마지막
   assert.doesNotMatch(list, /href="https:\/\/smartstore.naver.com/, '목록에는 상품 링크가 없다 (잘못 눌러 나가지 않게)');
   assert.match(list, /사이즈는 1m 입니다<\/span>\s*<span class="talk-unread" aria-label="안 읽은 메시지 2개">2</, '마지막 말 + 안 읽은 손님 말 2개');
   assert.match(list, /<span class="talk-who">[^<]+<\/span>네 확인해 볼게요/, '우리가 마지막에 말했으면 앞에 우리 이름');
+  assert.doesNotMatch(list, /class="talk-who-mini/, '담당이 없으면 표시 없음');
+  const kimId = db.prepare("SELECT id FROM users WHERE email = 'kim@broad.test'").get().id;
+  db.prepare("UPDATE inquiries SET assignee_id = ? WHERE external_id LIKE '%2222%'").run(kimId);
+  assert.match(await page(), new RegExp(`<span class="talk-who-mini staff-c${kimId % 10}" title="담당 김직원">김직원</span>`), '담당이 있으면 이름을 작게');
   // 검색: 첫 말이 아니어도 대화 안의 말로 찾는다
   assert.match(await page('&q=부착용'), /고객 1111/);
   assert.doesNotMatch(await page('&q=부착용'), /고객 2222/);
