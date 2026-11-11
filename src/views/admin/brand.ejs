@@ -12,6 +12,18 @@
   </form>
 </section>
 
+<section class="card" id="manual">
+  <h2>업무 매뉴얼 링크 <span class="h2-sub">왼쪽 메뉴 '견적/계산서' 아래 버튼</span></h2>
+  <form method="post" action="/admin/brand/manual" class="settings-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>노션 페이지 주소 (https:// 로 시작)
+      <input type="url" name="url" value="<%= manualUrl %>" maxlength="500" placeholder="https://www.notion.so/...">
+    </label>
+    <p class="muted small">주소를 넣으면 모든 직원 왼쪽 메뉴에 <strong>업무 매뉴얼 ↗</strong> 버튼이 생기고, 누르면 새 탭으로 열려요. 비우고 저장하면 버튼이 사라져요. 직원들이 열 수 있게 노션에서 페이지를 공유해 두세요.</p>
+    <button type="submit" class="btn-sm">저장</button>
+  </form>
+</section>
+
 <section class="card" id="proof">
   <h2>고객용 시안확정서 <span class="h2-sub">담당 디자이너 옆 연락처와 아래 약관</span></h2>
   <form method="post" action="/admin/brand/proof" class="settings-form proof-terms-form">

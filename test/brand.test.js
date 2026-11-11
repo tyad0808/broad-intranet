@@ -84,5 +84,5 @@ test('예전에 저장한 메뉴 순서에 없는 새 메뉴(톡톡)는 기본 �
   t.after(() => server.close());
   const { createBrand } = require('../src/brand');
   db.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES ('nav_order', ?)").run(JSON.stringify(['orders', 'schedule', 'mail', 'inbox']));
-  assert.deepStrictEqual(createBrand(db).view().navOrder, ['orders', 'schedule', 'mail', 'chat', 'inbox']);
+  assert.deepStrictEqual(createBrand(db).view().navOrder, ['orders', 'schedule', 'leave', 'mail', 'chat', 'inbox'], '나중에 생긴 휴가는 일정 바로 뒤에');
 });

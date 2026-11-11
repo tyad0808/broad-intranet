@@ -1,0 +1,21 @@
+<%- include('partials/header') %>
+<%# 회사 공지 모아보기 (최근 50개). 관리자 › 공지 에서 쓴다 %>
+<div class="page-head">
+  <div class="title-row"><h1 class="page-title">공지</h1></div>
+</div>
+<section class="card">
+  <% if (!notices.length) { %>
+    <p class="muted">아직 올라온 공지가 없어요.</p>
+  <% } else { %>
+    <ul class="notice-list">
+      <% notices.forEach(n => { const over = n.ends_on && n.ends_on < today; %>
+        <li class="notice-item">
+          <h2><% if (n.important) { %><span class="notice-tag">중요</span><% } %><% if (over) { %><span class="notice-tag off">지난 공지</span><% } %><%= n.title %></h2>
+          <p class="notice-meta"><%= n.starts_on %><%= n.ends_on ? ` ~ ${n.ends_on}` : '' %><%= n.writer ? ` · ${n.writer}` : '' %><%= n.my_read ? ' · 확인함' : '' %></p>
+          <% if (n.body) { %><p class="notice-body"><%= n.body %></p><% } %>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

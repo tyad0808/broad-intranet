@@ -1,5 +1,21 @@
   </main>
   </div>
+  <%# 회사 공지 팝업: [확인했어요] 를 누르면 이 직원에게는 다시 안 뜬다 (관리자 › 공지) %>
+  <% if (locals.popupNotice) { const n = popupNotice; %>
+    <div class="notice-pop" role="dialog" aria-modal="true" aria-labelledby="notice-pop-title">
+      <div class="notice-pop-box<%= n.important ? ' important' : '' %>">
+        <p class="notice-pop-kind"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16.5 9a4 4 0 0 1 0 6"/></svg><%= n.important ? '중요 공지' : '회사 공지' %><span class="notice-pop-date"><%= n.starts_on %></span></p>
+        <h2 id="notice-pop-title"><%= n.title %></h2>
+        <% if (n.body) { %><div class="notice-pop-body"><%= n.body %></div><% } %>
+        <form method="post" action="/notices/<%= n.id %>/read" class="notice-pop-actions" data-once>
+          <input type="hidden" name="_csrf" value="<%= locals.csrfToken %>">
+          <input type="hidden" name="back" value="<%= locals.pagePath || '/home' %>">
+          <a href="/notices" class="btn-sm ghost">지난 공지 보기</a>
+          <button type="submit" class="btn-sm primary" autofocus>확인했어요</button>
+        </form>
+      </div>
+    </div>
+  <% } %>
   <% if (locals.embed) { %>
     <script src="/embed.js"></script>
     <script src="/theme.js"></script>

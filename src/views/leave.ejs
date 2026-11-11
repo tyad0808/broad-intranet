@@ -1,0 +1,194 @@
+<%- include('partials/header') %>
+<%# 휴가 (월차·연차): 1년 미만 매월 1개, 1년 이상 입사일마다 14개, 반차 0.5개 (src/leave.js) %>
+<% const d = n => fmtDays(n);
+   const kindOf = r => KINDS[r.kind];
+   const stTag = r => `<span class="lv-st lv-${r.status}">${STATUS[r.status]}</span>`; %>
+<div class="page-head">
+  <div class="title-row"><h1 class="page-title">휴가</h1><span class="page-sub">1년 미만은 한 달마다 1일, 1년이 지나면 입사일마다 14일 · 반차는 0.5일</span></div>
+</div>
+
+<%# ① 내 휴가 %>
+<section class="lv-me" aria-label="내 휴가">
+  <div class="lv-tile main">
+    <span class="lv-label">내 남은 휴가</span>
+    <strong class="lv-num"><%= d(me.left) %><small>일</small></strong>
+    <span class="lv-sub"><% if (me.pending) { %>승인 대기 <%= d(me.pending) %>일 · 승인되면 빠져요<% } else { %>생긴 <%= d(me.granted) %>일<%= me.adjusted ? ` · 조정 ${me.adjusted > 0 ? '+' : ''}${d(me.adjusted)}일` : '' %> · 쓴 <%= d(me.used) %>일<% } %></span>
+  </div>
+  <div class="lv-tile">
+    <span class="lv-label">입사일</span>
+    <% if (me.hireDate) { %>
+      <strong class="lv-num small"><%= me.hireDate %></strong>
+      <span class="lv-sub">근속 <%= me.service || '-' %></span>
+    <% } else { %>
+      <strong class="lv-num small muted">아직 없음</strong>
+      <span class="lv-sub">관리자가 입사일을 넣으면 휴가가 저절로 생겨요</span>
+    <% } %>
+  </div>
+  <div class="lv-tile">
+    <span class="lv-label">다음에 생기는 휴가</span>
+    <% if (me.next) { %>
+      <strong class="lv-num small"><%= me.next.date %></strong>
+      <span class="lv-sub"><%= me.next.label %> · +<%= me.next.days %>일</span>
+    <% } else { %>
+      <strong class="lv-num small muted">-</strong>
+    <% } %>
+  </div>
+</section>
+
+<div class="lv-grid">
+  <%# ② 휴가 신청 %>
+  <section class="card" id="apply">
+    <h2>휴가 신청</h2>
+    <form method="post" action="/leave" class="lv-form" data-once>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <fieldset class="lv-kinds">
+        <legend>종류</legend>
+        <% Object.entries(KINDS).forEach(([k, label], i) => { %>
+          <label class="lv-kind"><input type="radio" name="kind" value="<%= k %>" <%= i === 0 ? 'checked' : '' %>><span><%= label %><small><%= k === 'full' ? '평일 1일씩' : '0.5일' %></small></span></label>
+        <% }) %>
+      </fieldset>
+      <div class="lv-dates">
+        <label>날짜 <input type="date" name="start_date" value="<%= today %>" required></label>
+        <label class="lv-end">끝나는 날 <span class="muted small">(하루면 비워 두세요)</span><input type="date" name="end_date"></label>
+      </div>
+      <label>사유 <span class="muted small">(선택)</span><input type="text" name="reason" maxlength="200" placeholder="예) 개인 일정"></label>
+      <p class="muted small">주말은 빼고 셉니다. 승인되면 회사 일정(달력)에 저절로 올라가요.</p>
+      <div><button type="submit" class="btn-sm primary">휴가 신청</button></div>
+    </form>
+  </section>
+
+  <%# ③ 내 신청 내역 %>
+  <section class="card">
+    <h2>내 신청 내역</h2>
+    <% if (!mine.length) { %>
+      <p class="muted">아직 신청한 휴가가 없어요.</p>
+    <% } else { %>
+      <ul class="lv-list">
+        <% mine.forEach(r => { %>
+          <li class="lv-row">
+            <span class="lv-when"><strong><%= dateText(r) %></strong><span class="muted"><%= kindOf(r) %> · <%= d(r.days) %>일<%= r.reason ? ` · ${r.reason}` : '' %></span>
+              <% if (r.decide_note) { %><span class="lv-note"><%= r.decider || '관리자' %>: <%= r.decide_note %></span><% } %></span>
+            <%- stTag(r) %>
+            <% if (r.status === 'pending') { %>
+              <form method="post" action="/leave/<%= r.id %>/cancel" class="inline" data-confirm="<%= dateText(r) %> 휴가 신청을 취소할까요?" data-once>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn-sm ghost">신청 취소</button>
+              </form>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+</div>
+
+<% if (manager) { %>
+  <%# ④ 관리자·부관리자: 승인 대기 %>
+  <section class="card" id="waiting">
+    <h2>승인 대기 <span class="badge-count"><%= waiting.length %>건</span></h2>
+    <% if (!waiting.length) { %>
+      <p class="muted">기다리는 신청이 없어요.</p>
+    <% } else { %>
+      <ul class="lv-list">
+        <% waiting.forEach(r => { const s = (staff.find(u => u.id === r.user_id) || {}).sum; %>
+          <li class="lv-row lv-wait">
+            <span class="lv-when"><strong><%= r.user_name %> · <%= dateText(r) %></strong>
+              <span class="muted"><%= kindOf(r) %> · <%= d(r.days) %>일<%= r.reason ? ` · ${r.reason}` : '' %><% if (s) { %> · 남은 휴가 <%= d(s.left) %>일<%= s.left - r.days < 0 ? ' (모자람)' : '' %><% } %></span></span>
+            <form method="post" action="/leave/<%= r.id %>/approve" class="inline" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn-sm primary">승인</button>
+            </form>
+            <form method="post" action="/leave/<%= r.id %>/reject" class="inline lv-reject" data-confirm="<%= r.user_name %> 님의 휴가를 반려할까요?" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <input type="text" name="note" maxlength="200" placeholder="반려 이유 (선택)" aria-label="반려 이유">
+              <button type="submit" class="btn-sm danger">반려</button>
+            </form>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+
+  <%# ⑤ 직원별 휴가 %>
+  <section class="card" id="staff">
+    <h2>직원별 휴가 <span class="h2-sub">입사일을 넣으면 휴가가 저절로 생겨요</span></h2>
+    <div class="lv-table-wrap">
+      <table class="lv-table">
+        <thead><tr><th>직원</th><th class="num">남은</th><th class="num">생긴</th><th class="num">조정</th><th class="num">쓴</th><th>입사일</th><th>근속</th><th>다음에 생김</th></tr></thead>
+        <tbody>
+          <% staff.forEach(u => { const s = u.sum; %>
+            <tr>
+              <th scope="row"><%= u.name %><% if (u.job_name) { %><span class="muted small"> · <%= u.job_name %></span><% } %></th>
+              <td class="num"><strong class="<%= s.left < 0 ? 'lv-minus' : '' %>"><%= d(s.left) %></strong></td>
+              <td class="num"><%= d(s.granted) %></td>
+              <td class="num"><%= s.adjusted ? `${s.adjusted > 0 ? '+' : ''}${d(s.adjusted)}` : '-' %></td>
+              <td class="num"><%= d(s.used) %><%= s.pending ? ` (+대기 ${d(s.pending)})` : '' %></td>
+              <td>
+                <form method="post" action="/leave/hire/<%= u.id %>" class="lv-hire">
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <input type="date" name="hire_date" value="<%= u.hire_date || '' %>" max="<%= today %>" aria-label="<%= u.name %> 입사일">
+                  <button type="submit" class="btn-sm">저장</button>
+                </form>
+              </td>
+              <td><%= s.service || '-' %></td>
+              <td><%= s.next ? `${s.next.date} (+${s.next.days})` : '-' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="lv-grid">
+    <%# ⑥ 일수 직접 조정 %>
+    <section class="card" id="adjust">
+      <h2>휴가 일수 조정</h2>
+      <p class="muted small">처음 시작할 때 지금 남은 일수 맞추기, 특별 휴가, 해가 바뀌어 없어지는 휴가 빼기 등에 써요. 0.5일 단위, 빼려면 앞에 - (예: -2).</p>
+      <form method="post" action="/leave/adjust" class="lv-form" data-once>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <div class="lv-dates">
+          <label>직원
+            <select name="user_id" required>
+              <option value="">고르세요</option>
+              <% staff.forEach(u => { %><option value="<%= u.id %>"><%= u.name %> (남은 <%= d(u.sum.left) %>일)</option><% }) %>
+            </select>
+          </label>
+          <label>일수 <input type="number" name="days" step="0.5" min="-60" max="60" required placeholder="예) 3 또는 -0.5"></label>
+        </div>
+        <label>이유 <input type="text" name="note" maxlength="100" required placeholder="예) 시작할 때 남은 일수 맞추기"></label>
+        <div><button type="submit" class="btn-sm">조정하기</button></div>
+      </form>
+      <% if (adjusts.length) { %>
+        <ul class="lv-list compact">
+          <% adjusts.forEach(a => { %><li class="lv-row"><span class="lv-when"><strong><%= a.user_name %> <%= a.days > 0 ? '+' : '' %><%= d(a.days) %>일</strong><span class="muted"><%= a.note %> · <%= a.creator || '' %> · <%= String(a.created_at).slice(0, 10) %></span></span></li><% }) %>
+        </ul>
+      <% } %>
+    </section>
+
+    <%# ⑦ 올해 처리한 휴가 (승인된 휴가는 여기서 취소 → 달력 일정도 지워짐) %>
+    <section class="card">
+      <h2>올해 처리한 휴가</h2>
+      <% if (!recent.length) { %>
+        <p class="muted">아직 없어요.</p>
+      <% } else { %>
+        <ul class="lv-list compact">
+          <% recent.forEach(r => { %>
+            <li class="lv-row">
+              <span class="lv-when"><strong><%= r.user_name %> · <%= dateText(r) %></strong><span class="muted"><%= kindOf(r) %> · <%= d(r.days) %>일<%= r.decider ? ` · ${r.decider}` : '' %></span></span>
+              <%- stTag(r) %>
+              <% if (r.status === 'approved') { %>
+                <form method="post" action="/leave/<%= r.id %>/cancel" class="inline" data-confirm="<%= r.user_name %> 님의 <%= dateText(r) %> 휴가 승인을 취소할까요? 달력 일정도 지워져요." data-once>
+                  <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                  <button type="submit" class="btn-sm ghost">승인 취소</button>
+                </form>
+              <% } %>
+            </li>
+          <% }) %>
+        </ul>
+      <% } %>
+    </section>
+  </div>
+<% } %>
+
+<script src="/leave.js"></script>
+<%- include('partials/footer') %>

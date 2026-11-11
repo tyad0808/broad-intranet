@@ -143,7 +143,11 @@ function homeRoutes(db, { sourceLabels = {}, chatOn = false } = {}) {
 
     const [, mm, dd] = today.split('-').map(Number);
     const weekday = WEEKDAYS[new Date(`${today}T00:00:00Z`).getUTCDay()];
+    // 지금 보이는 공지 중 가장 최근 것 (홈 맨 위 한 줄, 누르면 공지 목록)
+    const noticeDay = kstDay(0);
+    const latestNotice = db.prepare('SELECT id, title, important FROM notices WHERE starts_on <= ? AND (ends_on IS NULL OR ends_on >= ?) ORDER BY important DESC, starts_on DESC, id DESC LIMIT 1').get(noticeDay, noticeDay) || null;
     res.render('home', {
+      latestNotice,
       title: '홈',
       navSection: 'home',
       ds: true,

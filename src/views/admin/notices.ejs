@@ -1,0 +1,73 @@
+<%- include('../partials/header') %>
+<%- include('../partials/admin-tabs') %>
+
+<%# 공지 쓰기: 직원이 인트라넷을 열면 팝업으로 뜨고, [확인했어요] 를 누르면 그 직원에게는 다시 안 뜬다 %>
+<section class="card" id="new">
+  <h2>새 공지 쓰기</h2>
+  <form method="post" action="/admin/notices" class="notice-form" data-once>
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>제목
+      <input type="text" name="title" maxlength="<%= MAX_TITLE %>" required placeholder="예) 11월 15일(토) 사무실 휴무 안내">
+    </label>
+    <label>내용 <span class="muted small">(줄바꿈 그대로 보여요)</span>
+      <textarea name="body" rows="5" maxlength="<%= MAX_BODY %>"></textarea>
+    </label>
+    <div class="row-2">
+      <label>이날부터 팝업
+        <input type="date" name="starts_on" value="<%= today %>" required>
+      </label>
+      <label>이날까지 <span class="muted small">(비우면 계속)</span>
+        <input type="date" name="ends_on">
+      </label>
+    </div>
+    <label class="check"><input type="checkbox" name="important" value="1"> 중요 공지 (빨간 표시, 다른 공지보다 먼저 떠요)</label>
+    <div><button type="submit" class="btn-sm primary">공지 올리기</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h2>올린 공지 <span class="h2-sub">최근 50개 · 누가 [확인했어요] 를 눌렀는지</span></h2>
+  <% if (!notices.length) { %>
+    <p class="muted">아직 올린 공지가 없어요.</p>
+  <% } else { %>
+    <ul class="notice-list">
+      <% notices.forEach(n => { const over = n.ends_on && n.ends_on < today; const soon = n.starts_on > today; %>
+        <li class="notice-item" id="n<%= n.id %>">
+          <h2>
+            <% if (n.important) { %><span class="notice-tag">중요</span><% } %>
+            <% if (over) { %><span class="notice-tag off">끝남</span><% } else if (soon) { %><span class="notice-tag soon"><%= n.starts_on %>부터</span><% } %>
+            <%= n.title %>
+          </h2>
+          <p class="notice-meta"><%= n.starts_on %><%= n.ends_on ? ` ~ ${n.ends_on}` : ' ~ 계속' %><%= n.writer ? ` · ${n.writer}` : '' %> · 확인 <strong><%= n.readers.length %></strong> / <%= n.readers.length + n.unread.length %>명</p>
+          <% if (n.body) { %><p class="notice-body"><%= n.body %></p><% } %>
+          <details class="notice-readers">
+            <summary>누가 확인했나요?</summary>
+            <p><strong>확인함</strong> · <%= n.readers.length ? n.readers.map(u => u.name).join(', ') : '아직 없음' %></p>
+            <p><strong>아직</strong> · <%= n.unread.length ? n.unread.map(u => u.name).join(', ') : '모두 확인했어요' %></p>
+          </details>
+          <details class="notice-readers" <%= edit === n.id ? 'open' : '' %>>
+            <summary>고치기 · 지우기</summary>
+            <form method="post" action="/admin/notices/<%= n.id %>" class="notice-form" data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <label>제목 <input type="text" name="title" value="<%= n.title %>" maxlength="<%= MAX_TITLE %>" required></label>
+              <label>내용 <textarea name="body" rows="4" maxlength="<%= MAX_BODY %>"><%= n.body %></textarea></label>
+              <div class="row-2">
+                <label>이날부터 <input type="date" name="starts_on" value="<%= n.starts_on %>" required></label>
+                <label>이날까지 <input type="date" name="ends_on" value="<%= n.ends_on || '' %>"></label>
+              </div>
+              <label class="check"><input type="checkbox" name="important" value="1" <%= n.important ? 'checked' : '' %>> 중요 공지</label>
+              <label class="check"><input type="checkbox" name="reshow" value="1"> 이미 확인한 직원에게도 다시 팝업으로 띄우기</label>
+              <div><button type="submit" class="btn-sm">고친 내용 저장</button></div>
+            </form>
+            <form method="post" action="/admin/notices/<%= n.id %>/delete" class="inline" data-confirm="'<%= n.title %>' 공지를 지울까요? 직원들의 공지 목록에서도 사라져요." data-once>
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button type="submit" class="btn-sm danger">공지 지우기</button>
+            </form>
+          </details>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<%- include('../partials/footer') %>

@@ -1,20 +1,28 @@
-<%# 관리자 화면 공통 머리: 제목 + 알약 탭 (스크롤해도 위에 붙는다) %>
+<%# 관리자 화면 공통 머리: 제목 + 묶음(직원·회사 / 주문 / 판매처·메일 / 기록·서버) + 그 묶음의 메뉴 (스크롤해도 위에 붙는다)
+    메뉴가 많아서 비슷한 것끼리 4묶음으로 나눴다. 지금 화면이 든 묶음의 메뉴만 아래 줄에 보인다 %>
+<% const ADMIN_GROUPS = [
+     { key: 'people', label: '직원·회사', items: [
+       ['users', '/admin/users', '직원 관리'], ['jobs', '/admin/jobs', '직무'], ['notices', '/admin/notices', '공지'],
+       ['notify', '/admin/notify', '알림 설정'], ['brand', '/admin/brand', '회사·로고·매뉴얼']] },
+     { key: 'orders', label: '주문', items: [
+       ['stages', '/admin/stages', '작업 단계'], ['sources', '/admin/sources', '주문 출처'], ['columns', '/admin/columns', '주문 목록 칸'],
+       ['collect', '/admin/collect', '주문 수집'], ['templates', '/templates', '답장 문구·매크로']] },
+     { key: 'links', label: '판매처·메일 연결', items: [
+       ['channels', '/admin/channels', '판매처 연결'], ['mail', '/admin/mail', '메일 계정'], ['logen', '/admin/logen', '로젠 설정']] },
+     { key: 'system', label: '기록·서버', items: [
+       ['actions', '/admin/actions', '처리 기록'], ['storage', '/admin/storage', '저장 공간']] },
+   ];
+   const current = ADMIN_GROUPS.find(g => g.items.some(([k]) => k === tab)) || ADMIN_GROUPS[0]; %>
 <div class="page-head sticky-glass admin-head">
   <h1 class="page-title">관리자</h1>
-<nav class="channel-chips admin-chips" aria-label="관리자 메뉴">
-  <a href="/admin/users" class="chip <%= tab === 'users' ? 'on' : '' %>">직원 관리<% if (pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
-  <a href="/admin/stages" class="chip <%= tab === 'stages' ? 'on' : '' %>">작업 단계</a>
-  <a href="/admin/sources" class="chip <%= tab === 'sources' ? 'on' : '' %>">주문 출처</a>
-  <a href="/admin/jobs" class="chip <%= tab === 'jobs' ? 'on' : '' %>">직무</a>
-  <a href="/admin/notify" class="chip <%= tab === 'notify' ? 'on' : '' %>">알림 설정</a>
-  <a href="/admin/columns" class="chip <%= tab === 'columns' ? 'on' : '' %>">주문 목록 칸</a>
-  <a href="/admin/collect" class="chip <%= tab === 'collect' ? 'on' : '' %>">주문 수집</a>
-  <a href="/admin/logen" class="chip <%= tab === 'logen' ? 'on' : '' %>">로젠 설정</a>
-  <a href="/admin/actions" class="chip <%= tab === 'actions' ? 'on' : '' %>">처리 기록</a>
-  <a href="/admin/storage" class="chip <%= tab === 'storage' ? 'on' : '' %>">저장 공간</a>
-  <a href="/admin/brand" class="chip <%= tab === 'brand' ? 'on' : '' %>">회사·로고</a>
-  <a href="/admin/mail" class="chip <%= tab === 'mail' ? 'on' : '' %>">메일 계정</a>
-  <a href="/admin/channels" class="chip <%= tab === 'channels' ? 'on' : '' %>">판매처 연결</a>
-  <a href="/templates" class="chip <%= tab === 'templates' ? 'on' : '' %>">답장 문구·매크로</a>
-</nav>
+  <nav class="admin-groups" aria-label="관리자 메뉴 묶음">
+    <% ADMIN_GROUPS.forEach(g => { %>
+      <a href="<%= g.items[0][1] %>" class="<%= g === current ? 'on' : '' %>" <%= g === current ? 'aria-current=true' : '' %>><%= g.label %><% if (g.key === 'people' && pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
+    <% }) %>
+  </nav>
+  <nav class="channel-chips admin-chips" aria-label="<%= current.label %> 메뉴">
+    <% current.items.forEach(([key, href, label]) => { %>
+      <a href="<%= href %>" class="chip <%= tab === key ? 'on' : '' %>"><%= label %><% if (key === 'users' && pendingCount > 0) { %> <span class="badge"><%= pendingCount %></span><% } %></a>
+    <% }) %>
+  </nav>
 </div>

@@ -6,8 +6,8 @@ const { getSetting, setSetting } = require('./collector');
 
 const DEFAULT_NAME = '통합 어드민(브로애드)';
 // 왼쪽 메뉴 (관리자는 늘 맨 아래). 순서는 관리자 > 회사·로고 에서 바꾼다
-const NAV_ITEMS = { orders: '주문', mail: '메일함', chat: '톡톡', inbox: '문의함', schedule: '일정' };
-const DEFAULT_NAV = ['orders', 'mail', 'chat', 'inbox', 'schedule'];
+const NAV_ITEMS = { orders: '주문', mail: '메일함', chat: '톡톡', inbox: '문의함', schedule: '일정', leave: '휴가' };
+const DEFAULT_NAV = ['orders', 'mail', 'chat', 'inbox', 'schedule', 'leave'];
 // 저장된 순서에 빠진 메뉴(나중에 생긴 메뉴)는 기본 순서에서 바로 앞에 있던 메뉴 뒤에 끼운다
 function navOrderOf(saved) {
   const order = [...new Set((Array.isArray(saved) ? saved : []).filter(k => NAV_ITEMS[k]))];

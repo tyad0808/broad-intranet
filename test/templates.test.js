@@ -204,7 +204,7 @@ test('관리자 메뉴에 답장 문구·매크로 바로가기가 있다', asyn
   t.after(() => server.close());
   addUser(db, { email: 'boss@broad.test', name: '사장', role: 'admin' });
   const boss = await loginAs(baseUrl, 'boss@broad.test');
-  assert.match((await boss.request('/admin/users')).text, /<a href="\/templates" class="chip ">답장 문구·매크로<\/a>/);
+  assert.match((await boss.request('/admin/stages')).text, /<a href="\/templates" class="chip ">답장 문구·매크로<\/a>/, '주문 묶음 안에');
   // 답장 문구 화면으로 가도 관리자 탭이 그대로 (그 칸이 선택된 채), 직원에게는 관리자 탭이 없다
   const page = (await boss.request('/templates')).text;
   assert.match(page, /<a href="\/templates" class="chip on">답장 문구·매크로<\/a>/);

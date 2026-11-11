@@ -546,7 +546,27 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
   router.get('/brand', (req, res) => {
     const { MAX_NAME, DEFAULT_NAME, NAV_ITEMS } = require('../brand');
     const { phoneOf, termsOf } = require('../proofs');
-    res.render('admin/brand', { title: '회사·로고', tab: 'brand', MAX_NAME, DEFAULT_NAME, NAV_ITEMS, proofPhone: phoneOf(db), proofTerms: termsOf(db) });
+    const { getSetting } = require('../collector');
+    res.render('admin/brand', { title: '회사·로고', tab: 'brand', MAX_NAME, DEFAULT_NAME, NAV_ITEMS, proofPhone: phoneOf(db), proofTerms: termsOf(db), manualUrl: getSetting(db, 'manual_url') || '' });
+  });
+  // 업무 매뉴얼 링크 (노션 등, 왼쪽 메뉴 버튼). https 주소만, 비우면 버튼 없음
+  router.post('/brand/manual', (req, res) => {
+    const { setSetting } = require('../collector');
+    const raw = String(req.body.url || '').trim();
+    if (!raw) {
+      setSetting(db, 'manual_url', '');
+      flash(req, 'ok', '업무 매뉴얼 버튼을 숨겼습니다.');
+      return res.redirect('/admin/brand#manual');
+    }
+    let url = null;
+    try { url = new URL(raw); } catch { url = null; }
+    if (!url || url.protocol !== 'https:' || raw.length > 500) {
+      flash(req, 'error', 'https:// 로 시작하는 주소를 넣어 주세요.');
+      return res.redirect('/admin/brand#manual');
+    }
+    setSetting(db, 'manual_url', url.href);
+    flash(req, 'ok', '업무 매뉴얼 링크를 저장했습니다. 왼쪽 메뉴에 버튼이 생겼어요.');
+    res.redirect('/admin/brand#manual');
   });
   // 고객용 시안확정서: 담당 디자이너 옆 연락처, 아래 약관
   router.post('/brand/proof', (req, res) => {

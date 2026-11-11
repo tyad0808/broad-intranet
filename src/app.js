@@ -15,6 +15,8 @@ const { channelRoutes } = require('./routes/channels');
 const { orderRoutes, kstDay } = require('./routes/orders');
 const { homeRoutes } = require('./routes/home');
 const { manualRoutes, PAY_METHODS } = require('./routes/manual');
+const { noticeRoutes, noticeAdminRoutes, popupNotice } = require('./routes/notices');
+const { leaveRoutes, pendingLeaveCount } = require('./routes/leave');
 const { calendarRoutes } = require('./routes/calendar');
 const { inboxRoutes } = require('./routes/inbox');
 const { templateRoutes } = require('./routes/templates');
@@ -241,6 +243,7 @@ function createApp({
   const currentChannelInfo = channelInfoWith(db);
   // 왼쪽 메뉴의 미답변 건수: 문의함(쇼핑몰 문의·채팅)과 메일함을 따로
   const smartstoreUrlStmt = db.prepare("SELECT value FROM settings WHERE key = 'smartstore_url'");
+  const manualUrlStmt = db.prepare("SELECT value FROM settings WHERE key = 'manual_url'");
   const openCountsStmt = db.prepare(`
     SELECT COALESCE(SUM(NOT (source GLOB 'naver_mail*' OR source GLOB 'gmail*') AND source != 'talktalk'), 0) AS inquiries,
       COALESCE(SUM(source GLOB 'naver_mail*' OR source GLOB 'gmail*'), 0) AS mails,
@@ -273,6 +276,12 @@ function createApp({
     res.locals.openMails = open.mails;
     res.locals.openChats = open.chats;
     res.locals.newOrders = req.user && req.user.status === 'active' ? newOrdersStmt.get().n : 0;
+    // 왼쪽 메뉴 '업무 매뉴얼' 버튼 주소 (관리자 › 회사·로고). 없으면 버튼을 숨긴다
+    res.locals.manualUrl = req.user && req.user.status === 'active' ? manualUrlStmt.get()?.value || '' : '';
+    // 왼쪽 메뉴 '휴가' 옆 숫자 (관리자·부관리자: 승인 대기)
+    res.locals.pendingLeaves = req.user && req.user.status === 'active' ? pendingLeaveCount(db, req.user) : 0;
+    // 회사 공지 팝업: 아직 [확인했어요] 를 안 누른 공지 하나 (화면을 여는 GET 에서만, 팝업 안 작은 화면 제외)
+    res.locals.popupNotice = req.method === 'GET' && !res.locals.embed ? popupNotice(db, req.user) : null;
     res.locals.pagePath = req.originalUrl; // 화면 밝기 버튼(스크립트 없이 눌렀을 때) 돌아올 주소
     // 왼쪽 메뉴 '톡톡' 은 톡톡을 연결했을 때만 보인다
     res.locals.chatOn = Boolean(inbox.talktalk);
@@ -362,6 +371,7 @@ function createApp({
       };
     },
   }));
+  app.use('/admin', requireAdmin, noticeAdminRoutes(db));
   app.use('/admin', requireAdmin, adminRoutes(db, store, collector, notifier, brand, weekly, logenSvc, sounds));
   app.use('/stats', requireManager, statsRoutes(db, { staffReport: require('./stats').staffReport }));
   // 수기 주문(/orders/new)을 주문 카드(/orders/:id)보다 먼저 연결한다
@@ -373,6 +383,8 @@ function createApp({
     next();
   });
   app.use(requireActive, calendarRoutes(db, notifier));
+  app.use(requireActive, noticeRoutes(db));
+  app.use(requireActive, leaveRoutes(db, notifier));
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier, brandName: () => brand.view().name }));
   app.use(requireActive, templateRoutes(db));
   app.use(requireActive, manualRoutes(db, notifier));

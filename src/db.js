@@ -74,6 +74,8 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'phone', 'TEXT');
   // 주문 목록에서 마지막으로 체크한 필터 (디자인 단계·주문 단계·담당, JSON). 노션처럼 다음에 열어도 그대로
   addColumn(db, 'users', 'order_filter', 'TEXT');
+  // 입사일 (YYYY-MM-DD): 휴가 일수 계산 (1년 미만 매월 1개, 1년 이상 입사일마다 14개). 휴가 화면에서 관리자·부관리자가 넣는다
+  addColumn(db, 'users', 'hire_date', 'TEXT');
   // 보류: 고객이 '파일·내용 정리될 때까지 잠깐 멈춰 달라' 한 주문 (주문 묶음 전체에 같이). 회사 안에서만 표시
   addColumn(db, 'orders', 'hold_at', 'TEXT');
   addColumn(db, 'orders', 'hold_note', 'TEXT');
@@ -453,6 +455,50 @@ function migrate(db) {
       settlement_price INTEGER,                   -- 정산 금액 (송금액)
       updated_at       TEXT    NOT NULL DEFAULT (datetime('now')),
       PRIMARY KEY (site, contr_no, kind)
+    );
+    -- 회사 공지: 관리자가 쓰면 직원이 인트라넷을 열 때 팝업으로 뜬다. [확인했어요] 누르면 그 직원에게는 다시 안 뜬다
+    CREATE TABLE IF NOT EXISTS notices (
+      id          INTEGER PRIMARY KEY,
+      title       TEXT    NOT NULL,
+      body        TEXT    NOT NULL DEFAULT '',
+      important   INTEGER NOT NULL DEFAULT 0,
+      starts_on   TEXT    NOT NULL,              -- YYYY-MM-DD (한국 날짜) 이날부터 팝업
+      ends_on     TEXT,                          -- 이날까지 (비우면 계속)
+      created_by  INTEGER REFERENCES users(id),
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+      updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS notice_reads (
+      notice_id   INTEGER NOT NULL REFERENCES notices(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      read_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (notice_id, user_id)
+    );
+    -- 휴가(월차·연차) 신청: 직원이 신청 → 관리자·부관리자가 승인/반려. 승인되면 회사 일정(events)에 올린다
+    CREATE TABLE IF NOT EXISTS leave_requests (
+      id          INTEGER PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      start_date  TEXT    NOT NULL,              -- YYYY-MM-DD
+      end_date    TEXT    NOT NULL,              -- 하루면 start_date 와 같다
+      kind        TEXT    NOT NULL CHECK (kind IN ('full', 'am', 'pm')), -- 종일 · 오전 반차 · 오후 반차
+      days        REAL    NOT NULL,              -- 쓰는 휴가 일수 (반차 0.5, 종일은 평일 수)
+      reason      TEXT,
+      status      TEXT    NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'canceled')),
+      decided_by  INTEGER REFERENCES users(id),
+      decided_at  TEXT,
+      decide_note TEXT,
+      event_id    INTEGER,                       -- 승인하면 만든 회사 일정
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_leave_user ON leave_requests(user_id, start_date);
+    -- 휴가 일수 직접 조정 (처음 시작할 때 남은 일수 맞추기, 특별 휴가 등). +/- 일수와 이유
+    CREATE TABLE IF NOT EXISTS leave_adjust (
+      id          INTEGER PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      days        REAL    NOT NULL,
+      note        TEXT    NOT NULL,
+      created_by  INTEGER REFERENCES users(id),
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS order_hold_log (
       id               INTEGER PRIMARY KEY,
