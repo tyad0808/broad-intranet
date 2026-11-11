@@ -3,7 +3,7 @@
 // 좌표는 일러스트레이터 문서 좌표: 단위 pt, 위로 갈수록 y 가 커진다.
 // 범위(bounds)는 [왼쪽, 위, 오른쪽, 아래] 순서이고 위 > 아래 이다.
 
-var DOMBO_VERSION = '1.18.3'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
+var DOMBO_VERSION = '1.18.4'; // CSXS/manifest.xml 과 같게. 패널 위에 보여 준다
 var DOMBO_LAYER = '돔보마크';
 var DOMBO_CUT_LAYER = '칼선';
 var DOMBO_CUT_SPOT = 'CutContour';
@@ -142,7 +142,8 @@ function domboClipMask(group) {
     if (k.typename === 'PathItem' && k.clipping) return k;
     if (k.typename === 'CompoundPathItem' && k.pathItems.length > 0 && k.pathItems[0].clipping) return k;
   }
-  return null;
+  // clipping 표시를 못 읽는 마스크(컴파운드 패스·글자 마스크 등): 클리핑 그룹은 맨 위 개체가 마스크
+  return n > 0 ? kids[0] : null;
 }
 
 // 눈에 보이는 범위. 클리핑 마스크 그룹은 가려진 부분을 빼고 마스크 모양만 기준으로 삼는다.
@@ -1124,7 +1125,8 @@ function domboOuterClips(item, out, depth) {
   if (item.hidden || item.guides || item.typename !== 'GroupItem') return;
   if (domboClipMask(item)) { out.push(item); return; }
   depth = depth || 0;
-  if (depth >= 3) return;
+  if (depth >= 8) return;
+  // 그룹 속 그룹만 따라 내려간다 (그룹이 아닌 것은 typename 만 읽고 건너뜀)
   var kids = item.pageItems, n = kids.length;
   for (var i = 0; i < n; i++) domboOuterClips(kids[i], out, depth + 1);
 }

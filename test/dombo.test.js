@@ -419,6 +419,21 @@ test('크기·헤베: 기준은 맨 바깥 클리핑 마스크 > 그룹 > 가장
   assert.strictEqual(core.domboHebePick([pathItem(mm(0, 1, 1, 0), { hidden: true })]), null);
 });
 
+test('크기·헤베·대지 맞추기: 그룹 속 깊이(5단계) 들어 있는 마스크도 찾고, clipping 표시를 못 읽는 마스크는 맨 위 개체를 마스크로', () => {
+  const mm = (x1, y1, x2, y2) => [x1 * MM, y1 * MM, x2 * MM, y2 * MM];
+  const clip = group([pathItem(mm(0, 500, 400, 0), { clipping: true }), pathItem(mm(-100, 900, 900, -100))], { clipped: true });
+  let deep = clip;
+  for (let i = 0; i < 5; i++) deep = group([deep, pathItem(mm(-200, 1000, 1000, -200))]);
+  let p = core.domboHebePick([deep]);
+  assert.strictEqual(p.kind, '클리핑 마스크');
+  assert.deepStrictEqual(Array.from(p.bounds), mm(0, 500, 400, 0));
+  // 마스크가 글자 등이라 clipping 을 못 읽어도 클리핑 그룹의 맨 위 개체를 마스크로
+  const textMask = { typename: 'TextFrame', geometricBounds: mm(10, 60, 90, 20), visibleBounds: mm(10, 60, 90, 20) };
+  p = core.domboHebePick([group([textMask, pathItem(mm(-100, 900, 900, -100))], { clipped: true })]);
+  assert.strictEqual(p.kind, '클리핑 마스크');
+  assert.deepStrictEqual(Array.from(p.bounds), mm(10, 60, 90, 20));
+});
+
 test('크기·헤베: 1:1 과 10:1 파일, 큰 캔버스 배율', () => {
   const pick = { kind: '클리핑 마스크', item: { name: '' }, bounds: [0, 900 * MM, 3000 * MM, 0] };
   let t = core.domboHebeText(pick, 1, 1);
