@@ -42,9 +42,9 @@
     if (o.channel_status === 'CANCELED') return { cls: 'sb-cancel', text: '취소', sub: chLabel };
     if (o.channel === 'manual' && o.channel_status === 'PAYMENT_WAITING') return { cls: 'sb-wait', text: '입금대기', sub: '' };
     if (g.logen && g.logen.status === 'registered') return { cls: 'sb-ready', text: '발송 준비', sub: g.logen.slip_no ? `로젠 송장 ${g.logen.slip_no}` : '로젠 등록 · 출력 대기' };
-    if (o.channel !== 'manual' && confirmed) return { cls: 'sb-work', text: '작업 중', sub: `${chLabel} · 발주확인됨` };
+    if (o.channel !== 'manual' && confirmed) return { cls: 'sb-work', text: '작업 중', sub: chLabel, tail: ' · 발주확인됨' };
     if (o.channel === 'manual') return { cls: 'sb-work', text: '작업 중', sub: chLabel };
-    return { cls: 'sb-new', text: '신규', sub: `${chLabel} · 발주확인 전` };
+    return { cls: 'sb-new', text: '신규', sub: chLabel, tail: ' · 발주확인 전' };
   };
 %>
 
@@ -219,7 +219,8 @@
     <span class="oi-check"><% if (anyAction) { %><label class="check-all" title="처리할 수 있는 주문 모두 선택"><input type="checkbox" data-check-all><span class="check-all-text">처리할 수 있는 주문 모두 선택</span></label><% } %></span>
     <%# 왼쪽은 보는 칸(상태·배송·납기), 오른쪽은 직원이 고르는 칸(디자인·담당) %>
     <%# 칸 순서·보이기는 관리자 › 주문 목록 칸 에서 정한다 (칸 자리는 아래 <style> 의 --oc-*) %>
-    <% columns.filter(col => col.show).forEach(col => { %><span class="<%= col.pick ? 'head-pick' : col.key === 'memo' ? 'head-memo' : '' %>"><%= col.label %></span><% }) %>
+    <%# 한 줄 보기에서는 주문 칸을 [주문(판매처·이름) | 상품명] 두 칸으로 나눠 머리도 둘 %>
+    <% columns.filter(col => col.show).forEach(col => { %><% if (col.key === 'main') { %><span class="head-main"><span><%= col.label %></span><span class="head-product">상품명</span></span><% } else { %><span class="<%= [col.pick ? 'head-pick' : '', `head-${col.key}`].filter(Boolean).join(' ') %>"><%= col.label %></span><% } %><% }) %>
   </div>
   <ul class="order-list">
     <% groups.forEach(g => {
@@ -288,7 +289,8 @@
           <%# 상태 배지 (휴대폰에서는 맨 위에) + 채널 상태·송장 한 줄 %>
           <span class="cell c-status">
             <span class="st-badge <%= status.cls %>" <% if (status.title) { %>title="<%= status.title %>"<% } %>><%= status.text %></span>
-            <% if (status.sub) { %><span class="st-sub" title="<%= status.sub %>"><%= status.sub %></span><% } %>
+            <%# tail(발주확인 전·됨)은 한 줄 보기에서 숨긴다 — 배지(신규·작업 중)가 이미 같은 뜻이라 칸을 좁게 (마우스를 올리면 전체) %>
+            <% if (status.sub) { %><span class="st-sub" title="<%= status.sub + (status.tail || '') %>"><%= status.sub %><% if (status.tail) { %><span class="st-tail"><%= status.tail %></span><% } %></span><% } %>
           </span>
           <%# 배송 방법(고객이 고른 것) + 상품 금액(배송비 빼고, 통계와 같은 기준). 발주·발주확인·발송 단계는 상태 칸에 이미 나와서 따로 안 보여 준다 %>
           <% const way = shipWay(orderShipWay(g.items)); const money = moneyLabel(orderMoney(g.items)); %>

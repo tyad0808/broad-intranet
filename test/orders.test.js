@@ -361,7 +361,7 @@ test('새 주문의 디자인 단계는 디자인 작업 전이고, 목록에서
   const select = list.slice(list.indexOf(`action="/orders/${idOf('P1')}/design"`));
   assert.match(select.slice(0, 900), new RegExp(`value="${designId('디자인 작업 전')}" selected>디자인 작업 전`));
   assert.doesNotMatch(list, /class="pill stage"/, '주문 단계(발주·발주확인·발송)는 상태 칸에 나와서 목록에 따로 표시하지 않는다');
-  assert.match(list, /<span class="">주문<\/span><span class="head-memo">메모<\/span><span class="">상태<\/span><span class="">배송 · 금액<\/span><span class="">납기 · 발송<\/span><span class="head-pick">디자인<\/span><span class="head-pick">담당<\/span>/, '보는 칸 → 고르는 칸 순서 (처음 순서)');
+  assert.match(list, /<span class="head-main"><span>주문<\/span><span class="head-product">상품명<\/span><\/span><span class="head-memo">메모<\/span><span class="head-status">상태<\/span><span class="head-ship">배송 · 금액<\/span><span class="head-due">납기 · 발송<\/span><span class="head-pick head-design">디자인<\/span><span class="head-pick head-assign">담당<\/span>/, '보는 칸 → 고르는 칸 순서 (처음 순서)');
   await kim.submit('/', `/orders/${idOf('P1')}/design`, { design_stage_id: String(designId('디자인 작업 중')), back: '/' });
   assert.deepStrictEqual([row('P1').design_stage_id, row('P9').design_stage_id], [designId('디자인 작업 중'), designId('디자인 작업 중')]);
   // 잘못 골랐으면 다시 '디자인 작업 전' 으로
