@@ -2,6 +2,8 @@
 
 작업 규칙은 `.claude/rules/` 에 있다 (소통·보안·용어·코드·디자인·배포·사용 안내서).
 
+**코드를 찾을 때는 `docs/agents/code-map.md` (기능 → 파일 표) 부터 본다.** 더 넓게는 `graphify-out/GRAPH_REPORT.md` (Graphify 코드 그래프).
+
 ## Agent skills
 
 ### Issue tracker

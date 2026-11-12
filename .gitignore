@@ -15,3 +15,7 @@ backups/
 # 로그·기타
 *.log
 .DS_Store
+
+# Graphify 코드 그래프: 요약(GRAPH_REPORT.md)만 올린다 (graph.json·html·cache 는 크고 매번 바뀜)
+graphify-out/*
+!graphify-out/GRAPH_REPORT.md
