@@ -333,8 +333,8 @@ test('카드에는 구매자 이름을 먼저, 받는 분이 다르면 괄호로
   const { db, kim } = await setup(t);
   applyOrders(db, [order(4, { buyer_name: '김현진', receiver_name: '이서연' }), order(5, { buyer_name: '박지호', receiver_name: '박지호' })]);
   const text = (await kim.request('/')).text;
-  assert.match(text, /<strong class="buyer">김현진<\/strong> \(받는 분 이서연\)/);
-  assert.match(text, /<strong class="buyer">박지호<\/strong> ·/);
+  assert.match(text, /<strong class="buyer">김현진<\/strong><span class="oi-when"> \(받는 분 이서연\)/);
+  assert.match(text, /<strong class="buyer">박지호<\/strong><span class="oi-when"> ·/);
 });
 
 
@@ -361,7 +361,7 @@ test('새 주문의 디자인 단계는 디자인 작업 전이고, 목록에서
   const select = list.slice(list.indexOf(`action="/orders/${idOf('P1')}/design"`));
   assert.match(select.slice(0, 900), new RegExp(`value="${designId('디자인 작업 전')}" selected>디자인 작업 전`));
   assert.doesNotMatch(list, /class="pill stage"/, '주문 단계(발주·발주확인·발송)는 상태 칸에 나와서 목록에 따로 표시하지 않는다');
-  assert.match(list, /<span class="">주문<\/span><span class="head-memo">메모<\/span><span class="">상태<\/span><span class="">배송 · 금액<\/span><span class="">납기 · 발송<\/span><span class="head-pick">디자인<\/span><span class="head-pick">담당<\/span>/, '보는 칸 → 고르는 칸 순서 (처음 순서)');
+  assert.match(list, /<span class="head-main"><span>주문<\/span><span class="head-product">상품명<\/span><\/span><span class="head-memo">메모<\/span><span class="head-status">상태<\/span><span class="head-ship">배송 · 금액<\/span><span class="head-due">납기 · 발송<\/span><span class="head-pick head-design">디자인<\/span><span class="head-pick head-assign">담당<\/span>/, '보는 칸 → 고르는 칸 순서 (처음 순서)');
   await kim.submit('/', `/orders/${idOf('P1')}/design`, { design_stage_id: String(designId('디자인 작업 중')), back: '/' });
   assert.deepStrictEqual([row('P1').design_stage_id, row('P9').design_stage_id], [designId('디자인 작업 중'), designId('디자인 작업 중')]);
   // 잘못 골랐으면 다시 '디자인 작업 전' 으로
@@ -712,4 +712,21 @@ test('목록에서 바로 작업 메모: 저장하면 묶음 전체에, 주문 �
   assert.match((await kim.request(`/orders/${idOf('P1')}`)).text, /시안 2개 먼저 보내기/, '주문 화면 메모 칸과 같은 메모');
   await kim.submit('/', `/orders/${idOf('P1')}/memo`, { memo: '   ', back: '/' });
   assert.strictEqual(row('P1').memo, null);
+});
+
+test('주문 목록 보기: 기본은 한 줄, [자세히] 를 누르면 내 계정에만 자세히 보기', async t => {
+  const { db, kim, baseUrl } = await setup(t);
+  applyOrders(db, [order(7, { channel_order_id: 'O7', channel_item_id: 'P7a', product_name: '첫상품' }), order(8, { channel_order_id: 'O7', channel_item_id: 'P7b', product_name: '둘째상품' })]);
+  const first = (await kim.request('/')).text;
+  assert.match(first, /<body[^>]*class="[^"]*orders-wide orders-line/);
+  assert.match(first, /<button type="submit" name="view" value="line" class="on"/);
+  assert.match(first, /<span class="oi-more">외 1<\/span>/, '상품이 여러 개면 외 N');
+  const res = await kim.submit('/', '/me/order-view', { view: 'detail', back: '/?view=all' });
+  assert.strictEqual(res.location, '/?view=all');
+  const after = (await kim.request('/')).text;
+  assert.doesNotMatch(after, /orders-line/);
+  assert.match(after, /<button type="submit" name="view" value="detail" class="on"/);
+  const lee = await loginAs(baseUrl, 'lee@broad.test');
+  assert.match((await lee.request('/')).text, /orders-line/, '다른 직원은 그대로 한 줄');
+  assert.strictEqual((await kim.submit('/', '/me/order-view', { view: 'line', back: 'https://evil.example' })).location, '/', '바깥 주소로는 안 돌아간다');
 });

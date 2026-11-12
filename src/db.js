@@ -78,6 +78,8 @@ function addMissingColumns(db) {
   addColumn(db, 'users', 'hire_date', 'TEXT');
   // 연봉 (관리자만 보는 예상 연차수당 계산용). SETTINGS_KEY 로 암호화해서 저장 (src/secretBox.js) — 사용자 요청 2026-11
   addColumn(db, 'users', 'salary_sealed', 'TEXT');
+  // 주문 목록 보기: 'line' 한 줄 보기(기본) · 'detail' 자세히 보기 — 직원마다
+  addColumn(db, 'users', 'order_view', 'TEXT');
   // 보류: 고객이 '파일·내용 정리될 때까지 잠깐 멈춰 달라' 한 주문 (주문 묶음 전체에 같이). 회사 안에서만 표시
   addColumn(db, 'orders', 'hold_at', 'TEXT');
   addColumn(db, 'orders', 'hold_note', 'TEXT');

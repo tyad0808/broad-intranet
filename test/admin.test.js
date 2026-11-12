@@ -315,11 +315,11 @@ test('주문 목록 칸: 관리자가 순서를 바꾸고 숨기면 목록 표 �
   await press(admin, '/admin/columns/ship/show', { show: '0' }, '/admin/columns');
   await press(admin, '/admin/columns/main/show', { show: '0' }, '/admin/columns');
   const list = (await admin.request('/')).text;
-  assert.match(list, /<span class="">주문<\/span><span class="">상태<\/span><span class="head-memo">메모<\/span><span class="">납기 · 발송<\/span><span class="head-pick">담당<\/span><span class="head-pick">디자인<\/span>/);
+  assert.match(list, /<span class="head-main"><span>주문<\/span><span class="head-product">상품명<\/span><\/span><span class="head-status">상태<\/span><span class="head-memo">메모<\/span><span class="head-due">납기 · 발송<\/span><span class="head-pick head-assign">담당<\/span><span class="head-pick head-design">디자인<\/span>/);
   assert.match(list, /--oc-main: 2; --oc-status: 3; --oc-memo: 4; --oc-due: 5; --oc-assign: 6; --oc-design: 7;/);
   assert.match(list, /\.order-list:not\(\.inbox-list\) \.c-ship \{ display: none !important; \}/, '숨긴 칸');
   await press(admin, '/admin/columns/reset', {}, '/admin/columns');
-  assert.match((await admin.request('/')).text, /<span class="">주문<\/span><span class="head-memo">메모<\/span><span class="">상태<\/span><span class="">배송 · 금액<\/span>/);
+  assert.match((await admin.request('/')).text, /<span class="head-main"><span>주문<\/span><span class="head-product">상품명<\/span><\/span><span class="head-memo">메모<\/span><span class="head-status">상태<\/span><span class="head-ship">배송 · 금액<\/span>/);
   // 직원은 못 바꾼다
   addUser(db, { email: 'staff2@broad.test' });
   const staff = await loginAs(baseUrl, 'staff2@broad.test');

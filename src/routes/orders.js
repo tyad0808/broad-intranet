@@ -429,7 +429,8 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     res.render('orders/list', {
       columns,
       columnsStyle: columnsCss(columns),
-      bodyClass: 'orders-wide', // 가로 여백을 줄이고 주문 줄을 넓게
+      bodyClass: req.user.order_view === 'detail' ? 'orders-wide' : 'orders-wide orders-line', // 가로 여백을 줄이고 주문 줄을 넓게 · 한 줄 보기(기본)
+      orderView: req.user.order_view === 'detail' ? 'detail' : 'line',
       ds: true, // 새 디자인 규칙(.ds-v2) — 지금은 이 화면에만
       title: '주문',
       logenOn: Boolean(logen && logen.hasKey),
@@ -491,6 +492,14 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
       week: buildWeek(db),
       lastRun,
     });
+  });
+
+  // 주문 목록 보기 바꾸기: 한 줄(line) · 자세히(detail). 내 계정에만
+  router.post('/me/order-view', (req, res) => {
+    const view = req.body.view === 'detail' ? 'detail' : 'line';
+    db.prepare('UPDATE users SET order_view = ? WHERE id = ?').run(view, req.user.id);
+    const back = String(req.body.back || '/');
+    res.redirect(/^\/(\?[^\s]*)?$/.test(back) ? back : '/');
   });
 
   // 채널 버튼 순서 저장 (끌어다 놓기). 내 계정에만 적용된다
