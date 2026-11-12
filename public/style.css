@@ -2400,3 +2400,66 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
 .lv-mode input { width: 18px; height: 18px; margin: 3px 0 0; flex: none; }
 .salary-input { width: 150px; height: 36px; margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .pay-table td.num strong { font-size: 16px; }
+
+/* ───────── 주문 목록: 한 줄 보기 (body.orders-line, 넓은 화면에서만) ─────────
+   구매처+이름 / 상품명(넘치면 …) / 상태(배지 옆에 채널 상태) / 택배 옆에 금액 — 한 화면에 주문을 많이
+   옵션·추가 옵션·결제 시각은 숨기고, 주문을 눌러 상세에서 본다. 보기 버튼으로 '자세히' 로 돌아간다 */
+.view-toggle { display: none; }
+.oi-more { display: none; }
+@media (min-width: 1100px) {
+  .view-toggle { display: flex; justify-content: flex-end; align-items: center; gap: 0; margin: -6px 0 8px; }
+  .view-toggle .muted { margin-right: 8px; }
+  .view-toggle button { flex: none; width: auto; height: 32px; min-height: 32px; margin: 0; padding: 0 14px; border: 1px solid var(--line); border-radius: 0; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; cursor: pointer; }
+  .view-toggle button:first-of-type { border-radius: 8px 0 0 8px; }
+  .view-toggle button:last-of-type { border-radius: 0 8px 8px 0; margin-left: -1px; }
+  .view-toggle button.on { position: relative; border-color: var(--primary); background: var(--primary-weak); color: var(--primary-dark); }
+
+  .orders-line .order-head, .orders-line .order-head + .order-list > .order-item { grid-template-columns: var(--olln-wide, 24px minmax(0, 2fr) minmax(130px, 200px) 130px 100px 150px 96px); }
+  .orders-line .order-head + .order-list > .order-item { padding-top: 5px; padding-bottom: 5px; row-gap: 0; }
+  .orders-line .order-head + .order-list .oi-check { min-height: 32px; margin: 0; top: 0; align-self: center; }
+  /* 주문 칸: [N 이름] 상품명… 외 2 */
+  .orders-line .order-list .oi-col { align-self: center; }
+  .orders-line .order-list .oi-col > .oi-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .orders-line .order-list .oi-main .oi-head { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 6px; max-width: 60%; margin: 0; overflow: hidden; line-height: 1.4; }
+  .orders-line .order-list .oi-main .oi-head > * { margin-right: 0; }
+  .orders-line .order-list .oi-main .oi-head .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .orders-line .order-list .oi-head > * { flex: none; }
+  .orders-line .order-list .oi-head > .muted { flex: none; } /* 이름은 줄이지 않고, 상품명이 대신 … 으로 줄어든다 */
+  .orders-line .order-list .oi-head .buyer { white-space: nowrap; }
+  .orders-line .order-list .oi-when, .orders-line .order-list .memo-chip, .orders-line .order-list .ev-badge { display: none; }
+  .orders-line .order-list .oi-main .oi-items { display: flex; flex: 1 1 auto; min-width: 0; }
+  .orders-line .order-list .oi-items li { flex: 1 1 auto; }
+  .orders-line .order-list .oi-items li ~ li, .orders-line .order-list .oi-opt, .orders-line .order-list .oi-addons { display: none; }
+  .orders-line .order-list .oi-name { font-size: 15px; }
+  .orders-line .order-list .oi-more { display: inline; flex: none; color: var(--muted); font-size: 14px; white-space: nowrap; }
+  /* 메모: 한 줄 (넘치면 …) */
+  .orders-line .order-list .memo-view { min-height: 32px; padding-top: 4px; padding-bottom: 4px; }
+  .orders-line .order-list .memo-text { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .orders-line .order-list .hold-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 상태: [● 신규] 결제완료 · 발주확인 전 */
+  .orders-line .order-head + .order-list .c-status { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px; }
+  .orders-line .order-list .c-status .st-badge { flex: none; height: 26px; }
+  .orders-line .order-list .st-sub { margin: 0; min-width: 0; }
+  /* 배송·금액: [택배] 53,000원 */
+  .orders-line .order-head + .order-list .c-ship { flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px; }
+  .orders-line .order-head + .order-list .c-due { flex-direction: row; align-items: center; flex-wrap: nowrap; }
+  .orders-line .order-head + .order-list .c-due .pill { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .orders-line .order-head + .order-list .stage-select, .orders-line .order-head + .order-list .assign-select { height: 32px; min-height: 32px; }
+}
+/* 1100~1439px: 메모는 따로 칸이 아니라 (있을 때만) 주문 아래 한 줄 */
+@media (min-width: 1100px) and (max-width: 1439px) {
+  .orders-line .order-head + .order-list .c-memo:not(.has-memo):not(.has-hold) { display: none; }
+}
+/* 1440px 이상: 메모도 한 칸 (관리자가 정한 자리 --oc-<칸>) → 모든 주문이 한 줄 */
+@media (min-width: 1440px) {
+  .orders-line .order-head, .orders-line .order-head + .order-list > .order-item { grid-template-columns: var(--oll-wide, 24px minmax(0, 2fr) minmax(110px, 0.5fr) minmax(130px, 200px) 130px 100px 150px 96px); }
+  .orders-line .order-head .head-memo { display: block; }
+  .orders-line .order-head + .order-list .oi-col { grid-area: 1 / var(--oc-main, 2); }
+  .orders-line .order-head + .order-list .c-memo { grid-area: 1 / var(--oc-memo, 3); align-self: center; }
+  .orders-line .order-head + .order-list .cell:not(.c-memo) { grid-row: 1; }
+  .orders-line .order-head + .order-list .c-status { grid-column: var(--oc-status, 4); }
+  .orders-line .order-head + .order-list .c-ship { grid-column: var(--oc-ship, 5); }
+  .orders-line .order-head + .order-list .c-due { grid-column: var(--oc-due, 6); }
+  .orders-line .order-head + .order-list .c-stage { grid-column: var(--oc-design, 7); }
+  .orders-line .order-head + .order-list .c-assign { grid-column: var(--oc-assign, 8); }
+}

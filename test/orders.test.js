@@ -333,8 +333,8 @@ test('카드에는 구매자 이름을 먼저, 받는 분이 다르면 괄호로
   const { db, kim } = await setup(t);
   applyOrders(db, [order(4, { buyer_name: '김현진', receiver_name: '이서연' }), order(5, { buyer_name: '박지호', receiver_name: '박지호' })]);
   const text = (await kim.request('/')).text;
-  assert.match(text, /<strong class="buyer">김현진<\/strong> \(받는 분 이서연\)/);
-  assert.match(text, /<strong class="buyer">박지호<\/strong> ·/);
+  assert.match(text, /<strong class="buyer">김현진<\/strong><span class="oi-when"> \(받는 분 이서연\)/);
+  assert.match(text, /<strong class="buyer">박지호<\/strong><span class="oi-when"> ·/);
 });
 
 
@@ -712,4 +712,21 @@ test('목록에서 바로 작업 메모: 저장하면 묶음 전체에, 주문 �
   assert.match((await kim.request(`/orders/${idOf('P1')}`)).text, /시안 2개 먼저 보내기/, '주문 화면 메모 칸과 같은 메모');
   await kim.submit('/', `/orders/${idOf('P1')}/memo`, { memo: '   ', back: '/' });
   assert.strictEqual(row('P1').memo, null);
+});
+
+test('주문 목록 보기: 기본은 한 줄, [자세히] 를 누르면 내 계정에만 자세히 보기', async t => {
+  const { db, kim, baseUrl } = await setup(t);
+  applyOrders(db, [order(7, { channel_order_id: 'O7', channel_item_id: 'P7a', product_name: '첫상품' }), order(8, { channel_order_id: 'O7', channel_item_id: 'P7b', product_name: '둘째상품' })]);
+  const first = (await kim.request('/')).text;
+  assert.match(first, /<body[^>]*class="[^"]*orders-wide orders-line/);
+  assert.match(first, /<button type="submit" name="view" value="line" class="on"/);
+  assert.match(first, /<span class="oi-more">외 1<\/span>/, '상품이 여러 개면 외 N');
+  const res = await kim.submit('/', '/me/order-view', { view: 'detail', back: '/?view=all' });
+  assert.strictEqual(res.location, '/?view=all');
+  const after = (await kim.request('/')).text;
+  assert.doesNotMatch(after, /orders-line/);
+  assert.match(after, /<button type="submit" name="view" value="detail" class="on"/);
+  const lee = await loginAs(baseUrl, 'lee@broad.test');
+  assert.match((await lee.request('/')).text, /orders-line/, '다른 직원은 그대로 한 줄');
+  assert.strictEqual((await kim.submit('/', '/me/order-view', { view: 'line', back: 'https://evil.example' })).location, '/', '바깥 주소로는 안 돌아간다');
 });
