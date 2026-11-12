@@ -361,7 +361,7 @@ test('새 주문의 디자인 단계는 디자인 작업 전이고, 목록에서
   const select = list.slice(list.indexOf(`action="/orders/${idOf('P1')}/design"`));
   assert.match(select.slice(0, 900), new RegExp(`value="${designId('디자인 작업 전')}" selected>디자인 작업 전`));
   assert.doesNotMatch(list, /class="pill stage"/, '주문 단계(발주·발주확인·발송)는 상태 칸에 나와서 목록에 따로 표시하지 않는다');
-  assert.match(list, /<span class="head-main"><span>주문<\/span><span class="head-product">상품명<\/span><\/span><span class="head-memo">메모<\/span><span class="head-status">상태<\/span><span class="head-ship">배송 · 금액<\/span><span class="head-due">납기 · 발송<\/span><span class="head-pick head-design">디자인<\/span><span class="head-pick head-assign">담당<\/span>/, '보는 칸 → 고르는 칸 순서 (처음 순서)');
+  assert.match(list, /<span class="head-main" data-col="main"><span>주문<\/span><span class="head-product">상품명<\/span><\/span><span class="head-memo" data-col="memo">메모<\/span><span class="head-status" data-col="status">상태<\/span><span class="head-ship" data-col="ship">배송 · 금액<\/span><span class="head-due" data-col="due">납기 · 발송<\/span><span class="head-pick head-design" data-col="design">디자인<\/span><span class="head-pick head-assign" data-col="assign">담당<\/span>/, '보는 칸 → 고르는 칸 순서 (처음 순서)');
   await kim.submit('/', `/orders/${idOf('P1')}/design`, { design_stage_id: String(designId('디자인 작업 중')), back: '/' });
   assert.deepStrictEqual([row('P1').design_stage_id, row('P9').design_stage_id], [designId('디자인 작업 중'), designId('디자인 작업 중')]);
   // 잘못 골랐으면 다시 '디자인 작업 전' 으로
@@ -729,4 +729,23 @@ test('주문 목록 보기: 기본은 한 줄, [자세히] 를 누르면 내 계
   const lee = await loginAs(baseUrl, 'lee@broad.test');
   assert.match((await lee.request('/')).text, /orders-line/, '다른 직원은 그대로 한 줄');
   assert.strictEqual((await kim.submit('/', '/me/order-view', { view: 'line', back: 'https://evil.example' })).location, '/', '바깥 주소로는 안 돌아간다');
+});
+
+test('한 줄 보기 칸 너비: 세로선을 끌어 저장하면 내 계정에만, 이상한 값은 범위 안으로, 비우면 처음 너비', async t => {
+  const { db, kim, baseUrl } = await setup(t);
+  applyOrders(db, [order(1)]);
+  const first = (await kim.request('/')).text;
+  assert.match(first, /--oll-buyer: 132px;/, '처음 이름 칸 너비');
+  assert.match(first, /data-col-widths="\{\}"/);
+  assert.match(first, /<script src="\/col-resize.js"><\/script>/);
+  const res = await kim.submit('/', '/me/order-widths', { widths: JSON.stringify({ buyer: 180, memo: 9999, status: 'x', evil: 50, main: 300 }) });
+  assert.deepStrictEqual(JSON.parse(res.text), { ok: true, widths: { buyer: 180, memo: 420 } }, '모르는 칸·상품명 칸은 버리고, 너무 크면 최대값');
+  const after = (await kim.request('/')).text;
+  assert.match(after, /--oll-buyer: 180px;/);
+  assert.match(after, /--oll-wide: 24px minmax\(0, 2fr\) 420px /, '메모 칸이 정한 너비로');
+  assert.match(after, /data-col-reset >칸 너비 처음대로/, '바꿨으면 되돌리기 버튼이 보인다');
+  const lee = await loginAs(baseUrl, 'lee@broad.test');
+  assert.match((await lee.request('/')).text, /--oll-buyer: 132px;/, '다른 직원은 그대로');
+  await kim.submit('/', '/me/order-widths', { widths: '{}' });
+  assert.strictEqual(db.prepare("SELECT order_widths FROM users WHERE email = 'kim@broad.test'").get().order_widths, null);
 });
