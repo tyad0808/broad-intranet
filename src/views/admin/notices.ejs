@@ -57,10 +57,12 @@
               </div>
               <label class="check"><input type="checkbox" name="important" value="1" <%= n.important ? 'checked' : '' %>> 중요 공지</label>
               <label class="check"><input type="checkbox" name="reshow" value="1"> 이미 확인한 직원에게도 다시 팝업으로 띄우기</label>
-              <div><button type="submit" class="btn-sm">고친 내용 저장</button></div>
+              <div><button type="submit" class="btn-sm primary">고친 내용 저장</button></div>
             </form>
-            <form method="post" action="/admin/notices/<%= n.id %>/delete" class="inline" data-confirm="'<%= n.title %>' 공지를 지울까요? 직원들의 공지 목록에서도 사라져요." data-once>
+            <%# 지우기는 저장 버튼과 떨어뜨려 선 아래 오른쪽에 (잘못 누르지 않게) %>
+            <form method="post" action="/admin/notices/<%= n.id %>/delete" class="notice-delete" data-confirm="'<%= n.title %>' 공지를 지울까요? 직원들의 공지 목록에서도 사라져요." data-once>
               <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <span class="muted small">더 필요 없는 공지는 지울 수 있어요. 지우면 되돌릴 수 없어요.</span>
               <button type="submit" class="btn-sm danger">공지 지우기</button>
             </form>
           </details>

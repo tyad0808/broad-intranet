@@ -2323,6 +2323,7 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
 .notice-form .row-2 { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
 .notice-form .row-2 label { flex: 1 1 160px; }
 .notice-form .check { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; }
+.notice-delete { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 24px 0 0; padding-top: 16px; border-top: 1px solid var(--line); }
 /* 홈 맨 위: 지금 보이는 공지 한 줄 */
 .hm-notice { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text); font-size: 15px; text-decoration: none; }
 .hm-notice:hover { background: var(--hover); text-decoration: none; }
