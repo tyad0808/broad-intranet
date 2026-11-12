@@ -7,12 +7,12 @@ const { getSetting, setSetting } = require('./collector');
 // line: 한 줄 보기 (상태·배송 칸은 글자를 옆으로 붙여 쓰므로 조금 넓게)
 const COLUMNS = {
   main: { label: '주문', wide: 'minmax(0, 1.6fr)', mid: 'minmax(0, 1.4fr)', line: 'minmax(0, 2fr)', fixed: true },
-  memo: { label: '메모', wide: 'minmax(170px, 0.7fr)', mid: 'minmax(170px, 0.7fr)', line: 'minmax(110px, 0.5fr)' }, // 1500px 이상에서만 따로 칸
-  status: { label: '상태', wide: '140px', mid: '132px', line: 'minmax(130px, 200px)' },
-  ship: { label: '배송 · 금액', wide: '104px', mid: '100px', line: '130px' },
-  due: { label: '납기 · 발송', wide: '132px', mid: '124px', line: '100px' },
-  design: { label: '디자인', wide: '168px', mid: '164px', line: '150px', pick: true },
-  assign: { label: '담당', wide: '112px', mid: '104px', line: '96px', pick: true },
+  memo: { label: '메모', wide: 'minmax(170px, 0.7fr)', mid: 'minmax(170px, 0.7fr)', line: 'minmax(100px, 0.4fr)' }, // 1500px 이상에서만 따로 칸
+  status: { label: '상태', wide: '140px', mid: '132px', line: 'minmax(120px, 180px)' },
+  ship: { label: '배송 · 금액', wide: '104px', mid: '100px', line: '118px' },
+  due: { label: '납기 · 발송', wide: '132px', mid: '124px', line: '92px' },
+  design: { label: '디자인', wide: '168px', mid: '164px', line: '140px', pick: true },
+  assign: { label: '담당', wide: '112px', mid: '104px', line: '90px', pick: true },
 };
 const DEFAULT_ORDER = ['main', 'memo', 'status', 'ship', 'due', 'design', 'assign'];
 const KEY = 'order_columns';
