@@ -348,6 +348,8 @@ function createApp({
   });
 
   // 관리자 › 메일 계정 (앱 비밀번호 등록). 메일 계정 모음(mailRegistry)이 없으면 '쓸 수 없음' 안내
+  // 휴가 관리(/admin/leave)는 부관리자도 쓰므로 관리자 전용 화면들보다 먼저 연결한다
+  app.use(requireActive, leaveRoutes(db, notifier));
   app.use('/admin', requireAdmin, mailAccountRoutes(inbox.mailRegistry || null));
   // 관리자 › 판매처 연결. 자사몰은 서버 설정(.env)만 — 화면에는 상태만
   app.use('/admin', requireAdmin, channelRoutes(channelRegistry, {
@@ -384,7 +386,6 @@ function createApp({
   });
   app.use(requireActive, calendarRoutes(db, notifier));
   app.use(requireActive, noticeRoutes(db));
-  app.use(requireActive, leaveRoutes(db, notifier));
   app.use(requireActive, inboxRoutes(db, { ...inbox, notifier, brandName: () => brand.view().name }));
   app.use(requireActive, templateRoutes(db));
   app.use(requireActive, manualRoutes(db, notifier));

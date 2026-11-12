@@ -1,0 +1,142 @@
+<%- include('../partials/header') %>
+<%# 휴가 관리 (관리자·부관리자): 승인·반려, 직원별 입사일·남은 휴가, 일수 조정. 부관리자에게는 관리자 메뉴 묶음 대신 제목만 %>
+<% const d = n => fmtDays(n);
+   const kindOf = r => KINDS[r.kind];
+   const stTag = r => `<span class="lv-st lv-${r.status}">${STATUS[r.status]}</span>`; %>
+<% if (user.role === 'admin') { %>
+  <%- include('../partials/admin-tabs') %>
+<% } else { %>
+  <div class="page-head"><div class="title-row"><h1 class="page-title">휴가 관리</h1><a href="/leave" class="page-sub">내 휴가 ›</a></div></div>
+<% } %>
+<%# 규칙: 1년 미만은 한 달마다 1일, 1년 이상은 새해(1월 1일)마다 정한 일수 %>
+<section class="card lv-rule-card" id="rule">
+  <h2>휴가가 생기는 규칙</h2>
+  <ul class="lv-rule-list">
+    <li>입사 1년 미만: 한 달을 채울 때마다 <strong>1일</strong> (최대 11일, 입사일 기준)</li>
+    <li>근속 1년 이상:
+      <form method="post" action="/leave/yearly" class="lv-yearly" data-once>
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <label class="lv-mode"><input type="radio" name="mode" value="legal" <%= yearlyMode === 'legal' ? 'checked' : '' %>> <span><strong>근로기준법 기준 자동</strong> · 입사일(만 1년·2년) 15일, 만 3년부터 2년마다 1일 더, 최대 25일</span></label>
+        <label class="lv-mode"><input type="radio" name="mode" value="manual" <%= yearlyMode === 'manual' ? 'checked' : '' %>> <span><strong>관리자가 매년 직접</strong> · 아래 '직원별 휴가'의 남은 칸에 넣어요</span></label>
+        <button type="submit" class="btn-sm">저장</button>
+      </form>
+    </li>
+    <li>반차(오전·오후)는 0.5일. 직원은 남은 일수 안에서만 신청할 수 있어요.</li>
+  </ul>
+  <p class="muted small">참고: 근로기준법 연차는 상시 5명 이상 회사, 1년 출근율 80% 이상일 때 기준이에요. 5명 미만 회사는 연차 규정이 적용되지 않아요. 정확한 판단은 노무사에게 확인해 주세요.</p>
+</section>
+
+<%# ④ 관리자·부관리자: 승인 대기 %>
+<section class="card" id="waiting">
+  <h2>승인 대기 <span class="badge-count"><%= waiting.length %>건</span></h2>
+  <% if (!waiting.length) { %>
+    <p class="muted">기다리는 신청이 없어요.</p>
+  <% } else { %>
+    <ul class="lv-list">
+      <% waiting.forEach(r => { const s = (staff.find(u => u.id === r.user_id) || {}).sum; %>
+        <li class="lv-row lv-wait">
+          <span class="lv-when"><strong><%= r.user_name %> · <%= dateText(r) %></strong>
+            <span class="muted"><%= kindOf(r) %> · <%= d(r.days) %>일<%= r.reason ? ` · ${r.reason}` : '' %><% if (s) { %> · 남은 휴가 <%= d(s.left) %>일<%= s.left - r.days < 0 ? ' (모자람)' : '' %><% } %></span></span>
+          <form method="post" action="/leave/<%= r.id %>/approve" class="inline" data-once>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <button type="submit" class="btn-sm primary">승인</button>
+          </form>
+          <form method="post" action="/leave/<%= r.id %>/reject" class="inline lv-reject" data-confirm="<%= r.user_name %> 님의 휴가를 반려할까요?" data-once>
+            <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+            <input type="text" name="note" maxlength="200" placeholder="반려 이유 (선택)" aria-label="반려 이유">
+            <button type="submit" class="btn-sm danger">반려</button>
+          </form>
+        </li>
+      <% }) %>
+    </ul>
+  <% } %>
+</section>
+
+<%# ⑤ 직원별 휴가 %>
+<section class="card" id="staff">
+  <h2>직원별 휴가 <span class="h2-sub">남은 일수를 고쳐 저장하면 그 일수에서 다시 세요. 입사일을 넣어 두면 앞으로 생기는 휴가가 저절로 더해져요</span></h2>
+  <div class="lv-table-wrap">
+    <table class="lv-table">
+      <thead><tr><th>직원</th><th class="num">남은 (직접 고치기)</th><th>맞춘 날</th><th class="num">그 뒤 생긴</th><th class="num">조정</th><th class="num">쓴</th><th>입사일</th><th>근속</th><th>다음에 생김</th></tr></thead>
+      <tbody>
+        <% staff.forEach(u => { const s = u.sum; %>
+          <tr>
+            <th scope="row"><%= u.name %><% if (u.job_name) { %><span class="muted small"> · <%= u.job_name %></span><% } %></th>
+            <td class="num">
+              <form method="post" action="/leave/left/<%= u.id %>" class="lv-hire lv-left" data-once>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="number" name="left" value="<%= d(s.left) %>" step="0.5" min="0" max="200" class="<%= s.left < 0 ? 'lv-minus' : '' %>" aria-label="<%= u.name %> 지금 남은 휴가 일수">
+                <button type="submit" class="btn-sm">저장</button>
+              </form>
+            </td>
+            <td><%= s.base ? `${s.base.on} (${d(s.base.left)}일)` : '-' %></td>
+            <td class="num"><%= d(s.granted) %></td>
+            <td class="num"><%= s.adjusted ? `${s.adjusted > 0 ? '+' : ''}${d(s.adjusted)}` : '-' %></td>
+            <td class="num"><%= d(s.used) %><%= s.pending ? ` (+대기 ${d(s.pending)})` : '' %></td>
+            <td>
+              <form method="post" action="/leave/hire/<%= u.id %>" class="lv-hire">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="date" name="hire_date" value="<%= u.hire_date || '' %>" max="<%= today %>" aria-label="<%= u.name %> 입사일">
+                <button type="submit" class="btn-sm">저장</button>
+              </form>
+            </td>
+            <td><%= s.service || '-' %></td>
+            <td><%= s.next ? `${s.next.date} (+${s.next.days})` : '-' %></td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="lv-grid">
+  <%# ⑥ 일수 직접 조정 %>
+  <section class="card" id="adjust">
+    <h2>휴가 일수 조정</h2>
+    <p class="muted small">특별 휴가처럼 더하거나 빼는 일수를 이유와 함께 넣어요. 0.5일 단위, 빼려면 앞에 - (예: -2). 지금 남은 일수를 통째로 고칠 때는 위 '직원별 휴가'의 남은 칸에서 해요.</p>
+    <form method="post" action="/leave/adjust" class="lv-form" data-once>
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <div class="lv-dates">
+        <label>직원
+          <select name="user_id" required>
+            <option value="">고르세요</option>
+            <% staff.forEach(u => { %><option value="<%= u.id %>"><%= u.name %> (남은 <%= d(u.sum.left) %>일)</option><% }) %>
+          </select>
+        </label>
+        <label>일수 <input type="number" name="days" step="0.5" min="-60" max="60" required placeholder="예) 3 또는 -0.5"></label>
+      </div>
+      <label>이유 <input type="text" name="note" maxlength="100" required placeholder="예) 창립기념 특별 휴가"></label>
+      <div><button type="submit" class="btn-sm">조정하기</button></div>
+    </form>
+    <% if (adjusts.length) { %>
+      <ul class="lv-list compact">
+        <% adjusts.forEach(a => { %><li class="lv-row"><span class="lv-when"><strong><%= a.user_name %> <%= a.days > 0 ? '+' : '' %><%= d(a.days) %>일</strong><span class="muted"><%= a.note %> · <%= a.creator || '' %> · <%= String(a.created_at).slice(0, 10) %></span></span></li><% }) %>
+      </ul>
+    <% } %>
+  </section>
+
+  <%# ⑦ 올해 처리한 휴가 (승인된 휴가는 여기서 취소 → 달력 일정도 지워짐) %>
+  <section class="card">
+    <h2>올해 처리한 휴가</h2>
+    <% if (!recent.length) { %>
+      <p class="muted">아직 없어요.</p>
+    <% } else { %>
+      <ul class="lv-list compact">
+        <% recent.forEach(r => { %>
+          <li class="lv-row">
+            <span class="lv-when"><strong><%= r.user_name %> · <%= dateText(r) %></strong><span class="muted"><%= kindOf(r) %> · <%= d(r.days) %>일<%= r.decider ? ` · ${r.decider}` : '' %></span></span>
+            <%- stTag(r) %>
+            <% if (r.status === 'approved') { %>
+              <form method="post" action="/leave/<%= r.id %>/cancel" class="inline" data-confirm="<%= r.user_name %> 님의 <%= dateText(r) %> 휴가 승인을 취소할까요? 달력 일정도 지워져요." data-once>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <button type="submit" class="btn-sm ghost">승인 취소</button>
+              </form>
+            <% } %>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+  </section>
+</div>
+
+<%- include('../partials/footer') %>

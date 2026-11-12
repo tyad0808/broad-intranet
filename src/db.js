@@ -491,6 +491,16 @@ function migrate(db) {
       created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_leave_user ON leave_requests(user_id, start_date);
+    -- 휴가 '지금 남은 일수' 맞추기 (관리자): 가장 최근 것부터 계산을 다시 시작한다
+    --   남은 = 맞춘 일수 + 그 뒤에 생긴 휴가 + 그 뒤 조정 − 그 뒤 승인된 휴가
+    CREATE TABLE IF NOT EXISTS leave_baseline (
+      id          INTEGER PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id),
+      left_days   REAL    NOT NULL,
+      set_on      TEXT    NOT NULL,              -- YYYY-MM-DD (한국 날짜). 이날까지 생긴 휴가는 이 일수에 들어 있다
+      created_by  INTEGER REFERENCES users(id),
+      created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
     -- 휴가 일수 직접 조정 (처음 시작할 때 남은 일수 맞추기, 특별 휴가 등). +/- 일수와 이유
     CREATE TABLE IF NOT EXISTS leave_adjust (
       id          INTEGER PRIMARY KEY,

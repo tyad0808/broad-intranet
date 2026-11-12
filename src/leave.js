@@ -1,10 +1,14 @@
 // 휴가(월차·연차) 일수 계산 (사용자 요청 2026-11)
 //   - 입사 1년 미만: 한 달을 채울 때마다 1개 (입사일의 다음 달 같은 날, 최대 11개)
-//   - 입사 1년 이상: 입사일(1년·2년·…)마다 14개
+//   - 입사 1년 이상: 근로기준법 기준으로 입사일(만 n년)마다 자동 — 만 1·2년 15일, 만 3년부터 2년마다 +1일, 최대 25일 (기본)
+//       관리자 › 휴가 관리 에서 '관리자가 매년 직접 넣기' 로 바꾸면 자동으로 안 더한다 (settings.leave_yearly_mode)
+//       그날 근속 1년이 된 직원만. 입사 1년이 되는 날부터 다음 1월 1일 사이에는 새로 생기지 않는다 (필요하면 관리자가 조정)
 //   - 반차(오전·오후)는 0.5개, 종일은 평일(월~금) 수만큼
-//   - 남은 일수 = 생긴 일수 + 직접 조정 − 승인된 휴가. 해가 바뀌어도 저절로 없어지지 않는다 (필요하면 관리자가 조정)
+//   - 관리자가 '지금 남은 일수' 를 맞추면 (leave_baseline) 그 일수에서 다시 센다:
+//       남은 = 맞춘 일수 + 그 뒤에 생긴 휴가 + 그 뒤 조정 − 그 뒤 승인된 휴가
+//     맞춘 적이 없으면 입사일부터 센다. 해가 바뀌어도 남은 휴가가 저절로 없어지지는 않는다
 const MONTHLY_MAX = 11;
-const YEARLY_DAYS = 14;
+const YEARLY_MODE = 'legal'; // 기본: 근로기준법 기준 자동. 관리자 화면에서 '매년 직접 넣기'(manual)로 바꿀 수 있다 (사용자 요청 2026-11)
 const KINDS = { full: '종일', am: '오전 반차', pm: '오후 반차' };
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -24,25 +28,32 @@ function addMonths(ymd, n) {
 
 const isDate = s => DATE_RE.test(String(s || '')) && toStr(toDate(s)) === s;
 
+// 1년 이상 연차 (근로기준법 60조): 만 n년 되는 날 15일, 만 3년부터 2년마다 1일 더 (최대 25일)
+//   만 1·2년 15 · 만 3·4년 16 · 만 5·6년 17 · 만 7·8년 18 … 25
+const legalDays = n => Math.min(25, 15 + Math.floor((n - 1) / 2));
+
 // 입사일부터 오늘까지 생긴 휴가 [{ date, days, label }] 와 다음에 생길 것
-function grantsOf(hireDate, today = kstToday()) {
-  if (!isDate(hireDate) || hireDate > today) return { grants: [], next: isDate(hireDate) ? { date: addMonths(hireDate, 1), days: 1, label: '입사 1개월' } : null };
+//   mode: 'legal' 1년 이상도 입사일마다 법 기준으로 자동 · 'manual' 1년 이상은 관리자가 매년 직접 (1년 미만 매월 1일은 둘 다 자동)
+function grantsOf(hireDate, today = kstToday(), mode = YEARLY_MODE) {
+  if (!isDate(hireDate)) return { grants: [], next: null };
   const grants = [];
-  let next = null;
+  const future = [];
   for (let k = 1; k <= MONTHLY_MAX; k += 1) {
     const date = addMonths(hireDate, k);
     const g = { date, days: 1, label: `입사 ${k}개월` };
-    if (date <= today) grants.push(g);
-    else { next = next || g; break; }
+    if (date <= today) grants.push(g); else { future.push(g); break; }
   }
-  for (let n = 1; n <= 60; n += 1) {
-    const date = addMonths(hireDate, 12 * n);
-    const g = { date, days: YEARLY_DAYS, label: `입사 ${n}년` };
-    if (date <= today) grants.push(g);
-    else { next = next || g; break; }
+  for (let n = 1; mode === 'legal' && n <= 60; n += 1) {
+    const g = { date: addMonths(hireDate, 12 * n), days: legalDays(n), label: `만 ${n}년` };
+    if (g.date <= today) grants.push(g); else { future.push(g); break; }
   }
-  return { grants, next };
+  future.sort((a, b) => (a.date < b.date ? -1 : 1));
+  return { grants, next: future[0] || null };
 }
+
+// 관리자 › 휴가 관리 에서 고른 방식 (settings.leave_yearly_mode)
+const yearlyModeOf = db => ((db.prepare("SELECT value FROM settings WHERE key = 'leave_yearly_mode'").get() || {}).value === 'manual' ? 'manual' : 'legal');
+
 
 // 근속: '1년 3개월' 처럼
 function serviceText(hireDate, today = kstToday()) {
@@ -80,17 +91,22 @@ function readRequest(body) {
   return { start, end, kind, days, reason };
 }
 
-// 직원 한 명의 휴가 현황
+// 직원 한 명의 휴가 현황 (맞춘 일수가 있으면 그때부터)
 function summaryOf(db, user, today = kstToday()) {
-  const { grants, next } = grantsOf(user.hire_date, today);
+  const { grants: all, next } = grantsOf(user.hire_date, today, yearlyModeOf(db));
+  const base = db.prepare('SELECT left_days, set_on, created_at FROM leave_baseline WHERE user_id = ? ORDER BY id DESC LIMIT 1').get(user.id) || null;
+  const grants = base ? all.filter(g => g.date > base.set_on) : all;
+  const since = base ? base.created_at : '0000';
   const granted = grants.reduce((s, g) => s + g.days, 0);
-  const adjusted = db.prepare('SELECT COALESCE(SUM(days), 0) AS n FROM leave_adjust WHERE user_id = ?').get(user.id).n;
-  const used = db.prepare("SELECT COALESCE(SUM(days), 0) AS n FROM leave_requests WHERE user_id = ? AND status = 'approved'").get(user.id).n;
+  const adjusted = db.prepare('SELECT COALESCE(SUM(days), 0) AS n FROM leave_adjust WHERE user_id = ? AND created_at >= ?').get(user.id, since).n;
+  const used = db.prepare("SELECT COALESCE(SUM(days), 0) AS n FROM leave_requests WHERE user_id = ? AND status = 'approved' AND COALESCE(decided_at, created_at) >= ?").get(user.id, since).n;
   const pending = db.prepare("SELECT COALESCE(SUM(days), 0) AS n FROM leave_requests WHERE user_id = ? AND status = 'pending'").get(user.id).n;
-  return { hireDate: user.hire_date || '', service: serviceText(user.hire_date, today), grants, next, granted, adjusted, used, pending, left: granted + adjusted - used };
+  const start = base ? base.left_days : 0;
+  return { hireDate: user.hire_date || '', service: serviceText(user.hire_date, today), grants, next, granted, adjusted, used, pending,
+    base: base ? { left: base.left_days, on: base.set_on } : null, left: start + granted + adjusted - used };
 }
 
 // 일수 보기: 1 / 0.5 / 1.5
 const fmtDays = n => (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
-module.exports = { KINDS, MONTHLY_MAX, YEARLY_DAYS, addMonths, grantsOf, serviceText, daysOf, readRequest, summaryOf, fmtDays, isDate, kstToday };
+module.exports = { KINDS, MONTHLY_MAX, YEARLY_MODE, yearlyModeOf, legalDays, addMonths, grantsOf, serviceText, daysOf, readRequest, summaryOf, fmtDays, isDate, kstToday };
