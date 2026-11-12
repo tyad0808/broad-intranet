@@ -6,4 +6,4 @@
 - 설정값은 `getSetting` / `setSetting` (`src/collector.js`).
 - 날짜 모양이 채널마다 다르다 (스마트스토어 `+09:00`, 수기 `Z`). 비교·정렬은 `datetime()` 으로 맞춘다 — `ORDER_TIME` (`src/retention.js`).
 - 주문은 `(channel, channel_order_id)` 묶음 단위로 다룬다.
-- 테스트: `npm test` 가 모두 통과해야 올린다. 화면 문구를 바꾸면 그 문구를 찾는 테스트도 같이 고친다. 도우미: `test/helpers.js` 의 `startServer`, `loginAs`, `submit`.
+- 테스트: `npm test` 가 모두 통과해야 올린다. **작은 수정은 간단히 (사용자 허락, 2026-11):** 고치는 동안은 관련 테스트만 (`--test-name-pattern`), 전체 `npm test` 는 올리기 직전에 한 번만. 화면 문구를 바꾸면 그 문구를 찾는 테스트도 같이 고친다. 도우미: `test/helpers.js` 의 `startServer`, `loginAs`, `submit`.
