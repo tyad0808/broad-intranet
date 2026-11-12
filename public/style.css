@@ -2458,10 +2458,11 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
   .orders-line .order-head .head-main { display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 8px; }
   .orders-line .order-head .head-product { display: block; position: relative; }
   .orders-line .order-head .head-main > span, .orders-line .order-head > span:not(.oi-check) { text-align: center; } /* 가운데 정렬은 머리만 (사용자 요청) */
-  .orders-line .order-head .head-product::before, .orders-line .order-head .head-memo::before, .orders-line .order-head .head-status::before, .orders-line .order-head .head-ship::before {
+  /* 머리는 칸마다 세로선 (사용자 요청) */
+  .orders-line .order-head .head-product::before, .orders-line .order-head > span:not(.oi-check)::before {
     content: ''; position: absolute; left: -5px; top: -8px; bottom: -8px; border-left: 1px solid var(--line); }
   .orders-line .order-head .head-product::before { left: -4px; }
-  .orders-line .order-head .head-memo, .orders-line .order-head .head-status, .orders-line .order-head .head-ship { position: relative; }
+  .orders-line .order-head > span:not(.oi-check) { position: relative; }
   .orders-line .order-head + .order-list .oi-col { align-self: stretch; display: flex; align-items: center; min-width: 0; }
   .orders-line .order-head + .order-list .oi-col > .oi-main { position: relative; flex: 1 1 auto; align-self: stretch; }
   .orders-line .order-head + .order-list .oi-col > .oi-main::before { content: ''; position: absolute; left: 116px; top: -3px; bottom: -3px; border-left: 1px solid var(--line); }
