@@ -14,7 +14,7 @@ const { canConfirm, canDispatch, canDelay, checkDispatchInput, checkDelayInput, 
 const { SHIP_METHODS, COURIERS, DEFAULT_METHOD, DEFAULT_COURIER, orderShipWay, shipWay } = require('../channels/shipping');
 const { sheetView, SHIP_CHOICES, termsOf, phoneOf, shipChoiceFor } = require('../proofs');
 const { ORDER_TIME, hideCutoff, hideDays, periodRange, periodLabel, quickPeriods } = require('../retention');
-const { loadColumns, columnsCss } = require('../orderColumns');
+const { loadColumns, columnsCss, readWidths, COLUMNS: ORDER_COLUMNS } = require('../orderColumns');
 const { evidenceFor, evidenceView, GROUP_TAX_PENDING } = require('../evidence');
 
 const BULK_MAX = 50; // 한 번에 일괄 처리할 수 있는 주문 수
@@ -426,9 +426,12 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
 
     // 칸 순서·보이기 (관리자 › 주문 목록 칸)
     const columns = loadColumns(db);
+    const lineWidths = readWidths(req.user.order_widths); // 한 줄 보기 칸 너비 (내가 끌어서 정한 것)
     res.render('orders/list', {
       columns,
-      columnsStyle: columnsCss(columns),
+      columnsStyle: columnsCss(columns, lineWidths),
+      lineWidths,
+      lineDefaults: Object.fromEntries(Object.entries(ORDER_COLUMNS).map(([k, c]) => [k, c.line])),
       bodyClass: req.user.order_view === 'detail' ? 'orders-wide' : 'orders-wide orders-line', // 가로 여백을 줄이고 주문 줄을 넓게 · 한 줄 보기(기본)
       orderView: req.user.order_view === 'detail' ? 'detail' : 'line',
       ds: true, // 새 디자인 규칙(.ds-v2) — 지금은 이 화면에만
@@ -500,6 +503,14 @@ function orderRoutes(db, notifier, actions, collector = null, logen = null, proo
     db.prepare('UPDATE users SET order_view = ? WHERE id = ?').run(view, req.user.id);
     const back = String(req.body.back || '/');
     res.redirect(/^\/(\?[^\s]*)?$/.test(back) ? back : '/');
+  });
+
+  // 한 줄 보기 칸 너비 저장 (표 머리 세로선을 끌어서). 내 계정에만. 빈 값이면 처음 너비로
+  router.post('/me/order-widths', (req, res) => {
+    const widths = readWidths(String(req.body.widths || '{}').slice(0, 1000));
+    const text = Object.keys(widths).length ? JSON.stringify(widths) : null;
+    db.prepare('UPDATE users SET order_widths = ? WHERE id = ?').run(text, req.user.id);
+    res.json({ ok: true, widths });
   });
 
   // 채널 버튼 순서 저장 (끌어다 놓기). 내 계정에만 적용된다

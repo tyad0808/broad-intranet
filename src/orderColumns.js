@@ -14,6 +14,24 @@ const COLUMNS = {
   design: { label: '디자인', wide: '168px', mid: '164px', line: '140px', pick: true },
   assign: { label: '담당', wide: '112px', mid: '104px', line: '90px', pick: true },
 };
+// 한 줄 보기: 직원이 표 머리 세로선을 끌어서 정하는 칸 너비 (px, 내 계정에만). 상품명 칸은 남는 너비를 다 쓴다
+//   buyer = 주문 칸 안의 판매처·이름 칸
+const WIDTH_LIMITS = { buyer: [70, 320], memo: [60, 420], status: [70, 320], ship: [70, 260], due: [60, 220], design: [90, 260], assign: [60, 200] };
+const BUYER_DEFAULT = 132;
+
+// 저장된 글자(JSON) → { 칸: px } (모르는 칸·이상한 값은 버리고, 범위 안으로)
+function readWidths(json) {
+  let raw = {};
+  try { raw = JSON.parse(json || '{}'); } catch { raw = {}; }
+  const out = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  for (const [key, [min, max]] of Object.entries(WIDTH_LIMITS)) {
+    const n = Math.round(Number(raw[key]));
+    if (Number.isFinite(n) && n > 0) out[key] = Math.min(max, Math.max(min, n));
+  }
+  return out;
+}
+
 const DEFAULT_ORDER = ['main', 'memo', 'status', 'ship', 'due', 'design', 'assign'];
 const KEY = 'order_columns';
 
@@ -60,16 +78,17 @@ function showColumn(db, key, show) {
 // 주문 목록 화면에 넣는 <style> 내용 (값은 위의 정해진 글자로만 만든다, 직원이 쓴 글자는 들어가지 않음)
 //   1500px 이상: 메모도 따로 한 칸 (--oc-wide, --oc-<칸> = 몇 번째 칸)
 //   1100~1499px: 메모는 주문 칸 아래 한 줄로 (메모를 뺀 칸 줄 --ocn-wide·--ocn-mid, --ocn-<칸>)
-function columnsCss(list) {
+function columnsCss(list, lineWidths = {}) {
   const shown = list.filter(c => c.show);
   const noMemo = shown.filter(c => c.key !== 'memo');
-  const widths = (cols, size) => `24px ${cols.map(c => COLUMNS[c.key][size]).join(' ')}`;
+  const widths = (cols, size) => `24px ${cols.map(c => (size === 'line' && lineWidths[c.key] ? `${lineWidths[c.key]}px` : COLUMNS[c.key][size])).join(' ')}`;
   const vars = [
     `--oc-wide: ${widths(shown, 'wide')};`,
     `--ocn-wide: ${widths(noMemo, 'wide')};`,
     `--ocn-mid: ${widths(noMemo, 'mid')};`,
     `--oll-wide: ${widths(shown, 'line')};`,
     `--olln-wide: ${widths(noMemo, 'line')};`,
+    `--oll-buyer: ${lineWidths.buyer || BUYER_DEFAULT}px;`,
     ...shown.map((c, i) => `--oc-${c.key}: ${i + 2};`),
     ...noMemo.map((c, i) => `--ocn-${c.key}: ${i + 2};`),
   ];
@@ -77,4 +96,4 @@ function columnsCss(list) {
   return [`:root { ${vars.join(' ')} }`, ...hidden].join('\n');
 }
 
-module.exports = { COLUMNS, DEFAULT_ORDER, loadColumns, saveColumns, moveColumn, showColumn, columnsCss };
+module.exports = { WIDTH_LIMITS, BUYER_DEFAULT, readWidths, COLUMNS, DEFAULT_ORDER, loadColumns, saveColumns, moveColumn, showColumn, columnsCss };

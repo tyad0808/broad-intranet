@@ -172,6 +172,8 @@
 <form method="post" action="/me/order-view" class="view-toggle" aria-label="주문 목록 보기">
   <input type="hidden" name="_csrf" value="<%= csrfToken %>">
   <input type="hidden" name="back" value="<%= currentUrl %>">
+  <%# 칸 너비를 바꿨을 때만 보이는 되돌리기 (col-resize.js) %>
+  <% if (orderView === 'line') { %><button type="button" class="col-reset" data-col-reset <%= Object.keys(lineWidths).length ? '' : 'hidden' %>>칸 너비 처음대로</button><% } %>
   <span class="muted small">보기</span>
   <button type="submit" name="view" value="line" class="<%= orderView === 'line' ? 'on' : '' %>" aria-pressed="<%= orderView === 'line' %>">한 줄</button>
   <button type="submit" name="view" value="detail" class="<%= orderView === 'detail' ? 'on' : '' %>" aria-pressed="<%= orderView === 'detail' %>">자세히</button>
@@ -215,12 +217,13 @@
 <% } else { %>
   <style><%- columnsStyle %></style>
   <%# 표 머리 (넓은 화면에서만 보임). 체크박스는 처리할 수 있는 주문 모두 선택 %>
-  <div class="order-head">
+  <%# 한 줄 보기: 표 머리 세로선을 끌어서 칸 너비를 바꾼다 (col-resize.js, 내 계정에 저장) %>
+  <div class="order-head" data-col-widths="<%= JSON.stringify(lineWidths) %>" data-col-defaults="<%= JSON.stringify(lineDefaults) %>" data-csrf="<%= csrfToken %>">
     <span class="oi-check"><% if (anyAction) { %><label class="check-all" title="처리할 수 있는 주문 모두 선택"><input type="checkbox" data-check-all><span class="check-all-text">처리할 수 있는 주문 모두 선택</span></label><% } %></span>
     <%# 왼쪽은 보는 칸(상태·배송·납기), 오른쪽은 직원이 고르는 칸(디자인·담당) %>
     <%# 칸 순서·보이기는 관리자 › 주문 목록 칸 에서 정한다 (칸 자리는 아래 <style> 의 --oc-*) %>
     <%# 한 줄 보기에서는 주문 칸을 [주문(판매처·이름) | 상품명] 두 칸으로 나눠 머리도 둘 %>
-    <% columns.filter(col => col.show).forEach(col => { %><% if (col.key === 'main') { %><span class="head-main"><span><%= col.label %></span><span class="head-product">상품명</span></span><% } else { %><span class="<%= [col.pick ? 'head-pick' : '', `head-${col.key}`].filter(Boolean).join(' ') %>"><%= col.label %></span><% } %><% }) %>
+    <% columns.filter(col => col.show).forEach(col => { %><% if (col.key === 'main') { %><span class="head-main" data-col="main"><span><%= col.label %></span><span class="head-product">상품명</span></span><% } else { %><span class="<%= [col.pick ? 'head-pick' : '', `head-${col.key}`].filter(Boolean).join(' ') %>" data-col="<%= col.key %>"><%= col.label %></span><% } %><% }) %>
   </div>
   <ul class="order-list">
     <% groups.forEach(g => {
@@ -386,6 +389,7 @@
 
 <script src="/confirm.js"></script>
 <script src="/orders.js"></script>
+<script src="/col-resize.js"></script>
 <script src="/modal.js"></script>
 <script src="/chip-order.js"></script>
 <%- include('../partials/footer') %>

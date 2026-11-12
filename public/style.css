@@ -2408,13 +2408,15 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
 .view-toggle { display: none; }
 .oi-more { display: none; }
 .order-head .head-product { display: none; }
+.col-grip { display: none; }
+.col-reset[hidden] { display: none !important; }
 @media (min-width: 1100px) {
   .view-toggle { display: flex; justify-content: flex-end; align-items: center; gap: 0; margin: -6px 0 8px; }
   .view-toggle .muted { margin-right: 8px; }
-  .view-toggle button { flex: none; width: auto; height: 32px; min-height: 32px; margin: 0; padding: 0 14px; border: 1px solid var(--line); border-radius: 0; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; cursor: pointer; }
-  .view-toggle button:first-of-type { border-radius: 8px 0 0 8px; }
-  .view-toggle button:last-of-type { border-radius: 0 8px 8px 0; margin-left: -1px; }
-  .view-toggle button.on { position: relative; border-color: var(--primary); background: var(--primary-weak); color: var(--primary-dark); }
+  .view-toggle button[name=view] { flex: none; width: auto; height: 32px; min-height: 32px; margin: 0; padding: 0 14px; border: 1px solid var(--line); border-radius: 0; background: var(--field); color: var(--text-2); font-size: 14px; font-weight: 600; cursor: pointer; }
+  .view-toggle button[value=line] { border-radius: 8px 0 0 8px; }
+  .view-toggle button[value=detail] { border-radius: 0 8px 8px 0; margin-left: -1px; }
+  .view-toggle button[name=view].on { position: relative; border-color: var(--primary); background: var(--primary-weak); color: var(--primary-dark); }
 
   .orders-line .order-head, .orders-line .order-head + .order-list > .order-item { grid-template-columns: var(--olln-wide, 24px minmax(0, 2fr) minmax(100px, 150px) 118px 92px 140px 90px); }
   .orders-line .order-head + .order-list > .order-item { padding-top: 3px; padding-bottom: 3px; row-gap: 0; column-gap: 10px; }
@@ -2422,7 +2424,7 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
   .orders-line .order-head + .order-list .oi-check { min-height: 32px; margin: 0; top: 0; align-self: center; }
   /* 주문 칸: [판매처·이름 칸 | 상품명 칸] 두 칸으로 줄 맞춤. 상품명은 넘치면 …, 여러 개면 외 N */
   .orders-line .order-list .oi-col { align-self: center; }
-  .orders-line .order-list .oi-col > .oi-main { display: grid; grid-template-columns: 112px minmax(0, 1fr) auto; align-items: center; column-gap: 8px; min-width: 0; }
+  .orders-line .order-list .oi-col > .oi-main { display: grid; grid-template-columns: var(--oll-buyer, 132px) minmax(0, 1fr) auto; align-items: center; column-gap: 8px; min-width: 0; }
   .orders-line .order-list .oi-main .oi-head { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; min-width: 0; margin: 0; overflow: hidden; line-height: 1.4; font-size: 13px; }
   .orders-line .order-list .oi-main .oi-head > * { flex: none; margin-right: 0; }
   .orders-line .order-list .oi-head > .muted { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
@@ -2461,7 +2463,7 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
   .orders-line .order-head { font-size: 13px; }
   /* 표 머리 가운데 정렬 + 주문 · 메모 · 상태 칸 사이 세로선 (사용자 요청 2026-11)
      세로선은 칸 사이 틈(10px, 주문 안 이름|상품명은 8px) 한가운데에, 줄 높이 끝까지 */
-  .orders-line .order-head .head-main { display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 8px; }
+  .orders-line .order-head .head-main { display: grid; grid-template-columns: var(--oll-buyer, 132px) minmax(0, 1fr); column-gap: 8px; }
   .orders-line .order-head .head-product { display: block; position: relative; }
   .orders-line .order-head .head-main > span, .orders-line .order-head > span:not(.oi-check) { text-align: center; } /* 가운데 정렬은 머리만 (사용자 요청) */
   /* 머리는 칸마다 세로선 (사용자 요청) */
@@ -2469,9 +2471,16 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
     content: ''; position: absolute; left: -5px; top: -8px; bottom: -8px; border-left: 1px solid var(--line); }
   .orders-line .order-head .head-product::before { left: -4px; }
   .orders-line .order-head > span:not(.oi-check) { position: relative; }
+  /* 칸 너비 바꾸기: 머리 세로선을 잡고 끈다 (col-resize.js). 올리면 파란 선, 두 번 누르면 그 칸만 처음 너비 */
+  .orders-line .order-head .col-grip { display: block; position: absolute; top: -8px; bottom: -8px; left: -10px; width: 10px; z-index: 2; cursor: col-resize; touch-action: none; }
+  .orders-line .order-head .head-product > .col-grip { left: -9px; width: 10px; }
+  .orders-line .order-head .col-grip:hover::after, .orders-line .order-head .col-grip.dragging::after { content: ''; position: absolute; left: 4px; top: 0; bottom: 0; border-left: 2px solid var(--primary); }
+  body.col-resizing, body.col-resizing * { cursor: col-resize !important; user-select: none; }
+  .view-toggle .col-reset { flex: none; width: auto; height: 32px; min-height: 32px; margin: 0 12px 0 0; padding: 0 10px; border: 0; background: none; color: var(--primary-dark); font-size: 14px; cursor: pointer; }
+  .view-toggle .col-reset:hover { text-decoration: underline; }
   .orders-line .order-head + .order-list .oi-col { align-self: stretch; display: flex; align-items: center; min-width: 0; }
   .orders-line .order-head + .order-list .oi-col > .oi-main { position: relative; flex: 1 1 auto; align-self: stretch; }
-  .orders-line .order-head + .order-list .oi-col > .oi-main::before { content: ''; position: absolute; left: 116px; top: -3px; bottom: -3px; border-left: 1px solid var(--line); }
+  .orders-line .order-head + .order-list .oi-col > .oi-main::before { content: ''; position: absolute; left: calc(var(--oll-buyer, 132px) + 4px); top: -3px; bottom: -3px; border-left: 1px solid var(--line); }
   .orders-line .order-head + .order-list .c-status, .orders-line .order-head + .order-list .c-ship { position: relative; align-self: stretch; }
   .orders-line .order-head + .order-list .c-due, .orders-line .order-head + .order-list .c-stage, .orders-line .order-head + .order-list .c-assign { position: relative; align-self: stretch; align-items: center; }
   .orders-line .order-head + .order-list .c-status::before, .orders-line .order-head + .order-list .c-ship::before,
