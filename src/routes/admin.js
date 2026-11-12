@@ -69,7 +69,19 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
     for (const u of users) {
       if (u.status === 'suspended') u.release = { orders: releaseOpenOrders(db, u.id, { count: true }), asks: openAsks(u.id) };
     }
+    // 연봉·예상 연차수당 (관리자만 보는 화면). 연봉은 여기서만 풀어서 계산에 쓴다
+    const { createSecretBox } = require('../secretBox');
+    const { summaryOf, dailyWageOf, leavePayOf, fmtDays } = require('../leave');
+    const box = createSecretBox();
+    const pay = users.filter(u => u.status === 'active').map(u => {
+      const row = db.prepare('SELECT salary_sealed, hire_date FROM users WHERE id = ?').get(u.id) || {};
+      const opened = row.salary_sealed ? box.open(row.salary_sealed) : null;
+      const salary = opened ? Number(opened) : null;
+      const left = summaryOf(db, { id: u.id, hire_date: row.hire_date }).left;
+      return { id: u.id, name: u.name, salary, lost: Boolean(row.salary_sealed && !opened), left, daily: salary ? dailyWageOf(salary) : null, amount: salary ? leavePayOf(salary, left) : null };
+    });
     res.render('admin/users', {
+      pay, payReady: box.ready, fmtDays,
       title: '직원 관리',
       tab: 'users',
       pending: users.filter(u => u.status === 'pending'),
@@ -185,6 +197,26 @@ function adminRoutes(db, sessionStore, collector, notifier, brand = null, weekly
       flash(req, 'ok', `${user.name} 님의 로그인 잠금을 풀었습니다.`);
     }
     res.redirect('/admin/users');
+  });
+
+  // 연봉 (관리자만): 암호화해서 저장, 비우면 지운다. 화면에는 예상 연차수당 계산에만 쓴다
+  router.post('/users/:id/salary', (req, res) => {
+    const { createSecretBox } = require('../secretBox');
+    const box = createSecretBox();
+    const user = findUser(req.params.id);
+    if (!user) { flash(req, 'error', '직원을 찾을 수 없어요.'); return res.redirect('/admin/users#pay'); }
+    const raw = String(req.body.salary || '').replace(/[,\s원]/g, '');
+    if (!raw) {
+      db.prepare('UPDATE users SET salary_sealed = NULL WHERE id = ?').run(user.id);
+      flash(req, 'ok', `${user.name} 님 연봉을 지웠어요.`);
+      return res.redirect('/admin/users#pay');
+    }
+    const salary = Number(raw);
+    if (!Number.isInteger(salary) || salary < 1000000 || salary > 2000000000) { flash(req, 'error', '연봉을 원 단위 숫자로 넣어 주세요 (예: 36000000).'); return res.redirect('/admin/users#pay'); }
+    if (!box.ready) { flash(req, 'error', '서버 .env 에 SETTINGS_KEY 가 없어 연봉을 저장할 수 없어요 (메일 계정 비밀번호와 같은 열쇠).'); return res.redirect('/admin/users#pay'); }
+    db.prepare('UPDATE users SET salary_sealed = ? WHERE id = ?').run(box.seal(String(salary)), user.id);
+    flash(req, 'ok', `${user.name} 님 연봉을 저장했어요.`);
+    res.redirect('/admin/users#pay');
   });
 
   // 직무와 역할 변경

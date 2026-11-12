@@ -84,5 +84,35 @@
   </ul>
 </section>
 
+<%# 연봉 · 예상 연차수당 (관리자만). 연봉은 암호화해서 저장, 남은 연차는 휴가 관리의 남은 일수 %>
+<section class="card" id="pay">
+  <h2>연봉 · 예상 연차수당 <span class="h2-sub">관리자만 보여요</span></h2>
+  <p class="muted small">1일 통상임금 = 연봉 ÷ 12 ÷ 209시간 × 8시간 (퇴직금 미포함 연봉, 주 5일·하루 8시간 기준). 예상 연차수당 = 1일 통상임금 × 남은 연차(<a href="/admin/leave#staff">휴가 관리</a>의 남은 일수). <strong>참고용 금액</strong>이에요 — 연봉에 상여·식대처럼 통상임금이 아닌 돈이 섞여 있으면 실제와 다를 수 있으니 지급 전에 노무사·세무사에게 확인하세요.</p>
+  <% if (!payReady) { %><p class="error">서버 .env 에 SETTINGS_KEY 가 없어 연봉을 저장할 수 없어요 (메일 계정 비밀번호와 같은 열쇠).</p><% } %>
+  <div class="lv-table-wrap">
+    <table class="lv-table pay-table">
+      <thead><tr><th>직원</th><th class="num">예상 연차수당</th><th class="num">남은 연차</th><th class="num">1일 통상임금</th><th>연봉 (원)</th></tr></thead>
+      <tbody>
+        <% pay.forEach(p => { %>
+          <tr>
+            <th scope="row"><%= p.name %></th>
+            <td class="num"><strong><%= p.amount !== null ? `${p.amount.toLocaleString('ko-KR')}원` : '-' %></strong></td>
+            <td class="num"><%= fmtDays(p.left) %>일</td>
+            <td class="num"><%= p.daily ? `${p.daily.toLocaleString('ko-KR')}원` : '-' %></td>
+            <td>
+              <form method="post" action="/admin/users/<%= p.id %>/salary" class="lv-hire" data-once>
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <input type="text" name="salary" value="<%= p.salary ? p.salary.toLocaleString('ko-KR') : '' %>" inputmode="numeric" placeholder="예) 36,000,000" maxlength="16" aria-label="<%= p.name %> 연봉 (원)" class="salary-input" <%= payReady ? '' : 'disabled' %>>
+                <button type="submit" class="btn-sm" <%= payReady ? '' : 'disabled' %>>저장</button>
+              </form>
+              <% if (p.lost) { %><span class="error-text small">저장된 연봉을 풀 수 없어요 (열쇠가 바뀜) — 다시 넣어 주세요</span><% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>
+
 <script src="/confirm.js"></script>
 <%- include('../partials/footer') %>

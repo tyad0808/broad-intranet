@@ -106,7 +106,16 @@ function summaryOf(db, user, today = kstToday()) {
     base: base ? { left: base.left_days, on: base.set_on } : null, left: start + granted + adjusted - used };
 }
 
+// 예상 연차수당 (참고용, 사용자 회사 기준: 퇴직금 미포함 연봉 · 주 5일 하루 8시간)
+//   월 통상임금 = 연봉 ÷ 12, 1일 통상임금 = 월 통상임금 ÷ 209시간(주 40시간 + 주휴, 한 달) × 8시간
+//   연차수당 = 1일 통상임금 × 남은 연차 일수 (남은 일수가 0 이하면 0)
+//   연봉에 상여·식대처럼 통상임금이 아닌 돈이 섞여 있으면 실제와 다를 수 있다 → 화면에 '참고용' 이라고 쓴다
+const MONTH_HOURS = 209;
+const DAY_HOURS = 8;
+const dailyWageOf = salary => Math.round((Number(salary) / 12 / MONTH_HOURS) * DAY_HOURS);
+const leavePayOf = (salary, leftDays) => (leftDays > 0 ? Math.round(dailyWageOf(salary) * leftDays) : 0);
+
 // 일수 보기: 1 / 0.5 / 1.5
 const fmtDays = n => (Number.isInteger(n) ? String(n) : String(Math.round(n * 10) / 10));
 
-module.exports = { KINDS, MONTHLY_MAX, YEARLY_MODE, yearlyModeOf, legalDays, addMonths, grantsOf, serviceText, daysOf, readRequest, summaryOf, fmtDays, isDate, kstToday };
+module.exports = { dailyWageOf, leavePayOf, MONTH_HOURS, KINDS, MONTHLY_MAX, YEARLY_MODE, yearlyModeOf, legalDays, addMonths, grantsOf, serviceText, daysOf, readRequest, summaryOf, fmtDays, isDate, kstToday };

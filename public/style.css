@@ -2398,3 +2398,5 @@ a.hm-due .hm-ev-who { color: var(--primary-text); }
 .lv-yearly { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 6px 0 4px; line-height: 1.5; }
 .lv-mode { display: flex; align-items: flex-start; gap: 8px; margin: 0; font-size: 15px; font-weight: 400; cursor: pointer; }
 .lv-mode input { width: 18px; height: 18px; margin: 3px 0 0; flex: none; }
+.salary-input { width: 150px; height: 36px; margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.pay-table td.num strong { font-size: 16px; }

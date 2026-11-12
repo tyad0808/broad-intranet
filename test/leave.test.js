@@ -125,3 +125,32 @@ test('관리자가 지금 남은 일수를 직접 맞추고(그 뒤로 다시 �
   assert.match((await kim.request('/leave')).text, /1년 이상은 관리자가 매년 넣어요/);
   assert.strictEqual((await kim.submit('/leave', `/leave/left/${kimId}`, { left: '30' })).status, 403, '직원은 못 고친다');
 });
+
+test('연봉 · 예상 연차수당: 관리자만, 연봉은 암호화해서 저장, 1일 통상임금 = 연봉÷12÷209×8', async t => {
+  const { dailyWageOf, leavePayOf } = require('../src/leave');
+  assert.strictEqual(dailyWageOf(36000000), 114833, '월 300만 ÷ 209 × 8');
+  assert.strictEqual(leavePayOf(36000000, 5), 574165);
+  assert.strictEqual(leavePayOf(36000000, 2.5), 287083, '반차 0.5일도');
+  assert.strictEqual(leavePayOf(36000000, 0), 0);
+  const old = process.env.SETTINGS_KEY;
+  process.env.SETTINGS_KEY = 'a'.repeat(64);
+  t.after(() => { if (old === undefined) delete process.env.SETTINGS_KEY; else process.env.SETTINGS_KEY = old; });
+  const { db, sub, kimId, baseUrl } = await setup(t);
+  const boss = await loginAs(baseUrl, 'boss@broad.test');
+  await boss.submit('/admin/leave', `/leave/left/${kimId}`, { left: '5' });
+  const res = await boss.submit('/admin/users', `/admin/users/${kimId}/salary`, { salary: '36,000,000' });
+  assert.strictEqual(res.location, '/admin/users#pay');
+  const sealed = db.prepare('SELECT salary_sealed FROM users WHERE id = ?').get(kimId).salary_sealed;
+  assert.match(sealed, /^v1:/);
+  assert.ok(!sealed.includes('36000000'), 'DB 에는 암호문만');
+  const page = (await boss.request('/admin/users')).text;
+  assert.match(page, /value="36,000,000"/);
+  assert.match(page, /<strong>574,165원<\/strong>[\s\S]*?5일[\s\S]*?114,833원/);
+  // 부관리자·직원은 못 봄 (휴가 관리 화면에도 연봉 없음)
+  assert.strictEqual((await sub.request('/admin/users')).status, 403);
+  assert.doesNotMatch((await sub.request('/admin/leave')).text, /36,000,000|574,165/);
+  assert.strictEqual((await sub.submit('/admin/leave', `/admin/users/${kimId}/salary`, { salary: '1' })).status, 403);
+  // 비우면 지운다
+  await boss.submit('/admin/users', `/admin/users/${kimId}/salary`, { salary: '' });
+  assert.strictEqual(db.prepare('SELECT salary_sealed FROM users WHERE id = ?').get(kimId).salary_sealed, null);
+});
