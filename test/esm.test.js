@@ -4,8 +4,9 @@ const assert = require('node:assert');
 const crypto = require('crypto');
 const { openDb } = require('../src/db');
 const { createCollector } = require('../src/collector');
-const { createEsmClient, buildToken, isAllowed } = require('../src/channels/esmClient');
-const { createEsmSource, normalize, evenShipFee, claimPatch } = require('../src/channels/esm');
+const { createEsmClient, buildToken, isAllowed, ALLOWED } = require('../src/channels/esmClient');
+const { createEsmSource, createEsmWriter, normalize, evenShipFee, claimPatch } = require('../src/channels/esm');
+const { createOrderActions } = require('../src/actions');
 const { productUrl } = require('../src/channels/labels');
 
 // ESM 안내 문서의 주문조회 응답 예시와 같은 모양
@@ -38,12 +39,16 @@ test('인증 토큰: HS256 JWT (kid = 마스터 ID, ssi = 옥션·G마켓 ID), �
   assert.strictEqual(only.ssi, 'G:gm1');
 });
 
-test('허용 목록 밖(주문확인·발송처리 등)은 보내지 않는다 · 키가 없으면 보내지 않는다', async () => {
+test('처리(주문확인·발송처리)는 ESM_WRITE 로 만든 클라이언트만 · 허용 목록 밖은 보내지 않는다 · 키가 없으면 보내지 않는다', async () => {
   const calls = [];
   const fetchFn = async (...a) => { calls.push(a); return new Response('{}'); };
   const client = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'g', fetchFn, sleep: async () => {} });
-  await assert.rejects(client.request('POST', '/shipping/v1/Order/OrderCheck/123', {}), /허용되지 않은/);
-  await assert.rejects(client.request('POST', '/shipping/v1/Delivery/ShippingInfo', {}), /허용되지 않은/);
+  await assert.rejects(client.request('POST', '/shipping/v1/Order/OrderCheck/123', {}, { site: 'G' }), /ESM_WRITE=on 이 아님/);
+  await assert.rejects(client.request('POST', '/shipping/v1/Delivery/ShippingInfo', {}, { site: 'G' }), /ESM_WRITE=on 이 아님/);
+  await assert.rejects(client.request('POST', '/shipping/v1/Delivery/AddShippingCompleteInfo/123', {}), /허용되지 않은/, '배송완료 처리는 목록에 없다');
+  assert.deepStrictEqual(ALLOWED.filter(a => a.write).map(a => String(a.pattern)).sort(), [
+    String(/^\/shipping\/v1\/Delivery\/ShippingInfo$/), String(/^\/shipping\/v1\/Order\/OrderCheck\/\d+$/),
+  ], '상태를 바꾸는 주소는 이 둘만');
   const none = createEsmClient({ masterId: '', secretKey: '', gmarketId: '', auctionId: '', fetchFn });
   await assert.rejects(none.request('POST', '/shipping/v1/Order/RequestOrders', {}), /\.env 에 없습니다/);
   assert.strictEqual(calls.length, 0);
@@ -260,3 +265,53 @@ test('시작일을 앞당기면 첫 수집에서 그날부터 30일씩 나눠 �
   assert.strictEqual(rows.filter(r => r.channel_item_id === 'G-1001').length, 1);
 });
 
+
+// ── 2단계: 주문확인·발송처리 (ESM_WRITE=on) ──
+test('주문확인·발송처리: 사이트 ID 하나만 담은 토큰, 로젠 10003 · 송장번호 · 한국 시각으로 보낸다', async () => {
+  const calls = [];
+  const fetchFn = async (url, init) => { calls.push({ url, init }); return new Response(JSON.stringify({ ResultCode: 0, Message: 'Success', Data: {} })); };
+  const client = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'gid', auctionId: 'aid', fetchFn, sleep: async () => {}, allowWrite: true });
+  const w = createEsmWriter({ client, now: () => new Date('2026-11-12T01:30:00Z') });
+  const c = await w.confirm(['G-2946269058']);
+  assert.deepStrictEqual(c, { data: { successProductOrderIds: ['G-2946269058'], failProductOrderInfos: [] } });
+  assert.strictEqual(calls[0].url, 'https://sa2.esmplus.com/shipping/v1/Order/OrderCheck/2946269058');
+  const payload = JSON.parse(Buffer.from(calls[0].init.headers.authorization.split('.')[1], 'base64url').toString());
+  assert.strictEqual(payload.ssi, 'G:gid', 'G마켓 주문은 G마켓 ID 만');
+  const d = await w.dispatch([{ productOrderId: 'A-123', deliveryMethod: 'DELIVERY', deliveryCompanyCode: 'KGB', trackingNumber: '12345678901' }]);
+  assert.deepStrictEqual(d.data.successProductOrderIds, ['A-123']);
+  assert.strictEqual(calls[1].url, 'https://sa2.esmplus.com/shipping/v1/Delivery/ShippingInfo');
+  assert.deepStrictEqual(JSON.parse(calls[1].init.body), { OrderNo: 123, ShippingDate: '2026-11-12T10:30:00', DeliveryCompanyCode: 10003, InvoiceNo: '12345678901' });
+  assert.strictEqual(JSON.parse(Buffer.from(calls[1].init.headers.authorization.split('.')[1], 'base64url').toString()).ssi, 'A:aid', '옥션 주문은 옥션 ID 만');
+});
+
+test('발송처리 거절(코드 3000)은 그 주문만 실패로, 처리 요청은 다시 보내지 않는다', async () => {
+  let n = 0;
+  const fetchFn = async () => { n += 1; return new Response(JSON.stringify({ ResultCode: 3000, Message: '주문확인 진행중입니다. 잠시 후 다시 진행해주세요', Data: null })); };
+  const client = createEsmClient({ masterId: 'm', secretKey: 's', gmarketId: 'gid', fetchFn, sleep: async () => {}, allowWrite: true });
+  const r = await createEsmWriter({ client }).dispatch([{ productOrderId: 'G-1', deliveryMethod: 'DELIVERY', deliveryCompanyCode: 'KGB', trackingNumber: '123456789' }]);
+  assert.strictEqual(n, 1, '다시 보내지 않음');
+  assert.deepStrictEqual(r.data.successProductOrderIds, []);
+  assert.match(r.data.failProductOrderInfos[0].message, /주문확인 진행중/);
+});
+
+test('인트라넷 발송처리: G마켓 주문도 발주확인 → 송장 입력이 되고, 성공하면 배송중·발송 단계로 (연습 모드면 보내지 않음)', async () => {
+  const db = openDb(':memory:');
+  db.prepare("INSERT INTO orders (channel, channel_order_id, channel_item_id, product_name, channel_status, channel_confirmed, item_type, quantity) VALUES ('esm', 'G-1', 'G-1', '현수막', 'PAYED', 0, 'main', 1)").run();
+  const id = db.prepare('SELECT id FROM orders').get().id;
+  const practice = createOrderActions({ db });
+  assert.strictEqual(practice.modes.esm, 'practice');
+  assert.strictEqual((await practice.confirm(id, null)).result, 'practice');
+  const sent = [];
+  const writer = {
+    confirm: async ids => { sent.push(['confirm', ids]); return { data: { successProductOrderIds: ids, failProductOrderInfos: [] } }; },
+    dispatch: async list => { sent.push(['dispatch', list]); return { data: { successProductOrderIds: list.map(l => l.productOrderId), failProductOrderInfos: [] } }; },
+  };
+  const live = createOrderActions({ db, writers: { esm: writer } });
+  assert.strictEqual((await live.confirm(id, null)).result, 'ok');
+  assert.strictEqual(db.prepare('SELECT channel_confirmed FROM orders').get().channel_confirmed, 1);
+  assert.strictEqual((await live.dispatch(id, null, { method: 'QUICK_SVC', company: null, tracking: null })).result, 'skip', '택배만');
+  assert.strictEqual((await live.dispatch(id, null, { method: 'DELIVERY', company: 'KGB', tracking: '12345678901' })).result, 'ok');
+  assert.deepStrictEqual(sent[1][1][0], { productOrderId: 'G-1', deliveryMethod: 'DELIVERY', deliveryCompanyCode: 'KGB', trackingNumber: '12345678901', dispatchDate: sent[1][1][0].dispatchDate });
+  const row = db.prepare('SELECT channel_status, tracking_no FROM orders').get();
+  assert.deepStrictEqual({ ...row }, { channel_status: 'DELIVERING', tracking_no: '12345678901' });
+});

@@ -5,7 +5,7 @@ const { openDb } = require('./db');
 const { createApp } = require('./app');
 const { createOrderSource } = require('./channels');
 const { createCollector, createChannelCollector, getSetting, setSetting } = require('./collector');
-const { createEsmSource } = require('./channels/esm');
+const { createEsmSource, createEsmWriter } = require('./channels/esm');
 const { createChannelRegistry, CHANNELS } = require('./channelRegistry');
 const { createCoupangSource, createCoupangWriter } = require('./channels/coupang');
 const { createGodoSource, createGodoWriter } = require('./channels/godo');
@@ -73,12 +73,15 @@ const godoLive = process.env.GODO_WRITE === 'on' && Boolean(process.env.GODO_WRI
 if (process.env.GODO_WRITE === 'on' && !godoLive) {
   console.warn('[주의] GODO_WRITE=on 이지만 GODO_WRITE_KEY 나 GODO_API_KEY 가 없어서 자사몰은 연습 모드로 실행합니다.');
 }
+// G마켓·옥션 주문확인·발송처리: ESM_WRITE=on 이고 ESM 키가 있고 G마켓·옥션 수집이 켜져 있을 때만 (그 밖에는 연습 모드)
+const esmLive = process.env.ESM_WRITE === 'on' && esmReady && process.env.ESM !== 'off';
 const actions = createOrderActions({
   db,
   writer: liveWrite ? createSmartstoreWriter() : null,
   writers: {
     coupang: coupangLive ? createCoupangWriter() : null,
     godo: godoLive ? createGodoWriter() : null,
+    esm: esmLive ? createEsmWriter() : null,
   },
 });
 // 4차 문의함: .env 에 메일 계정(앱 비밀번호)이 있는 것만 받는다. 답장은 MAIL_SEND=on 일 때만 실제로 보냄 (그 밖에는 연습 모드)
@@ -220,7 +223,7 @@ app.listen(PORT, HOST, () => {
   console.log(`브로애드 인트라넷 실행 중: http://${HOST || 'localhost'}:${PORT}`);
   console.log(`발주확인·발송처리: ${actions.mode === 'live' ? '실제로 네이버에 보냄 (NAVER_WRITE=on)' : '연습 모드 (네이버로 보내지 않음)'}`);
   if (coupangReady) console.log(`쿠팡 상품준비중·송장: ${coupangLive ? '실제로 쿠팡에 보냄 (COUPANG_WRITE=on)' : '연습 모드 (쿠팡으로 보내지 않음)'}`);
-  if (esmReady) console.log(`G마켓·옥션: 주문 가져오기 켜짐 (${esmStart} 결제분부터, 조회만 — 주문확인·발송처리는 다음 단계)`);
+  if (esmReady) console.log(`G마켓·옥션: 주문 가져오기 켜짐 (${esmStart} 결제분부터) · 주문확인·발송처리: ${esmLive ? '실제로 G마켓·옥션에 보냄 (ESM_WRITE=on)' : '연습 모드 (G마켓·옥션으로 보내지 않음)'}`);
   if (godoReady) console.log(`자사몰 발주확인·송장: ${godoLive ? '실제로 자사몰에 보냄 (GODO_WRITE=on)' : '연습 모드 (자사몰로 보내지 않음)'}`);
   if (inboxCollector) {
     console.log(`문의함: ${inboxSources.map(s => s.label).join(' + ')}, ${intervalMinutes(db, 'inbox_interval_minutes')}분마다`);

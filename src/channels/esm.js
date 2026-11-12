@@ -1,4 +1,4 @@
-// G마켓·옥션(ESM) 주문 가져오기 (1단계: 조회 전용)
+// G마켓·옥션(ESM) 주문 가져오기 (1단계: 조회) + 주문확인·발송처리 (2단계: ESM_WRITE=on 일 때만, 맨 아래 createEsmWriter)
 //
 // ESM 주문번호(OrderNo) 하나 = 상품 하나. 인트라넷에서는 주문번호 하나를 주문 카드 하나로 본다.
 //   번호 앞에 사이트를 붙인다: G-2946269058 (G마켓) · A-1234567890 (옥션)
@@ -255,4 +255,56 @@ function esmProductUrl(itemId, productNo) {
     : `https://itempage3.auction.co.kr/DetailView.aspx?itemno=${productNo}`;
 }
 
-module.exports = { createEsmSource, normalize, claimPatch, evenShipFee, splitId, esmProductUrl, STATUS_MAP, CLAIMS };
+// ── 주문확인·발송처리 (2단계, 서버 .env 의 ESM_WRITE=on 일 때만 만든다 — src/server.js) ──
+// 인트라넷 택배사 → ESM 택배사 코드 (ESM '택배사 리스트 조회': 10003 로젠택배 · 10016 경동택배)
+const ESM_COURIERS = { KGB: 10003, KDEXP: 10016 };
+// 발송일시: 한국 시각 'YYYY-MM-DDThh:mm:ss' (ESM 은 호출 시점 2일 안의 시각만 받는다)
+const kstStamp = date => new Date(date.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 19);
+
+// 주문(=상품) 하나씩 보내고, 결과를 다른 채널과 같은 모양으로 모은다 (actions.js 의 parseResult)
+//   ESM 이 거절(4xx·코드 3000 등)하면 그 주문만 실패, 응답이 끊기면(5xx·시간 초과) 결과를 알 수 없음 → 그대로 던진다
+function createEsmWriter(options = {}) {
+  const client = options.client || createEsmClient({ ...options, allowWrite: true });
+  const now = options.now || (() => new Date());
+  async function each(ids, call) {
+    const success = [];
+    const fail = [];
+    for (const id of ids) {
+      const p = splitId(id);
+      if (!p) { fail.push({ productOrderId: id, message: '주문번호 모양이 다릅니다' }); continue; }
+      try {
+        await call(p, id);
+        success.push(id);
+      } catch (e) {
+        if (e.notSent || (e.status && e.status < 500) || (e.body && e.body.ResultCode !== undefined)) {
+          fail.push({ productOrderId: id, message: String(e.message || '실패').replace(/^G마켓·옥션 API 오류 \([^)]*\):\s*/, '') });
+        } else {
+          throw e;
+        }
+      }
+    }
+    return { data: { successProductOrderIds: success, failProductOrderInfos: fail } };
+  }
+  return {
+    // 주문확인: 결제완료 → 배송준비중
+    confirm(itemIds) {
+      return each(itemIds, p => client.request('POST', `/shipping/v1/Order/OrderCheck/${p.orderNo}`, {}, { site: p.site }));
+    },
+    // 발송처리: 택배사 코드 + 송장번호 (ESM 은 택배로만)
+    dispatch(list) {
+      const byId = new Map(list.map(l => [l.productOrderId, l]));
+      return each(list.map(l => l.productOrderId), (p, id) => {
+        const l = byId.get(id);
+        const code = ESM_COURIERS[l.deliveryCompanyCode];
+        if (l.deliveryMethod !== 'DELIVERY' || !code || !l.trackingNumber) {
+          throw Object.assign(new Error('G마켓·옥션은 택배(로젠·경동)와 송장번호로만 발송처리할 수 있어요.'), { notSent: true });
+        }
+        return client.request('POST', '/shipping/v1/Delivery/ShippingInfo', {
+          OrderNo: Number(p.orderNo), ShippingDate: kstStamp(now()), DeliveryCompanyCode: code, InvoiceNo: String(l.trackingNumber),
+        }, { site: p.site });
+      });
+    },
+  };
+}
+
+module.exports = { createEsmSource, createEsmWriter, ESM_COURIERS, normalize, claimPatch, evenShipFee, splitId, esmProductUrl, STATUS_MAP, CLAIMS };

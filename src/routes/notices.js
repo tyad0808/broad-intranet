@@ -19,11 +19,18 @@ const ACTIVE_SQL = 'n.starts_on <= ? AND (n.ends_on IS NULL OR n.ends_on >= ?)';
 function popupNotice(db, user) {
   if (!user || user.status !== 'active') return null;
   const today = kstToday();
-  return db.prepare(`
+  const n = db.prepare(`
     SELECT n.id, n.title, n.body, n.important, n.starts_on FROM notices n
     WHERE ${ACTIVE_SQL} AND NOT EXISTS (SELECT 1 FROM notice_reads r WHERE r.notice_id = n.id AND r.user_id = ?)
     ORDER BY n.important DESC, n.id ASC LIMIT 1
-  `).get(today, today, user.id) || null;
+  `).get(today, today, user.id);
+  if (!n) return null;
+  // 몇 번째 공지인지: 지금 보이는 공지 전체 중 (이미 확인한 것 + 1) — '공지 1 / 3'
+  const c = db.prepare(`
+    SELECT COUNT(*) AS total, COALESCE(SUM(EXISTS (SELECT 1 FROM notice_reads r WHERE r.notice_id = n.id AND r.user_id = ?)), 0) AS done
+    FROM notices n WHERE ${ACTIVE_SQL}
+  `).get(user.id, today, today);
+  return { ...n, index: c.done + 1, total: c.total };
 }
 
 // 쓴 값 확인: 제목은 꼭, 날짜는 YYYY-MM-DD, 끝나는 날은 시작보다 뒤

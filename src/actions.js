@@ -1,11 +1,11 @@
-// 주문 처리: 발주확인, 발송처리 (2차 스마트스토어, 3차 쿠팡·자사몰), 발송지연 처리 (스마트스토어만)
+// 주문 처리: 발주확인, 발송처리 (2차 스마트스토어, 3차 쿠팡·자사몰, G마켓·옥션), 발송지연 처리 (스마트스토어만)
 //
 // 흐름: ① 주문 묶음(본상품 + 추가상품)에서 처리할 수 있는 상품만 고른다
 //       ② 네이버로 보낸다 (연습 모드면 보내지 않는다)
 //       ③ 네이버가 "성공" 이라고 답한 상품만 인트라넷에도 반영한다
 //       ④ 누가·언제·무엇을 했는지 order_actions 표에 남긴다
 //
-// 연습 모드: 채널마다 따로. .env 의 NAVER_WRITE=on / COUPANG_WRITE=on / GODO_WRITE=on 이 아니면 그 채널의 writer 가 없고,
+// 연습 모드: 채널마다 따로. .env 의 NAVER_WRITE=on / COUPANG_WRITE=on / GODO_WRITE=on / ESM_WRITE=on 이 아니면 그 채널의 writer 가 없고,
 //           바깥으로 아무것도 보내지 않는다.
 const { transaction } = require('./db');
 const { getSetting, lastStageId } = require('./collector');
@@ -16,12 +16,13 @@ const { toKstIso } = require('./channels/smartstore');
 const ITEM_ORDER = "CASE WHEN item_type = 'addon' THEN 1 ELSE 0 END, id";
 
 // 처리 버튼이 있는 채널
-const WRITE_CHANNELS = ['smartstore', 'coupang', 'godo'];
+const WRITE_CHANNELS = ['smartstore', 'coupang', 'godo', 'esm'];
 // 안내 문구용 (받침에 따라 '로/으로', '가/이'), admin: 처리됐는지 직접 확인할 곳
 const CHANNEL_NAMES = {
   smartstore: { name: '네이버', ro: '네이버로', ga: '네이버가', admin: '판매자센터' },
   coupang: { name: '쿠팡', ro: '쿠팡으로', ga: '쿠팡이', admin: '쿠팡 WING' },
   godo: { name: '자사몰', ro: '자사몰로', ga: '자사몰이', admin: '자사몰 관리자' },
+  esm: { name: 'G마켓·옥션', ro: 'G마켓·옥션으로', ga: 'G마켓·옥션이', admin: 'ESM PLUS' },
 };
 
 // 진행 중인 취소·반품·교환이 있으면 처리하지 않는다 (먼저 판매자센터에서 클레임을 처리해야 함)
@@ -222,10 +223,10 @@ function createOrderActions({ db, writer = null, writers = {}, now = () => new D
     const dispatchDate = toKstIso(now());
     // 쿠팡은 택배(송장번호)로만 발송처리할 수 있다
     const target = findOrder(orderId);
-    if (target && target.channel === 'coupang' && shipping.method !== 'DELIVERY') {
+    if (target && (target.channel === 'coupang' || target.channel === 'esm') && shipping.method !== 'DELIVERY') {
       return Promise.resolve({
         result: 'skip', orderId: target.id, itemIds: [],
-        message: `'${target.product_name}': 쿠팡 주문은 택배(택배사·송장번호)로만 발송처리할 수 있습니다.`,
+        message: `'${target.product_name}': ${target.channel === 'esm' ? 'G마켓·옥션' : '쿠팡'} 주문은 택배(택배사·송장번호)로만 발송처리할 수 있습니다.`,
       });
     }
     return run({

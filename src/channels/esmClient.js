@@ -1,7 +1,8 @@
 // G마켓·옥션 (ESM Trading API) 연결
 //
-// 안전장치 1: 아래 ALLOWED 에 맞는 주소만 호출할 수 있다 (지금은 조회만: 주문·취소·반품·교환).
-// 안전장치 2: 상태를 바꾸는 주소(주문확인·발송처리 등)는 아직 목록에 없다 — 다음 단계에서 ESM_WRITE=on 일 때만 더한다.
+// 안전장치 1: 아래 ALLOWED 에 맞는 주소만 호출할 수 있다 (조회: 주문·취소·반품·교환 / 처리: 주문확인·발송처리).
+// 안전장치 2: 상태를 바꾸는 주소(write: true)는 allowWrite 로 만든 클라이언트만 부른다 — 서버는 .env 의 ESM_WRITE=on 일 때만 만든다.
+//            처리 요청은 다시 보내지 않는다 (두 번 처리되지 않게).
 //
 // 인증(JWT, HS256): 매 요청마다 시크릿키로 서명한 토큰을 Authorization: Bearer 로 보낸다 (etapi.gmarket.com 'API 가이드')
 //   header  { alg: HS256, typ: JWT, kid: ESM+ 마스터 ID }
@@ -26,6 +27,9 @@ const ALLOWED = [
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Cancels$/ },
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Returns$/ },
   { method: 'POST', pattern: /^\/claim\/v1\/sa\/Exchanges$/ },
+  // 처리 (ESM_WRITE=on 일 때만): 주문확인(결제완료 → 배송준비중), 발송처리(택배사·송장번호 → 배송중)
+  { method: 'POST', pattern: /^\/shipping\/v1\/Order\/OrderCheck\/\d+$/, write: true },
+  { method: 'POST', pattern: /^\/shipping\/v1\/Delivery\/ShippingInfo$/, write: true },
 ];
 
 function findAllowed(method, path) {
@@ -72,6 +76,7 @@ function createEsmClient({
   fetchFn = fetch,
   sleep = realSleep,
   now = () => new Date(),
+  allowWrite = false,
 } = {}) {
   let nextAny = 0;
   let nextRange = 0;
@@ -86,9 +91,14 @@ function createEsmClient({
   }
   const rangeDone = () => { nextRange = Date.now() + RANGE_GAP_MS; };
 
-  async function request(method, path, json = {}) {
-    if (!findAllowed(method, path)) {
+  // opts.site: 'G' / 'A' — 본문에 사이트가 없는 처리 요청(주문확인·발송처리)에서 토큰에 넣을 사이트
+  async function request(method, path, json = {}, opts = {}) {
+    const rule = findAllowed(method, path);
+    if (!rule) {
       throw Object.assign(new Error(`허용되지 않은 G마켓·옥션 API 호출입니다: ${method} ${path}`), { notSent: true });
+    }
+    if (rule.write && !allowWrite) {
+      throw Object.assign(new Error(`G마켓·옥션 주문 처리가 꺼져 있습니다 (ESM_WRITE=on 이 아님): ${method} ${path}`), { notSent: true });
     }
     if (!masterId || !secretKey || !sites.length) {
       throw Object.assign(new Error('ESM_MASTER_ID / ESM_SECRET_KEY / ESM_GMARKET_ID(또는 ESM_AUCTION_ID) 가 .env 에 없습니다.'), { notSent: true });
@@ -97,8 +107,9 @@ function createEsmClient({
     const isRange = /RequestOrders$/.test(path) && Number(json.orderStatus) !== 0;
     // 이 요청의 사이트 (1 옥션 · 2 G마켓) → 토큰에 그 사이트 판매자 ID 하나만
     //   (정산조회는 사이트를 숫자 대신 'A'·'G' 글자로 보낸다)
-    const rawSite = json.siteType ?? json.SiteType;
+    const rawSite = opts.site ?? json.siteType ?? json.SiteType;
     const site = rawSite === 'A' || Number(rawSite) === 1 ? 'A' : rawSite === 'G' || Number(rawSite) === 2 ? 'G' : null;
+    if (rule.write && !site) throw Object.assign(new Error('처리할 사이트(G마켓·옥션)를 알 수 없습니다.'), { notSent: true });
     for (let attempt = 0; ; attempt++) {
       await wait(isRange);
       let res;
@@ -122,13 +133,13 @@ function createEsmClient({
       let body = null;
       try { body = text ? JSON.parse(text) : null; } catch { body = null; }
       // 429(요청이 많음)는 처리하지 않고 거절한 것이라 다시 보내도 안전하다 (조회만 하므로)
-      if (res.status === 429 && attempt < RETRY_WAITS_MS.length) {
+      if (res.status === 429 && !rule.write && attempt < RETRY_WAITS_MS.length) {
         await sleep(RETRY_WAITS_MS[attempt]);
         continue;
       }
       const code = body && (body.ResultCode ?? body.resultCode);
       const busyMsg = body && (body.Message || body.message);
-      if (isBusy(code, busyMsg) && attempt < BUSY_WAITS_MS.length) {
+      if (isBusy(code, busyMsg) && !rule.write && attempt < BUSY_WAITS_MS.length) {
         await sleep(BUSY_WAITS_MS[attempt]);
         continue;
       }

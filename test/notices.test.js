@@ -75,3 +75,20 @@ test('관리자 메뉴는 4묶음: 지금 화면이 든 묶음의 메뉴만 아�
   assert.match(page, /href="\/admin\/logen" class="chip on">로젠 설정/);
   assert.doesNotMatch(page, /class="chip [^"]*">직원 관리/, '다른 묶음 메뉴는 안 보임');
 });
+
+test('공지가 여러 개면 하나씩 차례로 뜨고, 팝업에 몇 번째인지 (1 / 3) 보인다', async t => {
+  const { db, kim } = await setup(t);
+  const add = db.prepare("INSERT INTO notices (title, important, starts_on) VALUES (?, ?, '2026-01-01')");
+  add.run('첫째', 0); add.run('둘째', 0); add.run('급한 공지', 1);
+  const seen = [];
+  for (let i = 0; i < 3; i += 1) {
+    const html = (await kim.request('/home')).text;
+    const title = /id="notice-pop-title">([^<]+)</.exec(html)[1];
+    const count = /class="notice-pop-count"[^>]*>([^<]+)</.exec(html)[1];
+    seen.push(`${title} ${count}`);
+    const id = db.prepare('SELECT id FROM notices WHERE title = ?').get(title).id;
+    await kim.submit('/home', `/notices/${id}/read`, { back: '/home' });
+  }
+  assert.deepStrictEqual(seen, ['급한 공지 1 / 3', '첫째 2 / 3', '둘째 3 / 3'], '중요한 것 먼저, 그다음 먼저 올린 것부터');
+  assert.doesNotMatch((await kim.request('/home')).text, /class="notice-pop"/);
+});
